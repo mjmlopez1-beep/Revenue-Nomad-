@@ -258,6 +258,12 @@ async function main() {
   check("the admin export leaves the whole part out", !exp.includes('"evidence"') && !exp.includes(d1.id) && !exp.includes("forecast that holds") && !exp.includes('"evidenceAi"'));
   const otherProp = await refused(S.toProof(J, { companyId: pub("c_halcyon"), proposalId: "pr_not_mine" }));
   check("toProof into a proposal that isn't theirs: refused", otherProp?.status === 404, otherProp);
+  await T.tableInternals.mutate((st) => void (st.proposals ??= []).push({ id: "pr_jordan", memberId: "mem_jordan", sends: [] } as never));
+  await S.toProof(J, { companyId: pub("c_halcyon"), proposalId: "pr_jordan" });
+  await S.toProof(J, { caseIds: [d1.id], proposalId: "pr_jordan" });
+  check("toProof into one of theirs: the case notes it is used there, once", JSON.stringify((await S.listEvidence(J)).cases.find((c) => c.id === d1.id)?.usedIn) === JSON.stringify(["pr_jordan"]));
+  const rileyProof = await refused(S.toProof(R, { companyId: pub("c_halcyon"), proposalId: "pr_jordan" }));
+  check("  Riley can't note use in Jordan's proposal", rileyProof?.status === 404, rileyProof);
 
   console.log("\nMatch, in words, the same every time");
   const caseF = { industry: "Health Care", size: "201–500", revenue: "$20M–$50M", motion: "Sales-led", fn: "Sales", problems: [], workType: [] };

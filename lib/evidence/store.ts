@@ -566,7 +566,8 @@ export async function matchEvidence(token: string | null, a: { companyId?: unkno
 /**
  * The closest one or two ready cases for a company (internal id), as they go into a proposal's
  * Proof part: hidden-client-safe. Without a company, the newest ready ones. A Different case is
- * never offered for a company. Empty without Close.
+ * never offered for a company. Empty without Close. Call it on the committed state (loadState()),
+ * not a draft inside mutate: it reads the table's graph, which is built once for the committed state.
  */
 export function proofIn(seed: Seed, s: State, memberId: string, companyId: string | null | undefined, n = 2, nowMs = Date.now()): ProofItem[] {
   if (!T.closeNow(s, memberId, nowMs)) return [];
@@ -599,27 +600,30 @@ export function forgetProposalIn(s: State, memberId: string, proposalId: string)
  * as used in it. Close.
  */
 export async function toProof(token: string | null, a: { companyId?: unknown; caseIds?: unknown; proposalId?: unknown }, o: { origin?: string } = {}, nowMs = Date.now()): Promise<{ items: ProofItem[] }> {
-  return T.mutate((s, seed) => {
-    const me = meOf(seed, s, token);
-    gate(s, me.id, nowMs, o.origin);
-    let items: ProofItem[];
-    if (Array.isArray(a.caseIds)) {
-      const want = a.caseIds.filter((x): x is string => typeof x === "string").slice(0, 6);
-      const cases = want.map((id) => mineIn(s, me.id).find((c) => c.id === id));
-      if (cases.some((c) => !c)) throw new EvidenceProblem(NOT_YOURS, 404);
-      if (cases.some((c) => c!.status !== "ready")) throw new EvidenceProblem(ONLY_READY);
-      items = cases.map((c) => proofItem(c!));
-    } else {
-      const id = a.companyId == null || a.companyId === "" ? null : companyIdOf(seed, s, a.companyId);
-      if (a.companyId && !id) throw new EvidenceProblem("That company isn't on Merlin.", 404);
-      items = proofIn(seed, s, me.id, id, 2, nowMs);
-    }
-    if (typeof a.proposalId === "string" && a.proposalId) {
-      if (!(s.proposals ?? []).some((p) => p.id === a.proposalId && p.memberId === me.id)) throw new EvidenceProblem("That proposal isn't one of yours.", 404);
-      markUsedIn(s, me.id, items.map((x) => x.caseId), a.proposalId);
-    }
-    return { items };
-  });
+  // Read on the committed state (the table's graph is built once there), then only the note of use is written.
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = meOf(seed, s, token);
+  gate(s, me.id, nowMs, o.origin);
+  let items: ProofItem[];
+  if (Array.isArray(a.caseIds)) {
+    const want = a.caseIds.filter((x): x is string => typeof x === "string").slice(0, 6);
+    const cases = want.map((id) => mineIn(s, me.id).find((c) => c.id === id));
+    if (cases.some((c) => !c)) throw new EvidenceProblem(NOT_YOURS, 404);
+    if (cases.some((c) => c!.status !== "ready")) throw new EvidenceProblem(ONLY_READY);
+    items = cases.map((c) => proofItem(c!));
+  } else {
+    const id = a.companyId == null || a.companyId === "" ? null : companyIdOf(seed, s, a.companyId);
+    if (a.companyId && !id) throw new EvidenceProblem("That company isn't on Merlin.", 404);
+    items = proofIn(seed, s, me.id, id, 2, nowMs);
+  }
+  const proposalId = typeof a.proposalId === "string" ? a.proposalId : "";
+  if (proposalId)
+    await T.mutate((st, sd) => {
+      const meNow = meOf(sd, st, token);
+      if (!(st.proposals ?? []).some((p) => p.id === proposalId && p.memberId === meNow.id)) throw new EvidenceProblem("That proposal isn't one of yours.", 404);
+      markUsedIn(st, meNow.id, items.map((x) => x.caseId), proposalId);
+    });
+  return { items };
 }
 
 /** The cases a member shows on their Fractionals card: ready, switched on, Close. Hidden-client-safe. Anyone may read these. */
