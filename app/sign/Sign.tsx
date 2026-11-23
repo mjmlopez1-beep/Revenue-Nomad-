@@ -671,12 +671,12 @@ export function SignView({ token }: { token: string }) {
             <ul className="cv-lines">
               <li>
                 <span>{picked.option}</span>
-                <span>{pickedOpt ? priced(pickedOpt.price, pickedOpt.billing) : ""}</span>
+                <span>{priced(picked.price, picked.billing)}</span>
               </li>
               {picked.addOns.map((a) => (
-                <li key={a.name}>
+                <li key={a.id}>
                   <span>{a.name}</span>
-                  <span>{a.price}</span>
+                  <span>{priced(a.price, a.billing)}</span>
                 </li>
               ))}
             </ul>
@@ -794,7 +794,13 @@ export function SignView({ token }: { token: string }) {
             {v.status === "signed" && <SignedArt />}
             <span className="cv-banner-t">
               <h2 className="cv-banner-h">{v.status === "passed" && v.passedTo ? `You passed this to ${v.passedTo.name} to sign` : v.awaitingMember ? `Signed by you · waiting for ${d.from.name} to countersign` : v.status === "signed" && v.signedName ? `Signed by ${v.signedName} on ${dayOf(v.signedAt)}` : STATUS_SAY[v.status].h}</h2>
-              <span className="cv-banner-p">{v.awaitingMember ? `You'll both get the ${v.sealOnSign ? "sealed" : "signed"} copy by email once ${fromFirst} countersigns.` : STATUS_SAY[v.status].p}</span>
+              <span className="cv-banner-p">
+                {v.awaitingMember
+                  ? `You'll both get the ${v.sealOnSign ? "sealed" : "signed"} copy by email once ${fromFirst} countersigns.`
+                  : v.status === "signed" && v.sealed
+                    ? `${v.member ? "Both signatures are on it. " : ""}The sealed copy is at the foot of this page and in your email.`
+                    : STATUS_SAY[v.status].p}
+              </span>
             </span>
             {v.status === "signed" && (
               <a className="sg-link cv-banner-go" href={v.sealed ? "#sign" : v.copyUrl ?? "#sign"}>

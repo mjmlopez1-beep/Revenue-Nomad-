@@ -386,8 +386,9 @@ li.ct-exrow {
   background: #f1f3f2;
   color: var(--body-ink);
 }
+/* Your turn: pine, not ember. The shell's bell and Hiring now already hold the screen's two ember marks. */
 .ct-chip[data-st="turn"] {
-  background: var(--ember);
+  background: var(--pine);
   color: #fff;
 }
 .ct-chip[data-st="opened"] {
