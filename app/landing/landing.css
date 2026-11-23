@@ -3,8 +3,8 @@
  *
  * Shape: big type with tight leading, a lot of air, very round corners. Pine for the nav, the
  * hero and the two bands (numbers, closing call to action); the page between is off-white with
- * white cards. Each feature panel is a field of its own (mint, sand, mint soft, pine) with a
- * solid pill label, and picks out one phrase of its headline in that field's ink.
+ * white cards. Each feature panel is a field of its own (mint, sand, mint soft, deep sand, pine)
+ * with a solid pill label, and picks out one phrase of its headline in that field's ink.
  *
  * Pictures are Fractions, the illustration system (app/ui/fractions/): halves and quarters of a circle,
  * flat, on a 40px grid, with the Nomad and the crystal ball. They are inline SVG, hidden from
@@ -1463,7 +1463,7 @@ button.lp-fake-btn {
   color: var(--muted);
 }
 
-/* ---------- what you can do: four panels, each a field with its prop ---------- */
+/* ---------- what you can do: five panels, each a field with its prop ---------- */
 .lp-feat-list {
   display: grid;
   gap: 24px;
@@ -1492,6 +1492,15 @@ button.lp-fake-btn {
 }
 .lp-feat-soft {
   --tint: var(--volt-soft);
+  --feat-h: var(--ink);
+  --tint-ink: var(--volt-ink);
+  --feat-link: var(--volt-ink);
+  --feat-p: var(--body-ink);
+  --pill-bg: var(--pine);
+  --pill-ink: #fff;
+}
+.lp-feat-deep {
+  --tint: var(--sand-deep);
   --feat-h: var(--ink);
   --tint-ink: var(--volt-ink);
   --feat-link: var(--volt-ink);
@@ -1532,6 +1541,29 @@ button.lp-fake-btn {
 /* Every other panel leads with its picture. */
 .lp-feat:nth-child(even) .lp-feat-copy {
   order: 2;
+}
+.lp-feat-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+/* Beta, quietly: an outline in the field's own text colour, never a second solid pill. */
+.lp-feat-beta {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--beta-line, var(--line-strong));
+  color: var(--beta-ink, var(--muted));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.lp-feat-pine .lp-feat-beta {
+  --beta-line: rgba(255, 255, 255, 0.32);
+  --beta-ink: var(--on-pine-quiet);
 }
 .lp-feat-h.lp-feat-h {
   margin-top: 20px;
@@ -1931,113 +1963,201 @@ button.lp-fake-btn {
   border-radius: 999px;
   background: var(--surface-2);
 }
-/* everything else, named */
-/*
- * Everything in Merlin: every use case in a line, one row per job (Find, Get in, Price, Win, Let it
- * run). On a wide screen the job's name on the left and its use cases in two columns; on a phone,
- * stacked. Close and Beta in a small tag after the name.
- */
-.lp-all {
-  margin-top: 56px;
-}
-.lp-all-h.lp-all-h {
-  margin: 0 0 20px;
-  text-align: center;
-  font-size: 26px;
-  line-height: 32px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lp-all-jobs {
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  background: var(--surface);
-  overflow: hidden;
-}
-.lp-all-job {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 24px;
-  padding: 24px 32px;
-}
-.lp-all-job + .lp-all-job {
-  border-top: 1px solid var(--line);
-}
-.lp-all-job-h.lp-all-job-h {
-  margin: 0;
-  font-size: 17px;
+/* close it: the deal at Won, the signed proposal, a result from the Evidence Bank */
+.lp-v-won {
+  flex: none;
+  margin-left: auto;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
   line-height: 24px;
+  font-weight: 700;
+}
+/* The pipeline's steps, all passed: a bar each, the last one (Won) in pine. */
+.lp-v-pipe {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding-bottom: 16px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.lp-v-pipe > span {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.lp-v-pipe > span::before {
+  content: "";
+  height: 6px;
+  border-radius: 999px;
+  background: var(--volt);
+}
+.lp-v-pipe > .is-now {
   font-weight: 700;
   color: var(--pine);
 }
-.lp-all-list {
+.lp-v-pipe > .is-now::before {
+  background: var(--pine);
+}
+.lp-v-close .lp-v-sec .lp-v-top {
+  margin-bottom: 8px;
+}
+.lp-v-log {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.lp-v-log > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--body-ink);
+}
+.lp-v-log > .is-done {
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-weight: 700;
+}
+.lp-v-sign {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+}
+.lp-v-sig {
+  flex: none;
+  width: 112px;
+  height: 28px;
+}
+.lp-v-sig path {
+  fill: none;
+  stroke: var(--pine);
+  stroke-width: 2.2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lp-v-sign-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-v-proof {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--volt-soft);
+}
+.lp-v-proof-k {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.lp-v-proof .lp-v-tag {
+  background: var(--surface);
+}
+/* workflows: when this happens, then do this, each step with its credits */
+.lp-v-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+.lp-v-on::before {
+  content: "";
+  width: 26px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--pine) radial-gradient(circle at 18px 8px, #fff 5px, transparent 5.5px);
+}
+.lp-v-k {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lp-v-when,
+.lp-v-then {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.lp-v-when strong {
+  color: var(--ink);
+}
+.lp-v-steps {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 32px;
-}
-.lp-all-list li {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: 6px;
 }
-.lp-all-name {
-  display: inline-flex;
+.lp-v-steps > li {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 600;
-  color: var(--ink);
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
 }
-.lp-all-line {
-  font-size: 14.5px;
-  line-height: 21px;
-  color: var(--body-ink);
-}
-.lp-all-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
+.lp-v-n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pine);
+  color: #fff;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  background: var(--pine-8);
-  color: var(--pine);
 }
-.lp-all-tag-beta {
-  background: var(--sand);
-  color: var(--ink);
+.lp-v-steps .lp-v-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
 }
-@media (max-width: 960px) {
-  .lp-all-job {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
+.lp-v-cost {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
 }
-@media (max-width: 640px) {
-  .lp-all {
-    margin-top: 40px;
-  }
-  .lp-all-h.lp-all-h {
-    font-size: 22px;
-    line-height: 28px;
-  }
-  .lp-all-jobs {
-    border-radius: 18px;
-  }
-  .lp-all-job {
-    padding: 20px;
-  }
-  .lp-all-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.lp-v-flow-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.lp-v-flow-foot .lp-v-tag {
+  flex: none;
 }
 
 /* ---------- how it works: credits ---------- */
@@ -2991,6 +3111,21 @@ button.lp-fake-btn {
   }
   .lp-v-way-row {
     flex-wrap: wrap;
+  }
+  .lp-v-steps > li {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .lp-v-cost {
+    flex-basis: 100%;
+    padding-left: 32px;
+  }
+  .lp-v-sign {
+    gap: 12px;
+    padding: 10px 12px;
+  }
+  .lp-v-sig {
+    width: 88px;
   }
   .lp-steps {
     gap: 12px;

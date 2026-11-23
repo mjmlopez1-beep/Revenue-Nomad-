@@ -8,9 +8,10 @@
  * plain mint box in landing.css that runs from the arch to the bottom of the hero.
  *
  * The feature panels. One prop a panel, standing on the panel's product picture: the crystal
- * ball, the trail, the seat and the door. Each is 600 by 280 and stands on its bottom edge.
+ * ball, the trail, the seat, the door with the seat won, and the stairs. Each is 600 by 280 and
+ * stands on its bottom edge.
  *
- * Nothing here holds words, and every picture is decoration except the four props, which are
+ * Nothing here holds words, and every picture is decoration except the five props, which are
  * named.
  */
 import { Arch, Art, BigBall, Nomad, P, Seat, Spark, Steps, Tent } from "../ui/fractions/kit";
@@ -113,7 +114,7 @@ export function SparkMark({ className, t = "acc" }: Cls & { t?: "acc" | "sand" |
   );
 }
 
-/* ---------- the four props, one a feature panel: 600 by 280, standing on the bottom edge ---------- */
+/* ---------- the five props, one a feature panel: 600 by 280, standing on the bottom edge ---------- */
 
 /** Crystal Ball: the ball on its stand shows three tents, the ember one is next. The Nomad stands by on a pine hill. */
 export function FeatBall({ className }: Cls) {
@@ -169,26 +170,54 @@ export function FeatRates({ className }: Cls) {
   );
 }
 
-/** Open roles: a door, nested, with steps leading to it. */
-export function FeatDoor({ className }: Cls) {
+/** Close it: steps lead to a door with the seat inside it, won, and the Nomad stands by. A dome is cut by the left edge. */
+export function FeatClose({ className }: Cls) {
   return (
-    <Art w={600} h={280} className={className} title="A doorway with steps leading to it">
-      <P t="pine2" d={half(-200, 80, 200, "u")} />
-      <Arch x={180} y={280} r={120} h={240} t="mint" />
-      <Arch x={220} y={280} r={80} h={160} t="acc" />
-      <Arch x={260} y={280} r={40} h={80} t="sand" />
+    <Art w={600} h={280} className={className} title="Steps lead to a doorway with a seat inside it, and the Nomad stands beside it">
+      <P t="sand" d={half(-200, 80, 200, "u")} />
+      <P t="mint" d={quarter(440, 200, 80, "bl")} />
       <Steps
-        t="mint"
         pts={[
-          [450, 268],
-          [480, 268],
-          [510, 268],
-          [540, 268],
-          [570, 268],
+          [96, 268],
+          [126, 268],
+          [156, 268],
+          [186, 268],
+          [216, 268],
         ]}
       />
-      <Spark cx={480} cy={100} r={20} />
-      <Spark cx={560} cy={190} r={10} t="mint" />
+      <Arch x={240} y={280} r={100} h={240} t="pine" />
+      <Arch x={280} y={280} r={60} h={170} t="mint" />
+      <Seat x={293} y={280} scale={0.34} />
+      <Spark cx={150} cy={70} r={20} t="acc" />
+      <Spark cx={480} cy={60} r={10} t="pine" />
+      <Spark cx={196} cy={150} r={10} t="pine" />
+      <Nomad pose="stand" x={520} y={280} scale={0.45} />
+    </Art>
+  );
+}
+
+/** Workflows: one thing leads to the next. Three blocks rise like stairs to a door, steps run up them and the Nomad walks the first. A quarter is cut by the right edge. */
+export function FeatFlow({ className }: Cls) {
+  return (
+    <Art w={600} h={280} className={className} title="The Nomad walks up three blocks, like stairs, toward a doorway">
+      <P t="pine2" d={quarter(360, 40, 240, "br")} />
+      <P t="sand" d={square(40, 240, 160, 40)} />
+      <P t="mint" d={square(200, 200, 120, 80)} />
+      <P t="mints" d={square(320, 160, 120, 120)} />
+      <Arch x={340} y={160} r={40} h={120} t="acc" />
+      <Arch x={360} y={160} r={20} h={70} t="pine" />
+      <Steps
+        t="sand"
+        pts={[
+          [230, 188],
+          [260, 188],
+          [290, 188],
+        ]}
+      />
+      <Spark cx={520} cy={120} r={20} />
+      <Spark cx={56} cy={80} r={20} t="mint" />
+      <Spark cx={210} cy={110} r={10} t="sand" />
+      <Nomad pose="walk" x={140} y={240} scale={0.4} staff="sand" />
     </Art>
   );
 }
