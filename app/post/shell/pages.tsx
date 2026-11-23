@@ -316,6 +316,7 @@ const loadWarm = () => import("../network/WarmPaths");
 const loadContracts = () => import("../contracts/ContractsPage");
 const loadEvidence = () => import("../evidence/Evidence");
 const loadAlerts = () => import("../alerts/Alerts");
+const loadAgent = () => import("../agent/AgentAccess");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -334,8 +335,10 @@ const ContractsPageL = dynamic(() => loadContracts().then((m) => m.ContractsPage
 const EvidencePageL = dynamic(() => loadEvidence().then((m) => m.EvidencePage), { ssr: false, loading: pageWait });
 // Alerts and workflows (alerts/Alerts.tsx): every alert in one table, where they go, the starter gallery. The old look keeps Notifications.
 const AlertsPageL = dynamic(() => loadAlerts().then((m) => m.AlertsPage), { ssr: false, loading: pageWait });
+// Agent access (agent/AgentAccess.tsx): the member's agents, the tools' switches, the daily spend limit and the log.
+const AgentAccessL = dynamic(() => loadAgent().then((m) => m.AgentAccess), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadAlerts];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadAlerts, loadAgent];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -343,7 +346,7 @@ export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmark
 
 function CreditsP() {
   const c = useApp();
-  return <MyCredits view={c.view} refresh={c.refresh} onUseInClaude={() => c.openPage("integrations")} onNotifications={() => c.openPage("notifications")} />;
+  return <MyCredits view={c.view} refresh={c.refresh} onUseInClaude={() => c.openPage(c.ui2 ? "agent" : "integrations")} onNotifications={() => c.openPage("notifications")} />;
 }
 function IntegrationsP() {
   const c = useApp();
@@ -566,6 +569,12 @@ function ContractsP() {
   return <ContractsPageL />;
 }
 
+/** Agent access (agent/AgentAccess.tsx), page key "agent" (and ?p=claude) in the new look; the old look keeps Integrations' Claude section. */
+function AgentP() {
+  const c = useApp();
+  return c.ui2 ? <AgentAccessL /> : <IntegrationsP />;
+}
+
 /** Evidence Bank (evidence/Evidence.tsx), page key "evidence" (Close): its own header (Home / Evidence Bank / Your case library) and strip; on Free and Pro, the upgrade screen. */
 function EvidenceP() {
   return <EvidencePageL />;
@@ -577,7 +586,7 @@ const peersMain = (c: AppCtx) => (c.ui2 ? "wb-host fy-host" : c.shell.peersAll |
 /**
  * Every page by key. Old keys keep their pages; the new look's keys open the page that is their
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
- * Notifications, Agent access and Settings are Integrations).
+ * Notifications, Settings is Integrations; Agent access is its own page in the new look, Integrations in the old).
  */
 export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2" | "hiring2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
@@ -602,7 +611,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   warm: { title: "Warm paths", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.shell.wayCo ? "" : "wp-main") },
   evidence: { title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true, mainClass: (c) => (!c.me.plan || c.me.plan.canClose ? "wb-host ev-host" : "") },
   alerts: { title: "Alerts and workflows", component: AlertsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "al-host" : "") },
-  agent: { title: "Agent access", component: IntegrationsP },
+  agent: { title: "Agent access", component: AgentP, ownStrip: true, mainClass: (c) => (c.ui2 ? "ag-host" : "") },
   settings: { title: "Settings", component: IntegrationsP },
   contracts: { title: "Contracts", component: ContractsP, ownHeader: true, ownStrip: true, mainClass: "ct-main" },
   // Mount points for the new look's own pages (see the top of this file).

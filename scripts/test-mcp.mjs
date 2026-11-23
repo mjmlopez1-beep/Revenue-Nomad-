@@ -854,6 +854,52 @@ async function main() {
   const revB = await call("POST", "/api/oauth/apps", { cookie: B.token, headers: { origin: BASE }, body: { revoke: bGrant } });
   check("Revoke disconnects the app at once", revB.status === 200 && (await rpc(ba.access_token, "ping")).status === 401 && !revB.json.apps.some((x) => x.id === bGrant));
 
+  /* Agent access (lib/mcp/log.ts, /api/agent): switches, the daily spend limit and the log, for a member of its own */
+  {
+    const G = await join("Gil Agent");
+    const ga = await connect(G, { name: "Claude" });
+    const agentGet = () => call("GET", "/api/agent", { cookie: G.token, ipAddr: G.ip });
+    const agentSet = (body, headers = { origin: BASE }) => call("POST", "/api/agent", { cookie: G.token, ipAddr: G.ip, headers, body });
+    const v0 = await agentGet();
+    check("Agent access: the page's view needs the member signed in", (await call("GET", "/api/agent")).status === 401 && v0.status === 200);
+    check("  every tool in four groups with its switch on, unlock by kind, no limit, nothing in the log", v0.json?.view?.groups?.length === 4 && v0.json.view.tools.every((t) => t.on) && v0.json.view.tools.filter((t) => t.group === "spend").length === 4 && v0.json.view.limit === null && v0.json.view.log.length === 0, v0.json?.view && { tools: v0.json.view.tools.length, log: v0.json.view.log.length });
+    check("  and the agent connected, with today's use", v0.json?.view?.apps?.some((x) => x.name === "Claude" && x.requestsToday === 0));
+    const WORD = `qaword${RUN}`;
+    const read = await tool(ga.access_token, "search_companies", { query: WORD, limit: 2 });
+    check("  a read works", !read.isError);
+    check("  a switch only from Merlin's own pages, signed in, and only a real tool", (await agentSet({ key: "search_companies", on: false }, { origin: "https://evil.example.com" })).status === 403 && (await call("POST", "/api/agent", { headers: { origin: BASE }, body: { key: "search_companies", on: false } })).status === 401 && (await agentSet({ key: "drop_tables", on: false })).status === 400 && (await agentSet({ limit: 7 })).status === 400);
+    const sw = await agentSet({ key: "search_companies", on: false });
+    check("  switched off on the page", sw.status === 200 && sw.json?.view?.tools?.find((t) => t.key === "search_companies")?.on === false);
+    const refused = await tool(ga.access_token, "search_companies", { query: WORD, limit: 2 });
+    check("a switched-off tool refuses in plain words and does nothing", refused.isError && /^"Search companies" is switched off for agents\. The member switched this off on Merlin's Agent access page, so nothing was done\./.test(refused.out?.error ?? "") && !refused.out?.companies, refused.text);
+    const still = await rpc(ga.access_token, "tools/list");
+    check("  it stays in the tool list, and other tools still work", (still.json?.result?.tools ?? []).some((t) => t.name === "search_companies") && !(await tool(ga.access_token, "my_account")).isError);
+    await agentSet({ key: "search_companies", on: true });
+    check("  switched back on, it works", !(await tool(ga.access_token, "search_companies", { limit: 2 })).isError);
+    // The limit: 5 credits a day; companies open for 2 credits each here (no free company of the day).
+    const lim = await agentSet({ limit: 5 });
+    check("the daily spend limit is set on the page", lim.status === 200 && lim.json?.view?.limit === 5);
+    const locked = ((await tool(ga.access_token, "search_companies", { limit: 10 })).out?.companies ?? []).filter((c) => c.locked !== false).map((c) => c.id);
+    const credits0 = (await tool(ga.access_token, "my_account")).out?.credits;
+    const u1 = await tool(ga.access_token, "unlock", { entity: "company", id: locked[0], field: "identity", confirm: true });
+    const u2 = await tool(ga.access_token, "unlock", { entity: "company", id: locked[1], field: "identity", confirm: true });
+    check("  under it, the member's yes spends as before", u1.out?.confirmed === true && u2.out?.confirmed === true && (await tool(ga.access_token, "my_account")).out?.credits === credits0 - 4, [u1.text.slice(0, 120), u2.text.slice(0, 120)]);
+    const q3 = await tool(ga.access_token, "unlock", { entity: "company", id: locked[2], field: "identity" });
+    check("  a quote past it says so first", q3.out?.confirmed === false && /over the member's daily limit for agents/.test(q3.out?.message ?? ""), q3.out?.message);
+    const u3 = await tool(ga.access_token, "unlock", { entity: "company", id: locked[2], field: "identity", confirm: true });
+    check("the limit holds: past it a confirm spends nothing, in plain words", u3.isError && /may spend 5 a day \(4 spent today\)\. Nothing was spent\./.test(u3.text) && (await tool(ga.access_token, "my_account")).out?.credits === credits0 - 4, u3.text);
+    const gb = await connect(G, { name: "Cursor" });
+    const u4 = await tool(gb.access_token, "unlock", { entity: "company", id: locked[3], field: "identity", confirm: true });
+    check("  across agents too: another app of the member's is stopped", u4.isError && /may spend 5 a day/.test(u4.text), u4.text);
+    const v1 = (await agentGet()).json?.view;
+    const logText = JSON.stringify(v1?.log ?? []);
+    check("the log keeps no arguments: no search, no company, no field, no answer", !!v1 && v1.log.length >= 10 && !logText.includes(WORD) && !locked.some((id) => logText.includes(id)) && !/identity|query|confirm|"entity"|"id"/.test(logText), logText.slice(0, 300));
+    check("  only when, the tool, the outcome, credits and the app", v1.log.every((r) => Object.keys(r).every((k) => ["at", "t", "o", "c", "q", "a"].includes(k))));
+    check("  the spends, the stop and the switch-off are in it", v1.log.filter((r) => r.t === "unlock:company" && r.o === "ok" && r.c === 2).length === 2 && v1.log.some((r) => r.o === "limit" && r.q === 2) && v1.log.some((r) => r.o === "off" && r.t === "search_companies") && v1.log.some((r) => r.a === "Cursor"));
+    check("  today's spend and each agent's use", v1.spentToday === 4 && v1.apps.find((x) => x.name === "Claude")?.creditsToday === 4, { spent: v1.spentToday, apps: v1.apps });
+    check("  and nobody else's view has it", JSON.stringify((await call("GET", "/api/agent", { cookie: A.token })).json?.view?.log ?? []).indexOf('"q":2') === -1);
+  }
+
   /* limits: 60 tool calls a minute */
   const lc = await connect(L, { name: "Limits" });
   noPace.add(lc.access_token);

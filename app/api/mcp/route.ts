@@ -71,7 +71,7 @@ async function handle(req: NextRequest): Promise<Response> {
       return NextResponse.json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null }, { status: 400, headers: CORS });
     }
 
-    const server = makeServer({ member: who.member, origin: publicOrigin(req) });
+    const server = makeServer({ member: who.member, origin: publicOrigin(req), app: who.grant.clientName });
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);
     try {

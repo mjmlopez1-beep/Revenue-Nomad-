@@ -7876,8 +7876,11 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
       Object.entries(s.integrations.members).map(([id, m]) => [id, { ...m, pending: {}, ...(m.slack ? { slack: { ...m.slack, url: "" } } : {}), ...(m.webhook ? { webhook: { ...m.webhook, url: "" } } : {}) }]),
     ),
   };
+  // Agent access: the switches and the spend limit are settings and stay; the log of what a member's agents did is theirs alone.
+  const connector = s.connector && (({ log: _log, ...c }) => c)(s.connector); // eslint-disable-line @typescript-eslint/no-unused-vars
   return {
     ...rest,
+    ...(connector ? { connector } : {}),
     ...(conversations ? { conversations } : {}),
     ...(ownEmails ? { ownEmails } : {}),
     ...(seatInvites ? { seatInvites } : {}),
@@ -7961,6 +7964,9 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   del(s.billing?.members);
   if (s.connector) {
     del(s.connector.alerts);
+    // Agent access (lib/mcp/log.ts): their switches, their agents' spend limit and the log of what their agents did.
+    del(s.connector.agent);
+    del(s.connector.log);
     s.connector.grants = s.connector.grants.filter((x) => x.memberId !== id);
   }
   s.proposals = (s.proposals ?? []).filter((p) => p.memberId !== id);

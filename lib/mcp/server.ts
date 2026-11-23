@@ -22,6 +22,8 @@ import { registerEvidenceTools } from "./evidence";
 import { registerPeerTools } from "./peers";
 import { registerWayTools } from "./ways";
 import { registerGranolaTools } from "./granola";
+import { agentCall } from "./log";
+import { publicBase } from "../links";
 import { granolaOn } from "../granola/types";
 import { networkOn } from "../google/types"; // [google network]
 import { pathsOn } from "../paths";
@@ -96,6 +98,13 @@ const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: fals
 
 export function makeServer(ctx: T.Ctx): McpServer {
   const server = new McpServer({ name: "merlin", title: "Merlin", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: INSTRUCTIONS });
+  // Agent access (lib/mcp/log.ts): every tool, here and in the files below, goes through agentCall: a tool the member
+  // switched off refuses in plain words, unlock checks the daily spend limit, and each call leaves a row in the log
+  // (the tool, when, credits, outcome and app; never the arguments or what came back).
+  const page = `${(publicBase() ?? ctx.origin).replace(/\/$/, "")}/?p=agent`;
+  const register = server.registerTool.bind(server) as (name: string, config: unknown, cb: (...a: unknown[]) => Promise<CallToolResult>) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
+    register(name, config, (...a: unknown[]) => agentCall({ memberId: ctx.member.id, app: ctx.app, page }, name, a.length > 1 ? a[0] : undefined, () => cb(...a)));
 
   server.registerTool(
     "search_companies",
