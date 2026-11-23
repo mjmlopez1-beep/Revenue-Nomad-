@@ -13,8 +13,8 @@ import { firstName, frozenOf } from "./model";
 import "../../sign/sign.css";
 import "../../sign/clientview.css";
 
-export function ClientPreview({ p, close, onClose }: { p: ProposalRec; close: boolean; onClose: () => void }) {
-  const doc = useMemo(() => frozenOf(p, close), [p, close]);
+export function ClientPreview({ p, close, me, onClose }: { p: ProposalRec; close: boolean; me?: { name: string; title: string }; onClose: () => void }) {
+  const doc = useMemo(() => frozenOf(p, close, undefined, me), [p, close, me]);
   const [choice, setChoice] = useState<Choice | null>(null);
   const who = firstName(doc.to.name) || "the client";
   const pick = (optionId: string) => setChoice((c) => ({ optionId, addOnIds: c?.addOnIds ?? [] }));

@@ -793,7 +793,7 @@ export function ProposalsHome({
           </aside>
         )}
       </div>
-      {preview && <ClientPreview p={preview} close={data.canSend} onClose={() => setPreview(null)} />}
+      {preview && <ClientPreview p={preview} close={data.canSend} me={data.me} onClose={() => setPreview(null)} />}
     </div>
   );
 }

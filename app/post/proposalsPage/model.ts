@@ -14,7 +14,7 @@
  */
 import type { FrozenDoc, ProposalBlock, ProposalRec } from "@/lib/proposals/types";
 import type { ActivityView } from "@/lib/close/types";
-import { blanksOf, docFields, fill, rendered, templateBlocks, templateDef, TEMPLATES } from "@/lib/proposals/library";
+import { blanksOf, docFields, fieldLabel, fill, templateBlocks, templateDef, TEMPLATES } from "@/lib/proposals/library";
 import { priced } from "@/lib/proposals/pricing";
 import { minWords } from "@/lib/close/activity";
 import { example, type Example } from "../examples";
@@ -139,7 +139,7 @@ export function rowOf(p: ProposalRec, act: ActivityLite | null, nowMs = Date.now
   } else {
     const most = act?.stats.mostRead;
     const mostMs = act?.sections.find((s) => s.top)?.ms ?? 0;
-    a1 = opens ? `Opened ${opens === 1 ? "once" : `${opens} times`}${act && act.stats.readers > 1 ? ` · ${act.stats.readers} readers` : most && mostMs ? ` · ${minWords(mostMs)} on ${most}` : ""}` : `Opened ${short(x?.viewedAt)}`;
+    a1 = opens ? `Opened ${opens === 1 ? "once" : opens === 2 ? "twice" : `${opens} times`}${act && act.stats.readers > 1 ? ` · ${act.stats.readers} readers` : most && mostMs ? ` · ${minWords(mostMs)} on ${most}` : ""}` : `Opened ${short(x?.viewedAt)}`;
     const last = act?.timeline.find((t) => !/^you sent/i.test(`${t.strong ?? ""}${t.text}`.trim()));
     a2 = st === "client_signed" ? `${first} signed ${short(x?.signedAt)}` : st === "signed" ? `Signed by both${x?.memberSignedAt || x?.signedAt ? ` on ${short(x?.memberSignedAt ?? x?.signedAt)}` : ""}` : st === "declined" ? `Declined ${short(x?.declinedAt)}${x?.declineReason ? `. Reason: ${x.declineReason}` : "."}` : last ? `${last.strong ?? ""}${last.text}`.trim() : `Sent ${short(x?.sentAt)}`;
   }
@@ -262,16 +262,18 @@ export const fromWords = (fileName: string) => (fileName === BUILT_FROM ? "Built
 /* ---------- the client's view, for the preview ---------- */
 
 /** The proposal as the client will read it: what the server freezes when it is sent (lib/proposals/store.ts freeze). */
-export function frozenOf(p: ProposalRec, close: boolean, nowIso = new Date().toISOString()): FrozenDoc {
+export function frozenOf(p: ProposalRec, close: boolean, nowIso = new Date().toISOString(), me?: { name: string; title: string }): FrozenDoc {
   const signer = p.signer ?? { name: p.fields["client.signerName"] ?? "", email: p.fields["client.signerEmail"] ?? "", title: p.fields["client.signerTitle"] ?? "" };
   const f = docFields({ ...p, signer });
+  // A blank still to fill reads as its label in brackets: it can't go out like that, and the preview says what is missing.
+  const blank = (k: string) => `[${fieldLabel(k)}]`;
   return {
     title: p.title,
     version: p.version,
     company: p.company.name,
-    from: { name: f["provider.name"] || "", title: f["provider.title"] || "" },
+    from: { name: f["provider.name"] || me?.name || "", title: f["provider.title"] || me?.title || "" },
     to: { name: signer.name, title: signer.title ?? "", email: signer.email },
-    blocks: rendered(p.blocks, f).map((b, i) => ({ ...b, kind: p.blocks[i].blockId })),
+    blocks: p.blocks.map((b) => ({ title: b.title, text: fill(b.body, f, blank), kind: b.blockId })),
     ...(close && p.pricing?.options.length ? { pricing: structuredClone(p.pricing) } : {}),
     preparedAt: nowIso,
   };

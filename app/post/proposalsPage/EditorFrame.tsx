@@ -381,7 +381,7 @@ export function EditorFrame(x: EditorFrameProps) {
           </span>
         )}
       </div>
-      {client && <ClientPreview p={p} close={data.canSend} onClose={() => setClient(false)} />}
+      {client && <ClientPreview p={p} close={data.canSend} me={data.me} onClose={() => setClient(false)} />}
     </div>
   );
 }
