@@ -357,6 +357,18 @@ const admin = (await view("tok-ada")).admin?.leaders;
 check("the run's progress and what is on file count named leaders", typeof admin?.run?.named === "number" && admin.onFile.named === 9, admin && { run: admin.run, onFile: admin.onFile });
 check("nothing names LinkedIn or Sales Navigator as a source", !/linked\s*in|navigator/i.test(JSON.stringify([types.LEADERS_SOURCE_SAY, likelyWords(2)])));
 
+/* ---------- the California rule (lib/california.ts): the person's own location ---------- */
+console.log("\nCalifornia");
+
+const sidBefore = ppl(await view("tok-mo"), "Acme Test").filter((p) => p.site).length;
+// A leader whose own location says California (LeaderFn.california): never named, at a Texas company too.
+await table.tableInternals.mutate((d: { leaders?: Record<string, { functions: Record<string, { california?: true }> }> }) => {
+  const sales = d.leaders?.c_us?.functions.Sales;
+  if (sales) sales.california = true;
+});
+const afterCa = ppl(await view("tok-mo"), "Acme Test").filter((p) => p.site);
+check("a leader in California by their own location is not on the record, whatever the company's state", afterCa.length === sidBefore - 1 && !has(await view("tok-sal"), "salesford"), { before: sidBefore, after: afterCa.length });
+
 server.close();
 server.closeAllConnections?.();
 rmSync(dir, { recursive: true, force: true });

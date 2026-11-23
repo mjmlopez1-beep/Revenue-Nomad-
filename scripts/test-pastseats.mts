@@ -327,7 +327,7 @@ const namedSeedPath = path.join(dir, "intel-seed-names.json");
   check("United States holders are named, cleaned (credentials and Dr. off)", e("PSFX-001")?.fields.operator === P.zelda && e("PSFX-003")?.fields.operator === P.pella && e("PSFX-005")?.fields.operator === P.sable && e("PSFX-009c")?.fields.operator === P.odalys, usRows.map((x) => e(x)?.fields.operator));
   check("each named seat is marked holderFrom public profile", usRows.every((x) => e(x)?.holderFrom === "public profile"));
   check("no seat outside the United States carries a name", kept.filter((x) => x.country !== US).every((x) => !e(x.past_seat_id)?.fields.operator && !e(x.past_seat_id)?.holderFrom));
-  check("the counts say so, and print no name", line(r.stdout, /named now: (\d+)/) === String(usRows.length) && /named seats outside the United States: 0/.test(r.stdout) && !PEOPLE.some((p) => r.stdout.includes(p)), r.stdout);
+  check("the counts say so, and print no name", line(r.stdout, /named now: (\d+)/) === String(usRows.length) && /named seats outside the United States or in California: 0/.test(r.stdout) && !PEOPLE.some((p) => r.stdout.includes(p)), r.stdout);
   const text = readFileSync(namedSeedPath, "utf8");
   check("no other person's name reaches the seed", PEOPLE.filter((p) => text.includes(p)).sort().join() === [P.zelda, P.pella, P.sable, P.odalys].sort().join(), PEOPLE.filter((p) => text.includes(p)));
   const again = run(namedSeedPath, "--companies", tabPath, "--names");
@@ -350,7 +350,7 @@ const namedSeedPath = path.join(dir, "intel-seed-names.json");
   const t = JSON.parse(readFileSync(p, "utf8")) as { engagements: Eng[] };
   const e = (psid: string) => t.engagements.find((x) => x.id === pastId(psid));
   check("a seat that has a holder keeps it", r.status === 0 && e("PSFX-001")?.fields.operator === "Kept Holdername", r.stderr);
-  check("a public-profile name on a seat whose row is outside the United States comes off", !e("PSFX-002")?.fields.operator && !e("PSFX-002")?.holderFrom && /names taken off them: 1; named seats outside the United States: 0/.test(r.stdout), r.stdout);
+  check("a public-profile name on a seat whose row is outside the United States comes off", !e("PSFX-002")?.fields.operator && !e("PSFX-002")?.holderFrom && /names taken off them and California's: 1; named seats outside the United States or in California: 0/.test(r.stdout), r.stdout);
 }
 {
   // The refusal: a seat outside the United States with a name that didn't come from public profiles.
@@ -359,7 +359,7 @@ const namedSeedPath = path.join(dir, "intel-seed-names.json");
   const before = JSON.stringify(bad);
   writeFileSync(p, before);
   const r = run(p, "--names");
-  check("refuses to write when a seat outside the United States would carry a name", r.status === 1 && /1 seats outside the United States would carry a name\. Nothing was written\./.test(r.stderr) && readFileSync(p, "utf8") === before, r.stdout + r.stderr);
+  check("refuses to write when a seat outside the United States would carry a name", r.status === 1 && /1 seats outside the United States or in California would carry a name\. Nothing was written\./.test(r.stderr) && readFileSync(p, "utf8") === before, r.stdout + r.stderr);
   check("  and the refusal prints no name", !PEOPLE.some((x) => (r.stdout + r.stderr).includes(x)));
 }
 

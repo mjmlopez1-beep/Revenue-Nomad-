@@ -59,7 +59,8 @@ if (!process.env.RN_OWN_SITES_TSX) {
 const { companyKey, isPlaceholderCompany } = await import("../lib/scan/clean.ts");
 const { companyFirm } = await import("../lib/firmRemoval.ts");
 const { isDirectoryHost } = await import("../lib/websites/verify.ts");
-const { inCalifornia } = await import("../lib/ownsites/types.ts");
+// The California rule, one everywhere (lib/california.ts): the person's own location.
+const { californian } = await import("../lib/california.ts");
 const { host, isTrue, ownFirm, parseCsv, personKey, real, seedKey } = await import("./seat-import.mjs");
 const { cleanPersonName } = await import("../lib/personName.ts");
 
@@ -142,7 +143,7 @@ const add = (r, current) => {
   p.rows.push({ r, current });
   if (inUs(r)) p.us = true;
   else if (real(r.country)) p.other = true;
-  if (inCalifornia(r.person_location)) p.ca = true;
+  if (californian({ location: r.person_location })) p.ca = true;
 };
 for (const r of seatRows) add(r, true);
 for (const r of pastRows) add(r, false);

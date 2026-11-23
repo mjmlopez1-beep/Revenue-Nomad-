@@ -17,6 +17,7 @@ const { normalizeHq } = await import("../lib/geo.ts");
 const { employeeBand } = await import("../lib/industryMap.ts");
 const { cleanSeed } = await import("../lib/firmRemoval.ts");
 const { cleanPersonName } = await import("../lib/personName.ts");
+const { californian } = await import("../lib/california.ts");
 
 /* ---------- CSV ---------- */
 
@@ -326,6 +327,10 @@ export function cleanKeeping(seed, created, about) {
 export const PUBLIC_PROFILE = "public profile";
 /** The owner's rule: a name only for a row whose country is exactly "United States". */
 export const inUs = (r) => String(r.country ?? "").trim() === "United States";
+/** The row's person is in California by their own location (lib/california.ts, the one rule). Read as a yes or no, never stored. */
+export const inCa = (r) => californian({ location: r.person_location });
+/** A name from this row may go on a seat: the person is in the United States and not in California. */
+export const nameRowOk = (r) => inUs(r) && !inCa(r);
 
 /**
  * Put the row's name on a seat as its holder, cleaned (lib/personName.ts) and marked as from public
@@ -341,16 +346,17 @@ export function nameSeat(e, rawName) {
 }
 
 /**
- * A seat named from public profiles whose row puts the holder outside the United States loses the
- * name (they moved, or an older file said otherwise). A member's claim lives in the state and is
- * not touched. Then counts the seats outside the United States that still carry a name, which must
- * be 0 before anything is written. `seatOf(row)`: the row's seat on the seed, if any;
- * `ours(seat)`: a seat whose name only this kind of import could have put there.
+ * A seat named from public profiles whose row puts the holder outside the United States, or in
+ * California (their own location, lib/california.ts), loses the name (they moved, or an older file
+ * said otherwise, or the name went on before the California rule). A member's claim lives in the
+ * state and is not touched. Then counts the seats whose row may carry no name that still carry
+ * one, which must be 0 before anything is written. `seatOf(row)`: the row's seat on the seed, if
+ * any; `ours(seat)`: a seat whose name only this kind of import could have put there.
  */
 export function outsideUsNames(rows, seatOf, ours) {
   let takenOff = 0;
   for (const r of rows) {
-    if (inUs(r)) continue;
+    if (nameRowOk(r)) continue;
     const e = seatOf(r);
     if (e && e.holderFrom === PUBLIC_PROFILE) {
       delete e.fields.operator;
@@ -359,7 +365,7 @@ export function outsideUsNames(rows, seatOf, ours) {
     }
   }
   const namedOutsideUs = rows.filter((r) => {
-    if (inUs(r)) return false;
+    if (nameRowOk(r)) return false;
     const e = seatOf(r);
     return !!e && (e.holderFrom === PUBLIC_PROFILE || (ours(e) && !!e.fields?.operator));
   }).length;

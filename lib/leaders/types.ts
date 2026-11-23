@@ -57,6 +57,12 @@ export interface LeaderFn {
   name?: string;
   title?: string;
   page?: string;
+  /**
+   * The person is in California by their own location, when a page says where they are (a yes,
+   * never the place). Their name never shows (lib/california.ts). No reader sets it yet: a leader's
+   * page rarely gives one, and the company's state is not the person's.
+   */
+  california?: true;
 }
 /** The company's top leader: its CEO, else its president, else a founder (`rank` 0, 1, 2). Kept only with a name. */
 export interface LeaderTop extends LeaderFn {

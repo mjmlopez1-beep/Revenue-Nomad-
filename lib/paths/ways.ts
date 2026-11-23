@@ -118,10 +118,14 @@ const lc = (x: string) => x.charAt(0).toLowerCase() + x.slice(1);
 const lcStep = (x: string) => (/^(Ask|Send|Meet|Write|Their|Whoever|You)\b/.test(x) ? lc(x) : x);
 const companyLabel = (cx: Cx, id: string) => (cx.f.me.visible(id) ? (cx.g.companies.get(id)?.name ?? null) : null);
 
-/** Names from public profiles show only at a company in the United States, and never in California. */
+/**
+ * Names from public profiles show only at a company in the United States. California is judged by
+ * the person, not the company (lib/california.ts, the one rule): the importers never name a person
+ * whose own location is California, so a name on file here is never a Californian's, whatever the
+ * company's state. A ways-in name shows wherever the table shows it.
+ */
 function publicNameOk(cx: Cx, companyId: string): boolean {
-  const geo = T.geoOf(cx.g.companies.get(companyId), cx.s);
-  return geo.country === "United States" && geo.region !== "California";
+  return T.geoOf(cx.g.companies.get(companyId), cx.s).country === "United States";
 }
 
 /** A seat holder's name and role, only when the member can see them (and a public-profile name only where it may show). */

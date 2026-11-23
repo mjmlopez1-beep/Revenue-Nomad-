@@ -146,6 +146,7 @@ import type { StoredDocument } from "./documents/types";
 // inside the same change that sends, signs or declines. Registered once, when the server loads this module.
 import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
 import { ui2Me, ui2Setting } from "./ui2";
+import { nameMayShow } from "./california";
 setPipelineHook(proposalToPipeline);
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -10158,9 +10159,12 @@ const isFirmNode = (node: CompanyNode, s: State) => !!companyFirm(node.name, liv
 
 /**
  * The owner's rule, as for seat-holder names from public profiles (scripts/add-seat-names.mjs):
- * names only for a company whose HQ is in the United States. An HQ we can't place is not.
+ * names only for a company whose HQ is in the United States. An HQ we can't place is not. And the
+ * California rule, one everywhere (lib/california.ts): never a person in California by their own
+ * location (LeaderFn.california), whatever the company's state.
  */
 const LEADER_NAMES_COUNTRY = "United States";
+const leaderMayShow = (l: { california?: true }) => nameMayShow({ california: l.california === true });
 const namesAllowedAt = (c: Node | undefined, s: State) => !!c && geoOf(c, s).country === LEADER_NAMES_COUNTRY;
 /** A person at a company as a one-way key of their first and last name (nameKey): the record's id and Remove my name's mark. Never the name. */
 function leaderKey(companyId: string, name: string): string {
@@ -10210,13 +10214,13 @@ function namedLeaders(rec: Pick<LeadersRecord, "functions" | "top">): (LeaderFn 
 function keepNamesWhereAllowed(s: State, seed: Seed, node: Node | undefined, companyId: string, rec: Pick<LeadersRecord, "functions" | "top">, priv?: Set<string>): number {
   const allowed = namesAllowedAt(node, s);
   const hidden = priv ?? privateMemberKeys(seed, s);
-  const ok = (name: string) => allowed && !leaderOff(s, companyId, name) && !hidden.has(nameKey(name));
+  const ok = (name: string, l: { california?: true }) => allowed && leaderMayShow(l) && !leaderOff(s, companyId, name) && !hidden.has(nameKey(name));
   for (const [fn, l] of Object.entries(rec.functions)) {
-    if (!l.name || ok(l.name)) continue;
+    if (!l.name || ok(l.name, l)) continue;
     const { name: _n, title: _t, page: _p, ...rest } = l; // eslint-disable-line @typescript-eslint/no-unused-vars
     rec.functions[fn] = rest;
   }
-  if (rec.top && !ok(rec.top.name)) delete rec.top;
+  if (rec.top && !ok(rec.top.name, rec.top)) delete rec.top;
   return namedLeaders(rec).length;
 }
 /* ---------- the seat holder's email from their own website (lib/ownsites) ---------- */
@@ -10363,7 +10367,7 @@ function leaderPeople(seed: Seed, s: State, g: Graph) {
     }
     const here = byCompany.get(cid) ?? [];
     for (const l of namedLeaders(rec)) {
-      if (leaderOff(s, cid, l.name) || priv.has(nameKey(l.name))) continue;
+      if (!leaderMayShow(l) || leaderOff(s, cid, l.name) || priv.has(nameKey(l.name))) continue;
       if (here.some((p) => !p.site && sameName(valueOf(p, s, "name")?.value ?? "", l.name))) continue;
       const id = leaderPersonId(cid, l.name);
       if (g.contacts.has(id)) continue;

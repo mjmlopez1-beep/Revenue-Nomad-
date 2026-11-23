@@ -219,7 +219,7 @@ check("only the seat holder and the mark changed", JSON.stringify(s1.companies) 
 const second = runNames();
 check("a second run names nothing and keeps all 9", line(second.stdout, /named now: (\d+)/) === "0" && line(second.stdout, /\(kept\): (\d+)/) === "9", second.stdout);
 check("a second run leaves the seed as it was", readFileSync(seedPath, "utf8") === seedText);
-check("no seat outside the United States carries a name (the run says 0)", line(first.stdout, /named seats outside the United States: (\d+)/) === "0" && !eng(seat("fx-u1")[1]).fields.operator, first.stdout);
+check("no seat outside the United States carries a name (the run says 0)", line(first.stdout, /named seats outside the United States or in California: (\d+)/) === "0" && !eng(seat("fx-u1")[1]).fields.operator, first.stdout);
 {
   // A seat named from a public profile whose row now puts the holder outside the United States loses the name.
   const moved = {
@@ -232,8 +232,42 @@ check("no seat outside the United States carries a name (the run says 0)", line(
   writeFileSync(movedCsv, [HEAD, csvRow({ ...base, seat_id: "fx-uk1", person_name: P.yorick, person_sales_nav_id: "NAVLEAD0099", company_name: "Bravo Fixture Labs", country: "United Kingdom" })].join("\n") + "\n");
   const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-names.mjs"), movedCsv, "--seed", movedSeed, "--no-seal"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
   const after = JSON.parse(readFileSync(movedSeed, "utf8")).engagements[0];
-  check("a public-profile name on a seat outside the United States is taken off", r.status === 0 && !after.fields.operator && !after.holderFrom && /names taken off them: 1; named seats outside the United States: 0/.test(r.stdout), r.stdout + r.stderr);
+  check("a public-profile name on a seat outside the United States is taken off", r.status === 0 && !after.fields.operator && !after.holderFrom && /names taken off them and California's: 1; named seats outside the United States or in California: 0/.test(r.stdout), r.stdout + r.stderr);
   check("  and the run prints no name", !leaksIn(r.stdout + r.stderr, Object.values(P)).length);
+}
+{
+  // The California rule, one everywhere (lib/california.ts): judged by the person's own location, never the company's.
+  const ca = {
+    ...seed,
+    companies: [...seed.companies, { id: "c_tex", fields: { name: "Texas Fixture Co", hq: "Austin, TX" } }, { id: "c_cal", fields: { name: "Cal Fixture Co", hq: "San Francisco, California" } }],
+    engagements: [
+      // In California by their own location, at a Texas company: never named.
+      { id: hashedId("fx-ca1"), companyId: "c_tex", fields: { source: "Seat scan", role: "Fractional CMO", type: "Fractional", status: "Active", end: "Ongoing" }, verified: false },
+      // Named before the rule, and in California: the name comes off.
+      { id: hashedId("fx-ca2"), companyId: "c_tex", fields: { source: "Seat scan", role: "Fractional CFO", type: "Fractional", status: "Active", end: "Ongoing", operator: P.yorick }, holderFrom: "public profile", verified: false },
+      // Outside California by their own location, at a California company: named.
+      { id: hashedId("fx-ca3"), companyId: "c_cal", fields: { source: "Seat scan", role: "Fractional COO", type: "Fractional", status: "Active", end: "Ongoing" }, verified: false },
+    ],
+  };
+  const caSeed = path.join(dir, "intel-seed-ca.json");
+  const caCsv = path.join(dir, "seats-ca.csv");
+  writeFileSync(caSeed, JSON.stringify(ca));
+  writeFileSync(
+    caCsv,
+    [
+      HEAD,
+      csvRow({ ...base, seat_id: "fx-ca1", person_name: P.galatea, person_sales_nav_id: "NAVLEAD0201", company_name: "Texas Fixture Co", country: "United States", person_location: "Oakland, California, United States" }),
+      csvRow({ ...base, seat_id: "fx-ca2", person_name: P.yorick, person_sales_nav_id: "NAVLEAD0202", company_name: "Texas Fixture Co", country: "United States", person_location: "San Diego Metropolitan Area" }),
+      csvRow({ ...base, seat_id: "fx-ca3", person_name: P.fenwick, person_sales_nav_id: "NAVLEAD0203", company_name: "Cal Fixture Co", country: "United States", person_location: "Denver, Colorado, United States" }),
+    ].join("\n") + "\n",
+  );
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-seat-names.mjs"), caCsv, "--seed", caSeed, "--no-seal"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
+  const after = JSON.parse(readFileSync(caSeed, "utf8")).engagements as { id: string; fields: { operator?: string }; holderFrom?: string }[];
+  const at = (sid: string) => after.find((e) => e.id === hashedId(sid))!;
+  check("California, by the person's own location: never named, even at a company outside California", r.status === 0 && !at("fx-ca1").fields.operator && /in California \(their own location\), never named: 2/.test(r.stdout), r.stdout + r.stderr);
+  check("  a name put on before the rule comes off when the row says California", !at("fx-ca2").fields.operator && !at("fx-ca2").holderFrom && /names taken off them and California's: 1/.test(r.stdout), r.stdout);
+  check("  a person outside California at a California company is named: the company's state never counts", at("fx-ca3").fields.operator === P.fenwick, at("fx-ca3"));
+  check("  the location is never stored, and the run prints no name", !readFileSync(caSeed, "utf8").includes("Oakland") && !readFileSync(caSeed, "utf8").includes("Denver") && !leaksIn(r.stdout + r.stderr, Object.values(P)).length);
 }
 
 console.log("\nThe outreach file");

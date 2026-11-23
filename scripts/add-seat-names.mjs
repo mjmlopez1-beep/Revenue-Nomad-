@@ -14,9 +14,11 @@
  * seat_id's letters and digits). A person's further seat under the same seat_id (another company or
  * title) is found by its own id, as add-seat-scan.mjs gave it (scripts/seat-import.mjs seatScanIds).
  *
- * Only rows whose country is exactly "United States" are named. A seat named from a public profile
- * whose row says the holder is elsewhere loses that name, and the run stops without writing if any
- * seat outside the United States would still carry one (it prints that count, which must be 0).
+ * Only rows whose country is exactly "United States" are named, and never a person in California by
+ * their own location (person_location, lib/california.ts, read as a yes or no and never stored). A
+ * seat named from a public profile whose row says the holder is elsewhere, or in California, loses
+ * that name, and the run stops without writing if any such seat would still carry one (it prints
+ * that count, which must be 0).
  * The name is cleaned (lib/personName.ts):
  * pronouns, credentials, emoji, nicknames and decoration go, and what is left must read as a first
  * and last name written out; a row whose name doesn't is skipped and counted. The seat gets the name
@@ -38,7 +40,7 @@ if (!process.env.RN_SEAT_NAMES_TSX) {
   process.exit(r.status ?? 1);
 }
 // What the importers share: the CSV, the seed key, and names for United States seats only (seat-import.mjs).
-const { inUs, nameSeat, outsideUsNames, parseCsv, seatScanIds, seedKey } = await import("./seat-import.mjs");
+const { inCa, inUs, nameSeat, outsideUsNames, parseCsv, seatScanIds, seedKey } = await import("./seat-import.mjs");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -69,12 +71,17 @@ const seatOfRow = (r) => {
   return p && !p.dup ? (p.legacy && byId.get(p.legacy)) || byId.get(p.hashed) : undefined;
 };
 
-const counts = { us: 0, matchedHashed: 0, matchedLegacy: 0, notOnSeed: 0, notFound: 0, alreadyNamed: 0, named: 0, sameSeatTwice: 0 };
+const counts = { us: 0, ca: 0, matchedHashed: 0, matchedLegacy: 0, notOnSeed: 0, notFound: 0, alreadyNamed: 0, named: 0, sameSeatTwice: 0 };
 const skipped = {};
 const seen = new Set();
 for (const r of rows) {
   if (!inUs(r)) continue;
   counts.us++;
+  // The California rule: never named, by the person's own location.
+  if (inCa(r)) {
+    counts.ca++;
+    continue;
+  }
   const sid = String(r.seat_id ?? "").trim();
   if (!sid) {
     counts.notOnSeed++;
@@ -107,12 +114,13 @@ for (const r of rows) {
   else counts.named++;
 }
 
-// The owner's rule: no name for anyone based outside the United States. A seat named from a public
-// profile whose row in this file is outside the United States (the holder moved, or an older file
-// said otherwise) loses that name. A member's claim lives in the state and is not touched.
+// The owner's rules: no name for anyone based outside the United States, or in California. A seat
+// named from a public profile whose row in this file is outside the United States or in California
+// (the holder moved, an older file said otherwise, or it was named before the California rule) loses
+// that name. A member's claim lives in the state and is not touched.
 const { takenOff, namedOutsideUs } = outsideUsNames(rows, seatOfRow, (e) => e.fields?.source === "Seat scan");
 if (namedOutsideUs) {
-  console.error(`${namedOutsideUs} seats outside the United States would carry a name. Nothing was written.`);
+  console.error(`${namedOutsideUs} seats outside the United States or in California would carry a name. Nothing was written.`);
   process.exit(1);
 }
 
@@ -122,6 +130,7 @@ const matched = counts.matchedHashed + counts.matchedLegacy;
 const skippedN = Object.values(skipped).reduce((n, x) => n + x, 0);
 const onFile = seed.engagements.filter((e) => e.holderFrom === "public profile" && e.fields?.operator).length;
 console.log(`${dryRun ? "DRY RUN, nothing written. " : ""}rows read: ${rows.length}, United States: ${counts.us}`);
+console.log(`in California (their own location), never named: ${counts.ca}`);
 console.log(`matched to a seat on the seed: ${matched} (${counts.matchedHashed} by the hashed id, ${counts.matchedLegacy} by the first batch's id); not on the seed: ${counts.notOnSeed}`);
 if (counts.notFound) console.log(`matched a seat that isn't from the seat scan (left alone): ${counts.notFound}`);
 if (counts.sameSeatTwice) console.log(`the same seat twice in the file: ${counts.sameSeatTwice}`);
@@ -129,6 +138,6 @@ console.log(`named now: ${counts.named}`);
 console.log(`already had a seat holder (kept): ${counts.alreadyNamed}`);
 console.log(`skipped, the name doesn't read as a first and last name: ${skippedN}`);
 for (const [why, n] of Object.entries(skipped).sort((a, b) => b[1] - a[1])) console.log(`  skipped (${why}): ${n}`);
-console.log(`rows outside the United States: ${rows.length - counts.us}; names taken off them: ${takenOff}; named seats outside the United States: ${namedOutsideUs}`);
+console.log(`rows outside the United States: ${rows.length - counts.us}; names taken off them and California's: ${takenOff}; named seats outside the United States or in California: ${namedOutsideUs}`);
 console.log(`seed now: ${onFile} seats named from public profiles, of ${seed.engagements.filter((e) => e.fields?.source === "Seat scan").length} seat-scan seats`);
 if (!dryRun && !noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });

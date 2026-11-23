@@ -96,7 +96,7 @@ const { normalizeHq } = await import("../lib/geo.ts");
 const { employeeBand, industryOf, revenueBand } = await import("../lib/industryMap.ts");
 const { companyFirm } = await import("../lib/firmRemoval.ts");
 const {
-  FUNCTION_MAP, aboutNamesHolder, cleanKeeping, cleanUrl, companyIndex, companyName, host, hqCountry, inUs, isTrue, linkedinKey, nameSeat, newCompanyId, notFractional,
+  FUNCTION_MAP, aboutNamesHolder, cleanKeeping, cleanUrl, companyIndex, companyName, host, hqCountry, inCa, inUs, isTrue, linkedinKey, nameSeat, newCompanyId, notFractional,
   outsideUsNames, ownFirm, parseCsv, personKey, real, seedKey, seniorTitle,
 } = await import("./seat-import.mjs");
 
@@ -503,26 +503,31 @@ for (const { r, e } of keptRows) {
 
 /* ---------- names: United States only ---------- */
 
-const names = { us: 0, named: 0, kept: 0, skipped: {} };
+const names = { us: 0, ca: 0, named: 0, kept: 0, skipped: {} };
 if (withNames) {
   for (const { r, e } of keptRows) {
     if (!inUs(r)) continue;
     names.us++;
+    // The California rule (lib/california.ts): never named, by the person's own location.
+    if (inCa(r)) {
+      names.ca++;
+      continue;
+    }
     const put = nameSeat(e, r.person_name);
     if (put.kept) names.kept++;
     else if (put.skip) names.skipped[put.skip] = (names.skipped[put.skip] ?? 0) + 1;
     else names.named++;
   }
 }
-// Whatever the flag: a name from public profiles on a seat whose row is outside the United States
-// comes off, and nothing is written if any such seat would still carry a name.
+// Whatever the flag: a name from public profiles on a seat whose row is outside the United States,
+// or in California, comes off, and nothing is written if any such seat would still carry a name.
 const seatOfRow = (r) => {
   const psid = String(r.past_seat_id ?? "").trim();
   return psid ? engById.get(pastId(psid)) : undefined;
 };
 const { takenOff, namedOutsideUs } = outsideUsNames(firstRows, seatOfRow, (e) => e.id.startsWith("e_ps_"));
 if (namedOutsideUs) {
-  console.error(`${namedOutsideUs} seats outside the United States would carry a name. Nothing was written.`);
+  console.error(`${namedOutsideUs} seats outside the United States or in California would carry a name. Nothing was written.`);
   process.exit(1);
 }
 
@@ -567,10 +572,10 @@ console.log(`outside GTM and below Director, ${countsOnly ? `${Object.keys(junio
 console.log(`seat holders' countries (counted, never stored), top 10: ${top(countryCount, 10)}`);
 if (withNames) {
   const sk = Object.values(names.skipped).reduce((a, b) => a + b, 0);
-  console.log(`names: United States seats ${names.us}; named now: ${names.named}; already had a seat holder (kept): ${names.kept}; skipped, the name doesn't read as a first and last name: ${sk}`);
+  console.log(`names: United States seats ${names.us}; in California (their own location), never named: ${names.ca}; named now: ${names.named}; already had a seat holder (kept): ${names.kept}; skipped, the name doesn't read as a first and last name: ${sk}`);
   for (const [why, k] of Object.entries(names.skipped).sort((a, b) => b[1] - a[1])) console.log(`  skipped (${why}): ${k}`);
 } else console.log("names: none stored (run with --names for United States seats)");
-console.log(`rows outside the United States: ${firstRows.filter((r) => !inUs(r)).length}; names taken off them: ${takenOff}; named seats outside the United States: ${namedOutsideUs}`);
+console.log(`rows outside the United States: ${firstRows.filter((r) => !inUs(r)).length}; names taken off them and California's: ${takenOff}; named seats outside the United States or in California: ${namedOutsideUs}`);
 console.log(`likely fractional providers (the file's flag), seats dropped: ${dropped["likely fractional provider (the file's flag)"] ?? 0} at ${providerCompanies.size} companies`);
 console.log(`new firms dropped at import: ${firmNames.size}${countsOnly ? "" : firmNames.size ? `: ${[...firmNames].map(([nm, w]) => `${nm} (${w})`).sort().join(" | ")}` : ""}`);
 console.log(`firms the cleanup removed: ${cleaned.removed.companies} companies, ${cleaned.removed.seats} seats (${cleaned.kept.length} kept for admin review)`);

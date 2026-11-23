@@ -175,10 +175,5 @@ export function rejectWords(r: OwnRunSummary): string {
   return e.length ? e.map(([k, v]) => `${v.toLocaleString("en-US")} ${k}`).join(", ") : "none";
 }
 
-/**
- * Whether a LinkedIn-style location reads as California: the state by name or ", CA", or one of its
- * metro areas and larger cities. Read at import as a yes or no; the location itself is never stored.
- */
-const CA_PLACES =
-  /\b(california|san francisco|bay area|silicon valley|los angeles|san diego|sacramento|san jose|oakland|fresno|santa barbara|san luis obispo|bakersfield|modesto|stockton|riverside|inland empire|oxnard|santa rosa|salinas|santa cruz|monterey|redding|chico|visalia|merced|palo alto|irvine|pasadena|santa clara|sunnyvale|mountain view|berkeley|anaheim|santa monica|napa|sonoma)\b|,\s*ca\b/i;
-export const inCalifornia = (location: unknown) => CA_PLACES.test(String(location ?? ""));
+/** Whether a location reads as California: the one rule (lib/california.ts), kept here for the importers that read it from this module. */
+export { inCalifornia } from "../california";
