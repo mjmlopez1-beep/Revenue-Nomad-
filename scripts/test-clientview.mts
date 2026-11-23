@@ -321,6 +321,17 @@ async function main() {
   check("drawn: the sealed PDF carries the drawing (an image on its signature page)", !!dpdf && Buffer.from(dpdf.bytes).includes(Buffer.from("/Subtype /Image")) && !!dx.seal && sha(dpdf.bytes) === dx.seal.sha256);
   check("typed (the default) records the method as typed", x.signed?.method === "typed" || x.signed?.method === undefined);
 
+  /* ---------- the sender's name on what goes out ---------- */
+
+  const pe0 = await S.createProposal(JOR, { companyName: "Cedar and Pine Software", title: "Cedar and Pine Software · No sender field" }, BASE);
+  // Its fields replaced without the sender's: what goes out still says who sent it, as the editor does.
+  await S.updateProposal(JOR, pe0.id, { blocks: BLOCKS, fields: { "client.signerName": "Dana Whitfield" }, signer: { name: "Dana Whitfield", email: "dana.from@cedarandpine.example", title: "CEO" } }, BASE);
+  const me0 = mails.length;
+  await S.sendProposal(JOR, pe0.id, {}, BASE);
+  const elink = mails.slice(me0).find((m) => m.to === "dana.from@cedarandpine.example")?.text.match(/https:\/\/post\.example\.com\/sign\/(\S+)/)?.[1] ?? "";
+  const ev0 = await S.signerView(elink, who, BASE);
+  check("the sender's field emptied: the client's page still names the member who sent it", !!elink && !!ev0.doc.from.name.trim() && /Jordan/.test(ev0.doc.from.name), ev0.doc?.from);
+
   /* ---------- checking a copy ---------- */
 
   const match = await SEAL.checkCopy(pdfBytes);

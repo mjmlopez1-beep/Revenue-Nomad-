@@ -745,6 +745,8 @@ export async function sendProposal(
       }
     }
     const doc = freeze(p, signer, now, close);
+    // The sender's name taken out of the fields: the member's own, as the editor shows it ("by <name>"), never an empty "from".
+    if (!doc.from.name.trim()) doc.from = { name: me.name, title: doc.from.title || titleOf(s, me) };
     const x: StoredSend = {
       id: sendId,
       version: p.version,
