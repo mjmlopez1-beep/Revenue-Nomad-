@@ -444,7 +444,7 @@ function MapCard({
     if (named.size >= 6) break;
     if (r.locked || !shownIds.has(r.id) || named.has(r.id)) continue;
     // The picked company's label is wider (its estimate in a pill): keep further clear of it.
-    if (spots.some(([x, y], k) => Math.abs(x - r.x) < (k === 0 && cur ? 40 : 26) && Math.abs(y - r.y) < 8)) continue;
+    if (spots.some(([x, y], k) => Math.abs(x - r.x) < (k === 0 && cur ? 60 : 26) && Math.abs(y - r.y) < 8)) continue;
     named.add(r.id);
     spots.push([r.x, r.y]);
   }
