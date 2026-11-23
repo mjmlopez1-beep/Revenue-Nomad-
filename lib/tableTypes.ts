@@ -1250,16 +1250,16 @@ export type Action =
    * where it applies and a conversation opens with the note as its first message.
    */
   | { type: "invite"; engagementId: string; note?: string }
-  /**
-   * Messages between members (lib/messages.ts). Start one with the holder of a seat the viewer
-   * can see (unlocked, or free) who has signed in. `engagementId` and `conversationId` are public ids.
-   */
   /** The bell's inbox (lib/inbox.ts): mark lines read (every line without `ids`). */
   | { type: "inbox.read"; ids?: string[] }
   /** An alert that is no list (lib/inbox.ts FIXED_KEYS): Companies you follow, Someone you know changed jobs. */
   | { type: "alerts.fixed"; key: "follows" | "known"; on?: boolean; email?: boolean; slack?: boolean; bell?: boolean }
   /** Send a test of one alert to the bell (Alerts, "Send a test"). */
   | { type: "alerts.test"; alert: string }
+  /**
+   * Messages between members (lib/messages.ts). Start one with the holder of a seat the viewer
+   * can see (unlocked, or free) who has signed in. `engagementId` and `conversationId` are public ids.
+   */
   | { type: "message.start"; engagementId: string; text: string }
   /** Connect with a member listed in Referral partners (PartnersView.members): a conversation about no seat. `memberId` is a public id. */
   | { type: "message.connect"; memberId: string; text: string }

@@ -318,6 +318,7 @@ export function Integrations({
   section,
   onNetwork,
   onNotifications,
+  onAgent,
 }: {
   onBack: () => void;
   onCredits: () => void;
@@ -325,6 +326,12 @@ export function Integrations({
   onNetwork?: () => void;
   /** Notifications: what goes to Slack, and how often, is chosen there (one place for every email and post). */
   onNotifications?: () => void;
+  /**
+   * The new look (Settings): the member's agents, connecting one, the tools' switches and the daily
+   * limit live on Agent access (agent/AgentAccess.tsx), so the Claude section points there and keeps
+   * only the prompts for the member's network and writing voice. Left out: the old look's section.
+   */
+  onAgent?: () => void;
 }) {
   const toast = useToast();
   const copy = useCopy();
@@ -424,7 +431,7 @@ export function Integrations({
           st={slackPick(view)}
           onClick={() => jump(slackRef.current)}
         />
-        <PickCard mark={<ClaudeMark />} name="Claude" desc="Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit." st={claudePick(apps)} onClick={() => jump(claudeRef.current)} />
+        <PickCard mark={<ClaudeMark />} name="Claude" desc="Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit." st={claudePick(apps)} onClick={() => (onAgent ? onAgent() : jump(claudeRef.current))} />
         {googleSt && <PickCard mark={<GoogleG size={22} />} name="Google" desc="Who you already know at companies on Merlin, from your calendar and contacts." st={googleSt} onClick={() => jumpTo("google")} />}
         {granolaSt && <PickCard mark={<GranolaMark />} name="Granola" desc="Start a proposal from a call Granola recorded." st={granolaSt} onClick={() => jumpTo("granola")} />}
       </div>
@@ -527,11 +534,11 @@ export function Integrations({
                   <h3 className="tp-card-h" id="in-alerts-h">
                     What you get alerts for
                   </h3>
-                  <p className="cr-note">Choose which alerts come to Slack, and {FEATURE_NAME} apart from its email, in Notifications.</p>
+                  <p className="cr-note">Choose which alerts come to Slack, and {FEATURE_NAME} apart from its email, in {onAgent ? "Alerts" : "Notifications"}.</p>
                 </div>
                 {onNotifications && (
                   <button type="button" className="btn" onClick={onNotifications}>
-                    Open Notifications
+                    {onAgent ? "Open Alerts" : "Open Notifications"}
                   </button>
                 )}
               </section>
@@ -612,24 +619,47 @@ export function Integrations({
       {/* Granola: a personal API key, for starting a proposal from a call (nothing with RN_GRANOLA off). */}
       <GranolaSection />
 
-      <section className="in-section" id="claude" ref={claudeRef} aria-labelledby="in-claude-h">
-        <h2 className="in-h" id="in-claude-h">
-          Use it in Claude
-        </h2>
-        <ProRow
-          from="claude"
-          title="No daily cap"
-          free="On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap."
-          desc={plan?.name === "trial" ? `Claude can ask Merlin as often as you need, in your trial until ${planDay(plan.trialEndsAt)}. On Free it's 20 times a day.` : "Claude can ask Merlin as often as you need."}
-        />
-        {/* The assistants connected now, each with Disconnect (the top row's Claude chip follows this list). */}
-        <ConnectedApps onApps={setApps} />
-        <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
-        {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
-        <ClaudeNetworkPrompt />
-        {/* Your writing voice: the prompt for a member's own Claude to learn it from their sent mail (Voice.tsx). */}
-        <VoicePrompt />
-      </section>
+      {onAgent ? (
+        <section className="in-section" id="claude" ref={claudeRef} aria-labelledby="in-claude-h">
+          <h2 className="in-h" id="in-claude-h">
+            Your agents
+          </h2>
+          <section className="tp-card in-card in-to-nt" aria-labelledby="in-agent-h">
+            <div>
+              <h3 className="tp-card-h" id="in-agent-h">
+                Agent access
+              </h3>
+              <p className="cr-note">Connect Claude, ChatGPT, Claude Code or Cursor, switch their tools on or off, set a daily spend limit and see what they did.</p>
+            </div>
+            <button type="button" className="btn" onClick={onAgent}>
+              Open Agent access
+            </button>
+          </section>
+          {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
+          <ClaudeNetworkPrompt />
+          {/* Your writing voice: the prompt for a member's own Claude to learn it from their sent mail (Voice.tsx). */}
+          <VoicePrompt />
+        </section>
+      ) : (
+        <section className="in-section" id="claude" ref={claudeRef} aria-labelledby="in-claude-h">
+          <h2 className="in-h" id="in-claude-h">
+            Use it in Claude
+          </h2>
+          <ProRow
+            from="claude"
+            title="No daily cap"
+            free="On Free, Claude can ask Merlin 20 times a day. Pro has no daily cap."
+            desc={plan?.name === "trial" ? `Claude can ask Merlin as often as you need, in your trial until ${planDay(plan.trialEndsAt)}. On Free it's 20 times a day.` : "Claude can ask Merlin as often as you need."}
+          />
+          {/* The assistants connected now, each with Disconnect (the top row's Claude chip follows this list). */}
+          <ConnectedApps onApps={setApps} />
+          <UseInClaude embedded onBack={onBack} onCredits={onCredits} />
+          {/* [google network] the prompt for adding a Gmail network through the member's own Claude. */}
+          <ClaudeNetworkPrompt />
+          {/* Your writing voice: the prompt for a member's own Claude to learn it from their sent mail (Voice.tsx). */}
+          <VoicePrompt />
+        </section>
+      )}
     </div>
   );
 }

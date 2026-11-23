@@ -357,6 +357,7 @@ function IntegrationsP() {
       section={c.shell.claudeLink || c.page === "agent" ? "claude" : undefined}
       onNetwork={() => c.openPage("network")}
       onNotifications={() => c.openPage("notifications")}
+      onAgent={c.ui2 ? () => c.openPage("agent") : undefined}
     />
   );
 }
