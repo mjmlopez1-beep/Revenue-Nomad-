@@ -441,9 +441,9 @@ function MapCard({
   if (cur) named.add(cur.id);
   const spots: [number, number][] = cur ? [[cur.x, cur.y]] : [];
   for (const r of [...rows].sort((a, b) => a.rank - b.rank)) {
-    if (named.size >= 7) break;
+    if (named.size >= 6) break;
     if (r.locked || !shownIds.has(r.id) || named.has(r.id)) continue;
-    if (spots.some(([x, y]) => Math.abs(x - r.x) < 16 && Math.abs(y - r.y) < 7)) continue;
+    if (spots.some(([x, y]) => Math.abs(x - r.x) < 26 && Math.abs(y - r.y) < 8)) continue;
     named.add(r.id);
     spots.push([r.x, r.y]);
   }
