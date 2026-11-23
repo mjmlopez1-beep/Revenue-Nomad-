@@ -52,6 +52,7 @@ import { Seats } from "../Seats";
 import { PipelinePage } from "../Pipeline";
 import { GetInPage, WayInPage } from "../network/Ways";
 import { NetworkPage } from "../network/Network"; // [google network]
+import { useNetwork } from "../network/useNetwork";
 import { useState } from "react";
 import type { AskPlan } from "@/lib/ask";
 import { setFindStart } from "../find/start";
@@ -302,6 +303,7 @@ const loadWorkbench = () => import("./workbenchPage");
 const loadPeople = () => import("../people/People");
 const loadSeatsPage = () => import("../seatsPage/SeatsPage");
 const loadCompany = () => import("../company/CompanyPage");
+const loadWarm = () => import("../network/WarmPaths");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -309,8 +311,10 @@ const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage)
 const CompanyPage = dynamic(() => loadCompany().then((m) => m.CompanyPage), { ssr: false, loading: pageWait });
 const SeatsPage = dynamic(() => loadSeatsPage().then((m) => m.SeatsPage), { ssr: false, loading: pageWait });
 const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
+// Warm paths (network/WarmPaths.tsx): the map, the list, the path and the sources.
+const WarmPathsPage = dynamic(() => loadWarm().then((m) => m.WarmPaths), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadWarm];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -399,11 +403,16 @@ function ProposalsP() {
   const c = useApp();
   return <ProposalsPage view={c.view} infos={c.infos} />;
 }
-/** Where you can get in, and Your way into one company (network/Ways.tsx). With Your network on. The new look's Warm paths, for now. */
+/**
+ * Where you can get in, and Your way into one company (network/Ways.tsx). In the new look the list
+ * is Warm paths (network/WarmPaths.tsx); one company's way in (?w=) is the same page as before.
+ */
 function GetInP() {
   const c = useApp();
   return c.shell.wayCo ? (
     <WayInPage company={c.shell.wayCo} phone={c.phone} infos={c.infos} onBack={() => c.shell.setWayCo(null)} />
+  ) : c.ui2 ? (
+    <WarmPathsPage />
   ) : (
     <GetInPage infos={c.infos} phone={c.phone} openCompany={c.openCompany} />
   );
@@ -411,6 +420,9 @@ function GetInP() {
 /** [google network] Your network: the member's own, from Google and their own Claude. */
 function NetworkP() {
   const c = useApp();
+  const off = useNetwork().off;
+  // The new look without Google on this Merlin: ?p=network lands on Warm paths, where Bring in who you know is (never the table).
+  if (c.ui2 && off) return <WarmPathsPage />;
   return (
     <NetworkPage
       infos={c.infos}
@@ -562,10 +574,10 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   seats: { title: "Your seats", component: SeatsP, mainClass: (c) => (c.ui2 && !c.phone ? "wb-host sp-host" : "ys-main"), ownStrip: true },
   pipeline: { title: "Your pipeline", component: PipelineP },
   proposals: { title: "Proposals", component: ProposalsP },
-  getin: { title: "Where you can get in", component: GetInP, needsTable: true },
+  getin: { title: "Where you can get in", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.ui2 && !c.shell.wayCo ? "wp-main" : "") },
   network: { title: "Your network", component: NetworkP },
   // The new look's pages (RN_UI2): each opens its home of today until its own exists.
-  warm: { title: "Warm paths", component: GetInP, needsTable: true },
+  warm: { title: "Warm paths", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.shell.wayCo ? "" : "wp-main") },
   evidence: { title: "Evidence Bank", component: EvidenceSoon },
   alerts: { title: "Alerts and workflows", component: NotificationsP },
   agent: { title: "Agent access", component: IntegrationsP },

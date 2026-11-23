@@ -241,6 +241,8 @@ export interface NavInput2 {
   /** Your network is on (RN_GOOGLE): Warm paths is listed. */
   network: boolean;
   networkN?: number | null;
+  /** Ways in are on (RN_PATHS, Me.started.filesOn): Warm paths is listed without Google too, the sources being independent. */
+  paths?: boolean;
   totals: Record<RecordType, number> | null;
   hiringN: number | null;
   /** Hiring now's count is ember (no more urgent thing has the ember on screen). */
@@ -292,7 +294,7 @@ export function currentKey2(x: Pick<NavInput2, "page" | "recordType" | "tab" | "
  * The member's own things (Warm paths, Pipeline, Proposals, Messages) show no count while they have
  * none, as on a first visit in the mockup; Merlin's own data (Companies, People, Seats) always does.
  */
-/** The rail, top to bottom (Rail.dc.html). Warm paths needs Your network. Evidence Bank is Close's: without it, the item carries the plan's pill and opens the upgrade. */
+/** The rail, top to bottom (Rail.dc.html). Warm paths needs ways in (Your network, or the files on their own). Evidence Bank is Close's: without it, the item carries the plan's pill and opens the upgrade. */
 export function navItems2(x: NavInput2): NavItem2[] {
   const on = currentKey2(x);
   const t = x.totals;
@@ -309,7 +311,7 @@ export function navItems2(x: NavInput2): NavItem2[] {
       ...(x.hiringN && x.hiringHot ? { pill: { text: x.hiringN.toLocaleString("en-US"), kind: "hot" as const } } : { count: x.hiringN }),
       spoken: x.hiringN != null ? `${x.hiringN} open roles` : undefined,
     },
-    ...(x.network ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN || null }] : []),
+    ...(x.network || x.paths ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN || null }] : []),
     { key: "pipeline", label: "Pipeline", group: "close", icon: "pipeline", href: p("pipeline"), page: "pipeline", count: x.pipelineN || null, spoken: x.pipelineN ? `${x.pipelineN} open deals` : undefined },
     { key: "proposals", label: "Proposals", group: "close", icon: "proposals", href: p("proposals"), page: "proposals", count: x.proposalsN || null },
     { key: "contracts", label: "Contracts", group: "close", icon: "contracts", href: x.hrefs.contracts, page: "proposals", pill: { text: "New", kind: "new" } },

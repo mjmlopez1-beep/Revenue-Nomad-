@@ -110,3 +110,47 @@ export function useGetIn(): Got<GetInView> & { reload: () => Promise<void> } {
   }, [reload]);
   return { ...s, reload };
 }
+
+/* ---------- Warm paths (the new look) ---------- */
+
+/** Warm paths' map and list (GET ?warm=1). */
+export function useWarm(): Got<import("@/lib/paths/types").WarmView> & { reload: () => Promise<void> } {
+  type WV = import("@/lib/paths/types").WarmView;
+  const [s, setS] = useState<Got<WV>>({ data: null, off: false, failed: false });
+  const reload = useCallback(async () => {
+    const { ok, j } = await getJson<{ warm?: WV | { on: false } }>("warm=1");
+    const m = j?.warm;
+    if (!ok || !m) setS((x) => ({ ...x, failed: true }));
+    else if (!m.on) setS({ data: null, off: true, failed: false });
+    else setS({ data: m, off: false, failed: false });
+  }, []);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+  return { ...s, reload };
+}
+
+/** Suggested additions from the member's own files (GET ?suggest=1; RN_SUGGEST only). */
+export function useSuggest(on: boolean): { data: import("@/lib/paths/types").SuggestView | null; reload: () => Promise<void>; set: (v: import("@/lib/paths/types").SuggestView) => void } {
+  type SV = import("@/lib/paths/types").SuggestView;
+  const [d, setD] = useState<SV | null>(null);
+  const reload = useCallback(async () => {
+    const { ok, j } = await getJson<{ suggest?: SV }>("suggest=1");
+    setD(ok && j?.suggest ? j.suggest : null);
+  }, []);
+  useEffect(() => {
+    if (on) void reload();
+  }, [on, reload]);
+  return { data: d, reload, set: setD };
+}
+
+/** Add the ticked people, or never suggest them again. */
+export async function suggestPost(op: "suggestAdd" | "suggestSkip", keys: string[]): Promise<{ view?: import("@/lib/paths/types").SuggestView; message?: string; error?: string }> {
+  try {
+    const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op, keys }) });
+    const j = (await r.json().catch(() => ({}))) as { suggest?: import("@/lib/paths/types").SuggestView; message?: string; error?: string };
+    return r.ok ? { view: j.suggest, message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
+  } catch {
+    return { error: "We couldn't reach Merlin. Check your connection and try again." };
+  }
+}

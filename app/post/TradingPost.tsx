@@ -3012,6 +3012,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     close: closeOn,
     network: !!network,
     networkN: network ? network.companies.length : null,
+    // Warm paths without Google: the LinkedIn file, a CSV and fellow fractionals give ways in on their own (RN_PATHS).
+    paths: !!me.started?.filesOn,
     totals: waiting && !pf ? null : totals,
     hiringN: hiringNav,
     hiringHot,
@@ -3079,7 +3081,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       return tab === "all" || !t ? `All ${(recordType === "people" ? "people" : TYPE_TITLE[recordType]).toLowerCase()}` : t.label;
     }
     if (onScreen === "today") return "Home";
-    return navOn2 && onScreen !== "seats" && onScreen !== "network" && onScreen !== "billing" ? navOn2.label : PAGE_TITLE[onScreen];
+    return navOn2 && onScreen !== "seats" && (onScreen !== "network" || !network) && onScreen !== "billing" ? navOn2.label : PAGE_TITLE[onScreen];
   })();
   const headCrumbs: Crumb[] =
     onScreen === "today"
@@ -3087,7 +3089,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       : [
           { label: "Home", href: pageHref("today"), go: goHome },
           ...(onScreen === "table" && navOn2 && navOn2.key !== "hiring" ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
-          ...((onScreen === "seats" || onScreen === "network" || onScreen === "billing") && navOn2 ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
+          ...((onScreen === "seats" || (onScreen === "network" && !!network) || onScreen === "billing") && navOn2 ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
         ];
   const goPeers = () => openShellPage("peers");
   const bellEl = (
