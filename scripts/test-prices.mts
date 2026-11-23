@@ -272,6 +272,31 @@ async function main() {
     check("Questions: no LinkedIn, no em dash, no export, Merlin never a data provider", !/linkedin|—|export|download|\bcsv\b|data provider/i.test(words), (words.match(/.{30}(linkedin|—|export|download|csv|data provider).{30}/i) ?? [])[0]);
   }
 
+  console.log("\nThe landing page's panels: five jobs, Close it and Workflows, nothing left only in a table");
+  {
+    const { readFileSync } = await import("node:fs");
+    // The panels hold their pictures as JSX, and tsx compiles JSX to React.createElement.
+    (globalThis as { React?: unknown }).React = (await import("react")).default;
+    const F = await import("../app/landing/Features");
+    const off = F.features({ workflows: false, google: false });
+    const on = F.features({ workflows: true, google: false });
+    const say = (fs: typeof off) => fs.map((f) => `${f.head.join("")} ${f.body}`).join(" ");
+    check("five panels: find, get in, price, close, and Alerts while workflows are off", off.map((f) => f.label).join("|") === "Find the next client|Get in the door|Price it|Close it|Alerts", off.map((f) => f.label));
+    check("with workflows on the last panel is Workflows, with Beta, and only then", on.at(-1)!.label === "Workflows" && on.at(-1)!.beta === true && !off.some((f) => f.beta) && !/workflow/i.test(say(off)));
+    check("the first three panels are the same either way", JSON.stringify(on.slice(0, 3).map((f) => [f.label, f.head, f.body])) === JSON.stringify(off.slice(0, 3).map((f) => [f.label, f.head, f.body])));
+    const close = off.find((f) => f.key === "close")!;
+    check("Close it: send the proposal, get it signed", close.head.join("") === "Send the proposal, get it signed" && close.tone === "deep");
+    check("Close it names Pipeline, a proposal from your call, e-signature, opens, Evidence Bank and the Close plan", ["Pipeline", "proposal from your call", "e-signature", "when they open it", "Evidence Bank", "Close plan"].every((w) => close.body.includes(w)), close.body);
+    const wf = on.at(-1)!.body;
+    check("Workflows: alerts by email, Slack or the bell, the next step, credits before it runs, a note waits as a draft", ["email", "Slack", "bell", "open the company", "find who decides", "draft a note", "credits before it runs", "waits as a draft"].every((w) => wf.includes(w)), wf);
+    check("what the old table alone said is still on the page: Lookalikes and Hiring now in a panel, Agent access in the last one either way", /Lookalikes/.test(off[0].body) && /Hiring now/.test(off[0].body) && [off, on].every((fs) => /your own AI assistant, such as Claude/.test(fs.at(-1)!.body)));
+    const qs = new Map(faqItems(25, true, false, {}));
+    check("and Messages and Fractionals in the questions", /message them inside Merlin/.test(qs.get("How do I reach the fractional who held a seat?")!) && qs.has("What is Fractionals?"));
+    check("no LinkedIn, em dash, export or download in any panel", !/linkedin|—|export|download|\bcsv\b/i.test(say(on) + say(off)));
+    const src = readFileSync("app/landing/Features.tsx", "utf8");
+    check("Everything in Merlin is gone: no table, no anchor, no styles", !/Everything in Merlin|id="everything"|lp-all/.test(src) && !/\.lp-all/.test(readFileSync("app/landing/landing.css", "utf8")) && !/#everything/.test(readFileSync("app/landing/Landing.tsx", "utf8")));
+  }
+
   console.log("\nThe plans' names: Free, Pro and Close, and the Close trial");
   const R = await import("../lib/billing/rules");
   const CP = await import("../lib/billing/compare");
