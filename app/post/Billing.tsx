@@ -25,7 +25,7 @@ import { IconCheck, IconLock, IconX, useToast, errorText } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { PLANS, PLAN_ROWS, PRO_LEAVES_OUT } from "@/lib/billing/compare";
+import { PLANS, PLAN_ROWS, PRO_LEAVES_OUT, landingMoreRows } from "@/lib/billing/compare";
 import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY, TIER_NAME, TRIAL_NAME, keepVerb, keepWords, paidName, planName } from "@/lib/billing/rules";
 
 /**
@@ -124,7 +124,12 @@ function useBilling() {
  * In the app the agent row names no app (any agent connects, from Agent access) and saved views are lists; the Terms keep PLAN_ROWS as written.
  */
 const IN_APP: Record<string, string> = { Claude: "Your agent", "Saved views": "Lists" };
-export const ROWS = PLAN_ROWS.map((r) => (IN_APP[r[0]] ? ([IN_APP[r[0]], ...r.slice(1)] as typeof r) : r));
+/** The rows that came with alerts, workflows and Evidence Bank (the landing page's, from the same rules); the lists row reads as the alerts row. */
+const MORE = new Map(landingMoreRows(true).map((r) => [r[0], r] as const));
+export const ROWS = [
+  ...PLAN_ROWS.map((r) => (r[0] === "Saved views" ? MORE.get("Alerts on your lists")! : IN_APP[r[0]] ? ([IN_APP[r[0]], ...r.slice(1)] as typeof r) : r)),
+  ...["Workflows (Beta)", "Evidence Bank"].flatMap((k) => (MORE.has(k) ? [MORE.get(k)!] : [])),
+];
 
 export function CompareTable({ current }: { current?: "free" | "pro" | "close" }) {
   return (

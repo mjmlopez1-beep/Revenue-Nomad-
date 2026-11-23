@@ -15,7 +15,7 @@ import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TIER_NAME, WOR
 export const PLANS = [
   { key: "free", name: "Free", month: 0, year: 0, line: `Credits to start, 1 for each fact you add, one ${FEATURE_NAME} company a day.` },
   { key: "pro", name: TIER_NAME.pro, month: PRICES.month, year: PRICES.year, line: `Any company opens free, up to ${PRO_OPENS_DAILY} a day, every alert, ${PRO_CREDITS} credits a month.` },
-  { key: "close", name: TIER_NAME.close, month: PRICES.closeMonth, year: PRICES.closeYear, line: "Everything in Pro, plus proposals drafted from your call, sent and signed." },
+  { key: "close", name: TIER_NAME.close, month: PRICES.closeMonth, year: PRICES.closeYear, line: "Everything in Pro, plus proposals drafted from your call, sent and signed, and your Evidence Bank." },
 ] as const;
 
 /** [what, Free, Pro, Close]. */
