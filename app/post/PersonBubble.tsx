@@ -234,7 +234,7 @@ export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, on
         <div className="pb-sec" aria-label="What Merlin holds">
           {p ? (
             <>
-              {nameLocked && (
+              {nameLocked && !coLocked && (
                 <Line k="Name and title">
                   <NameAndTitle i={i} e={e} p={p} />
                 </Line>

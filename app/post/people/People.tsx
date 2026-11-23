@@ -168,7 +168,9 @@ export function PeoplePage() {
     .map((col) =>
       col.id === "know" || col.id === "last" || col.id === "pipe"
         ? { ...col, fill: (r: Row) => (ownFill(col.id as "know", [r as PeopleRow], pipeIds).filled ? "value" : "empty") }
-        : col.id === "company"
+        : col.id === "name"
+          ? { ...col, fill: (r: Row) => ((r as PeopleRow).own ? "value" : col.fill(r)) }
+          : col.id === "company"
           ? { ...col, label: "Company" }
           : col,
     );
@@ -395,7 +397,28 @@ export function PeoplePage() {
           {view === "known" && !hasSources ? (
             <ConnectPanel variant="inline" start={src} step={first ? { n: 3, of: c.start.six.of } : null} onSeeKnown={() => setView("known")} onNext={() => t.setRecordType("companies")} />
           ) : (
-            <CardList type="people" rows={shown.filter((r) => !r.own)} me={me} onOpen={(r) => openWho(r, document.activeElement as HTMLElement | null)} />
+            <>
+              <CardList type="people" rows={shown.filter((r) => !r.own)} me={me} onOpen={(r) => openWho(r, document.activeElement as HTMLElement | null)} />
+              {shown.some((r) => r.own) && (
+                <ul className="pp-cards" aria-label="People you know">
+                  {shown
+                    .filter((r) => r.own)
+                    .map((r) => (
+                      <li key={r.key} className="pp-card">
+                        <button type="button" className="pp-name" onClick={(e) => openWho(r, e.currentTarget)}>
+                          <span className="pp-name-t">{nameOf(r)}</span>
+                          <span className="pp-name-s">
+                            {titleOf(r) ?? ""}
+                            <span className="pp-yours">Yours</span>
+                          </span>
+                        </button>
+                        <CompanyName i={r.i} following={r.i.c.following} />
+                        {knowCell(r)}
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </>
           )}
           {listed.length > limit && (
             <button type="button" className="btn wb-more" onClick={() => setLimit((x) => x + PAGE)}>
@@ -483,7 +506,9 @@ export function PeoplePage() {
             Filter{chips.size ? ` · ${chips.size}` : ""}
           </button>
           <button type="button" className="wb-tb" onClick={() => setSort((x) => (x + 1) % 3)}>
-            Sort<span className="wb-tb-sub">: {PEOPLE_SORTS[sort]}</span>
+            <span>
+              Sort<span className="wb-tb-sub">: {PEOPLE_SORTS[sort]}</span>
+            </span>
           </button>
           <button type="button" className="pp-earn" onClick={() => c.openAdd({ mode: "person" })}>
             + Add a person · earn 1 credit

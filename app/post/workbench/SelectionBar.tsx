@@ -46,6 +46,15 @@ export function unlockItems(type: RecordType, rows: Row[]): { items: FactRef[]; 
 
 const NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], people: ["person", "people"], engagements: ["seat", "seats"] };
 
+/** People and seats: the locked companies of the picked rows, so the ones waiting on their company can open it first (each company once). */
+export function companyItems(type: RecordType, rows: Row[]): FactRef[] {
+  if (type === "companies") return [];
+  const seen = new Set<string>();
+  const out: FactRef[] = [];
+  for (const r of rows) if (r.i.c.hidden && !seen.has(r.i.c.id)) (seen.add(r.i.c.id), out.push({ entity: "company", id: r.i.c.id, field: "identity" }));
+  return out;
+}
+
 export function SelectionBar({
   type,
   rows,
@@ -67,7 +76,12 @@ export function SelectionBar({
   const ui = useUi();
   const toast = useToast();
   const me = ui.me;
-  const { items, wait } = unlockItems(type, rows);
+  const own = unlockItems(type, rows);
+  const cos = companyItems(type, rows);
+  // What the quote is for: the rows' own unlock, or (people and seats) their locked companies first.
+  const [what, setWhat] = useState<"rows" | "cos">("rows");
+  const items = what === "cos" ? cos : own.items;
+  const wait = own.wait;
   const [q, setQ] = useState<UnlockQuote | null>(null);
   const [busy, setBusy] = useState<"quote" | "run" | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -78,17 +92,20 @@ export function SelectionBar({
     setErr(null);
   }, [sig]);
   // Before the quote: the bar's own estimate, from the plan's free opens (the quote is the server's word).
-  const freeLeft = type === "companies" && me.proOpens ? Math.min(items.length, me.proOpens.left) : 0;
-  const guess = type === "companies" ? (items.length - freeLeft) * COMPANY_PRICE : items.length;
-  const noun = NOUN[type];
+  const isCo = type === "companies" || what === "cos";
+  const coGuess = (n: number) => (n - (me.proOpens ? Math.min(n, me.proOpens.left) : 0)) * COMPANY_PRICE;
+  const guess = type === "companies" ? coGuess(own.items.length) : own.items.length;
+  const noun = isCo ? NOUN.companies : NOUN[type];
   const label =
     type === "companies" && guess === 0
-      ? `Open ${items.length} · free ${me.plan?.name === "trial" ? "on the trial" : "today"}`
-      : `Unlock ${items.length} · ${creditWords(guess)}`;
-  const ask = async () => {
+      ? `Open ${own.items.length} · free ${me.plan?.name === "trial" ? "on the trial" : "today"}`
+      : `Unlock ${own.items.length} · ${creditWords(guess)}`;
+  const coLabel = `Open ${cos.length} ${cos.length === 1 ? "company" : "companies"} · ${coGuess(cos.length) === 0 ? `free ${me.plan?.name === "trial" ? "on the trial" : "today"}` : creditWords(coGuess(cos.length))}`;
+  const ask = async (w: "rows" | "cos") => {
     setErr(null);
+    setWhat(w);
     setBusy("quote");
-    const r = await fetchQuote(items);
+    const r = await fetchQuote(w === "cos" ? cos : own.items);
     setBusy(null);
     if ("error" in r) return setErr(r.error);
     setQ(r);
@@ -102,7 +119,7 @@ export function SelectionBar({
     onDone?.({ done: out.done, spent: out.spent });
     if (out.stopped) toast(out.stopped, !out.done);
   };
-  const w = q ? quoteWords(q, noun, type === "companies" && me.proOpens ? me.proOpens.left : null) : null;
+  const w = q ? quoteWords(q, noun, isCo && me.proOpens ? me.proOpens.left : null) : null;
   const picked = rows.length;
   const someOpen = rows.some((r) => !r.i.c.hidden);
   return (
@@ -124,9 +141,14 @@ export function SelectionBar({
         </span>
       ) : (
         <>
-          {items.length > 0 && (
-            <button type="button" className="wb-sel-btn wb-sel-primary" onClick={() => void ask()} disabled={!!busy} aria-busy={busy === "quote"}>
-              {busy === "quote" ? "Getting the price" : label}
+          {cos.length > 0 && (
+            <button type="button" className="wb-sel-btn wb-sel-primary" onClick={() => void ask("cos")} disabled={!!busy} aria-busy={busy === "quote" && what === "cos"}>
+              {busy === "quote" && what === "cos" ? "Getting the price" : coLabel}
+            </button>
+          )}
+          {own.items.length > 0 && (
+            <button type="button" className="wb-sel-btn wb-sel-primary" onClick={() => void ask("rows")} disabled={!!busy} aria-busy={busy === "quote" && what === "rows"}>
+              {busy === "quote" && what === "rows" ? "Getting the price" : label}
             </button>
           )}
           {wait > 0 && <span className="wb-sel-wait">{wait === 1 ? "1 opens" : `${wait} open`} after the company</span>}

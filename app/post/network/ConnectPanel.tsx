@@ -20,7 +20,7 @@
  * After a file goes in it says what Merlin found, from the member's own counts (never a guess):
  * how many people they know at companies on Merlin, the warmest three, and the next step.
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconX, useToast } from "../../ui/shared";
 import {
   CONTACTS_PROBLEM_WORDS, CSV_PROBLEM_WORDS, mapProblem, parseConnections, pickColumns, readContacts, type ColumnMap, type ContactField, type ContactsFile,
@@ -343,8 +343,13 @@ function ColumnSelect({ label, field, header, map, onMap }: { label: string; fie
 
 function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide: boolean; onAdded: () => void }) {
   const input = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const [file, setFile] = useState<{ name: string; text: string; info: ContactsFile } | null>(null);
+  // A file picked: its columns and preview come into view.
+  useEffect(() => {
+    if (file) box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [file]);
   const [map, setMap] = useState<ColumnMap>({});
   const [halves, setHalves] = useState(false);
   const [busy, setBusy] = useState<"read" | "save" | "delete" | null>(null);
@@ -391,7 +396,7 @@ function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide: boole
 
   if (file)
     return (
-      <div className={`cp-acts cp-csv${wide ? " cp-csv-wide" : ""}`}>
+      <div ref={box} className={`cp-acts cp-csv${wide ? " cp-csv-wide" : ""}`}>
         <span className="cp-file-name">
           {file.name} · {n(file.info.rows)} {file.info.rows === 1 ? "row" : "rows"}
         </span>
