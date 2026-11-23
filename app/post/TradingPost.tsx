@@ -1807,15 +1807,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       if (document.title !== want) document.title = want;
     };
     put();
-    // On a first load the page's own <title> can land after this ran and put the site's name back:
-    // say it again once the document has loaded.
-    if (document.readyState === "complete") return;
-    document.addEventListener("DOMContentLoaded", put);
-    window.addEventListener("load", put);
-    return () => {
-      document.removeEventListener("DOMContentLoaded", put);
-      window.removeEventListener("load", put);
-    };
+    // On a first load the layout's own <title> (the site's name) can be written again after this ran,
+    // as the page finishes hydrating: put the page's name back whenever that happens.
+    const watch = new MutationObserver(put);
+    watch.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => watch.disconnect();
   }, [docTitle]);
 
   /** An admin's "See it as a member": a cookie the server reads (only for admins), then the table again. */
