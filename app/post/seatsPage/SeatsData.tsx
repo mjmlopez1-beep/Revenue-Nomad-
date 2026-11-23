@@ -6,9 +6,10 @@
  * and search, so the address and a saved list follow it); "ended lately" is the endedWithin filter
  * (model.ts), the most recent end first unless the member picks a sort.
  *
- * Every cell is the old tables' (workbench/cells.tsx), so a lock spends exactly as there. Two are
- * drawn here: Held by says "Is this you?" on a seat Merlin found with nobody named, and Ended adds
- * how long ago (free) under the month's lock. Verify opens in the side panel (Verify.tsx VerifyHost).
+ * Every cell is the old tables' (workbench/cells.tsx), so a lock spends exactly as there. Three are
+ * drawn here: Held by says "Is this you?" on a seat Merlin found with nobody named, Seat adds who
+ * hired or managed it where their name shows (each opens the person bubble), and Ended adds how
+ * long ago (free) under the month's lock. Verify opens in the side panel (Verify.tsx VerifyHost).
  * Runs (rate, end month, a holder out of the directory, companies) are the workbench's: one quote,
  * one confirm, one button.
  */
@@ -31,6 +32,7 @@ import { VerifyHost, VerifyPanel, type VerifyTarget } from "../Verify";
 import { seatCell } from "../workbench/cells";
 import { columnOf, defaultCols, fillRate, visibleColumns } from "../workbench/columns";
 import { SelectionBar } from "../workbench/SelectionBar";
+import { PersonNameButton } from "../PersonBubble";
 import { StatusLine } from "../workbench/StatusLine";
 import { Toolbar, type ViewOption } from "../workbench/Toolbar";
 import { ToolsPanel } from "../workbench/ToolsPanel";
@@ -225,6 +227,22 @@ export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bott
           </button>
         </span>
       );
+    if (id === "role") {
+      // Who hired or managed the seat, where their name shows: each opens the person bubble.
+      const named = r.i.c.hidden ? [] : e.people.filter((p) => p.cells.name?.s === "value");
+      if (!named.length) return undefined;
+      return (
+        <span className="sp-two">
+          {seatCell(id, r, me.function)}
+          <span className="sp-sub sp-with">
+            With{" "}
+            {named.slice(0, 2).map((p) => (
+              <PersonNameButton key={p.id} i={r.i} p={p} e={e} className="sp-who" />
+            ))}
+          </span>
+        </span>
+      );
+    }
     if (id === "end") {
       const band = endedBand(e);
       if (!band) return undefined;

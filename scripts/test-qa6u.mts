@@ -24,7 +24,10 @@
  *     Escape closes it and focus goes back to the row that opened it;
  *   - onboarding's function chips: one Tab stop, the arrow keys move the choice;
  *   - the Fractionals table fits at 768 (nothing cut off);
- *   - a touch screen at 768: the top bar's and the record's controls are 44px.
+ *   - a touch screen at 768: the top bar's and the record's controls are 44px;
+ *   - the new look (a second server with RN_UI2=on, port + 1): at 1440 the record is a page in
+ *     place of the list (Enter opens it, Escape goes back to the row, /?c= opens it), and on a
+ *     phone it stays the drawer. The checks above run on the old look (RN_UI2 off).
  */
 import { spawn, spawnSync } from "node:child_process";
 import Module, { createRequire, register } from "node:module";
@@ -279,7 +282,8 @@ async function inBrowser() {
     JSON.stringify({ ledger: [], values: {}, unlocks: {}, seen: Object.fromEntries(members.map((m) => [m.id, iso(-3 * DAY)])), profiles: { mem_desk: { function: "Sales", onboarded: true, icp, fractionals: true } } }),
   );
   const env: NodeJS.ProcessEnv = { ...process.env, RN_DATA_DIR: bdir, RN_INTEL_SEED: path.join(bdir, "intel-seed.json"), RN_STARTER_CREDITS: "25", RN_ADMIN_EMAILS: "admin-qa6u-web@example.com", RN_SCAN_TEST: "1", RN_LOGO_LOOKUP: "off", RN_DIGEST: "0", RN_FREE_COMPANY: "off" };
-  for (const k of ["RN_INTEL_SEED_KEY", "RESEND_API_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_GOOGLE", "RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR", "STRIPE_API_URL"]) delete env[k];
+  // The old look here (the rollback): the record is the drawer. The new look's record page is checked below on its own server.
+  for (const k of ["RN_UI2", "RN_INTEL_SEED_KEY", "RESEND_API_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_GOOGLE", "RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR", "STRIPE_API_URL"]) delete env[k];
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
   server.stdout.on("data", (d) => (log += d));
@@ -402,6 +406,71 @@ async function inBrowser() {
         check("the top bar's controls are 44px tall on touch", !coarse || small.length === 0, small);
         await ctx.close();
       }
+      /* ---------- the new look: the record is a page at 1440, the drawer on a phone ---------- */
+      console.log("\nThe record in the new look (RN_UI2=on)");
+      {
+        const PORT2 = PORT + 1;
+        const BASE2 = `http://127.0.0.1:${PORT2}`;
+        const bdir2 = mkdtempSync(path.join(tmpdir(), "rn-qa6u-web2-"));
+        for (const f of ["intel-seed.json", "intel.json"]) writeFileSync(path.join(bdir2, f), readFileSync(path.join(bdir, f)));
+        const server2 = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT2)], { env: { ...env, RN_UI2: "on", RN_DATA_DIR: bdir2, RN_INTEL_SEED: path.join(bdir2, "intel-seed.json") }, stdio: ["ignore", "pipe", "pipe"] });
+        let log2 = "";
+        server2.stdout.on("data", (d) => (log2 += d));
+        server2.stderr.on("data", (d) => (log2 += d));
+        try {
+          let up2 = false;
+          for (let k = 0; k < 120 && !up2; k++) {
+            try {
+              up2 = (await realFetch(`${BASE2}/api/health`)).ok;
+            } catch {}
+            if (!up2) await new Promise((r) => setTimeout(r, 500));
+          }
+          check("the new look's server is up", up2, log2.slice(-400));
+          if (up2) {
+            const ctx2 = async (opts: import("playwright").BrowserContextOptions) => {
+              const ctx = await browser.newContext(opts);
+              await ctx.addCookies([{ name: "rn_table", value: members[0].token, url: BASE2 }]);
+              return ctx;
+            };
+            {
+              const ctx = await ctx2({ viewport: { width: 1440, height: 900 } });
+              const page = await ctx.newPage();
+              await page.goto(`${BASE2}/?t=companies`);
+              await settle(page);
+              await page.waitForSelector(".wb-scroll tbody tr[data-row]", { timeout: 20_000 }).catch(() => {});
+              const opener = page.locator(".wb-scroll tbody tr[data-row]").first();
+              const key = await opener.getAttribute("data-row");
+              await opener.focus();
+              await page.keyboard.press("Enter");
+              await page.waitForSelector("main.co-page", { timeout: 10_000 }).catch(() => {});
+              const st = await page.evaluate(() => ({ page: !!document.querySelector("main.co-page"), drawer: !!document.querySelector(".tp-drawer"), table: !!document.querySelector(".wb-scroll"), url: location.search, focus: document.activeElement?.matches("h1.co-name-h") ?? false }));
+              check("at 1440 the record opens as a page in place of the list (no drawer), its title focused, at ?c=", st.page && !st.drawer && !st.table && /[?&]c=/.test(st.url) && st.focus, st);
+              await page.keyboard.press("Escape");
+              await page.waitForTimeout(500);
+              const back = await page.evaluate(() => ({ page: !!document.querySelector("main.co-page"), table: !!document.querySelector(".wb-scroll"), row: (document.activeElement as HTMLElement | null)?.closest("tr")?.getAttribute("data-row") ?? null }));
+              check("Escape goes back to the list, and focus to the row it was opened from", !back.page && back.table && back.row === key, { back, key });
+              await page.goto(`${BASE2}/?c=${cos[1].id}`);
+              await page.waitForSelector("main.co-page", { timeout: 10_000 }).catch(() => {});
+              check("an old /?c= address opens the page too", await page.evaluate(() => !!document.querySelector("main.co-page") && !document.querySelector(".tp-drawer")));
+              await ctx.close();
+            }
+            {
+              const ctx = await ctx2({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+              const page = await ctx.newPage();
+              await page.goto(`${BASE2}/?c=${cos[1].id}`);
+              await page.waitForSelector(".tp-drawer", { timeout: 10_000 }).catch(() => {});
+              check("on a phone the record stays the drawer", await page.evaluate(() => !!document.querySelector(".tp-drawer") && !document.querySelector("main.co-page")));
+              await ctx.close();
+            }
+          }
+        } finally {
+          try {
+            server2.kill();
+          } catch {}
+          rmSync(bdir2, { recursive: true, force: true });
+        }
+      }
+
       const cssAll = readFileSync("app/post/post.css", "utf8");
       check("the touch rule covers icon buttons, chips, the credits pill and the record's links", /@media \(pointer: coarse\) \{\s*\.tp-app \.tp-iconbtn,[\s\S]*?min-width: 44px;[\s\S]*?\.tp-app \.chip,[\s\S]*?\.tp-app \.tp-credits,[\s\S]*?\.tp-drawer \.tp-dlinks a,/.test(cssAll));
     } finally {

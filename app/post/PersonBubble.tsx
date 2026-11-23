@@ -130,6 +130,12 @@ export interface PersonBubbleProps {
   onAdd?: () => void;
   /** The list chip ("On your list Sales-led SaaS"), when they are on one. */
   chips?: string[];
+  /** Your way in, where the page has its own (the company page's Ways in tab); else Warm paths. */
+  onWays?: () => void;
+  /** Their full card on the page (confirm, report, add a detail), where the page has one. */
+  onCard?: () => void;
+  /** Opened on their company's own page: no "Open the company". */
+  here?: boolean;
 }
 
 function Line({ k, children, sub }: { k: string; children: ReactNode; sub?: string | null }) {
@@ -144,7 +150,7 @@ function Line({ k, children, sub }: { k: string; children: ReactNode; sub?: stri
   );
 }
 
-export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, onAddPipeline, onPipeline, onDraft, onConnect, onAdd, chips = [] }: PersonBubbleProps) {
+export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, onAddPipeline, onPipeline, onDraft, onConnect, onAdd, chips = [], onWays, onCard, here = false }: PersonBubbleProps) {
   const app = useAppMaybe();
   const ui = useUi();
   const toast = useToast();
@@ -300,15 +306,20 @@ export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, on
               </button>
             )
           )}
-          {app && !coLocked && (
-            <>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => (onClose(), app.openPage("warm"))}>
-                Your way in
-              </button>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => (onClose(), app.openCompany(i.c.id))}>
-                Open the company
-              </button>
-            </>
+          {(onWays || app) && !coLocked && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => (onClose(), onWays ? onWays() : app?.openPage("warm"))}>
+              Your way in
+            </button>
+          )}
+          {onCard && p && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => (onClose(), onCard())}>
+              Confirm, report or add to this
+            </button>
+          )}
+          {app && !coLocked && !here && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => (onClose(), app.openCompany(i.c.id))}>
+              Open the company
+            </button>
           )}
         </div>
         <div className="pb-foot">
@@ -334,7 +345,7 @@ export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, on
  * company record's people, Pipeline, Messages). The name shows only when the record's own cell
  * holds it; else what they are ("Decision maker at a locked company").
  */
-export function PersonNameButton({ i, p, e = null, className = "" }: { i: CoInfo; p: PersonRec; e?: EngagementRec | null; className?: string }) {
+export function PersonNameButton({ i, p, e = null, className = "", more }: { i: CoInfo; p: PersonRec; e?: EngagementRec | null; className?: string; more?: Pick<PersonBubbleProps, "onWays" | "onCard" | "here" | "stage" | "onPipeline" | "onAddPipeline"> }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
   const byRecord = useKnownByRecord();
@@ -346,7 +357,7 @@ export function PersonNameButton({ i, p, e = null, className = "" }: { i: CoInfo
         <span className="pb-name-t">{shown ? shown.name : `${rel ?? "Someone"} at ${i.c.hidden ? "a locked company" : i.c.name}`}</span>
         {shown?.title && <span className="pb-name-s">{shown.title}</span>}
       </button>
-      {open && ref.current && <PersonBubble anchor={ref.current} i={i} p={p} e={e} known={byRecord.get(p.id) ?? null} onClose={() => setOpen(false)} />}
+      {open && ref.current && <PersonBubble anchor={ref.current} i={i} p={p} e={e} known={byRecord.get(p.id) ?? null} onClose={() => setOpen(false)} {...more} />}
     </>
   );
 }

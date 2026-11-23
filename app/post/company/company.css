@@ -581,72 +581,16 @@
   top: 4px;
 }
 
-/* ---------- the person ---------- */
-.co-peek {
-  border: 1px solid var(--ws-strong, #cdd4d0);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 10px 30px rgba(10, 26, 19, 0.12);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.co-peek-h {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.co-peek-ini {
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  background: #e3e8f7;
-  color: var(--ws-ink, #0a1a13);
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.co-peek-who {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.co-peek-cols {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-  gap: 14px;
-  font-size: 14px;
-  line-height: 20px;
-}
-.co-peek-cols > div {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.co-peek-dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 10px;
-}
-.co-peek-dl dt {
-  color: var(--ws-muted, #5b6661);
-}
-.co-peek-dl dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.co-peek-p {
-  margin: 0;
-}
-.co-peek-acts {
+/* ---------- who hired or managed a seat, in the seats table ---------- */
+.co-seat-by {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 2px 8px;
+}
+.co-seat-by .pb-name {
+  min-height: 28px;
+  font-size: 13px;
 }
 
 /* ---------- notes and activity ---------- */

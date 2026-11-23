@@ -22,7 +22,7 @@
  *  - the registry: company2 draws in place of the list on wider screens in the new look; phones
  *    and the old look keep the drawer, which draws the same sections.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import Module, { register } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -246,11 +246,13 @@ async function main() {
   /* ---------- focus and Esc order ---------- */
   console.log("\nFocus and Esc");
   const pageSrc = src("app/post/company/CompanyPage.tsx");
-  const peek = src("app/post/company/PersonPeek.tsx");
+  const bubbleSrc = src("app/post/PersonBubble.tsx");
+  const uiSrc = src("app/post/ui.tsx");
   const tp = src("app/post/TradingPost.tsx");
   const env = src("app/post/company/sections/env.tsx");
   check("Esc inside the page is taken first by what is open there (useEscape, in the capture phase, stopping the page's own)", /window\.addEventListener\("keydown", onKey, true\)/.test(env) && /e\.stopImmediatePropagation\(\);/.test(env));
-  check("the person takes Esc before the page, and gives focus back to the name that opened it", /useEscape\(true, close\)/.test(peek) && /anchor\?\.isConnected && anchor\.focus/.test(peek));
+  check("the person bubble (PersonBubble, handed in by CompanyPage) takes Esc before the page, and gives focus back to the name that opened it", /<Anchored anchor=\{anchor\}/.test(bubbleSrc) && /onEscape: \(\) => closeRef\.current\(\)/.test(uiSrc) && /className=\{`tp-pop \$\{className\}`\}/.test(uiSrc) && /\.tp-pop, \.tp-modal-wrap, \.tp-sheet-wrap/.test(env) && /const target = prev && prev\.isConnected/.test(uiSrc) && /bubble=\{\(o\) => \(\s*<PersonBubble/.test(pageSrc) && !existsSync(path.join(ROOT, "app/post/company/PersonPeek.tsx")));
+  check("names on the seats table open the same bubble (PersonNameButton), handed to the table by the page", /<SeatTable i=\{i\} nameOf=\{\(p, e\) => <PersonNameButton/.test(pageSrc) && !/PersonBubble/.test(src("app/post/company/parts.tsx")));
   check("Add a person, Unlock all's question, claiming a seat each take Esc first (the drawer's own, reused)", /useEscape\(true, \(\) => \{/.test(src("app/post/company/sections/People.tsx")) && /useEscape\(ask && !inSheet, cancel\)/.test(src("app/post/company/sections/Unlock.tsx")) && /useEscape\(ask, cancel\)/.test(src("app/post/company/sections/Seats.tsx")));
   check("a note being written or changed takes Esc (it keeps the text) and marks it handled, which the app's Esc respects", (parts.match(/e\.key === "Escape"/g) ?? []).length >= 2 && (parts.match(/e\.preventDefault\(\);\s*e\.stopPropagation\(\);/g) ?? []).length >= 2 && /if \(e\.defaultPrevented \|\| el === searchRef\.current\) return;/.test(tp));
   check("then Esc closes the record (the app's closeTop), and focus goes back to the row it was opened from", /else if \(drawer\) closeDrawer\(\);/.test(tp) && /\[data-row="\$\{CSS\.escape\(f\)\}"\]/.test(pageSrc) && /\[data-row="\$\{CSS\.escape\(id\)\}"\]/.test(pageSrc));

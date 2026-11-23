@@ -9,6 +9,7 @@
  */
 import { useRef, useState, type ReactNode } from "react";
 import type { EngagementRec, PersonRec } from "@/lib/tableTypes";
+import type { KnownPersonView } from "@/lib/paths/types";
 import { MOVE_STAGES, STAGE_WORDS, type MoveStage, type PipelineRec, type PipelineView } from "@/lib/pipeline";
 import { COMPANY_FILL, cellKey, shown, type CoInfo, type Row } from "../model";
 import { earnNote, useUi } from "../ui";
@@ -98,7 +99,7 @@ const SEAT_COLS: { id: string; name: string; field?: string }[] = [
 ];
 
 /** Every seat as a row: function, role and status, who held it, the dates, hours, rate, why they hired and how it was found. */
-export function SeatTable({ i, onDetails }: { i: CoInfo; onDetails: (id: string) => void }) {
+export function SeatTable({ i, onDetails, nameOf }: { i: CoInfo; onDetails: (id: string) => void; nameOf?: (p: PersonRec, e: EngagementRec) => ReactNode }) {
   const ui = useUi();
   const mine = ui.me.function;
   const engs = i.engs;
@@ -116,6 +117,8 @@ export function SeatTable({ i, onDetails }: { i: CoInfo; onDetails: (id: string)
           const e = r.e!;
           const fn = shown(e.cells.function);
           const status = shown(e.cells.status);
+          // Who hired or managed the seat, where their name shows: each opens the person bubble.
+          const named = nameOf ? e.people.filter((p) => p.cells.name?.s === "value") : [];
           return (
             <div key={e.id} className="co-tr" role="row" data-row={e.id}>
               <Cell>
@@ -126,6 +129,14 @@ export function SeatTable({ i, onDetails }: { i: CoInfo; onDetails: (id: string)
                     {isOpenRole(e) ? "Open role" : status ?? ""}
                     {e.yours ? " · your seat" : ""}
                   </span>
+                  {named.length > 0 && (
+                    <span className="co-seat-by">
+                      <span className="co-sub">With</span>
+                      {named.map((p) => (
+                        <span key={p.id}>{nameOf!(p, e)}</span>
+                      ))}
+                    </span>
+                  )}
                   <button type="button" className="tp-tbtn co-details" onClick={() => onDetails(e.id)}>
                     Details
                   </button>
@@ -165,7 +176,18 @@ const nameKey = (v: string) => v.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLow
  * after the name. A name the member can see opens the person bubble (`onPerson`). How you know
  * them comes from the member's own network only, and says so.
  */
-export function PeopleTable({ i, open, onPerson }: { i: CoInfo; open: string | null; onPerson: (p: PersonRec, e: EngagementRec | null, el: HTMLElement) => void }) {
+export function PeopleTable({
+  i,
+  open,
+  onPerson,
+  knownOf,
+}: {
+  i: CoInfo;
+  open: string | null;
+  onPerson: (p: PersonRec, e: EngagementRec | null, el: HTMLElement) => void;
+  /** How the member knows a person on file, from any source of theirs (Google, their LinkedIn file, their contacts CSV): handed in by the page. */
+  knownOf?: (p: PersonRec) => KnownPersonView | null;
+}) {
   const net = useNetCompany(i.c.hidden ? null : i.c.id);
   const people = i.people;
   if (!people.length) return null;
@@ -183,6 +205,8 @@ export function PeopleTable({ i, open, onPerson }: { i: CoInfo; open: string | n
           const name = p.cells.name?.s === "value" ? p.cells.name.v : null;
           const title = shown(p.cells.title);
           const k = name ? known.get(nameKey(name)) : undefined;
+          // Their own sources first (each works without Google); Google's network by name otherwise.
+          const mine = name && knownOf ? knownOf(p) : null;
           const tie = e ? [shown(e.cells.function), "seat"].filter(Boolean).join(" ") : "Whole company";
           return (
             <div key={p.id} className={`co-tr${open === p.id ? " co-tr-on" : ""}`} role="row" data-row={p.id}>
@@ -206,13 +230,18 @@ export function PeopleTable({ i, open, onPerson }: { i: CoInfo; open: string | n
               <Cell opened={opened(p.cells.phone)}>{personCell("phone", r)}</Cell>
               <Cell opened={opened(p.cells.linkedin)}>{personCell("linkedin", r)}</Cell>
               <Cell>
-                {k ? (
+                {mine && !mine.away ? (
+                  <span className="co-stack">
+                    {mine.warmth ? <WarmthChip w={mine.warmth} /> : <span className="chip">In your contacts</span>}
+                    <span className="co-sub">{mine.why}</span>
+                  </span>
+                ) : k ? (
                   <span className="co-stack">
                     <WarmthChip w={k.warmth} />
                     <span className="co-sub">{k.meetings ? `${plural(k.meetings, "meeting")}` : "In your contacts"}</span>
                   </span>
                 ) : (
-                  <span className="co-sub">{!name ? "After the name" : net ? "Not in what you brought in" : "Nothing you brought in yet"}</span>
+                  <span className="co-sub">{!name ? "After the name" : net || knownOf ? "Not in what you brought in" : "Nothing you brought in yet"}</span>
                 )}
               </Cell>
             </div>

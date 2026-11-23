@@ -25,6 +25,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Benchmarks, EngagementRec, PersonRec } from "@/lib/tableTypes";
+import type { KnownPersonView } from "@/lib/paths/types";
 import { FOUND_NOTE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
 import { CompanyLogo, IconChevron, IconExternal, hrefFor, post, val } from "../../ui/shared";
 import { COMPANY_GTM, fitReason, fnGap, namedFn, shown, type CoInfo, type SeatInfo } from "../model";
@@ -49,9 +50,26 @@ import {
 } from "./sections/Record";
 import { COMPANY_ROWS, type Contact } from "./sections/env";
 import { AddHere, Activity, EvidenceCard, NextMove, Notes, PeopleTable, RolesNote, RolesTable, SeatTable, StagePicker, Timeline, factsLine } from "./parts";
-import { PersonPeek, type BubbleProps } from "./PersonPeek";
+import { PersonBubble, PersonNameButton, useKnownByRecord } from "../PersonBubble";
 import { TAB_NAME, TABS, dealOf, filledOf, isListedRole, isOpenRole, nextMoveOf, primaryFor, stageWord, tabFor, type TabKey } from "./companyModel";
 import "./company.css";
+
+/** What the page hands the person bubble when a name in Who decides here is chosen. */
+export interface BubbleProps {
+  i: CoInfo;
+  p: PersonRec;
+  e: EngagementRec | null;
+  /** The name that opened it: focus goes back there when it closes. */
+  anchor: HTMLElement;
+  onClose: () => void;
+  /** See the way in (the Ways in tab). */
+  onWays: () => void;
+  /** Their full card, below the table (confirm, report, add a detail). */
+  onCard: () => void;
+  /** The deal's stage here ("Talking"), or null, and the Deal tab. */
+  stage: string | null;
+  onDeal: () => void;
+}
 
 export interface CompanyRecordProps {
   i: CoInfo;
@@ -72,8 +90,10 @@ export interface CompanyRecordProps {
   contact?: Contact | null;
   /** The header's right side (bell, credits, Add what you know). */
   actions?: ReactNode;
-  /** The person bubble (app/post/PersonBubble.tsx, once it exists); PersonPeek stands in. */
+  /** The person bubble (app/post/PersonBubble.tsx), handed in by CompanyPage. Without one a name opens nothing. */
   bubble?: (o: BubbleProps) => ReactNode;
+  /** How the member knows a person on file (their own sources), for Who decides here. */
+  knownOf?: (p: PersonRec) => KnownPersonView | null;
   /** The tab to open at, in place of the one `focus` picks. */
   startTab?: TabKey;
   /** The "what this page is for" strip is dismissed, and dismissing it. */
@@ -92,7 +112,7 @@ function whyFits(i: CoInfo, mine: string | null): string {
 }
 
 export function CompanyRecord(props: CompanyRecordProps) {
-  const { i, focus, pos, onClose, onStep, crystal, crumbs, first = false, benchmarks, mySeats, contact, actions, bubble, startTab, stripOff, onStripOff } = props;
+  const { i, focus, pos, onClose, onStep, crystal, crumbs, first = false, benchmarks, mySeats, contact, actions, bubble, knownOf, startTab, stripOff, onStripOff } = props;
   const ui = useUi();
   const app = useAppMaybe();
   const c = i.c;
@@ -326,7 +346,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
                 <span className="co-sub">Function, start, hours a week and why they hired are free. {c.hidden ? "Who held each seat opens with the company." : "Who held each seat is free now the company is open."}</span>
               </div>
               <Timeline i={i} />
-              <SeatTable i={i} onDetails={(id) => (setDetails(id), requestAnimationFrame(() => document.getElementById(`tp-d-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })))} />
+              <SeatTable i={i} nameOf={(p, e) => <PersonNameButton i={i} p={p} e={e} className="co-seat-who" more={{ here: true, onWays: () => go("ways"), stage: deal ? stageWord(deal.stage) : null, onPipeline: () => go("deal"), onAddPipeline: () => go("deal") }} />} onDetails={(id) => (setDetails(id), requestAnimationFrame(() => document.getElementById(`tp-d-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })))} />
               <p className="co-legend">
                 <span className="co-legend-tint" aria-hidden /> A tinted cell is a fact you opened. A lock says its price. A quiet lock opens after another purchase.
               </p>
@@ -352,14 +372,16 @@ export function CompanyRecord(props: CompanyRecordProps) {
                 </span>
               </div>
               {peopleN === 0 && <p className="co-sub">Nobody is on file here yet.{c.hidden ? "" : " Add someone you know and earn a credit for each fact."}</p>}
-              <PeopleTable i={i} open={peek?.p.id ?? null} onPerson={(p, e, el) => setPeek((x) => (x?.p.id === p.id ? null : { p, e, el }))} />
+              <PeopleTable i={i} knownOf={knownOf} open={peek?.p.id ?? null} onPerson={(p, e, el) => setPeek((x) => (x?.p.id === p.id ? null : { p, e, el }))} />
               {peek &&
-                (bubble ?? ((o: BubbleProps) => <PersonPeek {...o} />))({
+                bubble?.({
                   i,
                   p: peek.p,
                   e: peek.e,
                   anchor: peek.el,
                   onClose: () => setPeek(null),
+                  stage: deal ? stageWord(deal.stage) : null,
+                  onDeal: () => (setPeek(null), go("deal")),
                   onWays: () => go("ways"),
                   onCard: () => {
                     const id = peek.p.id;
@@ -614,6 +636,8 @@ export function CompanyRecord(props: CompanyRecordProps) {
 export function CompanyPage() {
   const app = useAppMaybe();
   const r = app?.record;
+  // How the member knows each person on file (their own sources only), for the bubble.
+  const byRecord = useKnownByRecord();
   const first = useMemo(() => (r ? !(r.me.companiesUnlocked ?? 0) && !r.me.unlocked : false), [r?.info.c.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!app || !r) return null;
   return (
@@ -632,6 +656,23 @@ export function CompanyPage() {
       actions={app.headerActions}
       stripOff={app.start.stripOff("company") || (app.me.stripsOff ?? []).includes("company")}
       onStripOff={() => app.start.dismissStrip("company")}
+      knownOf={(p) => byRecord.get(p.id) ?? null}
+      bubble={(o) => (
+        <PersonBubble
+          anchor={o.anchor}
+          i={o.i}
+          p={o.p}
+          e={o.e}
+          known={byRecord.get(o.p.id) ?? null}
+          onClose={o.onClose}
+          here
+          onWays={o.onWays}
+          onCard={o.onCard}
+          stage={o.stage}
+          onPipeline={o.onDeal}
+          onAddPipeline={o.onDeal}
+        />
+      )}
     />
   );
 }
