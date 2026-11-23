@@ -1725,6 +1725,11 @@ button.ms2-co-name:hover {
 }
 .ms2-phone .ms2-search {
   flex: 1 1 160px;
+  /* Search and New message share one row on a phone, so the list starts higher up. */
+  min-width: 0;
+}
+.ms2-phone .ms2-search input {
+  width: 0;
 }
 .ms2-phone .ms2-list {
   border-right: 0;

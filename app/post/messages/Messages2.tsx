@@ -596,7 +596,7 @@ export function Messages2() {
       <span className="ms2-grow" />
       <label className="ms2-search">
         <IconSearch size={15} />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search conversations" placeholder="Search a name or company" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search conversations" placeholder={phone ? "Search" : "Search a name or company"} />
       </label>
       <button type="button" className={`ms2-new${m === "compose" ? " on" : ""}`} aria-pressed={m === "compose"} onClick={newMessage}>
         <IconPlus size={15} />
