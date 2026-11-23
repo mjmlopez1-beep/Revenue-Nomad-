@@ -39,6 +39,7 @@ import { PageStrip } from "../shell/PageStrip";
 import { usePeers, peersAct } from "../peersStore";
 import { usePipeline, pipelineAct } from "../pipelineStore";
 import { PassSheet } from "../PeerSheets";
+import { openFractionalFor } from "../fractionalsModel";
 import { openWay } from "../network/useWays";
 import { IntroLine } from "../IntroLine";
 import { SEAT_LOCKED_FIRST, readM, rememberOne, send, tellUnread, unlockSendCost, unlockSendPrice, useConversations, when, type Act, type ActAnswer } from "./data";
@@ -499,7 +500,7 @@ export function Messages2() {
 
   const side = (
     <aside className="ms2-side" aria-label="About this conversation">
-      {wp && <PersonCard p={wp} rec={wp.id ? recByMember.get(wp.id) ?? null : null} blocked={!!open?.blocked} onProfile={() => app.openPage("fractionals")} />}
+      {wp && <PersonCard p={wp} rec={wp.id ? recByMember.get(wp.id) ?? null : null} blocked={!!open?.blocked} onProfile={() => (wp.id && openFractionalFor(wp.id), app.openPage("fractionals"))} />}
       <div role="tablist" aria-label="Context" className="ms2-ctabs">
         {(
           [

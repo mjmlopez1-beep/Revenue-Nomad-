@@ -251,6 +251,8 @@ const PAGE_TITLE: Record<Page, string> = {
   settings: "Settings",
   contracts: "Contracts",
 };
+/** A page's title: the new look's one Fractionals page (Peers and the directory) is "Fractionals" at all three of its addresses. */
+const pageTitle = (p: Page, ui2: boolean) => (ui2 && (p === "peers" || p === "fractionals" || p === "partners") ? "Fractionals" : PAGE_TITLE[p]);
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["decision maker", "decision makers"] };
@@ -1762,7 +1764,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
 
   // The tab's title says where the member is.
-  const docTitle = page !== "table" ? PAGE_TITLE[page] : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : TYPE_TITLE[recordType];
+  const docTitle = page !== "table" ? pageTitle(page, ui2) : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : TYPE_TITLE[recordType];
   useEffect(() => {
     document.title = `${docTitle} · Merlin`;
   }, [docTitle]);
@@ -3299,7 +3301,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         crystal: (drawer!.returnTo === "radar" && radarList.some((r) => r.i.c.id === drawerInfo!.c.id)) || (drawer!.returnTo === "today" && todayIds.has(drawerInfo!.c.id)),
         crumbs:
           drawer!.returnTo && !drawer!.over && drawer!.returnTo !== "table"
-            ? [{ label: "Home", href: pageHref("today"), go: goHome }, { label: PAGE_TITLE[drawer!.returnTo], href: pageHref(drawer!.returnTo as AppPage), go: closeDrawer }]
+            ? [{ label: "Home", href: pageHref("today"), go: goHome }, { label: pageTitle(drawer!.returnTo, ui2), href: pageHref(drawer!.returnTo as AppPage), go: closeDrawer }]
             : [...headCrumbs, { label: headTitle, href: urlRef.current.replace(/([?&])c=[^&]*&?/, "$1").replace(/[?&]$/, "") || "/", go: closeDrawer }],
       }
     : null;
@@ -3423,7 +3425,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         ) : waiting && onScreen !== "table" ? (
           <main className="tp-main tp-main-page">
             {/* A page about companies waits for all of them; any other page shows its own head while the table lands. */}
-            {pageDef(onScreen)?.needsTable ? <AllLoading failed={fullFailed} /> : <PageWait title={PAGE_TITLE[onScreen]} failed={fullFailed} />}
+            {pageDef(onScreen)?.needsTable ? <AllLoading failed={fullFailed} /> : <PageWait title={pageTitle(onScreen, ui2)} failed={fullFailed} />}
           </main>
         ) : PageNow ? (
           <main className={`tp-main tp-main-page${pageMain ? ` ${pageMain}` : ""}`}>

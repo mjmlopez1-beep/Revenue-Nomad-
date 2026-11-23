@@ -53,6 +53,20 @@ export const takeWantSeat = () => {
   return s;
 };
 
+/**
+ * A member whose card the new look's Fractionals page should open (a Messages thread's Profile): set
+ * before opening the page. Read without using it up, as the shell can mount the page twice while it
+ * settles; the page clears it once it has the records, and it counts for 15 seconds at most.
+ */
+let wantMember: { id: string; at: number } | null = null;
+export const openFractionalFor = (memberId: string, nowMs = Date.now()) => {
+  wantMember = { id: memberId, at: nowMs };
+};
+export const peekWantMember = (nowMs = Date.now()): string | null => (wantMember && nowMs - wantMember.at < 15_000 ? wantMember.id : null);
+export const doneWantMember = () => {
+  wantMember = null;
+};
+
 export type FrTab = "all" | "on" | "unlocked";
 export const FR_TABS: { key: FrTab; label: string }[] = [
   { key: "all", label: "All" },

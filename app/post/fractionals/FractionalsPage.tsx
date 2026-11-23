@@ -66,6 +66,8 @@ import {
   startPlaceNow,
   startThree,
   takeWantSeat,
+  peekWantMember,
+  doneWantMember,
   withPeers,
   type FxCtx,
   type FxFilters,
@@ -163,6 +165,15 @@ export function FractionalsPage() {
     const r = records.find((x) => x.seats.some((s) => s.id === wantSeat));
     if (r) setPanel({ kind: "card", id: r.id });
   }, [records, wantSeat]);
+  // A Messages thread's Profile: that member's card, once the directory and Peers are in (a member with no seat joins from Peers).
+  const [wantMember] = useState(() => peekWantMember());
+  useEffect(() => {
+    if (!wantMember || !data || !peers) return;
+    doneWantMember();
+    const r = records.find((x) => x.memberId === wantMember);
+    if (r) setPanel({ kind: "card", id: r.id });
+    else toast("Their card isn't listed in Fractionals.");
+  }, [records, wantMember, data, peers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ctx: FxCtx = useMemo(() => {
     const know = new Map<string, { from: string; why: string }>();

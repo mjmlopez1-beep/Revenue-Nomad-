@@ -679,6 +679,13 @@ async function main() {
     ]);
     const ola = merged.find((r) => r.memberId === "m_noseat");
     check("a member Peers shows with no seat on file joins the list, seatless, named as Peers names them; nobody twice", merged.length === d2.records.length + 1 && !!ola && ola.seats.length === 0 && ola.now === 0 && ola.onMerlin && ola.name === "Ola Noseat" && !merged.some((r) => r.name === "Someone Else"), ola);
+    {
+      // Messages' Profile opens that member's card: read without using it up (the shell may mount the page twice), for 15 seconds at most.
+      fm.openFractionalFor("m_x", 1_000);
+      const seen = [fm.peekWantMember(2_000), fm.peekWantMember(3_000), fm.peekWantMember(17_000)];
+      fm.doneWantMember();
+      check("a thread's Profile: the card to open, read twice, gone after 15 seconds or once used", seen[0] === "m_x" && seen[1] === "m_x" && seen[2] === null && fm.peekWantMember(2_000) === null, seen);
+    }
     check("the Open to leads cell", fm.leadsWord({ onMerlin: true, leads: "open" }) === "Open" && fm.leadsWord({ onMerlin: true, leads: "off" }) === "Not now" && fm.leadsWord({ onMerlin: false }) === "Not yet");
   }
 
