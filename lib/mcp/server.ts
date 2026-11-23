@@ -23,6 +23,7 @@ import { registerWayTools } from "./ways";
 import { registerGranolaTools } from "./granola";
 import { granolaOn } from "../granola/types";
 import { networkOn } from "../google/types"; // [google network]
+import { pathsOn } from "../paths";
 import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
 
 export const PER_MINUTE = 60;
@@ -471,8 +472,10 @@ export function makeServer(ctx: T.Ctx): McpServer {
   registerProposalTools(server, ctx, run);
   // Peers (lib/mcp/peers.ts): the member's peers, passing a lead (asks first), and the leads passed to them.
   registerPeerTools(server, ctx, run);
-  // Your way into a company (lib/mcp/ways.ts): the routes with Est. success, read only. Only with Your network on, like the paths.
-  if (networkOn()) registerWayTools(server, ctx, run);
+  // Your way into a company (lib/mcp/ways.ts): the routes with Est. success, read only. With ways in on (RN_PATHS): the
+  // sources are independent, so the LinkedIn file, a contacts CSV and fellow fractionals give routes without Google. The
+  // locked-match rule holds there as in the app (a locked company's routes stay closed; people from the member's own files are never named).
+  if (pathsOn()) registerWayTools(server, ctx, run);
   // The member's recent Granola calls (lib/mcp/granola.ts), read only. Only with RN_GRANOLA=1.
   if (granolaOn()) registerGranolaTools(server, ctx, run);
 
