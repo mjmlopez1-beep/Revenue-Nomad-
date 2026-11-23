@@ -355,7 +355,7 @@ export function PeoplePage() {
   const opensUsed = live.proOpens ? live.proOpens.of - live.proOpens.left : null;
   const status =
     msg ??
-    (first && opensUsed !== null ? `Trial: ${opensUsed} of ${live.proOpens!.of} free company opens used today. A name and title cost 1 credit.` : null);
+    (first && opensUsed !== null ? `${live.plan?.name === "trial" ? "Trial: " : ""}${opensUsed} of ${live.proOpens!.of} free company opens used today. A name and title cost 1 credit.` : null);
 
   const bubble =
     whoRow && who ? (
