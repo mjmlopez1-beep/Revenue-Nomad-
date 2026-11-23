@@ -12,6 +12,7 @@
  */
 import { IconX } from "../../ui/shared";
 import { setFindStart } from "../find/start";
+import { setCreditsStart } from "../pageStart";
 import { useAppMaybe } from "./pages";
 import { WHATS_NEW, WHATS_NEW_KEY, whatsNewShown } from "./releaseNotes";
 import "./shell.css";
@@ -33,6 +34,7 @@ export function WhatsNew() {
                 className="ws-new-go"
                 onClick={() => {
                   if (x.find) setFindStart({ lookup: "" });
+                  if (x.tab) setCreditsStart(x.tab);
                   c.openPage(x.page);
                 }}
               >

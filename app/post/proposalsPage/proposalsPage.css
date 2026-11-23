@@ -1420,6 +1420,8 @@
   font-size: 19px;
   font-weight: 800;
   color: var(--pz-ink);
+  /* A long title ends in an ellipsis, not cut mid-word (the whole title is in the document below and on hover). */
+  text-overflow: ellipsis;
 }
 .pz-title:hover:not([readonly]),
 .pz-title:focus {

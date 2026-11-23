@@ -292,7 +292,7 @@ async function tell(cx: Ctx, run: WfRun, bells: Parameters<typeof pushInbox>[2])
       const [{ renderAlertEmail }, { emailLinker }, { alertOffUrl }, seed] = await Promise.all([import("../digest"), import("../emailIn"), import("../notify/events"), loadSeed()]);
       const linker = emailLinker(seed, s, m.id, base, cx.nowMs);
       const off = alertOffUrl(base, m.id, [`wf:${f.id}`]);
-      const mail = renderAlertEmail({ name: m.name, every: "instant", groups: [{ name: f.name, lines: [{ text: out, url: linker(ev.href) }, { text: did, url: linker("/?p=alerts") }], offUrl: off }], alertsUrl: linker("/?p=alerts"), appUrl: base, unsubscribeUrl: off });
+      const mail = renderAlertEmail({ name: m.name, every: "instant", groups: [{ name: f.name, lines: [{ text: out, url: linker(ev.href) }, { text: did, url: linker("/?p=alerts") }], offUrl: off }], alertsUrl: linker("/?p=alerts"), appUrl: base, unsubscribeUrl: off, oneRun: true });
       await sendEmail(m.email, mail.subject, mail.text, mail.html, { unsubscribeUrl: off });
     } catch (e) {
       console.error("workflows: the email failed", e instanceof Error ? e.message : "error");

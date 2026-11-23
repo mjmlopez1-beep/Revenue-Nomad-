@@ -131,7 +131,7 @@ async function main() {
   check("a saved search with new matches is in that member's email data", JSON.stringify(mo?.alerts) === JSON.stringify([{ name: "Fractional Marketing roles", n: 1 }]), mo?.alerts);
   check("a member without saved searches has none", Array.isArray(sal?.alerts) && sal!.alerts!.length === 0, sal?.alerts);
   const moMail = (await import("../lib/digest")).renderDigest(mo!);
-  check("the email lists the saved view and its new roles", moMail.text.includes("Your saved views\n  Fractional Marketing roles  1 new") && moMail.html.includes("Fractional Marketing roles") && !moMail.text.includes("RevOps roles in Texas"), moMail.text);
+  check("the email lists the saved view and its new roles", moMail.text.includes("Your lists\n  Fractional Marketing roles  1 new") && moMail.html.includes("Fractional Marketing roles") && !moMail.text.includes("RevOps roles in Texas"), moMail.text);
   check("the email never names the company of a saved search's match", !moMail.text.includes("Gamma Co") && !moMail.html.includes("Gamma Co"));
   check("everyone with an email who hasn't opted out is on the list", list.map((x) => x.memberId).sort().join() === "m1,m2,m4,m6", list.map((x) => x.memberId));
   delete process.env.RN_DIGEST_ALL;
@@ -224,7 +224,7 @@ async function main() {
   });
   check(
     "a hire found this week that started earlier says added this week, and when it started",
-    hireMail.subject === "2 companies in your profile that hired a fractional Finance leader, added this week" && /Finance · started Mar 2026/.test(hireMail.text) && !/hired a fractional Finance leader this week/.test(hireMail.text + hireMail.html),
+    hireMail.subject === "2 companies that fit your ideal client and hired a fractional Finance leader, added this week" && /Finance · started Mar 2026/.test(hireMail.text) && !/hired a fractional Finance leader this week/.test(hireMail.text + hireMail.html),
     { subject: hireMail.subject, text: hireMail.text.slice(0, 400) },
   );
 

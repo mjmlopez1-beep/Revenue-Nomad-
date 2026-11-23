@@ -257,9 +257,9 @@ const PAGE_TITLE: Record<Page, string> = {
 /**
  * The new look's names for pages that kept their old key (the browser tab, the breadcrumb, the wait):
  * the one Fractionals page (Peers and the directory) at all three of its addresses, Credits and usage
- * for ?p=credits and ?p=billing (its Plans tab), Home for Today. The lists keep the rail's names (UI2_TYPE_TITLE).
+ * for ?p=credits and ?p=billing (its Plans tab), Home for Today, Pipeline (the rail's name) for Your pipeline. The lists keep the rail's names (UI2_TYPE_TITLE).
  */
-const UI2_TITLE: Partial<Record<Page, string>> = { today: "Home", radar: "Crystal Ball", peers: "Fractionals", fractionals: "Fractionals", partners: "Fractionals", credits: "Credits and usage", billing: "Credits and usage" };
+const UI2_TITLE: Partial<Record<Page, string>> = { today: "Home", radar: "Crystal Ball", peers: "Fractionals", fractionals: "Fractionals", partners: "Fractionals", credits: "Credits and usage", billing: "Credits and usage", pipeline: "Pipeline" };
 const pageTitle = (p: Page, ui2: boolean) => (ui2 ? UI2_TITLE[p] ?? PAGE_TITLE[p] : PAGE_TITLE[p]);
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** The lists' names in the new look's rail: Decision makers is People there. */
@@ -1803,15 +1803,14 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const docTitle = page !== "table" ? pageTitle(page, ui2) : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : ui2 ? (tab === "hiring" ? "Hiring now" : UI2_TYPE_TITLE[recordType]) : TYPE_TITLE[recordType];
   useEffect(() => {
     const want = `${docTitle} · Merlin`;
-    const put = () => {
+    document.title = want;
+    // Next puts the site's own title back when the app rewrites the address (a tab, a section): keep the page's.
+    if (typeof MutationObserver === "undefined") return;
+    const keep = new MutationObserver(() => {
       if (document.title !== want) document.title = want;
-    };
-    put();
-    // On a first load the layout's own <title> (the site's name) can be written again after this ran,
-    // as the page finishes hydrating: put the page's name back whenever that happens.
-    const watch = new MutationObserver(put);
-    watch.observe(document.head, { childList: true, subtree: true, characterData: true });
-    return () => watch.disconnect();
+    });
+    keep.observe(document.head, { childList: true, characterData: true, subtree: true });
+    return () => keep.disconnect();
   }, [docTitle]);
 
   /** An admin's "See it as a member": a cookie the server reads (only for admins), then the table again. */

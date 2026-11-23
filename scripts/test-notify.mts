@@ -405,7 +405,7 @@ async function main() {
   check("one post per member per scan", moPosts.length === 1 && hanaPosts.length === 1, { mo: moPosts.map(textOf), hana: hanaPosts.map(textOf) });
   const moText = moPosts[0] ? textOf(moPosts[0]) : "";
   check("it counts the member's function and their saved view", /3 new open roles for you in the latest scan/.test(moText), moText);
-  check("it says which saved view matched", /1 matches your saved view “Sales at SaaS”/.test(moText), moText);
+  check("it says which saved view matched", /1 matches your list “Sales at SaaS”/.test(moText), moText);
   check("a hidden company stays hidden", !/Beta Labs|Gamma Goods/.test(moText) && /at a SaaS company/.test(moText), moText);
   check("a role reads its standard industry and its country and region", /at a SaaS company, \$5M–\$20M revenue, Texas, US/.test(moText), moText);
   check("a saved view for another country doesn't match", !/Sales in Germany/.test(moText), moText);
@@ -425,7 +425,7 @@ async function main() {
     moSecs,
   );
   check("a locked company's role has no link to its record and no picture", moSecs.every((b) => !/<https?:/.test(b.text?.text ?? "") && !b.accessory) && !JSON.stringify(moSecs).includes("?c="), moSecs);
-  check("the saved view's match is a small line after the roles", (moPost?.blocks ?? []).some((b) => b.type === "context" && /1 matches your saved view “Sales at SaaS”/.test(String((b.elements?.[0] as { text?: string })?.text))), moPost?.blocks);
+  check("the saved view's match is a small line after the roles", (moPost?.blocks ?? []).some((b) => b.type === "context" && /1 matches your list “Sales at SaaS”/.test(String((b.elements?.[0] as { text?: string })?.text))), moPost?.blocks);
   clear();
   skew += 16 * MIN;
   const res2 = await t.applyScan({ roles: [...found.roles, role("Echo Energy", "Fractional Head of Marketing", "Marketing")], sources: [{ source: "board", fetched: 5, matched: 5 }] });

@@ -20,7 +20,7 @@ import { AskReply, FixMenu, LogList, NoteBox } from "../PipelineParts";
 import { PassButton } from "../PeerSheets";
 import { openWay, useWayIn } from "../network/useWays";
 import type { Example } from "../examples";
-import { money, nextOf, toWords, wayOf, type ExampleCard, type RouteHint } from "./model";
+import { money, nextOf, shownMonthly, toWords, wayOf, type ExampleCard, type RouteHint } from "./model";
 import { benchHint } from "./AddDeal";
 import { openItem } from "../Activity";
 import { openContract } from "../contracts/open";
@@ -105,7 +105,7 @@ export function DealDrawer({
           )}
           <span className="pl2-dr-sub">
             {lock ? i?.teaser || "Locked company" : r.pitch ?? "Seat not set yet"}
-            {r.monthly ? ` · ${money(r.monthly)} a month` : ""}
+            {shownMonthly(r) ? ` · ${money(r.monthly)} a month` : ""}
           </span>
         </span>
         <button type="button" className="pl2-x" aria-label="Close" onClick={onClose}>
@@ -270,7 +270,7 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
       {!edit ? (
         <>
           <span className="pl2-small">
-            {won ? `Won at ${money(r.won!.monthly)} a month, from the terms. ` : r.value ? `${money(r.value)} a month, as you typed it. ` : "No value yet. Type what it is worth a month and the totals count it. "}
+            {won ? `Won at ${money(r.won!.monthly)} a month, from the terms. ` : r.stage === "won" ? "Won, with no terms yet. Add the terms and the totals count it. " : r.value ? `${money(r.value)} a month, as you typed it. ` : "No value yet. Type what it is worth a month and the totals count it. "}
             {r.pitch ? `You pitch ${r.pitch}.` : "No seat set yet."}
           </span>
           <button type="button" className="pl2-link" onClick={() => setEdit(true)}>

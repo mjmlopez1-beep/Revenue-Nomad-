@@ -47,6 +47,7 @@ import {
   money,
   nextOf,
   passes,
+  shownMonthly,
   sortDeals,
   summaryWords,
   toWords,
@@ -517,7 +518,7 @@ function DealCard({
             <span className="pl2-co-s">{lock ? i?.teaser || "Locked company" : r.pitch ?? "Seat not set yet"}</span>
           </span>
         </span>
-        <span className="pl2-money">{r.monthly ? <><strong className="num">{money(r.monthly)}</strong> a month</> : <span className="pl2-muted">No value yet</span>}</span>
+        <span className="pl2-money">{shownMonthly(r) ? <><strong className="num">{money(r.monthly)}</strong> a month</> : <span className="pl2-muted">{r.stage === "won" ? "No terms yet" : "No value yet"}</span>}</span>
         <span className="pl2-way">{way ?? toWords(r) ?? "No way in chosen yet"}</span>
         <span className="pl2-next">
           <span aria-hidden className={`pl2-dot${n.hot ? (ember ? " hot" : " due") : ""}`} />
@@ -634,7 +635,7 @@ function DealTable({
   const cols: ColumnDef[] = [
     { ...COMPANY_COLUMNS[0], words: (rs) => `${rs.length} ${rs.length === 1 ? "deal" : "deals"}` },
     col("plStage", "Stage", "minmax(112px, 0.6fr)", (ds) => `${ds.filter((d) => LINE.includes(d.stage) && d.stage !== "won").length} open`, () => true),
-    col("plValue", "Value a month", "minmax(112px, 0.6fr)", (ds) => `${money(ds.filter((d) => d.stage !== "won" && colOf(d.stage) !== "closed").reduce((n, d) => n + d.monthly, 0))} open`, (d) => d.monthly > 0),
+    col("plValue", "Value a month", "minmax(112px, 0.6fr)", (ds) => `${money(ds.filter((d) => d.stage !== "won" && colOf(d.stage) !== "closed").reduce((n, d) => n + d.monthly, 0))} open`, (d) => shownMonthly(d) > 0),
     col("plWay", "Your way in", "minmax(180px, 1.2fr)", (ds) => `${pct(ds.filter((d) => !!wayOf(d, routes.get(d.company))).length, ds.length)} have one`, (d) => !!wayOf(d, routes.get(d.company))),
     col("plNext", "Next move", "minmax(190px, 1.2fr)", (ds) => `${ds.filter((d) => passes("due", d, today)).length} due`, () => true),
     col("plPaper", "Proposal or contract", "minmax(170px, 1.1fr)", (ds) => `${ds.filter((d) => !!d.paper).length} of ${ds.length}`, (d) => !!d.paper),
@@ -653,7 +654,7 @@ function DealTable({
       case "plStage":
         return <span className={`pl2-pill ${d.stage === "won" ? "pine" : colOf(d.stage) === "closed" ? "plain" : d.stage === "sent" || d.stage === "reach" ? "plain" : "mint"}`}>{STAGE_WORDS[d.stage]}</span>;
       case "plValue":
-        return d.monthly ? two(<strong className="num">{money(d.monthly)}</strong>, "a month") : two(<span className="pl2-muted">Not set</span>);
+        return shownMonthly(d) ? two(<strong className="num">{money(d.monthly)}</strong>, "a month") : two(<span className="pl2-muted">{d.stage === "won" ? "No terms yet" : "Not set"}</span>);
       case "plWay":
         return two(wayOf(d, routes.get(d.company)) ?? <span className="pl2-muted">None chosen yet</span>, toWords(d));
       case "plNext": {

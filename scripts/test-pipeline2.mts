@@ -129,7 +129,9 @@ async function main() {
   check("sort by value: highest first", M.sortDeals(list, "value").map((r) => r.id).join() === "2,1,3");
   check("sort by company: A to Z, locked last", M.sortDeals(list, "company").map((r) => r.id).join() === "2,1,3");
   check("sort by next move: the latest first, none last", M.sortDeals(list, "due").map((r) => r.id).join() === "2,1,3");
-  check("column totals: count and value a month, 'No value yet' without one", M.colTotal("sent", list).n === 3 && M.colTotal("sent", list).words === "$21,000 a month" && M.colTotal("won", [rec({ stage: "won", monthly: 5000 })]).words === "$5,000 a month won" && M.colTotal("sent", [rec({})]).words === "No value yet");
+  check("column totals: count and value a month, 'No value yet' without one", M.colTotal("sent", list).n === 3 && M.colTotal("sent", list).words === "$21,000 a month" && M.colTotal("won", [rec({ stage: "won", monthly: 5000, won: { monthly: 5000 } as never })]).words === "$5,000 a month won" && M.colTotal("sent", [rec({})]).words === "No value yet");
+  // A Won deal without terms shows no value (the value typed before it was won is not what it won), as Home's numbers count it.
+  check("a Won deal without terms shows no value, and its column says so", M.shownMonthly(rec({ stage: "won", monthly: 9000 })) === 0 && M.colTotal("won", [rec({ stage: "won", monthly: 9000 })]).words === "No value yet" && M.shownMonthly(rec({ stage: "sent", monthly: 9000 })) === 9000);
   check("filters: due, with a proposal, no way in, with a peer", M.passes("due", list[1], "2026-11-23") && !M.passes("due", list[0], "2026-11-23") && M.passes("noway", list[0], "2026-11-23") && !M.passes("peer", list[0], "2026-11-23"));
 
   console.log("\nthe Example cards");
