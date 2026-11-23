@@ -175,7 +175,7 @@ async function main() {
   check("a catch-all function reads as a fractional leader", H.hireWhat(null, "Other") === "a fractional leader" && H.hireWhat(null, "Executive") === "a fractional leader" && H.hireWhat(null, null) === "a fractional leader");
   check(
     "the email's line, as the owner wrote it",
-    H.hiresLine(2, ["Finance"], true) === "2 companies in your profile hired a fractional Finance leader this week" &&
+    H.hiresLine(2, ["Finance"], true) === "2 companies that fit your ideal client hired a fractional Finance leader this week" &&
       H.hiresLine(1, [], false) === "1 company hired a fractional leader this week" &&
       H.hiresLine(3, ["Finance", "Operations"], false) === "3 companies hired a fractional Finance or Operations leader this week",
   );
@@ -434,17 +434,17 @@ async function main() {
   );
   const mail = digest.renderDigest(sal!);
   // Changed: the hires were added this week, and may have started months before: the line says "added this week", each row when it started.
-  check("the subject is the owner's line, as added this week", mail.subject === "4 companies in your profile that hired a fractional Finance leader, added this week", mail.subject);
+  check("the subject is the owner's line, as added this week", mail.subject === "4 companies that fit your ideal client and hired a fractional Finance leader, added this week", mail.subject);
   check("the email lists the companies in free facts: the company, the function, when it started", mail.text.includes(`Beta Labs · Finance · started ${H.startWords(ym(1))}`) && mail.text.includes(`${digest.LOCKED_HIRER} · Finance · started ${H.startWords(ym(2))}`), mail.text);
-  check("its one button opens the saved view", mail.html.includes("Open the saved view") && (mail.html.match(/class="cb-cta"/g) ?? []).length === 1 && mail.html.includes(h!.url.replace(/&/g, "&amp;")));
+  check("its one button opens the saved view", mail.html.includes("Open the list") && (mail.html.match(/class="cb-cta"/g) ?? []).length === 1 && mail.html.includes(h!.url.replace(/&/g, "&amp;")));
   check("the rendered email never names a seat holder or a locked company", !(mail.text + mail.html).includes(HOLDER) && !(mail.text + mail.html).includes(HIDDEN_NAME));
   check("no ember dot: a hire is no live opening", !mail.html.includes("background:#FF5A1F"));
   // A week with new roles too: the hire line sits under the roles, with an outlined button to the view (the email keeps one filled button).
   const mixed = digest.renderDigest({ ...sal!, newRoles: 2, newRolesMine: 1, newRolesMineHidden: 1, byFunction: [{ function: "Sales", n: 1 }, { function: "Marketing", n: 1 }], rolesUrl: `${BASE}/?v=hiring`, roles: [] });
-  check("with new roles, the roles lead and the hire line follows", mixed.subject === "1 new Sales role this week" && mixed.text.includes("4 companies in your profile that hired a fractional Finance leader, added this week.") && (mixed.html.match(/class="cb-cta"/g) ?? []).length === 1, mixed.text);
+  check("with new roles, the roles lead and the hire line follows", mixed.subject === "1 new Sales role this week" && mixed.text.includes("4 companies that fit your ideal client and hired a fractional Finance leader, added this week.") && (mixed.html.match(/class="cb-cta"/g) ?? []).length === 1, mixed.text);
   check(
-    "with new roles, the saved view still gets a button (outlined, after the roles' filled one)",
-    /border:2px solid [^"]*"><a href="[^"]*"[^>]*>Open the saved view<\/a>/.test(mixed.html) && mixed.html.indexOf("Open the saved view") > mixed.html.indexOf('class="cb-cta"') && mixed.html.includes(h!.url.replace(/&/g, "&amp;")),
+    "with new roles, the list still gets a button (outlined, after the roles' filled one)",
+    /border:2px solid [^"]*"><a href="[^"]*"[^>]*>Open the list<\/a>/.test(mixed.html) && mixed.html.indexOf("Open the list") > mixed.html.indexOf('class="cb-cta"') && mixed.html.includes(h!.url.replace(/&/g, "&amp;")),
   );
 
   /* ---------- the server: the weekly post in Slack ---------- */
@@ -467,7 +467,7 @@ async function main() {
   const posts = outbox.filter((o) => o.url === SLACK);
   const text = JSON.stringify(posts[0]?.body ?? {});
   check("a scan with no new roles still posts the week's new hires", posts.length === 1, posts.length);
-  check("the post's headline is the owner's line", text.includes("4 companies in your profile hired a fractional Finance leader this week"), text.slice(0, 400));
+  check("the post's headline is the owner's line", text.includes("4 companies that fit your ideal client hired a fractional Finance leader this week"), text.slice(0, 400));
   check("the post lists companies in free facts, a locked one unnamed", text.includes("Beta Labs") && text.includes("A locked company") && text.includes("Hired a fractional Finance leader"), text);
   // In Slack, a company a block: the name in bold (linked only when the member can see it), the hire, when it started.
   const hireBlocks = (posts[0]?.body.blocks ?? []) as { type: string; text?: { text: string }; fields?: { text: string }[] }[];

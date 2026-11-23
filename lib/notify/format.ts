@@ -287,11 +287,11 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
     return {
       kind: "roles",
       count: hires.reduce((n, x) => n + x.n, 0),
-      headline: one ? hiresLine(h.n, h.functions, h.inProfile) : `New hires for ${hires.length} of your saved views this week`,
+      headline: one ? hiresLine(h.n, h.functions, h.inProfile) : `New hires for ${hires.length} of your lists this week`,
       lines,
       url: viewUrl(h),
       ...(entries.length ? { entries } : {}),
-      ...(entries.length && more > 0 ? { after: [`And ${plural(more, one ? "more" : "more saved view")}.`] } : {}),
+      ...(entries.length && more > 0 ? { after: [`And ${plural(more, one ? "more" : "more list")}.`] } : {}),
     };
   }
   const headline =
@@ -299,8 +299,8 @@ export function alertFor(items: AlertItem[], base: string): Alert | null {
   const lines = roles.slice(0, 3).map((r) => r.label);
   if (total > lines.length && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]}. And ${plural(total - lines.length, "more")}.`;
   const saved = [
-    ...hires.map((h) => `${hiresLine(h.n, h.functions, h.inProfile)}, for your saved view “${cut(h.name, 50)}”`),
-    ...[...alerts].map(([name, n]) => `${n} ${n === 1 ? "matches" : "match"} your saved view “${cut(name, 60)}”`),
+    ...hires.map((h) => `${hiresLine(h.n, h.functions, h.inProfile)}, for your list “${cut(h.name, 50)}”`),
+    ...[...alerts].map(([name, n]) => `${n} ${n === 1 ? "matches" : "match"} your list “${cut(name, 60)}”`),
   ].slice(0, 2);
   // At most 3 lines in all: the saved views take the last places.
   const out = [...lines.slice(0, Math.max(1, 3 - saved.length)), ...saved].slice(0, 3);

@@ -97,7 +97,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
       ? `new ${fn} ${mine === 1 ? "role" : "roles"} this week`
       : `new fractional ${newRoles === 1 ? "role" : "roles"} this week`;
   const subject = heroCount > 0 ? `${heroCount} ${heroLabel}` : "No new fractional roles this week";
-  const hireCta = "Open the saved view";
+  const hireCta = "Open the list";
 
   // How a locked company opens, as the member's plan has it: never "2 credits" to a member whose first company each day is free.
   const plan = d.unlock === "pro" || d.unlock === "day" ? d.unlock : "credits";
@@ -121,7 +121,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     lead = plan === "credits" ? `${none}${stays} unlock it for 2 credits.` : `${none}${stays} open it. ${opensWords(newRoles === 1)}`;
   } else if (hireOnly) {
     // Why this email came: the view the member saved, by its own name.
-    lead = hires[0].name ? `From your saved view “${hires[0].name}”.` : "";
+    lead = hires[0].name ? `From your list “${hires[0].name}”.` : "";
   } else {
     lead = "The roles that were already open are still listed.";
   }
@@ -143,7 +143,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     .filter((a) => a.name && a.n > 0)
     .sort((a, b) => b.n - a.n)
     .slice(0, 10);
-  const alertsTitle = "Your saved views";
+  const alertsTitle = "Your lists";
   const alertNew = (n: number) => `${n} new`;
 
   const closedLine =
@@ -189,7 +189,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     // Each saved view that follows hires: its line (the first one is the headline in a week with no new roles), the companies, the view.
     ...hires.flatMap((h, k) => [
       ...(hireOnly && k === 0 ? [] : ["", `${hiresLine(h.n, h.functions, h.inProfile, true)}.`]),
-      ...(h.name && !(hireOnly && k === 0) ? [`  From your saved view “${h.name}”`] : []),
+      ...(h.name && !(hireOnly && k === 0) ? [`  From your list “${h.name}”`] : []),
       "",
       ...h.rows.flatMap((r) => [`${r.company}${r.meta ? ` · ${r.meta}` : ""}`, ...(r.url ? [`  ${r.url}`] : [])]),
       ...(h.url ? ["", hireCta, h.url] : []),
@@ -269,7 +269,7 @@ ${roles
       const head = lead0
         ? ""
         : `<p class="cb-ink" style="margin:0 0 4px;font-family:${MAIL.font};font-size:17px;line-height:24px;font-weight:800;letter-spacing:-0.01em;color:${MAIL.ink}">${esc(hiresLine(h.n, h.functions, h.inProfile, true))}</p>${
-            h.name ? `\n<p class="cb-muted" style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your saved view “${esc(h.name)}”</p>` : ""
+            h.name ? `\n<p class="cb-muted" style="margin:0 0 12px;font-family:${MAIL.font};font-size:14px;line-height:20px;color:${MAIL.muted}">From your list “${esc(h.name)}”</p>` : ""
           }`;
       const list = h.rows.length
         ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-bottom:1px solid ${MAIL.line}">
@@ -351,6 +351,8 @@ export interface AlertMailData {
   appUrl: string;
   /** The link a mail app's own unsubscribe button posts to: every alert in this email off. */
   unsubscribeUrl: string;
+  /** One workflow run: the subject is what happened (its first line), not a count of its lines. */
+  oneRun?: boolean;
 }
 /** Lines an alert's group lists before "And N more". */
 export const ALERT_MAIL_LINES = 8;
@@ -367,7 +369,7 @@ export function renderAlertEmail(d: AlertMailData): { subject: string; text: str
     .filter((g) => g.name && g.lines.length);
   const n = groups.reduce((a, g) => a + g.lines.length, 0);
   const when = d.every === "daily" ? "this morning" : d.every === "weekly" ? "this week" : "just now";
-  const subject = n === 1 ? groups[0].lines[0].text : `${n} alerts ${when}: ${groups.map((g) => g.name).slice(0, 2).join(", ")}${groups.length > 2 ? " and more" : ""}`;
+  const subject = n === 1 || (d.oneRun && groups.length === 1) ? groups[0].lines[0].text : `${n} alerts ${when}: ${groups.map((g) => g.name).slice(0, 2).join(", ")}${groups.length > 2 ? " and more" : ""}`;
   const alertsUrl = link(d.alertsUrl);
   const unsubscribeUrl = link(d.unsubscribeUrl);
   const footerNote = footerLine();
