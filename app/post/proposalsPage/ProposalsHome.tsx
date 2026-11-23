@@ -323,6 +323,10 @@ export function ProposalsHome({
 
   return (
     <div className="pz" data-first={first || undefined}>
+      {/* The page's one heading: the header shows the title as its breadcrumb. */}
+      <h1 className="sr-only" tabIndex={-1}>
+        Proposals
+      </h1>
       <PageStrip page="proposals" own={real.length}>
         {mine.length
           ? "Your first template is saved. Now start a proposal from a call, and Merlin drafts it in that structure and your words."

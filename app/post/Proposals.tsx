@@ -217,7 +217,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
     // Back on the list from a screen above it: keyboard focus on the list's heading.
     if (!deeper && wasSub.current)
       window.requestAnimationFrame(() => {
-        const h = document.querySelector<HTMLElement>(".pp-page h1");
+        const h = document.querySelector<HTMLElement>(".pp-page h1, .pz > h1");
         if (h) (h.tabIndex = -1), h.focus({ preventScroll: true });
       });
     wasSub.current = deeper;

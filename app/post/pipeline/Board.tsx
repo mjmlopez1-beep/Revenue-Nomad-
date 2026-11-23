@@ -135,7 +135,15 @@ export function PipelineBoard() {
     if (!res.ok) return toast(res.message, true);
     setLast(isMoveStage(from) ? { id: r.id, from, to, name: nameOf(r) } : null);
     if (to === "won") setWinning(r.id);
+    else refocus(r.id);
   };
+  // The card moved to another column: keyboard focus follows it to its Move button (it was on the menu that went away).
+  const refocus = (id: string) =>
+    window.setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a !== document.body && a.isConnected) return;
+      document.querySelector<HTMLElement>(`.pl2-card[data-deal="${id}"] .pl2-move`)?.focus();
+    }, 60);
   const undo = async () => {
     if (!last || busy) return;
     setBusy(true);
@@ -143,6 +151,7 @@ export function PipelineBoard() {
     setBusy(false);
     setLast(null);
     toast(res.ok ? `Back to ${STAGE_WORDS[last.from]}.` : res.message, !res.ok);
+    if (res.ok) refocus(last.id);
   };
   const openLocked = async (r: PipelineRec) => {
     const ok = await ui.unlock({ entity: "company", id: r.company, field: "identity" });
@@ -345,6 +354,8 @@ export function PipelineBoard() {
 
   return (
     <div className={`pl2${drawerOpen ? " pl2-has-drawer" : ""}`}>
+      {/* The page's one heading: the header shows the title as its breadcrumb. */}
+      <h1 className="sr-only">{tab === "intros" ? "Pipeline: intros" : "Pipeline"}</h1>
       {strip}
       {toolbar}
       {filters}
