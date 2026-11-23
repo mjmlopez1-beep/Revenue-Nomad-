@@ -259,7 +259,7 @@ const PAGE_TITLE: Record<Page, string> = {
  * the one Fractionals page (Peers and the directory) at all three of its addresses, Credits and usage
  * for ?p=credits and ?p=billing (its Plans tab), Home for Today. The lists keep the rail's names (UI2_TYPE_TITLE).
  */
-const UI2_TITLE: Partial<Record<Page, string>> = { today: "Home", peers: "Fractionals", fractionals: "Fractionals", partners: "Fractionals", credits: "Credits and usage", billing: "Credits and usage" };
+const UI2_TITLE: Partial<Record<Page, string>> = { today: "Home", radar: "Crystal Ball", peers: "Fractionals", fractionals: "Fractionals", partners: "Fractionals", credits: "Credits and usage", billing: "Credits and usage" };
 const pageTitle = (p: Page, ui2: boolean) => (ui2 ? UI2_TITLE[p] ?? PAGE_TITLE[p] : PAGE_TITLE[p]);
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** The lists' names in the new look's rail: Decision makers is People there. */
@@ -1802,7 +1802,20 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   // The tab's title says where the member is.
   const docTitle = page !== "table" ? pageTitle(page, ui2) : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : ui2 ? (tab === "hiring" ? "Hiring now" : UI2_TYPE_TITLE[recordType]) : TYPE_TITLE[recordType];
   useEffect(() => {
-    document.title = `${docTitle} · Merlin`;
+    const want = `${docTitle} · Merlin`;
+    const put = () => {
+      if (document.title !== want) document.title = want;
+    };
+    put();
+    // On a first load the page's own <title> can land after this ran and put the site's name back:
+    // say it again once the document has loaded.
+    if (document.readyState === "complete") return;
+    document.addEventListener("DOMContentLoaded", put);
+    window.addEventListener("load", put);
+    return () => {
+      document.removeEventListener("DOMContentLoaded", put);
+      window.removeEventListener("load", put);
+    };
   }, [docTitle]);
 
   /** An admin's "See it as a member": a cookie the server reads (only for admins), then the table again. */
@@ -2379,7 +2392,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     />
   );
   /** Under a search: what the profile and filters keep out, one tap to see it; or, widened, the way back. */
-  const narrowWords = narrowedBy ? (narrowedBy.icp && narrowedBy.filters ? "your profile and filters" : narrowedBy.icp ? "your Ideal Fractional Profile" : "your filters") : "";
+  const narrowWords = narrowedBy ? (narrowedBy.icp && narrowedBy.filters ? "your profile and filters" : narrowedBy.icp ? "your ideal client" : "your filters") : "";
   const searchLine = qt && page === "table" && (wide || outside > 0) && (
     <p className="tp-scanline tp-searchline" role="status">
       {wide ? (
@@ -3412,8 +3425,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             )}
             {/* The help sheet, the Undo toast and the spend question, hosted once whatever the header draws. */}
             <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />
-            {/* Stage 9: the release notes for members who used the old look, once, until closed (shell/WhatsNew.tsx). */}
-            <WhatsNew />
+            {/* Stage 9: the release notes for members who used the old look, once, until closed (shell/WhatsNew.tsx). Under
+                the header, never above it: a page that draws its own header places it there itself (Home), else it waits for the next page. */}
+            {!headOwn && <WhatsNew />}
             {stripKey && !defShown?.ownStrip && !(onScreen === "table" && recordOpen && phone) && <PageStrip page={stripKey} own={stripOwn} />}
           </>
         ) : (
@@ -3913,7 +3927,7 @@ function Empty({
     const others = hiring.others > 0 ? [{ label: `See the ${hiring.others} in other functions`, go: hiring.onOthers }] : [];
     if (hiring.outside > 0) {
       h = `None of the ${hiring.outsideText} fit your profile right now`;
-      p = "They're all at companies outside your Ideal Fractional Profile.";
+      p = "They're all at companies outside your ideal client.";
       actions = [{ label: `Show all ${hiring.outside}`, go: hiring.onOutside, kind: "pine" }, ...others];
     } else if (filtered && !hired) {
       h = `No open ${hiring.fn} roles match these filters`;

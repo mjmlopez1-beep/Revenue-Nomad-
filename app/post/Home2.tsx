@@ -39,7 +39,8 @@ import { CloseOnHome } from "./Activity";
 import { CountersignDue } from "./MySignature";
 import { FromYourPeers } from "./HomePeers";
 import { RouteMove } from "./network/Ways";
-import { KnownMoves } from "./network/KnownMoves";
+import { KnownMoves, useKnownMoves } from "./network/KnownMoves";
+import { WhatsNew } from "./shell/WhatsNew";
 import { ProWelcome, TrialSummaryCard } from "./Billing";
 import { Scene } from "../ui/fractions/lazy";
 import { crystalLine, sinceWords, showMeDue } from "./todayModel";
@@ -101,7 +102,9 @@ export function Home2(p: Home2Props) {
   const pipe = usePipeline(true).view;
   const dueN = pipe?.due.length ?? 0;
   const openDeals = pipe ? pipe.counts.reach + pipe.counts.sent + pipe.counts.replied + pipe.counts.meeting + pipe.counts.proposal : null;
-  const todoN = moveN + dueN;
+  // Someone you know changed jobs: each is a move of today too (counted, not snoozed: the server keeps no Done for them).
+  const knownN = useKnownMoves(rest)?.list.length ?? 0;
+  const todoN = moveN + dueN + knownN;
   const vocab: AskVocab = useMemo(() => ({ myFn: me.function ?? null, hasIcp: !icpEmpty(me.icp) }), [me.function, me.icp]);
 
   const daySub = first
@@ -137,6 +140,8 @@ export function Home2(p: Home2Props) {
         <span className="h2-day">{daySub}</span>
         {p.actions && <div className="h2-acts">{p.actions}</div>}
       </div>
+      {/* What's new sits under the page's header on every page; Home draws its own header, so it places it here. */}
+      <WhatsNew />
 
       {first && about && (
         <section aria-label="About this page" className="h2-about">
