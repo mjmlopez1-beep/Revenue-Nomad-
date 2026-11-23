@@ -42,15 +42,21 @@ export interface WorkbenchProps {
   fresh?: ReadonlySet<string>;
   /** The row number of the first row in view (the page's start). */
   start?: number;
+  /** A page's own drawing of a column for a row (People's names and the member's own columns); undefined draws the registry's cell. */
+  cell?: (colId: string, r: Row) => ReactNode | undefined;
+  /** A row's own class (an example row, a row the member set aside). */
+  rowClass?: (r: Row) => string;
+  /** Rows that can't be picked (examples): no checkbox. */
+  canPick?: (r: Row) => boolean;
 }
 
 const cellOf = (type: RecordType, id: string, r: Row, mine: string | null) => (type === "companies" ? companyCell(id, r, mine) : type === "engagements" ? seatCell(id, r, mine) : personCell(id, r));
 
-const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, hero }: { r: Row; n: number; type: RecordType; cols: ColumnDef[]; mine: string | null; on: boolean; onPick: (key: string, on: boolean) => void; onOpen: (r: Row) => void; hero: ReactNode | null }) {
+const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, hero, cell, extra, pickable = true }: { r: Row; n: number; type: RecordType; cols: ColumnDef[]; mine: string | null; on: boolean; onPick: (key: string, on: boolean) => void; onOpen: (r: Row) => void; hero: ReactNode | null; cell?: WorkbenchProps["cell"]; extra?: string; pickable?: boolean }) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <tr
-      className={`${on ? "wb-on" : ""}${hero ? " wb-hero-row" : ""}`}
+      className={`${on ? "wb-on" : ""}${hero ? " wb-hero-row" : ""}${extra ? ` ${extra}` : ""}`}
       onClick={() => onOpen(r)}
       onKeyDown={(e) => {
         if (e.key === "Enter" && e.target === e.currentTarget) onOpen(r);
@@ -59,7 +65,7 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
       data-row={r.key}
     >
       <td className="wb-td-check" onClick={stop} onKeyDown={stop}>
-        <input type="checkbox" className="wb-check" checked={on} onChange={(e) => onPick(r.key, e.target.checked)} aria-label={`Select row ${n}`} />
+        {pickable && <input type="checkbox" className="wb-check" checked={on} onChange={(e) => onPick(r.key, e.target.checked)} aria-label={`Select row ${n}`} />}
       </td>
       <td className="wb-td-n num" aria-hidden>
         {n}
@@ -71,7 +77,7 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
           </td>
         ) : (
           <td key={c.id} className={`wb-td${c.id === "company" ? " wb-td-co" : ""}${c.num ? " num" : ""}`}>
-            {cellOf(type, c.id, r, mine)}
+            {cell?.(c.id, r) ?? cellOf(type, c.id, r, mine)}
           </td>
         ),
       )}
@@ -80,9 +86,10 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
   );
 });
 
-export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, onAddColumn, hero, fillNote, fresh, start = 0 }: WorkbenchProps) {
-  const all = rows.length > 0 && rows.every((r) => selected.has(r.key));
-  const some = !all && rows.some((r) => selected.has(r.key));
+export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, onAddColumn, hero, fillNote, fresh, start = 0, cell, rowClass, canPick }: WorkbenchProps) {
+  const pickRows = canPick ? rows.filter(canPick) : rows;
+  const all = pickRows.length > 0 && pickRows.every((r) => selected.has(r.key));
+  const some = !all && pickRows.some((r) => selected.has(r.key));
   const minWidth = 40 + 36 + 44 + cols.reduce((n, c) => n + minPx(c.width), 0);
   return (
     <div className="wb-scroll">
@@ -147,7 +154,7 @@ export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll,
             </tr>
           )}
           {rows.map((r, k) => (
-            <WbRow key={r.key} r={r} n={start + k + 1} type={type} cols={cols} mine={mine} on={selected.has(r.key)} onPick={onPick} onOpen={onOpen} hero={hero && hero.key === r.key ? hero.node : null} />
+            <WbRow key={r.key} r={r} n={start + k + 1} type={type} cols={cols} mine={mine} on={selected.has(r.key)} onPick={onPick} onOpen={onOpen} hero={hero && hero.key === r.key ? hero.node : null} cell={cell} extra={rowClass?.(r)} pickable={canPick ? canPick(r) : true} />
           ))}
         </tbody>
       </table>

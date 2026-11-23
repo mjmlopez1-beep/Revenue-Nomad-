@@ -352,6 +352,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
       if (!(live.plan?.canClose ?? true)) return upgrade("evidence");
       return toast("Evidence Bank is coming. Once your first case is ready, this column fills in, free.");
     }
+    if (d.kind !== "action") return;
     if (d.action === "pipeline") return needRows(() => void toPipeline())();
     if (d.action === "notes") return needRows(draftNotes)();
     if (d.action === "pass") return needRows(passLeads)();

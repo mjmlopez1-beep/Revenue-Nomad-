@@ -18,6 +18,8 @@
  *   companies2  the Companies workbench (workbench/CompaniesWorkbench.tsx), in place of the
  *               table while it lists companies. It reads and changes the table's place (TableCtx).
  *   find2       Find (find/Find.tsx), page key "find".
+ *   people2     People (people/People.tsx), in place of the table while it lists people (Data / People).
+ *              It reads the table's place (TableCtx) for its filters and the list type.
  *
  * An entry with `placeholder` and no `component` draws today's page instead (TradingPost).
  */
@@ -264,11 +266,13 @@ const ProposalsPage = dynamic(() => import("../Proposals").then((m) => m.Proposa
 const loadHome2 = () => import("../Home2");
 const loadFind = () => import("../find/Find");
 const loadWorkbench = () => import("./workbenchPage");
+const loadPeople = () => import("../people/People");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
+const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadPeople];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -478,6 +482,11 @@ function Companies2P() {
   return <WorkbenchPage />;
 }
 
+/** People (people/People.tsx), in place of the table while it lists people. It draws its own <main>. */
+function People2P() {
+  return <PeoplePage />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -485,7 +494,7 @@ const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-m
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
  * Notifications, Agent access and Settings are Integrations).
  */
-export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2", PageDef>> = {
+export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "people2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
@@ -512,7 +521,11 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2",
   home2: { title: "Home", component: Home2P, ownHeader: true, ownStrip: true },
   companies2: { title: "Companies", component: Companies2P, crumbs: ["today"], ownStrip: true },
   find2: { title: "Find", component: FindP, ownStrip: true },
+  people2: { title: "People", component: People2P, crumbs: ["today"], ownStrip: true },
 };
+
+/** The new look's page that takes the table's place for a list type (companies2, people2), or null where the table stays. */
+export const tableSlot = (t: RecordType): "companies2" | "people2" | null => (t === "companies" ? "companies2" : t === "people" ? "people2" : null);
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */
 const ENTRY_OF: Partial<Record<string, string>> = { find: "find2" };

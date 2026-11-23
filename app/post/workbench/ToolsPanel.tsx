@@ -9,7 +9,7 @@ import { useState } from "react";
 import { IconSearch, IconX } from "../../ui/shared";
 import type { RecordType, Row } from "../model";
 import { RunConfig } from "./RunConfig";
-import { TOOL_TABS, itemsFor, type ToolCtx, type ToolDo, type ToolTab } from "./tools";
+import { itemsFor, toolTabsFor, type ToolCtx, type ToolDo, type ToolTab } from "./tools";
 
 export function ToolsPanel({
   type,
@@ -42,7 +42,7 @@ export function ToolsPanel({
   return (
     <aside className="wb-tools" aria-label="Tools">
       {run ? (
-        <RunConfig key={run} col={run} rows={rows} picked={picked} onBack={() => onRun(null)} onDone={onRunDone} />
+        <RunConfig key={run} type={type} col={run} rows={rows} picked={picked} onBack={() => onRun(null)} onDone={onRunDone} />
       ) : (
         <div className="wb-tools-list">
           <div className="wb-tools-top">
@@ -56,7 +56,7 @@ export function ToolsPanel({
           </div>
           {!q && (
             <div role="tablist" aria-label="Tools" className="wb-tabs">
-              {TOOL_TABS.map((t) => (
+              {toolTabsFor(type).map((t) => (
                 <button key={t.key} type="button" role="tab" aria-selected={t.key === tab} className={`wb-tab${t.key === tab ? " on" : ""}`} onClick={() => onTab(t.key)}>
                   {t.label}
                 </button>
