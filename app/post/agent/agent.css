@@ -752,8 +752,22 @@
 }
 .ag-radios {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+}
+/* No limit, the default, first and across the row; the caps under it are optional. */
+.ag-radios .ag-radio-none {
+  grid-column: 1 / -1;
+}
+/* The credits meter near the top (credits/Meter.tsx). */
+.ag-credits-lim {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.ag-credits-lim a {
+  color: var(--pine);
+  font-weight: 700;
 }
 .ag-radios button {
   height: 40px;

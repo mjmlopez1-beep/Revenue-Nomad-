@@ -13,7 +13,9 @@
  *                      and each tool, cost and how it asks, use in 30 days. Spending credits and
  *                      sending for signature always ask first: no switch turns that off.
  *   What they did      the log (lib/mcp/log.ts): what, when, which agent, credits. Never arguments.
- *   Daily spend limit  for all agents together (5, 10, 25, 50 credits, or none).
+ *   Credits            the credits meter (credits/Meter.tsx): N% of this month's credits left,
+ *                      Top up or Upgrade at 20% or less. Agents use the member's own credits.
+ *   Daily spend limit  for all agents together: No limit (the default), or 5, 10, 25, 50 a day.
  *   Things to ask      prompts to copy, by kind; What your agent taught Merlin (voice, network).
  *
  * First visit (no agent has done anything yet): the strip, the steps open, what an agent can and
@@ -27,6 +29,7 @@ import { errorText, timeAgo, useToast } from "../../ui/shared";
 import { copyText } from "../hooks";
 import { useApp, stripGone, type ShellPage } from "../shell/pages";
 import { useNetwork } from "../network/useNetwork";
+import { CreditsMeterBar } from "../credits/Meter";
 import "./agent.css";
 
 /* ---------- the agents Merlin knows how to connect ---------- */
@@ -299,6 +302,17 @@ export function AgentAccess() {
           <button type="button" className="ag-strip-x" aria-label="Dismiss" onClick={() => c.start.dismissStrip("agent")}>
             <Tick cross />
           </button>
+        </section>
+      )}
+
+      {/* Credits: the same meter as Credits and usage (credits/Meter.tsx). Agents spend the member's own credits, and that is the point. */}
+      {c.me.meter && (
+        <section className="ag-card ag-pad ag-credits" aria-label="Your credits">
+          <CreditsMeterBar me={c.me} lead="Your agents use the same credits you do. Let them work: each spend still asks you first." from="claude" onEarn={() => c.openPage("credits")}>
+            <span className="ag-credits-lim">
+              Daily spend limit: <a href="#ag-limit">{view.limit === null ? "No limit (default)" : `${view.limit} credits a day`}</a>. A limit is optional.
+            </span>
+          </CreditsMeterBar>
         </section>
       )}
 
@@ -711,35 +725,36 @@ function Limit({ view, spendOn, setLimit }: { view: AgentView; spendOn: boolean;
     : limit
       ? `${spentToday} of ${limit} credits spent by your agents today. Resets at midnight UTC.`
       : `${plural(spentToday, "credit")} spent by your agents today. Each spend still asks you first.`;
+  // No limit is the default (lib/mcp/log.ts DEFAULT_LIMIT): agents should be free to use credits. A cap is the member's choice.
   const note = !spendOn
     ? "Pick a limit now and it applies when you turn Spend back on. Reading, adding and drafting still work."
     : limit
       ? `${limit} credits opens about ${limit} names and titles, or ${Math.floor(limit / 2)} people with an email each. At the limit your agent is told to stop until tomorrow. You can still spend in Merlin yourself. A company that opens free on your plan does not count.`
-      : "No limit: your agents may spend what you say yes to. Pick a number to stop them at it each day.";
+      : "No limit is the default: your agents may spend what you say yes to, as you would. A limit is optional. Pick one if you want them to stop at it each day.";
   const opens = c.me.proOpens;
   return (
     <section className="ag-card ag-pad ag-limit" id="ag-limit" aria-labelledby="ag-lim-h">
       <div className="ag-head ag-head-flat">
         <h2 id="ag-lim-h">Daily spend limit</h2>
-        <span className="ag-sub">All your agents together</span>
+        <span className="ag-sub">Optional. All your agents together</span>
       </div>
       <div className="ag-big">
-        <strong>{spendOn ? (limit ? limit : "None") : "Off"}</strong>
-        <span>{spendOn ? (limit ? "credits a day" : "no daily limit") : "Spend is switched off"}</span>
+        <strong>{spendOn ? (limit ? limit : "No limit") : "Off"}</strong>
+        <span>{spendOn ? (limit ? "credits a day" : "the default") : "Spend is switched off"}</span>
       </div>
       <div className="ag-meter" role="img" aria-label={meterText}>
         <span style={{ width: `${meter}%` }} />
       </div>
       <span className="ag-meter-t">{meterText}</span>
       <div className="ag-radios" role="radiogroup" aria-label="Credits your agents may spend in a day">
+        <button type="button" role="radio" aria-checked={limit === null} aria-label="No limit, the default" className={`ag-radio-none${limit === null ? " on" : ""}`} onClick={() => setLimit(null)}>
+          No limit (default)
+        </button>
         {LIMIT_CHOICES.map((n) => (
           <button key={n} type="button" role="radio" aria-checked={limit === n} aria-label={`${n} credits a day`} className={limit === n ? "on" : ""} onClick={() => setLimit(n)}>
             {n}
           </button>
         ))}
-        <button type="button" role="radio" aria-checked={limit === null} aria-label="No daily limit" className={limit === null ? "on" : ""} onClick={() => setLimit(null)}>
-          None
-        </button>
       </div>
       <span className="ag-note">{note}</span>
       <div className="ag-caps">

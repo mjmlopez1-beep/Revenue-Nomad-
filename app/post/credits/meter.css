@@ -1,0 +1,83 @@
+/*
+ * The credits meter (credits/Meter.tsx): a thin pine bar and "N% of your credits left", the way
+ * Claude shows usage. Pine at every level (the screen's ember stays for the balance itself); a
+ * low meter (20% or less) says so in words, with a pine Top up or Upgrade.
+ */
+.cm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.cm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+.cm-pct {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cm-card .cm-pct {
+  font-size: 17px;
+}
+.cm-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.cm-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pine-8);
+  overflow: hidden;
+}
+.cm-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pine);
+  transition: width 0.3s ease;
+}
+.cm-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink, var(--ink));
+}
+.cm-buy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.cm-said {
+  font-size: 13px;
+  color: var(--muted);
+}
+/* In the credits popover (TopBar.tsx CreditsPopover): its first block, on the popover's own padding. */
+.cm-pop {
+  gap: 6px;
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.cm-pop .cm-pct {
+  font-size: 15px;
+}
+.cm-pop .cm-bar {
+  height: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-bar > span {
+    transition: none;
+  }
+}
+/* The header pill's thin bar: only in the new look's header (shell.css shows it), never with the day's unlock line. */
+.tp-credits-meter {
+  display: none;
+}

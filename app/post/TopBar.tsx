@@ -15,6 +15,7 @@ import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, SpendHost, UndoHost, owedText } from "./ui";
 import { PlanPill } from "./Billing";
+import { CreditsMeterBar, meterTip } from "./credits/Meter";
 import { ProposalBell } from "./Activity";
 
 /**
@@ -110,17 +111,19 @@ export function CreditsPill({
         onClick={onClick}
         aria-haspopup="dialog"
         aria-expanded={false}
-        aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}${leftWords ? `, ${leftWords.charAt(0).toLowerCase()}${leftWords.slice(1)}` : ""}. Show where they came from.`}
+        aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}${me.meter ? `, ${me.meter.leftPct}% of this month's left` : ""}${leftWords ? `, ${leftWords.charAt(0).toLowerCase()}${leftWords.slice(1)}` : ""}. Show where they came from.`}
         title={
           owed > 0
             ? owedText(owed)
             : me.credits <= 0
-              ? "You're out of credits. Add a fact you know and you earn one."
+              ? "You're out of credits. Add a fact you know and you earn one, or top up."
               : me.credits <= 3
-                ? "You're running low. Add a fact you know and you earn a credit."
+                ? "You're running low. Add a fact you know and you earn a credit, or top up."
                 : leftWords
                   ? (unlockTip ?? UNLOCKS_LEFT_TIP)
-                  : undefined
+                  : me.meter
+                    ? meterTip(me.meter, me.plan)
+                    : undefined
         }
       >
         {/* One line: the balance. With the day's limit binding, a second line under it (the pill then stacks the two). */}
@@ -136,6 +139,12 @@ export function CreditsPill({
           <span className="tp-credits-cap" aria-hidden>
             {left === 0 ? "No unlocks" : <><span className="num">{left}</span> {left === 1 ? "unlock" : "unlocks"}</>}
             <span className="tp-credits-cap-left"> left</span> today
+          </span>
+        )}
+        {/* The credits meter, thin, in the new look's pill (credits/Meter.tsx; its percent is in the title and the spoken name). */}
+        {me.meter && (
+          <span className={`tp-credits-meter${me.meter.low ? " low" : ""}`} aria-hidden>
+            <span style={{ width: `${me.meter.leftPct}%` }} />
           </span>
         )}
         {delta && (
@@ -201,6 +210,7 @@ export function CreditsPopover({
   const unlocks = unlockLimitLine(me, ledger);
   return (
     <Anchored anchor={anchor} onClose={onClose} width={340} className="tp-credpop" align="end" label="Your credits">
+      <CreditsMeterBar me={me} variant="pop" />
       <div className="tp-credpop-top">
         <div>
           <div className={`tp-credpop-n num${me.credits <= 3 ? " low" : ""}`}>{me.credits}</div>

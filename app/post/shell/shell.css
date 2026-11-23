@@ -457,6 +457,27 @@
   border-color: var(--ember);
   color: var(--ember-ink);
 }
+/* The credits meter in the pill (credits/Meter.tsx): a 2px pine line at its foot. */
+.ws-hacts .tp-credits-meter {
+  display: block;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pine-8);
+  overflow: hidden;
+  pointer-events: none;
+}
+.ws-hacts .tp-credits-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--pine);
+}
+.ws-hacts .tp-credits.has-cap .tp-credits-meter {
+  display: none;
+}
 .ws-add {
   height: 40px;
   padding: 0 14px;

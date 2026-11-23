@@ -4,7 +4,8 @@
  * Credits and usage (Credits.dc.html), the new look's page for ?p=credits and ?p=billing, in four
  * tabs. The old look keeps Your credits (Credits.tsx) and Plan and billing (Billing.tsx).
  *
- *   Overview      the balance, earned today of the cap, free company opens today, the plan and
+ *   Overview      the credits meter (Meter.tsx: N% of this month's credits left, Top up or
+ *                 Upgrade at 20% or less), the balance, earned today of the cap, free company opens today, the plan and
  *                 its end, credits in three lines; earned and spent by week or day, and by kind
  *                 (the ledger's reasons grouped: creditsModel.ts kindOf, "Other" for any reason it
  *                 doesn't know, Workflows for a line a workflow spent); Merlin's drafting
@@ -80,6 +81,7 @@ import {
   type Line,
   type Way,
 } from "./creditsModel";
+import { CreditsMeterBar } from "./Meter";
 import "./credits.css";
 
 const dayKey = (iso: string) => new Date(iso).toDateString();
@@ -1077,6 +1079,12 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
         What you earned, what you spent and what your plan gives you.
       </p>
       {!stripGone(c, "credits") && <PageStrip page="credits" />}
+      {/* The credits meter (Meter.tsx): the share of this month's credits left, on Overview. */}
+      {tab === "overview" && me.meter && (
+        <section className="cnu-card cnu-pad cnu-meter" aria-label="Credits left this month">
+          <CreditsMeterBar me={me} lead="Use them on what moves your pipeline. Every cost shows before you spend." onEarn={() => setTab("earn")} />
+        </section>
+      )}
       {/* Phones: the tiles and the three lines on Overview only, so the ledger, the ways and the plans start near the top. */}
       {(!phone || tab === "overview") && tiles}
       {(!phone || tab === "overview") && (
