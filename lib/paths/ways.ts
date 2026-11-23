@@ -1118,7 +1118,7 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
 /* ---------- Warm paths ---------- */
 
 /** Companies the map draws, and the most the list holds. */
-export const WARM_MAP_MAX = 48;
+export const WARM_MAP_MAX = 36;
 export const WARM_MAX = 300;
 const FIT_TRAITS = ["function", "industry", "size", "revenue", "a hiring signal"] as const;
 
@@ -1187,8 +1187,9 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
   const wayF = tops.map((t) => wayFine(t));
   const spFit = splitLine(fitC, fitF);
   const spWay = splitLine(wayC, wayF);
-  const xs = placeAxis(wayC, wayF, spWay, { lo0: 10, none: 6 });
-  const ys = placeAxis(fitC, fitF, spFit, { lo0: 6 });
+  // The quadrants' names sit in the corners: the marks keep clear of them (up 16 to 84).
+  const xs = placeAxis(wayC, wayF, spWay, { lo: [16, 44], hi: [57, 93], none: 6 });
+  const ys = placeAxis(fitC, fitF, spFit, { lo: [16, 43], hi: [57, 84] });
   const mine = (s as WithRoutes).routes?.[m.id] ?? {};
   const countsAll = zeros();
   const bySource: WarmView["bySource"] = {};
@@ -1257,8 +1258,8 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
   kept.forEach((r, k2) => (r.rank = k2 + 1));
   const on = balanced(kept, WARM_MAP_MAX);
   const counts = zeros();
-  const boxOf = (r: WarmRow): [number, number, number, number] => [r.best === null ? 3 : r.x >= 50 ? 54 : 13, r.best === null ? 10 : r.x >= 50 ? 95 : 46, r.y >= 50 ? 54 : 5, r.y >= 50 ? 95 : 46];
-  const placed = spreadBox(kept.filter((r) => on.has(r)).map((r) => ({ id: r.id, x: r.x, y: r.y, box: boxOf(r) })));
+  const boxOf = (r: WarmRow): [number, number, number, number] => [r.best === null ? 3 : r.x >= 50 ? 55 : 14, r.best === null ? 9 : r.x >= 50 ? 95 : 46, r.y >= 50 ? 55 : 15, r.y >= 50 ? 85 : 45];
+  const placed = spreadBox(kept.filter((r) => on.has(r)).map((r) => ({ id: r.id, x: r.x, y: r.y, box: boxOf(r) })), 7.5);
   const at = new Map(placed.map((p) => [p.id, p]));
   for (const r of kept)
     if (on.has(r)) {

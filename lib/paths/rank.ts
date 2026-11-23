@@ -419,24 +419,33 @@ export function splitLine(coarse: readonly (number | null)[], fine: readonly num
 export const isHigh = (sp: Split, coarse: number | null, fine: number) => (coarse === null ? false : sp.at !== null ? coarse >= sp.at : fine >= sp.fineAt);
 
 /**
- * Where each row goes along one axis, 0 to 100: the low side in [lo0, 46], the high side in [54, 92],
- * each scaled by its fine value within its side. Rows with no value at all sit at `none` (the map's
- * "No route" strip).
+ * Where each row goes along one axis, 0 to 100: the low side in `lo` (default [lo0 + 4, 44]), the
+ * high side in `hi` (default [56, 92]). Within its side a row is placed half by its fine value and
+ * half by its rank there, so many companies with the same estimate spread out instead of standing in
+ * a column (the axis reads Colder to Warmer, never a number). Rows with no value at all sit at
+ * `none` (the map's "No route" strip).
  */
-export function placeAxis(coarse: readonly (number | null)[], fine: readonly number[], sp: Split, opts: { lo0?: number; none?: number } = {}): number[] {
+export function placeAxis(coarse: readonly (number | null)[], fine: readonly number[], sp: Split, opts: { lo0?: number; none?: number; lo?: [number, number]; hi?: [number, number] } = {}): number[] {
   const lo0 = opts.lo0 ?? 8;
+  const [loA, loB] = opts.lo ?? [lo0 + 4, 44];
+  const [hiA, hiB] = opts.hi ?? [56, 92];
   const high = coarse.map((c, k) => isHigh(sp, c, fine[k]));
-  const range = (side: boolean) => {
-    const v = fine.filter((_, k) => high[k] === side && coarse[k] !== null);
-    return v.length ? [Math.min(...v), Math.max(...v)] : [0, 0];
+  const side = (on: boolean) => {
+    const ks = coarse.map((_, k) => k).filter((k) => high[k] === on && coarse[k] !== null);
+    ks.sort((a, b) => fine[a] - fine[b] || a - b);
+    const rank = new Map(ks.map((k, i) => [k, ks.length > 1 ? i / (ks.length - 1) : 0.5]));
+    const v = ks.map((k) => fine[k]);
+    return { rank, min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 0 };
   };
-  const [l0, l1] = range(false);
-  const [h0, h1] = range(true);
-  const scale = (v: number, a: number, b: number, to0: number, to1: number) => (b > a ? to0 + ((v - a) / (b - a)) * (to1 - to0) : (to0 + to1) / 2);
+  const L = side(false);
+  const H = side(true);
   return coarse.map((c, k) => {
     if (c === null) return opts.none ?? lo0;
-    const v = high[k] ? scale(fine[k], h0, h1, 56, 92) : scale(fine[k], l0, l1, lo0 + 4, 44);
-    return Math.round(v * 10) / 10;
+    const s = high[k] ? H : L;
+    const [a, b] = high[k] ? [hiA, hiB] : [loA, loB];
+    const byValue = s.max > s.min ? (fine[k] - s.min) / (s.max - s.min) : 0.5;
+    const t = 0.5 * byValue + 0.5 * (s.rank.get(k) ?? 0.5);
+    return Math.round((a + t * (b - a)) * 10) / 10;
   });
 }
 

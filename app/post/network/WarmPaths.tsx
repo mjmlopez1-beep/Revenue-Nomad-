@@ -150,6 +150,9 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
   const counts = ex ? zoneCounts(exRows) : v.countsAll;
   const people = useMemo(() => peopleOf(rows), [rows]);
   const withPath = v.rows.filter((r) => r.best !== null).length;
+  // Paths through someone (not a cold note to who decides), and those through fellow fractionals.
+  const through = v.rows.filter((r) => r.best !== null && r.src !== "direct").length;
+  const fellowN = v.rows.filter((r) => r.src === "fellow").length;
   const onCount = 2 + Number(v.own.google) + Number(v.own.linkedin) + Number(v.own.csv);
   const goSources = (k?: SourceKey) => {
     if (k) setSrc(k);
@@ -169,9 +172,10 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
         <section className="ws-strip wp-strip" aria-label="About this page">
           <span className="ws-strip-t">
             <strong>What this page is for.</strong> Every company that fits you, placed by how well it fits and how strong your way in is. Pick one to see the path, then ask for the intro.{" "}
-            {withPath
-              ? `Merlin already found ${withPath === 1 ? "1 path" : `${withPath} paths`} from fellow fractionals and the seats on file. They are free.`
+            {fellowN
+              ? `Merlin already found ${fellowN === 1 ? "1 path" : `${fellowN} paths`} through fellow fractionals who held a seat there. They are free.`
               : "Bring in who you know and each person at a company that fits becomes a path here."}
+            {withPath > through ? ` Until then a cold note to who decides is the way in at ${n(withPath - through)}, and the map says so.` : ""}
           </span>
           <button type="button" className="ws-strip-x" aria-label="Dismiss" onClick={() => c.start.dismissStrip("warm")}>
             <IconX size={16} />
@@ -524,7 +528,7 @@ function MapCard({
                   onClick={() => onPick(r.id)}
                   data-mark={r.id}
                 >
-                  <Tile r={r} size={30} />
+                  <Tile r={r} size={28} />
                   {r.hiringNow && <span className="wp-hot" aria-hidden />}
                   {named.has(r.id) && (
                     <span className={cx("wp-mlab", left && "left", on && "on")} aria-hidden>

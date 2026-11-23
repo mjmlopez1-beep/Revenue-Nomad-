@@ -390,7 +390,7 @@
 }
 .wp-field {
   position: relative;
-  height: 520px;
+  height: 540px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #fff;
@@ -527,9 +527,9 @@
 }
 .wp-mark {
   position: absolute;
-  width: 34px;
-  height: 34px;
-  margin: 0 0 -17px -17px;
+  width: 32px;
+  height: 32px;
+  margin: 0 0 -16px -16px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -559,10 +559,10 @@
 }
 .wp-hot {
   position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 11px;
-  height: 11px;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
   box-sizing: border-box;
   border-radius: 50%;
   background: #ff5a1f;
