@@ -372,6 +372,36 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
     const b = P(q, true);
     check(`old address ${q}: the old look opens ${off ?? "the table"}, the new ${on ?? "the table"}`, a.p === off && b.p === on && more(a) && more(b), { off: a.p, on: b.p });
   }
+  // Stage 8: in the new look Plan and billing and Your credits are one page, Credits and usage, and the old addresses land on its tab (credits/creditsModel.ts creditTabOf); Rate benchmarks on its table's tab (rates/ratesModel.ts rateTabOf).
+  {
+    const { creditTabOf } = await import("../app/post/credits/creditsModel");
+    const { rateTabOf } = await import("../app/post/rates/ratesModel");
+    const tabs: [string, string, boolean, string][] = [
+      ["?p=credits", "credits", true, "overview"],
+      ["?p=billing", "billing", true, "plans"],
+      ["?p=billing&plans=1", "billing", true, "plans"],
+      ["?p=billing&plans=1&from=ai-pack", "billing", true, "plans"],
+      ["?p=billing&topup=1", "billing", true, "plans"],
+      ["?p=billing&aipack=1", "billing", true, "plans"],
+      ["?p=billing&paid=1&plan=pro", "billing", true, "plans"],
+      ["?p=credits&tab=ledger", "credits", true, "ledger"],
+      ["?p=credits&tab=earn", "credits", true, "earn"],
+      ["?p=credits&tab=history", "credits", true, "ledger"],
+      ["?p=billing", "billing", false, "overview"],
+    ];
+    for (const [q, page, billing, want] of tabs) {
+      const p = P(q, true);
+      check(`new look: ${q}${billing ? "" : " (billing off)"} opens Credits and usage at ${want}`, p.p === page && creditTabOf(page, q, billing) === want, { p: p.p, tab: creditTabOf(page, q, billing) });
+    }
+    check("new look: ?p=rates opens Rate benchmarks By function; tab=size and tab=seats their tabs", P("?p=rates", true).p === "rates" && rateTabOf("?p=rates") === "fn" && rateTabOf("?p=rates&tab=size") === "size" && rateTabOf("?p=rates&tab=seats") === "seats" && rateTabOf("?p=rates&tab=bogus") === "fn");
+    const reg = readFileSync(path.join(process.cwd(), "app/post/shell/pages.tsx"), "utf8");
+    check(
+      "registry: credits and billing draw Credits and usage in the new look, rates the new Rate benchmarks; the old look keeps Your credits, Plan and billing and Benchmarks",
+      /function CreditsP\(\) \{\s*const c = useApp\(\);\s*if \(c\.ui2\) return <CreditsUsageL page="credits" \/>;\s*return <MyCredits/.test(reg) &&
+        /function BillingP\(\) \{[\s\S]{0,200}if \(c\.ui2\) return <CreditsUsageL page="billing" \/>;\s*return <BillingPage/.test(reg) &&
+        /function RatesP\(\) \{\s*const c = useApp\(\);\s*if \(c\.ui2\) return <RatesPageL \/>;\s*return <Benchmarks/.test(reg),
+    );
+  }
   // An old /table?k= link is redirected to /?k= (app/table/page.tsx): Home, signed in, in both looks.
   check("old address /table?k=: Home in both looks", isHome("?k=tok-abc") && !P("?k=tok-abc", false).p && !P("?k=tok-abc", true).p && P("?k=tok-abc", true).home);
   check("old address ?p=proposals&ct=1 (Contracts): the Contracts page in the new look, Proposals (at its Contracts screen) in the old", P("?p=proposals&ct=1", true).p === "contracts" && P("?p=proposals&ct=1", false).p === "proposals");

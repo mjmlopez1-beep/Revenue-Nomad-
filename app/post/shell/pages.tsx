@@ -60,7 +60,7 @@ import { useNetwork } from "../network/useNetwork";
 import { useState } from "react";
 import type { AskPlan } from "@/lib/ask";
 import { setFindStart } from "../find/start";
-import { setRatesStart } from "../rates/start";
+import { setRatesStart } from "../pageStart";
 import { firstOf, ownOf } from "../firstVisit";
 
 /* ---------- the keys ---------- */
@@ -602,7 +602,7 @@ const peersMain = (c: AppCtx) => (c.ui2 ? "wb-host fy-host" : c.shell.peersAll |
  * Notifications, Settings is Integrations; Agent access is its own page in the new look, Integrations in the old).
  */
 export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2" | "hiring2", PageDef>> = {
-  credits: { title: "Your credits", component: CreditsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "cu-host" : "") },
+  credits: { title: "Your credits", component: CreditsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "cnu-host" : "") },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
   rates: { title: "Rate benchmarks", component: RatesP, ownStrip: true, mainClass: (c) => (c.ui2 ? "rt-host" : "") },
@@ -610,7 +610,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   // The new look draws its three columns full width (messages/Messages2.tsx) with its own first-visit strip.
   messages: { title: "Messages", component: MessagesP, ownStrip: true, mainClass: (c) => (c.ui2 ? "ms2-host" : "") },
   radar: { title: YOUR_FEATURE, component: RadarP, mainClass: (c) => (c.ui2 ? "wb-host cb-host" : "rd-main"), needsTable: true, ownStrip: true },
-  billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan || c.ui2, ownStrip: true, mainClass: (c) => (c.ui2 ? "cu-host" : "") },
+  billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan || c.ui2, ownStrip: true, mainClass: (c) => (c.ui2 ? "cnu-host" : "") },
   peers: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
   fractionals: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
   partners: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },

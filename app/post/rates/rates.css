@@ -920,3 +920,15 @@
     flex-wrap: wrap;
   }
 }
+.rt-ex-t {
+  font-family: var(--font) !important;
+  font-size: 15px !important;
+}
+/* The chart sits inside the card's side padding. */
+.rt-bench > .ch-range {
+  width: calc(100% - 32px);
+}
+.rt-big {
+  font-size: 30px;
+  line-height: 36px;
+}

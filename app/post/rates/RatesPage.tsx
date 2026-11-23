@@ -36,20 +36,56 @@ import { PageStrip } from "../shell/PageStrip";
 import { CardList } from "../Cards";
 import { Workbench } from "../workbench/Workbench";
 import { columnOf, type ColumnDef } from "../workbench/columns";
-import { EMPTY_FILTERS, applyFilters, namedFn, rowsFor, shown as shownCell } from "../model";
 import {
-  bandWho, chargeWorking, figureOf, groupLabel, money, needWords, ownRates, per, pickGroup, readChargeAsk, sitsShort,
-  type Band, type ChargeAsk, type Figure, type GroupFig, type RateKind,
+  EMPTY_FILTERS,
+  applyFilters,
+  namedFn,
+  rowsFor,
+  shown as shownCell,
+} from "../model";
+import {
+  bandWho,
+  chargeWorking,
+  moneyRange,
+  figureOf,
+  groupLabel,
+  money,
+  needWords,
+  ownRates,
+  per,
+  pickGroup,
+  readChargeAsk,
+  sitsShort,
+  type Band,
+  type ChargeAsk,
+  type Figure,
+  type GroupFig,
+  type RateKind,
 } from "../chargeModel";
-import { RATE_TABS, RATE_TAB_LABEL, askChips, myRates, rateTabOf, type MyRate, type RateTab } from "./ratesModel";
-import { takeRatesStart } from "./start";
+import {
+  RATE_TABS,
+  RATE_TAB_LABEL,
+  askChips,
+  myRates,
+  rateTabOf,
+  type MyRate,
+  type RateTab,
+} from "./ratesModel";
+import { takeLanding, takeRatesStart } from "../pageStart";
 import "../charge.css";
 import "./rates.css";
 
-const KIND_LABEL: Record<RateKind, string> = { monthly: "Per month", hourly: "Per hour" };
+const KIND_LABEL: Record<RateKind, string> = {
+  monthly: "Per month",
+  hourly: "Per hour",
+};
 const bandName = (b: Band) => (b === "All" ? "All sizes" : b);
-const people = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "person" : "people"}`;
-const toAdd = () => document.getElementById("rt-add")?.scrollIntoView({ behavior: "smooth", block: "start" });
+const people = (n: number) =>
+  `${n.toLocaleString("en-US")} ${n === 1 ? "person" : "people"}`;
+const toAdd = () =>
+  document
+    .getElementById("rt-add")
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 /** The share of a floor reached, for the progress bar under "Not enough reports yet". */
 function Need({ g, label }: { g: GroupFig; label: string }) {
@@ -58,7 +94,11 @@ function Need({ g, label }: { g: GroupFig; label: string }) {
   const min = f && f.state === "few" ? f.min : 5;
   return (
     <span className="rt-need" role="img" aria-label={label}>
-      <span style={{ width: `${Math.min(100, Math.round((n / Math.max(1, min)) * 100))}%` }} />
+      <span
+        style={{
+          width: `${Math.min(100, Math.round((n / Math.max(1, min)) * 100))}%`,
+        }}
+      />
     </span>
   );
 }
@@ -66,24 +106,49 @@ function Need({ g, label }: { g: GroupFig; label: string }) {
 /** Where an amount sits on a figure's own scale, 2 to 98 percent: for the small bars in Your rates. */
 function pos(v: number, f: Figure): number {
   if (f.state === "few") return 50;
-  const lo = f.state === "range" ? f.p25 - (f.p75 - f.p25) * 0.6 : f.median * 0.5;
-  const hi = f.state === "range" ? f.p75 + (f.p75 - f.p25) * 0.6 : f.median * 1.5;
-  return Math.max(2, Math.min(98, Math.round(((v - lo) / (hi - lo || 1)) * 1000) / 10));
+  const lo =
+    f.state === "range" ? f.p25 - (f.p75 - f.p25) * 0.6 : f.median * 0.5;
+  const hi =
+    f.state === "range" ? f.p75 + (f.p75 - f.p25) * 0.6 : f.median * 1.5;
+  return Math.max(
+    2,
+    Math.min(98, Math.round(((v - lo) / (hi - lo || 1)) * 1000) / 10),
+  );
 }
 
 /* ---------- the table's cells ---------- */
 
-function StatCells({ s, b, side, onPro }: { s: RateStat; b: Benchmarks; side: "m" | "h"; onPro: () => void }) {
+function StatCells({
+  s,
+  b,
+  side,
+  onPro,
+}: {
+  s: RateStat;
+  b: Benchmarks;
+  side: "m" | "h";
+  onPro: () => void;
+}) {
   const f = figureOf(s, b);
   const cap = side === "m" ? "Per month" : "Per hour";
   if (f.state === "few")
     return (
       <>
         <td colSpan={2} className={`rt-td rt-few rt-${side}`} data-cap={cap}>
-          <span className="rt-need" role="img" aria-label={`${f.n} of ${f.min} people have shared a rate`}>
-            <span style={{ width: `${Math.min(100, Math.round((f.n / f.min) * 100))}%` }} />
+          <span
+            className="rt-need"
+            role="img"
+            aria-label={`${f.n} of ${f.min} people have shared a rate`}
+          >
+            <span
+              style={{
+                width: `${Math.min(100, Math.round((f.n / f.min) * 100))}%`,
+              }}
+            />
           </span>
-          <span className="rt-few-t">{needWords({ fn: "", band: "All", fig: f })}</span>
+          <span className="rt-few-t">
+            {needWords({ fn: "", band: "All", fig: f })}
+          </span>
         </td>
         <td className={`rt-td num rt-n rt-${side}`} data-cap="People">
           <span className="rt-muted">
@@ -99,9 +164,14 @@ function StatCells({ s, b, side, onPro }: { s: RateStat; b: Benchmarks; side: "m
       </td>
       <td className={`rt-td num rt-lh rt-${side}`} data-cap="Low to high">
         {f.state === "range" ? (
-          <Num>{`${money(f.p25)} to ${money(f.p75)}`}</Num>
+          <Num>{moneyRange(f.p25, f.p75)}</Num>
         ) : f.rangeLocked ? (
-          <button type="button" className="rt-lock" onClick={onPro} aria-label={`${cap}, low to high: Pro. See Pro`}>
+          <button
+            type="button"
+            className="rt-lock"
+            onClick={onPro}
+            aria-label={`${cap}, low to high: Pro. See Pro`}
+          >
             <IconLock size={12} /> Pro
           </button>
         ) : (
@@ -122,15 +192,37 @@ export function RatesPage() {
   const ui = useUi();
   const me = ui.me;
   const b = c.view.benchmarks;
-  const myFn = namedFn(me.function) && FUNCTIONS.includes(me.function!) ? me.function! : null;
-  const fns = useMemo(() => (b ? FUNCTIONS.filter((f) => b.rows.some((r) => r.function === f && r.revenue === "All")) : []), [b]);
-  const [fn, setFn] = useState<string>(() => (myFn && fns.includes(myFn) ? myFn : fns[0] ?? "Sales"));
+  const myFn =
+    namedFn(me.function) && FUNCTIONS.includes(me.function!)
+      ? me.function!
+      : null;
+  const fns = useMemo(
+    () =>
+      b
+        ? FUNCTIONS.filter((f) =>
+            b.rows.some((r) => r.function === f && r.revenue === "All"),
+          )
+        : [],
+    [b],
+  );
+  const [fn, setFn] = useState<string>(() =>
+    myFn && fns.includes(myFn) ? myFn : (fns[0] ?? "Sales"),
+  );
   const [band, setBand] = useState<Band>("All");
   const [kind, setKind] = useState<RateKind>("monthly");
   const [pick, setPick] = useState<"fn" | "band" | null>(null);
-  const [tab, setTab] = useState<RateTab>(() => (typeof window === "undefined" ? "fn" : rateTabOf(window.location.search)));
+  const [tab, setTab] = useState<RateTab>(() =>
+    typeof window === "undefined"
+      ? "fn"
+      : rateTabOf(takeLanding("rates") || window.location.search),
+  );
   const [q, setQ] = useState("");
-  const [asked, setAsked] = useState<{ id: string; title: string; a: ChargeAsk & { fn: string }; unknown: string[] } | null>(null);
+  const [asked, setAsked] = useState<{
+    id: string;
+    title: string;
+    a: ChargeAsk & { fn: string };
+    unknown: string[];
+  } | null>(null);
   const [yoursCol, setYoursCol] = useState(false);
   const [askingRm, setAskingRm] = useState<string | null>(null);
   const [gone, setGone] = useState<Set<string>>(new Set());
@@ -145,29 +237,77 @@ export function RatesPage() {
         company: s.i.c.hidden ? "one of your seats" : s.i.c.name,
         engagementId: s.e.id,
         fn: shownCell(s.e.cells.function),
-        rate: s.e.cells.rate?.s === "value" && s.e.cells.rate.mine ? s.e.cells.rate.v : null,
+        rate:
+          s.e.cells.rate?.s === "value" && s.e.cells.rate.mine
+            ? s.e.cells.rate.v
+            : null,
         pricing: shownCell(s.e.cells.pricing),
         revenue: s.i.c.hidden ? null : shownCell(s.i.c.cells.revenue),
       })),
     [c.shell.seats],
   );
-  const mine = useMemo(() => myRates(b, me.benchRates, seatsIn).filter((r) => !gone.has(r.id)), [b, me.benchRates, seatsIn, gone]);
-  const own = useMemo(() => ownRates(fn, me.benchRates.filter((r) => !gone.has(r.id)), seatsIn), [fn, me.benchRates, seatsIn, gone]);
-  const companies = useMemo(() => c.infos.filter((i) => !i.c.hidden && i.c.name).map((i) => ({ name: i.c.name, revenue: shownCell(i.c.cells.revenue) })), [c.infos]);
-  const seatCos = useMemo(() => seatsIn.filter((s) => s.company !== "one of your seats").map((s) => ({ name: s.company, revenue: s.revenue })), [seatsIn]);
+  const mine = useMemo(
+    () => myRates(b, me.benchRates, seatsIn).filter((r) => !gone.has(r.id)),
+    [b, me.benchRates, seatsIn, gone],
+  );
+  const own = useMemo(
+    () =>
+      ownRates(
+        fn,
+        me.benchRates.filter((r) => !gone.has(r.id)),
+        seatsIn,
+      ),
+    [fn, me.benchRates, seatsIn, gone],
+  );
+  const companies = useMemo(
+    () =>
+      c.infos
+        .filter((i) => !i.c.hidden && i.c.name)
+        .map((i) => ({
+          name: i.c.name,
+          revenue: shownCell(i.c.cells.revenue),
+        })),
+    [c.infos],
+  );
+  const seatCos = useMemo(
+    () =>
+      seatsIn
+        .filter((s) => s.company !== "one of your seats")
+        .map((s) => ({ name: s.company, revenue: s.revenue })),
+    [seatsIn],
+  );
   const chips = askChips(myFn, me.icp, seatCos);
 
   // Seats with a rate: the seats on file with a rate (shown or locked), the picked function's first unless All functions.
   const seatRows = useMemo(() => {
     if (tab !== "seats") return [];
-    const all = applyFilters(rowsFor("engagements", c.infos), { ...EMPTY_FILTERS, rateKnown: true }, "all", "", me, true).rows.filter((r) => !!r.e && r.e.cells.rate && (r.e.cells.rate.s === "value" || r.e.cells.rate.s === "locked"));
-    return onlyFn ? all.filter((r) => shownCell(r.e!.cells.function) === fn) : all;
+    const all = applyFilters(
+      rowsFor("engagements", c.infos),
+      { ...EMPTY_FILTERS, rateKnown: true },
+      "all",
+      "",
+      me,
+      true,
+    ).rows.filter(
+      (r) =>
+        !!r.e &&
+        r.e.cells.rate &&
+        (r.e.cells.rate.s === "value" || r.e.cells.rate.s === "locked"),
+    );
+    return onlyFn
+      ? all.filter((r) => shownCell(r.e!.cells.function) === fn)
+      : all;
   }, [tab, c.infos, me, onlyFn, fn]);
   /** Ask: the words set the benchmark above to their group, and the working shows under the box. */
   const runAsk = (text: string, id: string, title?: string) => {
     const r = readChargeAsk(text, { myFn: fn ?? myFn, companies });
     const a = { ...r, fn: r.fn ?? fn };
-    setAsked({ id, title: title ?? (text.trim() || groupLabel(a.fn, a.band)), a, unknown: r.unknown });
+    setAsked({
+      id,
+      title: title ?? (text.trim() || groupLabel(a.fn, a.band)),
+      a,
+      unknown: r.unknown,
+    });
     setFn(a.fn);
     setBand(a.band);
     setKind(a.kind);
@@ -184,7 +324,19 @@ export function RatesPage() {
     if (o.band) setBand(o.band);
     if (o.kind) setKind(o.kind);
     setPick(null);
-    if (asked) setAsked({ ...asked, id: "now", title: "the group above", a: { ...asked.a, fn: o.fn ?? asked.a.fn, band: o.band ?? asked.a.band, kind: o.kind ?? asked.a.kind, company: null } });
+    if (asked)
+      setAsked({
+        ...asked,
+        id: "now",
+        title: "the group above",
+        a: {
+          ...asked.a,
+          fn: o.fn ?? asked.a.fn,
+          band: o.band ?? asked.a.band,
+          kind: o.kind ?? asked.a.kind,
+          company: null,
+        },
+      });
   };
 
   if (!b)
@@ -201,9 +353,22 @@ export function RatesPage() {
   const other: RateKind = kind === "monthly" ? "hourly" : "monthly";
   const og = pickGroup(b, fn, g.shown?.band ?? "All", other).shown;
   const ownNow = own[kind] ?? null;
-  const w = asked ? chargeWorking(b, asked.a, ownRates(asked.a.fn, me.benchRates.filter((r) => !gone.has(r.id)), seatsIn)) : null;
+  const w = asked
+    ? chargeWorking(
+        b,
+        asked.a,
+        ownRates(
+          asked.a.fn,
+          me.benchRates.filter((r) => !gone.has(r.id)),
+          seatsIn,
+        ),
+      )
+    : null;
   const f = g.shown?.fig ?? null;
-  const askBand = w && w.band && asked && asked.a.fn === fn && asked.a.kind === kind ? w.band : null;
+  const askBand =
+    w && w.band && asked && asked.a.fn === fn && asked.a.kind === kind
+      ? w.band
+      : null;
   const anyIndexed = b.rows.some((r) => r.indexed);
   const withoutYours = !!g.shown?.fig?.stat.withoutYours;
   const onPro = () => openPlans("bench");
@@ -211,36 +376,83 @@ export function RatesPage() {
 
   /* ----- the group pickers ----- */
   const nOf = (row: BenchmarkRow | undefined) => (row ? row[kind].n : 0);
-  const rowAt = (f0: string, bd: Band) => b.rows.find((r) => r.function === f0 && r.revenue === bd);
-  const opts: { t: string; n: number | null; on: boolean; go: () => void; locked?: boolean }[] =
+  const rowAt = (f0: string, bd: Band) =>
+    b.rows.find((r) => r.function === f0 && r.revenue === bd);
+  const opts: {
+    t: string;
+    n: number | null;
+    on: boolean;
+    go: () => void;
+    locked?: boolean;
+  }[] =
     pick === "fn"
-      ? fns.map((x) => ({ t: x, n: nOf(rowAt(x, "All")), on: x === fn, go: () => setGroup({ fn: x }) }))
+      ? fns.map((x) => ({
+          t: x,
+          n: nOf(rowAt(x, "All")),
+          on: x === fn,
+          go: () => setGroup({ fn: x }),
+        }))
       : pick === "band"
-        ? ["All", ...RN_REVENUE].map((x) => ({ t: bandName(x), n: b.limited && x !== "All" ? null : nOf(rowAt(fn, x)), on: x === band, locked: !!b.limited && x !== "All", go: () => (b.limited && x !== "All" ? onPro() : setGroup({ band: x })) }))
+        ? ["All", ...RN_REVENUE].map((x) => ({
+            t: bandName(x),
+            n: b.limited && x !== "All" ? null : nOf(rowAt(fn, x)),
+            on: x === band,
+            locked: !!b.limited && x !== "All",
+            go: () =>
+              b.limited && x !== "All" ? onPro() : setGroup({ band: x }),
+          }))
         : [];
 
-  const who = g.shown ? `Fractional ${g.shown.fn} leaders ${bandWho(g.shown.band)}` : "";
+  const who = g.shown
+    ? `Fractional ${g.shown.fn} leaders ${bandWho(g.shown.band)}`
+    : "";
   const figure = (
-    <section className="rt-card rt-bench" id="rt-bench" ref={benchRef} aria-labelledby="rt-bh">
+    <section
+      className="rt-card rt-bench"
+      id="rt-bench"
+      ref={benchRef}
+      aria-labelledby="rt-bh"
+    >
       <div className="rt-head">
         <h2 id="rt-bh">What the work pays</h2>
         <span className="rt-sp" />
-        <div className="rt-kinds" role="tablist" aria-label="How the work is priced">
+        <div
+          className="rt-kinds"
+          role="tablist"
+          aria-label="How the work is priced"
+        >
           {(["monthly", "hourly"] as const).map((k) => (
-            <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? "on" : undefined} onClick={() => setGroup({ kind: k })}>
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={kind === k}
+              className={kind === k ? "on" : undefined}
+              onClick={() => setGroup({ kind: k })}
+            >
               {KIND_LABEL[k]}
             </button>
           ))}
         </div>
       </div>
       <div className="rt-picks" role="group" aria-label="Pick the group">
-        <button type="button" className="rt-pick" aria-expanded={pick === "fn"} onClick={() => setPick(pick === "fn" ? null : "fn")}>
+        <button
+          type="button"
+          className="rt-pick"
+          aria-expanded={pick === "fn"}
+          onClick={() => setPick(pick === "fn" ? null : "fn")}
+        >
           <span className="rt-pick-k">Function</span>
           <span className="rt-pick-v">
             {fn} <IconChevron size={14} dir="down" />
           </span>
         </button>
-        <button type="button" className="rt-pick" aria-expanded={pick === "band"} onClick={() => setPick(pick === "band" ? null : "band")}>
+        <button
+          type="button"
+          className="rt-pick"
+          aria-expanded={pick === "band"}
+          onClick={() => setPick(pick === "band" ? null : "band")}
+        >
           <span className="rt-pick-k">
             Company size <ProTag plan={me.plan} />
           </span>
@@ -250,10 +462,23 @@ export function RatesPage() {
         </button>
       </div>
       {pick && (
-        <div className="rt-opts" role="group" aria-label={pick === "fn" ? "Function" : "Company size"}>
-          <span className="rt-opts-t">{pick === "fn" ? "Function" : "Company size"}. The number is how many people are in the group if you pick it.</span>
+        <div
+          className="rt-opts"
+          role="group"
+          aria-label={pick === "fn" ? "Function" : "Company size"}
+        >
+          <span className="rt-opts-t">
+            {pick === "fn" ? "Function" : "Company size"}. The number is how
+            many people are in the group if you pick it.
+          </span>
           {opts.map((o) => (
-            <button key={o.t} type="button" aria-pressed={o.on} className={`rt-opt${o.on ? " on" : ""}`} onClick={o.go}>
+            <button
+              key={o.t}
+              type="button"
+              aria-pressed={o.on}
+              className={`rt-opt${o.on ? " on" : ""}`}
+              onClick={o.go}
+            >
               {o.locked && <IconLock size={11} />} {o.t}
               <span className="rt-opt-n">{o.n === null ? "Pro" : o.n}</span>
             </button>
@@ -263,7 +488,8 @@ export function RatesPage() {
       {g.sizeLocked && (
         <div className="rt-status" role="status">
           <span>
-            <strong>Client size is Pro.</strong> Free shows the median for each function across every size. Showing {groupLabel(fn, "All")} instead.
+            <strong>Client size is Pro.</strong> Free shows the median for each
+            function across every size. Showing {groupLabel(fn, "All")} instead.
           </span>
           <button type="button" className="btn btn-sm" onClick={onPro}>
             See Pro
@@ -273,7 +499,11 @@ export function RatesPage() {
       {g.widened && !g.sizeLocked && g.shown && (
         <div className="rt-status" role="status" data-widened>
           <span>
-            <strong>Not enough reports yet for {groupLabel(g.asked.fn, g.asked.band)}:</strong> {needWords(g.asked)}. Showing {groupLabel(g.shown.fn, g.shown.band)} instead.
+            <strong>
+              Not enough reports yet for {groupLabel(g.asked.fn, g.asked.band)}:
+            </strong>{" "}
+            {needWords(g.asked)}. Showing {groupLabel(g.shown.fn, g.shown.band)}{" "}
+            instead.
           </span>
           <Need g={g.asked} label={needWords(g.asked)} />
           <button type="button" className="tp-flink" onClick={toAdd}>
@@ -285,13 +515,21 @@ export function RatesPage() {
         <>
           <div className="rt-fig">
             <div className="rt-fig-main">
-              <span className="rt-who">{who} were paid{f.state === "median" ? " a median of" : ""}</span>
+              <span className="rt-who">
+                {who} were paid{f.state === "median" ? " a median of" : ""}
+              </span>
               <strong className="rt-big">
-                <Num>{f.state === "range" ? `${money(f.p25)} to ${money(f.p75)}` : money(f.median)}</Num>
+                <Num>
+                  {f.state === "range"
+                    ? moneyRange(f.p25, f.p75)
+                    : money(f.median)}
+                </Num>
               </strong>
               <span className="rt-per">{per(kind)}</span>
               <span className="rt-sub">
-                {f.state === "range" ? `The middle half of ${people(f.n)}.` : `From ${people(f.n)}. ${f.rangeLocked ? "The middle half is Pro." : `The middle half shows at ${f.rangeAt} people.`}`}
+                {f.state === "range"
+                  ? `The middle half of ${people(f.n)}.`
+                  : `From ${people(f.n)}. ${f.rangeLocked ? "The middle half is Pro." : `The middle half shows at ${f.rangeAt} people.`}`}
               </span>
             </div>
             <div className="rt-tile">
@@ -303,17 +541,43 @@ export function RatesPage() {
             </div>
             <div className="rt-tile">
               <span className="rt-tile-k">{KIND_LABEL[other]}</span>
-              <strong>{og?.fig && og.fig.state !== "few" ? <Num>{money(og.fig.median)}</Num> : "No figure"}</strong>
-              <span className="rt-tile-s">{og?.fig && og.fig.state !== "few" ? `the median, from ${people(og.fig.n)}` : og ? "not enough reports yet" : "not enough reports yet"}</span>
+              <strong>
+                {og?.fig && og.fig.state !== "few" ? (
+                  <Num>{money(og.fig.median)}</Num>
+                ) : (
+                  "No figure"
+                )}
+              </strong>
+              <span className="rt-tile-s">
+                {og?.fig && og.fig.state !== "few"
+                  ? `the median, from ${people(og.fig.n)}`
+                  : og
+                    ? "not enough reports yet"
+                    : "not enough reports yet"}
+              </span>
             </div>
           </div>
           {f.state === "range" ? (
-            <RangeBar f={f} own={ownNow?.amount ?? null} kind={kind} ask={askBand} />
+            <RangeBar
+              f={f}
+              own={ownNow?.amount ?? null}
+              kind={kind}
+              ask={askBand}
+            />
           ) : (
-            <div className="rt-medline" role="img" aria-label={`The median is ${money(f.median)} ${per(kind)}${ownNow ? `, and your rate is ${money(ownNow.amount)}` : ""}.`}>
+            <div
+              className="rt-medline"
+              role="img"
+              aria-label={`The median is ${money(f.median)} ${per(kind)}${ownNow ? `, and your rate is ${money(ownNow.amount)}` : ""}.`}
+            >
               <span className="rt-medline-track" />
               <span className="rt-medline-med" style={{ left: "50%" }} />
-              {ownNow && <span className="rt-medline-you" style={{ left: `${pos(ownNow.amount, f)}%` }} />}
+              {ownNow && (
+                <span
+                  className="rt-medline-you"
+                  style={{ left: `${pos(ownNow.amount, f)}%` }}
+                />
+              )}
             </div>
           )}
           <ul className="ch-key rt-key">
@@ -334,7 +598,11 @@ export function RatesPage() {
                 <span className="ch-keymark ch-keymark-you" aria-hidden />
                 <span>
                   Your rate, <b>{money(ownNow.amount)}</b>
-                  {ownNow.at ? ` at ${ownNow.at}` : ""}. {sitsShort(ownNow.amount, f) ? `${sitsShort(ownNow.amount, f)!.replace(/^./, (x) => x.toUpperCase())}` : ""} <span className="ch-muted">Only you see it.</span>
+                  {ownNow.at ? ` at ${ownNow.at}` : ""}.{" "}
+                  {sitsShort(ownNow.amount, f)
+                    ? `${sitsShort(ownNow.amount, f)!.replace(/^./, (x) => x.toUpperCase())}`
+                    : ""}{" "}
+                  <span className="ch-muted">Only you see it.</span>
                 </span>
               </li>
             )}
@@ -351,9 +619,17 @@ export function RatesPage() {
         </>
       ) : (
         <div className="rt-status rt-none" role="status" data-nofig>
-          <strong>No figure yet for {groupLabel(g.asked.fn, g.sizeLocked ? "All" : g.asked.band)}</strong>
+          <strong>
+            No figure yet for{" "}
+            {groupLabel(g.asked.fn, g.sizeLocked ? "All" : g.asked.band)}
+          </strong>
           <span>
-            Not enough people have reported what they were paid here to show a figure: {needWords(g.sizeLocked ? pickGroup(b, fn, "All", kind).asked : g.asked) || "no reports yet"}. Merlin never shows an amount below that.
+            Not enough people have reported what they were paid here to show a
+            figure:{" "}
+            {needWords(
+              g.sizeLocked ? pickGroup(b, fn, "All", kind).asked : g.asked,
+            ) || "no reports yet"}
+            . Merlin never shows an amount below that.
           </span>
           <Need g={g.asked} label={needWords(g.asked) || "No reports yet"} />
           <button type="button" className="tp-flink" onClick={toAdd}>
@@ -364,13 +640,23 @@ export function RatesPage() {
       <details className="rt-how">
         <summary>How these figures work, and what is never shown</summary>
         <p>
-          A group shows a middle figure (the median) once {b.minN} different people have a rate in it. Low and high show at {b.rangeN ?? 10} people. They are the middle half: 1 in 4 people are paid
-          less than low, and 1 in 4 more than high. {anyIndexed ? "Groups that include Revenue Nomad's Rate Index, our survey and contract data, show at 20 people." : ""}
+          A group shows a middle figure (the median) once {b.minN} different
+          people have a rate in it. Low and high show at {b.rangeN ?? 10}{" "}
+          people. They are the middle half: 1 in 4 people are paid less than
+          low, and 1 in 4 more than high.{" "}
+          {anyIndexed
+            ? "Groups that include Revenue Nomad's Rate Index, our survey and contract data, show at 20 people."
+            : ""}
         </p>
         <p>
-          Each person counts once, however many rates they shared. Amounts are rounded to the nearest $250 a month or $5 an hour, and to the nearest $1,000 or $25 while fewer than {b.rangeN ?? 10}{" "}
-          people are in a figure. Where we know the hours, an hourly rate also counts in the monthly figures, and a monthly retainer in the hourly ones.
-          {withoutYours ? " Your own rate is left out of what you read, so nothing you share can move a number you see." : ""}
+          Each person counts once, however many rates they shared. Amounts are
+          rounded to the nearest $250 a month or $5 an hour, and to the nearest
+          $1,000 or $25 while fewer than {b.rangeN ?? 10} people are in a
+          figure. Where we know the hours, an hourly rate also counts in the
+          monthly figures, and a monthly retainer in the hourly ones.
+          {withoutYours
+            ? " Your own rate is left out of what you read, so nothing you share can move a number you see."
+            : ""}
         </p>
       </details>
     </section>
@@ -404,10 +690,12 @@ export function RatesPage() {
             return (
               <li key="ex" className="rt-mrow rt-ex">
                 <span className="rt-mrow-t">
-                  <strong>Example</strong>
-                  <span className="rt-pill">Example, not a real rate</span>
+                  <strong className="rt-ex-t">No rate of yours yet</strong>
                 </span>
-                <span className="rt-mrow-w">Your own rate shows here once you add one, placed against what others in your function were paid. Only you see it.</span>
+                <span className="rt-mrow-w">
+                  Your own rate shows here once you add one, placed against what
+                  others in your function were paid. Only you see it.
+                </span>
               </li>
             );
           const r = x.r;
@@ -423,29 +711,67 @@ export function RatesPage() {
                 <span className="rt-muted">{per(r.kind)}</span>
                 <span className="rt-sp" />
                 {r.source === "private" && askingRm !== r.id && (
-                  <button type="button" className="btn btn-sm btn-ghost tp-btn-red" aria-label={label} onClick={() => setAskingRm(r.id)}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost tp-btn-red"
+                    aria-label={label}
+                    onClick={() => setAskingRm(r.id)}
+                  >
                     Remove
                   </button>
                 )}
                 {r.source === "seat" && (
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => c.openSeats(r.engagementId ?? undefined)}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => c.openSeats(r.engagementId ?? undefined)}
+                  >
                     Edit on the seat
                   </button>
                 )}
               </span>
               <span className="rt-mrow-w">
-                {r.fn} · {r.at ? `your seat at ${r.at}` : "not tied to a seat"} · {r.source === "private" ? "shared privately" : "on the seat"}
+                {r.fn} · {r.at ? `your seat at ${r.at}` : "not tied to a seat"}{" "}
+                · {r.source === "private" ? "shared privately" : "on the seat"}
               </span>
               {fig && fig.state !== "few" && (
-                <span className="rt-mbar" role="img" aria-label={words ? `Your rate is ${words}` : "No figure to compare yet"}>
-                  {fig.state === "range" && <span className="rt-mbar-mid" style={{ left: `${pos(fig.p25, fig)}%`, width: `${pos(fig.p75, fig) - pos(fig.p25, fig)}%` }} />}
-                  <span className="rt-mbar-med" style={{ left: `${pos(fig.median, fig)}%` }} />
-                  <span className="rt-mbar-you" style={{ left: `${pos(r.amount, fig)}%` }} />
+                <span
+                  className="rt-mbar"
+                  role="img"
+                  aria-label={
+                    words ? `Your rate is ${words}` : "No figure to compare yet"
+                  }
+                >
+                  {fig.state === "range" && (
+                    <span
+                      className="rt-mbar-mid"
+                      style={{
+                        left: `${pos(fig.p25, fig)}%`,
+                        width: `${pos(fig.p75, fig) - pos(fig.p25, fig)}%`,
+                      }}
+                    />
+                  )}
+                  <span
+                    className="rt-mbar-med"
+                    style={{ left: `${pos(fig.median, fig)}%` }}
+                  />
+                  <span
+                    className="rt-mbar-you"
+                    style={{ left: `${pos(r.amount, fig)}%` }}
+                  />
                 </span>
               )}
               <span className="rt-mrow-s">
-                <strong>{words ? words.replace(/^./, (y) => y.toUpperCase()) : "No figure to compare yet."}</strong>{" "}
-                {words && r.group ? `Against ${groupLabel(r.group.fn, r.group.band)}: ${people(fig!.n)}.` : r.group?.fig ? needWords(r.group) : ""}
+                <strong>
+                  {words
+                    ? words.replace(/^./, (y) => y.toUpperCase())
+                    : "No figure to compare yet."}
+                </strong>{" "}
+                {words && r.group
+                  ? `Against ${groupLabel(r.group.fn, r.group.band)}: ${people(fig!.n)}.`
+                  : r.group?.fig
+                    ? needWords(r.group)
+                    : ""}
               </span>
               {askingRm === r.id && (
                 <span
@@ -459,12 +785,23 @@ export function RatesPage() {
                     }
                   }}
                 >
-                  <span>Removing this rate takes back the 1 credit it earned.</span>
+                  <span>
+                    Removing this rate takes back the 1 credit it earned.
+                  </span>
                   <span className="rt-ask-b">
-                    <button type="button" className="btn btn-sm tp-btn-red" onClick={() => void remove(r)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm tp-btn-red"
+                      onClick={() => void remove(r)}
+                    >
                       Remove it
                     </button>
-                    <button type="button" className="btn btn-sm btn-ghost" autoFocus onClick={() => setAskingRm(null)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      autoFocus
+                      onClick={() => setAskingRm(null)}
+                    >
                       Keep it
                     </button>
                   </span>
@@ -477,14 +814,22 @@ export function RatesPage() {
       <div className="rt-mfoot">
         {noRate > 0 ? (
           <>
-            {noRate === 1 ? "1 of your seats has no rate yet." : `${noRate} of your seats have no rate yet.`}{" "}
-            <button type="button" className="tp-flink" onClick={() => c.openSeats()}>
-              Add {noRate === 1 ? "it" : "them"} · +{noRate} {noRate === 1 ? "credit" : "credits"}
+            {noRate === 1
+              ? "1 of your seats has no rate yet."
+              : `${noRate} of your seats have no rate yet.`}{" "}
+            <button
+              type="button"
+              className="tp-flink"
+              onClick={() => c.openSeats()}
+            >
+              Add {noRate === 1 ? "it" : "them"} · +{noRate}{" "}
+              {noRate === 1 ? "credit" : "credits"}
             </button>
           </>
         ) : (
           <>
-            A rate you share privately counts in the figures and is never shown with your name.{" "}
+            A rate you share privately counts in the figures and is never shown
+            with your name.{" "}
             <button type="button" className="tp-flink" onClick={toAdd}>
               Add a rate you know
             </button>
@@ -532,7 +877,9 @@ export function RatesPage() {
             <button type="button" onClick={() => setTab("seats")}>
               <span>
                 <strong>What a seat paid</strong>
-                <span>The rate on a seat you can see, once its company is open.</span>
+                <span>
+                  The rate on a seat you can see, once its company is open.
+                </span>
               </span>
               <span className="rt-pill">1 credit</span>
             </button>
@@ -554,14 +901,28 @@ export function RatesPage() {
             if (q.trim()) runAsk(q, "now", q.trim());
           }}
         >
-          <input className="input rt-ask-in" type="text" value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} aria-label="Ask Merlin what to charge" placeholder="Ask Merlin. Say the client and the hours" />
+          <input
+            className="input rt-ask-in"
+            type="text"
+            value={q}
+            maxLength={200}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Ask Merlin what to charge"
+            placeholder="Ask Merlin. Say the client and the hours"
+          />
           <button type="submit" className="btn btn-pine">
             Ask
           </button>
         </form>
         <div className="rt-ask-chips" role="group" aria-label="Start from">
           {chips.map((x) => (
-            <button key={x.id} type="button" aria-pressed={asked?.id === x.id} className={`rt-chip${asked?.id === x.id ? " on" : ""}`} onClick={() => runAsk(x.text, x.id, x.label)}>
+            <button
+              key={x.id}
+              type="button"
+              aria-pressed={asked?.id === x.id}
+              className={`rt-chip${asked?.id === x.id ? " on" : ""}`}
+              onClick={() => runAsk(x.text, x.id, x.label)}
+            >
               {x.label}
             </button>
           ))}
@@ -569,8 +930,10 @@ export function RatesPage() {
       </div>
       {!w || !asked ? (
         <p className="rt-ask-none">
-          Pick one, or ask in your own words. Merlin sets the benchmark above to the right group, then shows each step of its working so you can check it. It answers only from the figures on this page
-          and never sees another member&apos;s rate.
+          Pick one, or ask in your own words. Merlin sets the benchmark above to
+          the right group, then shows each step of its working so you can check
+          it. It answers only from the figures on this page and never sees
+          another member&apos;s rate.
         </p>
       ) : (
         <div className="rt-work" role="status">
@@ -590,10 +953,23 @@ export function RatesPage() {
                 </li>
               ))}
             </ol>
-            {asked.unknown.length > 0 && <span className="rt-work-unk">Words Merlin did not use: {asked.unknown.join(", ")}.</span>}
+            {asked.unknown.length > 0 && (
+              <span className="rt-work-unk">
+                Words Merlin did not use: {asked.unknown.join(", ")}.
+              </span>
+            )}
             <span className="rt-work-l">
               <strong>Where this lands:</strong> {w.lands}{" "}
-              <button type="button" className="tp-flink" onClick={() => benchRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              <button
+                type="button"
+                className="tp-flink"
+                onClick={() =>
+                  benchRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  })
+                }
+              >
                 See it
               </button>
             </span>
@@ -603,16 +979,28 @@ export function RatesPage() {
             <span className="rt-work-sub">{w.sub}</span>
             <span className="rt-work-acts">
               {w.answered && me.plan?.canClose !== false && (
-                <button type="button" className="btn btn-sm btn-pine" onClick={() => c.openPage("proposals")}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-pine"
+                  onClick={() => c.openPage("proposals")}
+                >
                   Use in a proposal
                 </button>
               )}
               {!w.answered && (
-                <button type="button" className="btn btn-sm btn-volt" onClick={toAdd}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-volt"
+                  onClick={toAdd}
+                >
                   Share yours · +1 credit
                 </button>
               )}
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAsked(null)}>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setAsked(null)}
+              >
                 Clear
               </button>
             </span>
@@ -620,8 +1008,14 @@ export function RatesPage() {
         </div>
       )}
       <p className="rt-ask-foot">
-        Asking spends no credits and no allowance: Merlin works it out by rules from the figures above. The same figures are free in your own agent, through the Merlin connector.{" "}
-        <button type="button" className="tp-flink" onClick={() => c.openPage("agent")}>
+        Asking spends no credits and no allowance: Merlin works it out by rules
+        from the figures above. The same figures are free in your own agent,
+        through the Merlin connector.{" "}
+        <button
+          type="button"
+          className="tp-flink"
+          onClick={() => c.openPage("agent")}
+        >
           Agent access
         </button>
       </p>
@@ -630,12 +1024,21 @@ export function RatesPage() {
 
   /* ----- the table ----- */
   const rows = b.rows;
-  const fnRows = FUNCTIONS.map((x) => rows.find((r) => r.function === x && r.revenue === (b.limited ? "All" : band))).filter((r): r is BenchmarkRow => !!r);
-  const hasFig = (r: BenchmarkRow) => r.monthly.median !== undefined || r.hourly.median !== undefined;
+  const fnRows = FUNCTIONS.map((x) =>
+    rows.find(
+      (r) => r.function === x && r.revenue === (b.limited ? "All" : band),
+    ),
+  ).filter((r): r is BenchmarkRow => !!r);
+  const hasFig = (r: BenchmarkRow) =>
+    r.monthly.median !== undefined || r.hourly.median !== undefined;
   const fnShown = fnRows.filter((r) => hasFig(r) || r.function === myFn);
   const fnLater = fnRows.filter((r) => !fnShown.includes(r));
   const yoursCell = (r: BenchmarkRow): ReactNode => {
-    const o = ownRates(r.function, me.benchRates.filter((x) => !gone.has(x.id)), seatsIn)[kind];
+    const o = ownRates(
+      r.function,
+      me.benchRates.filter((x) => !gone.has(x.id)),
+      seatsIn,
+    )[kind];
     if (!o)
       return (
         <button type="button" className="tp-flink" onClick={toAdd}>
@@ -648,13 +1051,30 @@ export function RatesPage() {
         <strong>
           {money(o.amount)} {per(kind)}
         </strong>
-        <span className="rt-muted">{s ? s.replace(/^./, (y) => y.toUpperCase()) : "No figure to compare yet"}</span>
+        <span className="rt-muted">
+          {s
+            ? s.replace(/^./, (y) => y.toUpperCase())
+            : "No figure to compare yet"}
+        </span>
       </span>
     );
   };
-  const statTable = (list: { key: string; name: ReactNode; row: BenchmarkRow | null; on: boolean; go: () => void; mine?: boolean }[], head: string) => (
+  const statTable = (
+    list: {
+      key: string;
+      name: ReactNode;
+      row: BenchmarkRow | null;
+      on: boolean;
+      go: () => void;
+      mine?: boolean;
+    }[],
+    head: string,
+  ) => (
     <div className="rt-scroll">
-      <table className="rt-table" aria-label={`Rate benchmarks, ${head.toLowerCase()}`}>
+      <table
+        className="rt-table"
+        aria-label={`Rate benchmarks, ${head.toLowerCase()}`}
+      >
         <thead>
           <tr className="rt-groups">
             <th scope="col" rowSpan={2} className="rt-th-name">
@@ -677,10 +1097,20 @@ export function RatesPage() {
               <th key={`${sd}1`} scope="col" className={`num rt-${sd}`}>
                 Middle
               </th>,
-              <th key={`${sd}2`} scope="col" className={`num rt-${sd}`} title="The middle half: 1 in 4 people are paid less than low, and 1 in 4 more than high">
+              <th
+                key={`${sd}2`}
+                scope="col"
+                className={`num rt-${sd}`}
+                title="The middle half: 1 in 4 people are paid less than low, and 1 in 4 more than high"
+              >
                 Low to high
               </th>,
-              <th key={`${sd}3`} scope="col" className={`num rt-${sd}`} title="Different people with a rate in this figure">
+              <th
+                key={`${sd}3`}
+                scope="col"
+                className={`num rt-${sd}`}
+                title="Different people with a rate in this figure"
+              >
                 People
               </th>,
             ])}
@@ -690,10 +1120,17 @@ export function RatesPage() {
           {list.map((x) => (
             <tr key={x.key} className={x.on ? "on" : undefined}>
               <th scope="row" className="rt-name">
-                <button type="button" className="rt-name-b" aria-pressed={x.on} onClick={x.go}>
+                <button
+                  type="button"
+                  className="rt-name-b"
+                  aria-pressed={x.on}
+                  onClick={x.go}
+                >
                   {x.name}
                 </button>
-                {x.mine && <span className="rt-tag rt-tag-mine">Your function</span>}
+                {x.mine && (
+                  <span className="rt-tag rt-tag-mine">Your function</span>
+                )}
                 {x.row?.indexed && <span className="rt-tag">Rate Index</span>}
               </th>
               {!x.row ? (
@@ -705,7 +1142,8 @@ export function RatesPage() {
               ) : x.mine && !hasFig(x.row) ? (
                 <td colSpan={6} className="rt-td rt-ownempty">
                   <span className="num">
-                    {Math.max(x.row.monthly.n, x.row.hourly.n)} of {Math.min(x.row.monthly.min, x.row.hourly.min)} so far.
+                    {Math.max(x.row.monthly.n, x.row.hourly.n)} of{" "}
+                    {Math.min(x.row.monthly.min, x.row.hourly.min)} so far.
                   </span>{" "}
                   <button type="button" className="tp-flink" onClick={toAdd}>
                     Share yours privately · +1 credit
@@ -717,7 +1155,11 @@ export function RatesPage() {
                   <StatCells s={x.row.hourly} b={b} side="h" onPro={onPro} />
                 </>
               )}
-              {yoursCol && <td className="rt-td rt-yours" data-cap="Your rate">{x.row ? yoursCell(x.row) : null}</td>}
+              {yoursCol && (
+                <td className="rt-td rt-yours" data-cap="Your rate">
+                  {x.row ? yoursCell(x.row) : null}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -725,27 +1167,42 @@ export function RatesPage() {
     </div>
   );
 
-  const seatCols = ["company", "role", "function", "hours", "rate", "end"].map((id) => columnOf("engagements", id)).filter((x): x is ColumnDef => !!x);
+  const seatCols = ["company", "role", "function", "hours", "rate", "end"]
+    .map((id) => columnOf("engagements", id))
+    .filter((x): x is ColumnDef => !!x);
   const seatsShown = seatRows.slice(0, limit);
   const seatOpen = seatRows.filter((r) => !r.i.c.hidden).length;
-  const seatRate = seatRows.filter((r) => r.e?.cells.rate?.s === "value").length;
+  const seatRate = seatRows.filter(
+    (r) => r.e?.cells.rate?.s === "value",
+  ).length;
 
   let tableBody: ReactNode;
   let rowsText = "";
   let status: ReactNode = null;
   if (tab === "fn") {
     tableBody = statTable(
-      fnShown.map((r) => ({ key: r.function, name: r.function, row: r, on: r.function === fn, go: () => setGroup({ fn: r.function }), mine: r.function === myFn })),
+      fnShown.map((r) => ({
+        key: r.function,
+        name: r.function,
+        row: r,
+        on: r.function === fn,
+        go: () => setGroup({ fn: r.function }),
+        mine: r.function === myFn,
+      })),
       "Function",
     );
     rowsText = `${fnShown.length} of ${fnRows.length} functions${b.limited || band === "All" ? ", every company size" : `, at ${band}`}`;
     status = fnLater.length ? (
       <span className="rt-later">
-        <strong>No figure yet{b.limited || band === "All" ? "" : " at this size"}:</strong>{" "}
+        <strong>
+          No figure yet{b.limited || band === "All" ? "" : " at this size"}:
+        </strong>{" "}
         {fnLater
           .map((r) => {
             const n = Math.max(r.monthly.n, r.hourly.n);
-            return n ? `${r.function} (${n} of ${Math.min(r.monthly.min, r.hourly.min)})` : r.function;
+            return n
+              ? `${r.function} (${n} of ${Math.min(r.monthly.min, r.hourly.min)})`
+              : r.function;
           })
           .join(", ")}
         . A group shows a figure at {b.minN} people.{" "}
@@ -756,7 +1213,14 @@ export function RatesPage() {
     ) : null;
   } else if (tab === "size") {
     tableBody = statTable(
-      ["All", ...RN_REVENUE].map((bd) => ({ key: bd, name: bandName(bd), row: rowAt(fn, bd) ?? null, on: bd === band, go: () => (b.limited && bd !== "All" ? onPro() : setGroup({ band: bd })) })),
+      ["All", ...RN_REVENUE].map((bd) => ({
+        key: bd,
+        name: bandName(bd),
+        row: rowAt(fn, bd) ?? null,
+        on: bd === band,
+        go: () =>
+          b.limited && bd !== "All" ? onPro() : setGroup({ band: bd }),
+      })),
       `Company size, ${fn}`,
     );
     rowsText = `${fn} at ${RN_REVENUE.length + 1} company sizes`;
@@ -768,23 +1232,53 @@ export function RatesPage() {
     ) : seatRows.length ? (
       <>
         {c.phone ? (
-          <CardList type="engagements" rows={seatsShown} me={c.me} onOpen={(r) => c.openCompany(r.i.c.id, r.key)} tab="all" />
+          <CardList
+            type="engagements"
+            rows={seatsShown}
+            me={c.me}
+            onOpen={(r) => c.openCompany(r.i.c.id, r.key)}
+            tab="all"
+          />
         ) : (
           <div className="rt-seats">
-            <Workbench type="engagements" rows={seatsShown} cols={seatCols} mine={myFn} selected={new Set()} onPick={() => {}} onPickAll={() => {}} canPick={() => false} onOpen={(r) => c.openCompany(r.i.c.id, r.key)} sort="newest" onAddColumn={() => {}} />
+            <Workbench
+              type="engagements"
+              rows={seatsShown}
+              cols={seatCols}
+              mine={myFn}
+              selected={new Set()}
+              onPick={() => {}}
+              onPickAll={() => {}}
+              canPick={() => false}
+              onOpen={(r) => c.openCompany(r.i.c.id, r.key)}
+              sort="newest"
+              onAddColumn={() => {}}
+            />
           </div>
         )}
         {seatRows.length > limit && (
-          <button type="button" className="btn wb-more" onClick={() => setLimit((n) => n + 50)}>
+          <button
+            type="button"
+            className="btn wb-more"
+            onClick={() => setLimit((n) => n + 50)}
+          >
             Show {Math.min(50, seatRows.length - limit)} more
           </button>
         )}
       </>
     ) : (
       <div className="rt-empty">
-        <strong>{onlyFn ? `No ${fn} seat on file has a rate yet.` : "No seat on file has a rate yet."}</strong>
+        <strong>
+          {onlyFn
+            ? `No ${fn} seat on file has a rate yet.`
+            : "No seat on file has a rate yet."}
+        </strong>
         {onlyFn && (
-          <button type="button" className="tp-flink" onClick={() => setOnlyFn(false)}>
+          <button
+            type="button"
+            className="tp-flink"
+            onClick={() => setOnlyFn(false)}
+          >
             Show every function
           </button>
         )}
@@ -793,21 +1287,37 @@ export function RatesPage() {
     rowsText = `${seatRows.length.toLocaleString("en-US")} ${seatRows.length === 1 ? "seat" : "seats"} with a rate${onlyFn ? ` in ${fn}` : ""}`;
     status = (
       <span className="rt-later">
-        {seatOpen} of {seatRows.length} at companies you can see. {seatRate} {seatRate === 1 ? "rate shows" : "rates show"}. A rate is 1 credit once its company is open, asked first.
+        {seatOpen} of {seatRows.length} at companies you can see. {seatRate}{" "}
+        {seatRate === 1 ? "rate shows" : "rates show"}. A rate is 1 credit once
+        its company is open, asked first.
       </span>
     );
   }
   const table = (
-    <section className="rt-card rt-tablec" id="rt-table" aria-label="Rate table">
+    <section
+      className="rt-card rt-tablec"
+      id="rt-table"
+      aria-label="Rate table"
+    >
       <div className="rt-tools">
         <span className="rt-rows">{rowsText}</span>
         <span className="rt-sp" />
         {tab !== "seats" ? (
-          <button type="button" className="rt-tool" aria-pressed={yoursCol} onClick={() => setYoursCol((x) => !x)}>
+          <button
+            type="button"
+            className="rt-tool"
+            aria-pressed={yoursCol}
+            onClick={() => setYoursCol((x) => !x)}
+          >
             {yoursCol ? "Hide your rate" : "+ Your rate beside each row"}
           </button>
         ) : (
-          <button type="button" className="rt-tool" aria-pressed={!onlyFn} onClick={() => (setOnlyFn((x) => !x), setLimit(50))}>
+          <button
+            type="button"
+            className="rt-tool"
+            aria-pressed={!onlyFn}
+            onClick={() => (setOnlyFn((x) => !x), setLimit(50))}
+          >
             {onlyFn ? "Every function" : `Only ${fn}`}
           </button>
         )}
@@ -816,7 +1326,14 @@ export function RatesPage() {
       <div className="wb-bottom rt-bottom">
         <div role="tablist" aria-label="Tables" className="wb-bottom-tabs">
           {RATE_TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={t === tab} className={`wb-btab${t === tab ? " on" : ""}`} onClick={() => (setTab(t), setLimit(50))}>
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={t === tab}
+              className={`wb-btab${t === tab ? " on" : ""}`}
+              onClick={() => (setTab(t), setLimit(50))}
+            >
               {RATE_TAB_LABEL[t]}
             </button>
           ))}
@@ -828,16 +1345,26 @@ export function RatesPage() {
 
   /* ----- add a rate ----- */
   const add = (
-    <section className="rt-card rt-pad rt-addc" id="rt-add" aria-labelledby="rt-addh">
+    <section
+      className="rt-card rt-pad rt-addc"
+      id="rt-add"
+      aria-labelledby="rt-addh"
+    >
       <div className="rt-head rt-head-flat">
         <h2 id="rt-addh">Add a rate you know</h2>
         <span className="rt-pill rt-pill-earn">Earns 1 credit</span>
       </div>
-      <p className="rt-subp">It counts in the middle figures and is never shown with your name or the seat. Your rate joins a group&apos;s number once 5 people have shared one privately in that group.</p>
       <ShareRate refresh={c.refresh} inline idp="rt-share" />
       <div className="rt-seatcta">
-        <span>Happy for members to see a rate? Put it on the seat instead. You earn 1 credit, and a member spends 1 to see it.</span>
-        <button type="button" className="btn btn-sm" onClick={() => ui.openAdd({ mode: "engagement" })}>
+        <span>
+          Happy for members to see a rate? Put it on the seat instead. You earn
+          1 credit, and a member spends 1 to see it.
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => ui.openAdd({ mode: "engagement" })}
+        >
           Add a rate to a seat
         </button>
       </div>
@@ -847,19 +1374,30 @@ export function RatesPage() {
   return (
     <div className="rt-page">
       <p className="rt-lead">
-        What fractional work pays{b.total ? `, from ${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file` : ""}. Each person counts once, however many rates they shared.
+        What fractional work pays
+        {b.total
+          ? `, from ${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file`
+          : ""}
+        . Each person counts once, however many rates they shared.
       </p>
       {!stripGone(c, "rates") && (
         <PageStrip
           page="rates"
           own={mine.length}
           actions={
-            <button type="button" className="btn btn-sm btn-pine" onClick={toAdd}>
+            <button
+              type="button"
+              className="btn btn-sm btn-pine"
+              onClick={toAdd}
+            >
               Add your rate
             </button>
           }
         >
-          See what fractionals in your function were paid, ask Merlin what to charge a client, and add a rate you know. {myFn ? "Your function is already picked. " : ""}Adding a rate earns 1 credit and places you on the chart.
+          See what fractionals in your function were paid, ask Merlin what to
+          charge a client, and add a rate you know.{" "}
+          {myFn ? "Your function is already picked. " : ""}Adding a rate earns 1
+          credit and places you on the chart.
         </PageStrip>
       )}
       <div className="rt-top">

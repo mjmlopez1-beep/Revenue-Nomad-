@@ -10,7 +10,14 @@
  * (`wf`), or a reason that starts "Workflow": both read as the Workflows kind.
  */
 import type { LedgerRow, Me } from "@/lib/tableTypes";
-import { COMPANY_PRICE, EARN_CAP, HIDDEN_COMPANY, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT } from "@/lib/tableFields";
+import {
+  COMPANY_PRICE,
+  EARN_CAP,
+  HIDDEN_COMPANY,
+  PRO_OPENS_DAILY,
+  REFERRAL_BONUS,
+  REFERRAL_LIMIT,
+} from "@/lib/tableFields";
 import { FEATURE_NAME } from "@/lib/radar/types";
 import { PASS_CREDIT } from "@/lib/peersCore";
 
@@ -18,25 +25,59 @@ import { PASS_CREDIT } from "@/lib/peersCore";
 
 export const CREDIT_TABS = ["overview", "ledger", "earn", "plans"] as const;
 export type CreditTab = (typeof CREDIT_TABS)[number];
-export const CREDIT_TAB_LABEL: Record<CreditTab, string> = { overview: "Overview", ledger: "Ledger", earn: "Ways to earn", plans: "Plans" };
+export const CREDIT_TAB_LABEL: Record<CreditTab, string> = {
+  overview: "Overview",
+  ledger: "Ledger",
+  earn: "Ways to earn",
+  plans: "Plans",
+};
 
 /**
  * The tab an address opens. ?p=billing (Plan and billing: every email and Stripe's way back,
  * ?plans=1, ?topup=1, ?paid=1, ?aipack=1) opens Plans; ?p=credits opens Overview. `tab=` names one
  * outright (?p=credits&tab=ledger). Without billing live there is no Plans tab: Overview.
  */
-export function creditTabOf(page: string, search: string, billing: boolean): CreditTab {
+export function creditTabOf(
+  page: string,
+  search: string,
+  billing: boolean,
+): CreditTab {
   const q = new URLSearchParams(search);
   const named = q.get("tab");
-  const alias: Record<string, CreditTab> = { history: "ledger", ways: "earn", plan: "plans", billing: "plans" };
-  const t = (CREDIT_TABS as readonly string[]).includes(named ?? "") ? (named as CreditTab) : named && alias[named] ? alias[named] : null;
-  const want: CreditTab = t ?? (page === "billing" || q.get("plans") === "1" || q.get("aipack") === "1" ? "plans" : "overview");
+  const alias: Record<string, CreditTab> = {
+    history: "ledger",
+    ways: "earn",
+    plan: "plans",
+    billing: "plans",
+  };
+  const t = (CREDIT_TABS as readonly string[]).includes(named ?? "")
+    ? (named as CreditTab)
+    : named && alias[named]
+      ? alias[named]
+      : null;
+  const want: CreditTab =
+    t ??
+    (page === "billing" || q.get("plans") === "1" || q.get("aipack") === "1"
+      ? "plans"
+      : "overview");
   return want === "plans" && !billing ? "overview" : want;
 }
 
 /* ---------- what each line is ---------- */
 
-export const KINDS = ["opens", "facts", "added", "rates", "invites", "leads", "plan", "refunds", "takenBack", "workflows", "other"] as const;
+export const KINDS = [
+  "opens",
+  "facts",
+  "added",
+  "rates",
+  "invites",
+  "leads",
+  "plan",
+  "refunds",
+  "takenBack",
+  "workflows",
+  "other",
+] as const;
 export type Kind = (typeof KINDS)[number];
 export const KIND_LABEL: Record<Kind, string> = {
   opens: "Company opens",
@@ -56,9 +97,11 @@ export const KIND_LABEL: Record<Kind, string> = {
 export type Line = LedgerRow & { wf?: string };
 
 const PRIVATE_RATE = "Private rate";
-const FREE_OPEN = /^(Opened free (on|in your|from) |Free company of the day|Free .* company of the day)/;
+const FREE_OPEN =
+  /^(Opened free (on|in your|from) |Free company of the day|Free .* company of the day)/;
 const REFUND_WORDS = /^(Refund for |You were right|Gave back )/;
-const PLAN_WORDS = /( credits for the month| credits for month \d+ of your year|^Bought \d+ credits|^Topped up to 0)/;
+const PLAN_WORDS =
+  /( credits for the month| credits for month \d+ of your year|^Bought \d+ credits|^Topped up to 0)/;
 
 /** What a line is, from its reason and field as the server sends them (lib/table.ts fullView). Unknown: Other. */
 export function kindOf(l: Line): Kind {
@@ -89,10 +132,12 @@ export function kindOf(l: Line): Kind {
 
 /** Earned (in), spent (out), or free (a company opened for no credits, a fact added past the day's cap). */
 export type Tone = "earned" | "spent" | "free";
-export const toneOf = (l: LedgerRow): Tone => (l.delta > 0 ? "earned" : l.delta < 0 ? "spent" : "free");
+export const toneOf = (l: LedgerRow): Tone =>
+  l.delta > 0 ? "earned" : l.delta < 0 ? "spent" : "free";
 
 /** "+2", "−1", "Free" (a 0 line). */
-export const deltaWords = (l: LedgerRow) => (l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "Free");
+export const deltaWords = (l: LedgerRow) =>
+  l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "Free";
 
 /* ---------- running balance ---------- */
 
@@ -100,7 +145,11 @@ export const deltaWords = (l: LedgerRow) => (l.delta > 0 ? `+${l.delta}` : l.del
  * The balance after each line, newest first, worked back from today's (below 0 while credits are
  * owed), and the balance before the oldest line (the starting credits when nothing is missing).
  */
-export function withBalance<T extends LedgerRow>(ledger: T[], credits: number, owed = 0): { rows: { l: T; after: number }[]; opening: number } {
+export function withBalance<T extends LedgerRow>(
+  ledger: T[],
+  credits: number,
+  owed = 0,
+): { rows: { l: T; after: number }[]; opening: number } {
   let bal = credits - owed;
   const rows = ledger.map((l) => {
     const after = bal;
@@ -128,18 +177,36 @@ export function byKind(ledger: Line[]): KindSum[] {
   const m = new Map<Kind, KindSum>();
   for (const l of ledger) {
     const k = kindOf(l);
-    const s = m.get(k) ?? { kind: k, label: KIND_LABEL[k], earned: 0, spent: 0, lines: 0, free: 0 };
+    const s = m.get(k) ?? {
+      kind: k,
+      label: KIND_LABEL[k],
+      earned: 0,
+      spent: 0,
+      lines: 0,
+      free: 0,
+    };
     if (l.delta > 0) s.earned += l.delta;
     else if (l.delta < 0) s.spent -= l.delta;
     else s.free++;
     s.lines++;
     m.set(k, s);
   }
-  return [...m.values()].sort((a, b) => (a.kind === "other" ? 1 : b.kind === "other" ? -1 : b.earned + b.spent - (a.earned + a.spent) || KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind)));
+  return [...m.values()].sort((a, b) =>
+    a.kind === "other"
+      ? 1
+      : b.kind === "other"
+        ? -1
+        : b.earned + b.spent - (a.earned + a.spent) ||
+          KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind),
+  );
 }
 
 /** Totals over lines: earned, spent, and companies opened free. */
-export function totals(ledger: LedgerRow[]): { earned: number; spent: number; free: number } {
+export function totals(ledger: LedgerRow[]): {
+  earned: number;
+  spent: number;
+  free: number;
+} {
   let earned = 0;
   let spent = 0;
   let free = 0;
@@ -175,24 +242,48 @@ export interface Bucket {
  * balance at the end of each. Buckets before the member's first line are left out, so a new member
  * sees only this week.
  */
-export function buckets(ledger: LedgerRow[], credits: number, owed: number, nowMs: number, by: "week" | "day" = "week", n = by === "week" ? 5 : 7): Bucket[] {
-  const startOf = by === "week" ? weekStart : (ms: number) => new Date(new Date(ms).setHours(0, 0, 0, 0)).getTime();
+export function buckets(
+  ledger: LedgerRow[],
+  credits: number,
+  owed: number,
+  nowMs: number,
+  by: "week" | "day" = "week",
+  n = by === "week" ? 5 : 7,
+): Bucket[] {
+  const startOf =
+    by === "week"
+      ? weekStart
+      : (ms: number) => new Date(new Date(ms).setHours(0, 0, 0, 0)).getTime();
   const step = by === "week" ? 7 * DAY : DAY;
   const cur = startOf(nowMs);
-  const first = ledger.length ? startOf(Math.min(...ledger.map((l) => Date.parse(l.at)))) : cur;
+  const first = ledger.length
+    ? startOf(Math.min(...ledger.map((l) => Date.parse(l.at))))
+    : cur;
   const out: Bucket[] = [];
   let bal = credits - owed;
   for (let k = 0; k < n; k++) {
     const from = cur - k * step;
     // Day lengths move with daylight saving: a day bucket ends at the next day's midnight.
-    const to = k === 0 ? Infinity : by === "day" ? startOf(from + step + 3 * 3_600_000) : from + step;
+    const to =
+      k === 0
+        ? Infinity
+        : by === "day"
+          ? startOf(from + step + 3 * 3_600_000)
+          : from + step;
     const inIt = ledger.filter((l) => {
       const t = Date.parse(l.at);
       return t >= from && t < to;
     });
     const t = totals(inIt);
     const d = new Date(from);
-    const label = k === 0 ? (by === "week" ? "This week" : "Today") : by === "week" ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
+    const label =
+      k === 0
+        ? by === "week"
+          ? "This week"
+          : "Today"
+        : by === "week"
+          ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
     out.push({ label, from, earned: t.earned, spent: t.spent, bal });
     bal -= t.earned - t.spent;
     if (from <= first) break;
@@ -203,31 +294,63 @@ export function buckets(ledger: LedgerRow[], credits: number, owed: number, nowM
 /* ---------- the ledger's filters ---------- */
 
 export type LedgerFilter = "all" | Tone;
-export function filterLedger<T extends LedgerRow>(rows: { l: T; after: number; text: string }[], filter: LedgerFilter, q: string) {
+export function filterLedger<T extends LedgerRow>(
+  rows: { l: T; after: number; text: string }[],
+  filter: LedgerFilter,
+  q: string,
+) {
   const want = q.trim().toLowerCase();
-  return rows.filter((r) => (filter === "all" || toneOf(r.l) === filter) && (!want || `${r.text} ${r.l.company}`.toLowerCase().includes(want)));
+  return rows.filter(
+    (r) =>
+      (filter === "all" || toneOf(r.l) === filter) &&
+      (!want || `${r.text} ${r.l.company}`.toLowerCase().includes(want)),
+  );
 }
 
 /* ---------- the rules, in three lines and in full ---------- */
 
 /** The three lines: start, spend to see, earn by adding. From Me and the plan. */
-export function threeLines(me: Pick<Me, "earnCap" | "proOpens" | "crystal">, starter: number): { n: string; t: string; s: string }[] {
+export function threeLines(
+  me: Pick<Me, "earnCap" | "proOpens" | "crystal">,
+  starter: number,
+): { n: string; t: string; s: string }[] {
   const opens = me.proOpens
     ? ` Companies open free, up to ${PRO_OPENS_DAILY} a day, on your plan.`
     : me.crystal === "one" || me.crystal === "used"
       ? ` On Free, one ${FEATURE_NAME} company a day opens free.`
       : "";
   return [
-    { n: String(starter), t: `You start with ${starter} credits.`, s: "They are yours and they do not expire." },
-    { n: "−", t: "You spend to see.", s: `A company is ${COMPANY_PRICE} credits and a fact is 1.${opens}` },
-    { n: "+1", t: "You earn by adding.", s: `Each fact Merlin does not have earns 1 credit, up to ${me.earnCap} a day.` },
+    {
+      n: String(starter),
+      t: `You start with ${starter} credits.`,
+      s: "They are yours and they do not expire.",
+    },
+    {
+      n: "−",
+      t: "You spend to see.",
+      s: `A company is ${COMPANY_PRICE} credits and a fact is 1.${opens}`,
+    },
+    {
+      n: "+1",
+      t: "You earn by adding.",
+      s: `Each fact Merlin does not have earns 1 credit, up to ${me.earnCap} a day.`,
+    },
   ];
 }
 
 /* ---------- ways to earn ---------- */
 
 export interface Way {
-  id: "seatRates" | "seat" | "fact" | "rate" | "invite" | "confirm" | "lead" | "plan" | "topup";
+  id:
+    | "seatRates"
+    | "seat"
+    | "fact"
+    | "rate"
+    | "invite"
+    | "confirm"
+    | "lead"
+    | "plan"
+    | "topup";
   title: string;
   /** "+1 each", "+10 each". */
   reward: string;
@@ -245,11 +368,22 @@ export interface Way {
  * The paid ways (a plan's monthly credits, the top-up) only while billing is live and set up.
  */
 export function waysToEarn(
-  me: Pick<Me, "earned24h" | "earnCap" | "added" | "invited" | "invitesPaid" | "benchRates" | "plan">,
+  me: Pick<
+    Me,
+    | "earned24h"
+    | "earnCap"
+    | "added"
+    | "invited"
+    | "invitesPaid"
+    | "benchRates"
+    | "plan"
+  >,
   o: { seatsNoRate: number; seats: number },
 ): Way[] {
   const room = Math.max(0, me.earnCap - me.earned24h);
-  const today = room ? `${room} of ${me.earnCap} left to earn today` : `You have earned ${me.earnCap} today. You can earn again tomorrow`;
+  const today = room
+    ? `${room} of ${me.earnCap} left to earn today`
+    : `You have earned ${me.earnCap} today. You can earn again tomorrow`;
   const ways: Way[] = [];
   if (o.seatsNoRate > 0)
     ways.push({
@@ -259,28 +393,99 @@ export function waysToEarn(
       earns: true,
       what: "A seat of yours has no rate yet. A rate on your seat earns 1 credit, and a member spends 1 to see it.",
       status: today,
-      go: "Add the rates",
+      go: o.seatsNoRate === 1 ? "Add the rate" : "Add the rates",
     });
   ways.push(
-    { id: "seat", title: "Add a seat you have held", reward: "+1 an answer", earns: true, what: "Each answer on a seat you held earns 1 credit: the role, the dates, the hours, the rate. The seat also becomes a way in.", status: o.seats ? `${o.seats} ${o.seats === 1 ? "seat" : "seats"} of yours on file` : "No seat of yours on file yet", go: "Add a seat" },
-    { id: "fact", title: "Add a fact Merlin does not have", reward: "+1 each", earns: true, what: "A company's size, its HQ, a hiring contact. Only 5 answers a day about industry, size, revenue or how they sell earn a credit.", status: `${me.added.toLocaleString("en-US")} ${me.added === 1 ? "fact" : "facts"} added so far · ${today}`, go: "Add what you know" },
-    { id: "rate", title: "Share a rate privately", reward: "+1", earns: true, what: "A rate for the benchmarks only. It is never shown with your name or the seat, and it places you on the chart.", status: me.benchRates.length ? `${me.benchRates.length} shared so far` : "None shared yet", go: "Rate benchmarks" },
+    {
+      id: "seat",
+      title: "Add a seat you have held",
+      reward: "+1 an answer",
+      earns: true,
+      what: "Each answer on a seat you held earns 1 credit: the role, the dates, the hours, the rate. The seat also becomes a way in.",
+      status: o.seats
+        ? `${o.seats} ${o.seats === 1 ? "seat" : "seats"} of yours on file`
+        : "No seat of yours on file yet",
+      go: "Add a seat",
+    },
+    {
+      id: "fact",
+      title: "Add a fact Merlin does not have",
+      reward: "+1 each",
+      earns: true,
+      what: "A company's size, its HQ, a hiring contact. Only 5 answers a day about industry, size, revenue or how they sell earn a credit.",
+      status: `${me.added.toLocaleString("en-US")} ${me.added === 1 ? "fact" : "facts"} added so far · ${today}`,
+      go: "Add what you know",
+    },
+    {
+      id: "rate",
+      title: "Share a rate privately",
+      reward: "+1",
+      earns: true,
+      what: "A rate for the benchmarks only. It is never shown with your name or the seat, and it places you on the chart.",
+      status: me.benchRates.length
+        ? `${me.benchRates.length} shared so far`
+        : "None shared yet",
+      go: "Rate benchmarks",
+    },
     {
       id: "invite",
       title: "Invite a fractional you would vouch for",
       reward: `+${REFERRAL_BONUS} each`,
       earns: true,
       what: `You both get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat. Up to ${REFERRAL_LIMIT} invite bonuses every 30 days.`,
-      status: me.invited ? `${me.invited} joined from your link${me.invitesPaid ? `, ${me.invitesPaid} added a first fact` : ""}` : "Nobody invited yet",
+      status: me.invited
+        ? `${me.invited} joined from your link${me.invitesPaid ? `, ${me.invitesPaid} added a first fact` : ""}`
+        : "Nobody invited yet",
       go: "Copy invite link",
     },
-    { id: "confirm", title: "Get a fact confirmed", reward: "+1", earns: true, what: "When two other members confirm a fact you added, you earn 1 more.", status: me.added ? "Starts as members confirm what you added" : "Starts once you have added a fact", go: "See your seats" },
-    { id: "lead", title: "Pass a lead you cannot take", reward: `+${PASS_CREDIT}`, earns: true, what: "Send a company to a fractional who fits. You earn when they pick it up.", status: "On a company's record or from Fractionals", go: "Find a fractional" },
+    {
+      id: "confirm",
+      title: "Get a fact confirmed",
+      reward: "+1",
+      earns: true,
+      what: "When two other members confirm a fact you added, you earn 1 more.",
+      status: me.added
+        ? "Starts as members confirm what you added"
+        : "Starts once you have added a fact",
+      go: "See your seats",
+    },
+    {
+      id: "lead",
+      title: "Pass a lead you cannot take",
+      reward: `+${PASS_CREDIT}`,
+      earns: true,
+      what: "Send a company to a fractional who fits. You earn when they pick it up.",
+      status: "On a company's record or from Fractionals",
+      go: "Find a fractional",
+    },
   );
   const plan = me.plan;
   if (plan) {
-    ways.push({ id: "plan", title: `Pro and Close add ${plan.prices.proCredits} credits a month`, reward: `${plan.prices.proCredits} a month`, earns: false, what: "They arrive with each paid month, on top of what you earn.", status: plan.name === "pro" ? "Yours with each paid month" : plan.name === "trial" ? "Not part of the trial. They start with your first paid month" : "On Pro and Close", go: "See the plans" });
-    if (plan.topup) ways.push({ id: "topup", title: `Buy ${plan.prices.topupCredits} credits`, reward: `$${plan.prices.topup}, once`, earns: false, what: "On any plan. They do not expire.", status: "Checkout opens on Stripe, where your card is kept. Merlin never sees it", go: `Buy ${plan.prices.topupCredits} credits` });
+    ways.push({
+      id: "plan",
+      title: `Pro and Close add ${plan.prices.proCredits} credits a month`,
+      reward: `${plan.prices.proCredits} a month`,
+      earns: false,
+      what: "They arrive with each paid month, on top of what you earn.",
+      status:
+        plan.name === "pro"
+          ? "Yours with each paid month"
+          : plan.name === "trial"
+            ? "Not part of the trial. They start with your first paid month"
+            : "On Pro and Close",
+      go: "See the plans",
+    });
+    if (plan.topup)
+      ways.push({
+        id: "topup",
+        title: `Buy ${plan.prices.topupCredits} credits`,
+        reward: `$${plan.prices.topup}, once`,
+        earns: false,
+        what: "On any plan. They do not expire.",
+        status:
+          "Checkout opens on Stripe, where your card is kept. Merlin never sees it",
+        go: `Buy ${plan.prices.topupCredits} credits`,
+      });
   }
   return ways;
 }

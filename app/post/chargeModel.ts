@@ -110,6 +110,9 @@ export function sitsWords(own: number, f: Figure): string | null {
 export const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 export const per = (k: RateKind) => (k === "hourly" ? "an hour" : "a month");
 
+/** "$8,500 to $15,000", or one amount when both ends are the same (every rate in the group alike). */
+export const moneyRange = (a: number, b: number) => (a === b ? money(a) : `${money(a)} to ${money(b)}`);
+
 /** "3 of the 5 people it needs" for a figure below its floor. */
 export const fewWords = (f: Extract<Figure, { state: "few" }>) => `${f.n} of the ${f.min} people it needs`;
 
@@ -267,7 +270,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
   }
   const f = g.shown.fig;
   const rf = g.ranged?.fig?.state === "range" ? g.ranged.fig : null;
-  if (f.state === "range") add("What they were paid", `${money(f.p25)} to ${money(f.p75)} ${per0}. The middle is ${money(f.median)}.`);
+  if (f.state === "range") add("What they were paid", `${moneyRange(f.p25, f.p75)} ${per0}. The middle is ${money(f.median)}.`);
   else
     add(
       "What they were paid",
@@ -289,7 +292,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
     add("What to ask", `From the middle (${money(rf.median)}) to the top of the middle half (${money(rf.p75)}): 1 in 4 people in ${groupLabel(g.ranged!.fn, g.ranged!.band)} were paid more than that.`);
     return {
       steps,
-      big: `Ask ${money(rf.median)} to ${money(rf.p75)} ${per0}`,
+      big: `Ask ${moneyRange(rf.median, rf.p75)} ${per0}`,
       sub: a.kind === "hourly" ? "Open at the high end. Keep the middle as your floor. Quote a set number of hours, so the total is clear." : "Open at the high end. Keep the middle as your floor.",
       lands: `${lands}, with Merlin's range marked on the chart.`,
       band: g.ranged === g.shown ? { from: rf.median, to: rf.p75 } : null,
