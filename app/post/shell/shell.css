@@ -819,3 +819,11 @@
     flex-basis: 44px;
   }
 }
+
+/* What's new: on a phone the list folds behind "See what moved"; elsewhere it shows in full. */
+.ws-new-more { display: none; }
+@media (max-width: 640px) {
+  .ws-new-colon { display: none; }
+  .ws-new-more { display: inline; }
+  .ws-new-list:not(.is-open) { display: none; }
+}

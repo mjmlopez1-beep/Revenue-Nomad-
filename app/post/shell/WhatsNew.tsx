@@ -10,6 +10,7 @@
  * The three things moved out of sight on purpose each get a line (saved views, Invite, search),
  * with Settings in one place and Alerts and workflows. Plain words, no numbers.
  */
+import { useState } from "react";
 import { IconX } from "../../ui/shared";
 import { setFindStart } from "../find/start";
 import { setCreditsStart } from "../pageStart";
@@ -19,13 +20,22 @@ import "./shell.css";
 
 export function WhatsNew() {
   const c = useAppMaybe();
+  // On a phone the five lines fold behind one button, so the page stays on the first screen (desktop shows them all).
+  const [open, setOpen] = useState(false);
   if (!c || !whatsNewShown({ ui2: c.ui2, stripsOff: c.me.stripsOff, gone: c.start.stripOff(WHATS_NEW_KEY) })) return null;
   const close = () => c.start.dismissStrip(WHATS_NEW_KEY);
   return (
     <section className="ws-strip ws-new" aria-label="What's new in Merlin">
       <div className="ws-new-t">
-        <strong>What&apos;s new in Merlin.</strong> Everything you had is still here. A few things moved:
-        <ul className="ws-new-list">
+        <strong>What&apos;s new in Merlin.</strong> Everything you had is still here. A few things moved
+        <span className="ws-new-colon">:</span>
+        <span className="ws-new-more">
+          .{" "}
+          <button type="button" className="ws-new-go" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? "Hide what moved" : `See what moved (${WHATS_NEW.length})`}
+          </button>
+        </span>
+        <ul className={`ws-new-list${open ? " is-open" : ""}`}>
           {WHATS_NEW.map((x) => (
             <li key={x.key}>
               {x.text}{" "}
