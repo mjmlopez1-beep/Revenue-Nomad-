@@ -137,3 +137,9 @@
   .h2-head > .h2-h1 { grid-row: 2; }
   .h2-head > .h2-day { grid-row: 3; }
 }
+
+/* Phones: 44px tap targets (a step's button, the strip's close). */
+@media (max-width: 767px) {
+  .h2-gs-go button { min-height: 44px; }
+  .h2-x { width: 44px; height: 44px; flex-basis: 44px; }
+}

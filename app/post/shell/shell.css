@@ -803,3 +803,19 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* Phones: every tap target in the shell at least 44px (the header's buttons, a strip's and What's new's close). */
+@media (max-width: 767px) {
+  .ws-head-phone .ws-hbtn {
+    width: 44px;
+    height: 44px;
+  }
+  .ws-head-phone .tp-credits {
+    min-height: 44px;
+  }
+  .ws-strip-x {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+}

@@ -157,3 +157,8 @@
 .fd-seedpick input { height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line-input); border-radius: 8px; background: var(--surface); font: inherit; font-size: 14px; }
 .fd-seedhits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .fd-seedhits .fd-link { padding: 0; text-align: left; }
+
+/* Phones: 44px tap targets (the kinds). */
+@media (max-width: 767px) {
+  .fd-kind { height: 44px; }
+}

@@ -638,3 +638,8 @@
 .hn-nw {
   white-space: nowrap;
 }
+
+/* Phones: 44px tap targets (the views). */
+@media (max-width: 767px) {
+  .hn-vtab { height: 44px; }
+}

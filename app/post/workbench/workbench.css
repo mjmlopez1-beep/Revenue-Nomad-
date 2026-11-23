@@ -947,3 +947,9 @@
   font-family: inherit;
 }
 .wb-pill-btn { background: transparent; color: var(--pine); }
+
+/* Phones: 44px tap targets (a strip's close, the tabs at the foot). */
+@media (max-width: 767px) {
+  .wb-iconbtn { width: 44px; height: 44px; flex-basis: 44px; }
+  .wb-btab { min-height: 44px; }
+}
