@@ -22,8 +22,8 @@
  * First visit (the member hasn't chosen to show their card, and has no lead or team yet): the panel
  * opens on Your card, outlined, the view is Serve the same clients as you, and three fractionals who
  * serve the same kind of client sit on top of the list. Every record arrives locked as the member may
- * see it (lib/fractionals.ts); a fractional who keeps out of the directory is a hidden row, never
- * named. Free on every plan; nothing here spends a credit but a locked company's own unlock, which
+ * see it (lib/fractionals.ts); a fractional who keeps out of the directory, or hides their name, is
+ * never listed. Free on every plan; nothing here spends a credit but a locked company's own unlock, which
  * asks first (ui.unlock). No export.
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -84,17 +84,17 @@ const STEP = 60;
 const TINTS = ["#E3E8F7", "#E8F3EE", "#FFE7A8", "#F3E8F5", "#DDF0F7", "#FBE3D6"];
 const tintOf = (id: string) => TINTS[[...id].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) % TINTS.length];
 
-function Face({ r, size = 32 }: { r: Pick<FractionalRec, "id" | "initials" | "keepsOut" | "locked">; size?: number }) {
-  const grey = !!r.keepsOut || !r.initials;
+function Face({ r, size = 32 }: { r: Pick<FractionalRec, "id" | "initials" | "locked">; size?: number }) {
+  const grey = !r.initials;
   return (
     <span className="fy-av" aria-hidden style={{ width: size, height: size, flexBasis: size, fontSize: size > 40 ? 15 : 12, background: grey ? "#EEF1EF" : tintOf(r.id) }}>
-      {r.keepsOut ? "?" : r.initials ?? "?"}
+      {r.initials ?? "?"}
     </span>
   );
 }
 
-const nameOf = (r: FractionalRec) => (r.keepsOut ? "Hidden fractional" : r.name ?? "A fractional");
-const firstOfRec = (r: FractionalRec) => (r.keepsOut ? "them" : r.first ?? "them");
+const nameOf = (r: FractionalRec) => r.name ?? "A fractional";
+const firstOfRec = (r: FractionalRec) => r.first ?? "them";
 
 export function FractionalsPage() {
   const c = useApp();
@@ -116,7 +116,7 @@ export function FractionalsPage() {
       ...[...peers.inbox, ...peers.sent].map((l) => ({ memberId: l.who.id, name: l.who.name, first: l.who.first, fn: null, conversationId: l.conversationId })),
       ...peers.teams.map((t) => ({ memberId: t.with.id, name: t.with.name, first: t.with.first, title: t.with.title, fn: t.with.fn })),
     ];
-    return withPeers(list, extra);
+    return withPeers(list, extra, peers.unlisted ?? []);
   }, [data, peers]);
   const mine = records.find((r) => r.you) ?? null;
   const own = (peers?.inbox.length ?? 0) + (peers?.sent.length ?? 0) + (peers?.teams.length ?? 0);
@@ -480,7 +480,7 @@ export function FractionalsPage() {
   ];
   const shown = rows.slice(0, n);
   const subOf = (r: FractionalRec) =>
-    r.keepsOut ? "Keeps out of the directory" : !r.onMerlin ? (r.invite?.at ? `Invited ${timeAgo(r.invite.at)}` : "Not on Merlin yet") : r.memberId && muted.has(r.memberId) ? "Muted" : peerBy.get(keyOf(r))?.thread?.words ?? (r.name && /\.$/.test(r.name) ? "First name only for now" : "On Merlin");
+    !r.onMerlin ? (r.invite?.at ? `Invited ${timeAgo(r.invite.at)}` : "Not on Merlin yet") : r.memberId && muted.has(r.memberId) ? "Muted" : peerBy.get(keyOf(r))?.thread?.words ?? (r.name && /\.$/.test(r.name) ? "First name only for now" : "On Merlin");
   const table = (
     <div className="wb-scroll fy-scroll">
       <table className="wb-table fy-table">
@@ -521,7 +521,7 @@ export function FractionalsPage() {
                     <button type="button" className="fy-namebtn" aria-label={`Open the card of ${nameOf(r)}, row ${i + 1}`} onClick={() => openCard(r)}>
                       <Face r={r} />
                       <span className="fy-who-t">
-                        <span className={`fy-name${r.keepsOut ? " fy-muted" : ""}`}>{nameOf(r)}</span>
+                        <span className="fy-name">{nameOf(r)}</span>
                         <span className="fy-sub">{subOf(r)}</span>
                       </span>
                     </button>
@@ -529,14 +529,14 @@ export function FractionalsPage() {
                   </span>
                 </td>
                 <td>
-                  <Two a={r.keepsOut ? leadTitle({ fn: r.fn, title: undefined }) : leadTitle(r)} b={levelLine(r)} />
+                  <Two a={leadTitle(r)} b={levelLine(r)} />
                 </td>
                 <td>
                   <Two a={`${r.now} now`} b={`${r.past} past`} />
                 </td>
-                <td>{r.keepsOut ? <Muted>Hidden</Muted> : cw ? <Two a={cw.a} b={cw.b} /> : <Muted>None yet</Muted>}</td>
-                <td>{r.keepsOut ? <Muted>Hidden</Muted> : iw ? <Two a={iw.a} b={iw.b} /> : <Muted>Not on file</Muted>}</td>
-                <td>{r.keepsOut ? <Muted>Hidden</Muted> : !r.onMerlin ? <Muted>Not yet</Muted> : r.cases?.length ? <Two a={plural(r.cases.length, "case")} b="Chose to show" strong /> : <Muted>Not shared</Muted>}</td>
+                <td>{cw ? <Two a={cw.a} b={cw.b} /> : <Muted>None yet</Muted>}</td>
+                <td>{iw ? <Two a={iw.a} b={iw.b} /> : <Muted>Not on file</Muted>}</td>
+                <td>{!r.onMerlin ? <Muted>Not yet</Muted> : r.cases?.length ? <Two a={plural(r.cases.length, "case")} b="Chose to show" strong /> : <Muted>Not shared</Muted>}</td>
                 <td>{lw === "Open" ? <span className="fy-pill fy-pill-mint">Open</span> : lw === "Not now" ? <span className="fy-pill">Not now</span> : <Muted>{lw || "Not said"}</Muted>}</td>
                 {showKnow && <td>{kn ? <Two a={kn.from} b={kn.why} /> : <Muted>Not in your sources</Muted>}</td>}
               </tr>
@@ -553,7 +553,7 @@ export function FractionalsPage() {
           <button type="button" className="fy-namebtn" aria-label={`Open the card of ${nameOf(r)}`} onClick={() => openCard(r)}>
             <Face r={r} />
             <span className="fy-who-t">
-              <span className={`fy-name${r.keepsOut ? " fy-muted" : ""}`}>{nameOf(r)}</span>
+              <span className="fy-name">{nameOf(r)}</span>
               <span className="fy-sub">{subOf(r)}</span>
             </span>
           </button>
@@ -726,7 +726,7 @@ function icpChips(me: Me): string[] {
 function headlineOf(view: FxView, records: FractionalRec[], rows: FractionalRec[], counts: Record<FxView, number>, filtered: boolean, wait: string | null): string {
   if (wait) return wait;
   const others = records.filter((r) => !r.you);
-  const on = (list: FractionalRec[]) => list.filter((r) => r.onMerlin && !r.keepsOut).length;
+  const on = (list: FractionalRec[]) => list.filter((r) => r.onMerlin).length;
   if (filtered) return `${plural(rows.length, "row matches", "rows match")} these filters`;
   if (view === "all") return `${others.length.toLocaleString("en-US")} fractionals on file. ${on(others).toLocaleString("en-US")} are on Merlin.`;
   if (view === "same") {
@@ -747,7 +747,6 @@ function emptyWords(view: FxView, filtered: boolean, anySource: boolean): string
 
 /** "Software, EdTech · 51–200 people. In common: Halcyon Freight. Shows 2 cases. Open to leads." */
 function cardLine(r: FractionalRec): string {
-  if (r.keepsOut) return "Name, clients and evidence are hidden. Seats and roles still count.";
   const iw = industryWords(r);
   const cw = commonWords(r);
   return [iw ? [iw.a, iw.b].filter(Boolean).join(" · ") : "", cw ? `In common: ${cw.a}` : "", r.cases?.length ? `Shows ${plural(r.cases.length, "case")}` : "", r.leads === "open" ? "Open to leads" : ""].filter(Boolean).join(". ");
@@ -767,7 +766,7 @@ function RowAction({ r, reload, wide }: { r: FractionalRec; reload: () => Promis
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
-  if (r.you || r.keepsOut) return null;
+  if (r.you) return null;
   if (r.memberId)
     return wide ? null : (
       <ConnectButton member={{ id: r.memberId, first: firstOfRec(r) }} conversationId={r.conversationId} label={<span className="sr-only">Message {firstOfRec(r)}</span>} className="fy-msg" shared={sharedOf(r)} />
@@ -1068,9 +1067,7 @@ function CardPanel({
           </p>
         )}
         <div className="fy-tags">
-          {r.keepsOut ? (
-            <span className="fy-pill">Keeps out of the directory</span>
-          ) : !r.onMerlin ? (
+          {!r.onMerlin ? (
             <span className="fy-pill">{r.invite?.at ? `Invited ${timeAgo(r.invite.at)}` : "Not on Merlin yet"}</span>
           ) : (
             <>
@@ -1097,14 +1094,6 @@ function CardPanel({
               </button>
             </div>
           </>
-        ) : r.keepsOut ? (
-          <div className="fy-hidden-box">
-            <strong>This fractional keeps out of the directory.</strong>
-            <span>Their seats and roles still count, with the name hidden. They cannot be messaged or passed a lead from here. On a company you have open, 1 credit opens who held the seat and the role.</span>
-            <a className="fy-link" href={c.hrefOf("table")} onClick={(e) => (e.preventDefault(), c.openPage("table"))}>
-              See seats on Merlin
-            </a>
-          </div>
         ) : (
           <div className="fy-card-acts fy-col">
             <RowAction r={r} reload={reload} wide />
@@ -1112,81 +1101,77 @@ function CardPanel({
             {!r.invite && !r.locked && <span className="fy-note">Open one of their companies to invite them to connect.</span>}
           </div>
         )}
-        {!r.keepsOut && (
-          <>
-            <div role="tablist" aria-label="Card" className="wb-tabs fy-cardtabs">
-              {tabs.map(([k, t]) => (
-                <button key={k} type="button" role="tab" aria-selected={tab === k} className={`wb-tab${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            {tab === "seats" && (
-              <div className="fy-tabbody">
-                {serve.length > 0 && (
-                  <div className="fy-serve">
-                    <span className="fy-k">Who they serve</span>
-                    {serve.map((t) => (
-                      <span key={t} className="fy-schip">
-                        {t}
-                      </span>
-                    ))}
-                    <span className="fy-sub">{cl?.from === "stated" ? "In their own words" : "Read from their seats"}</span>
-                  </div>
-                )}
-                {waiting ? (
-                  <p className="fy-sub" role="status">
-                    Loading their seats
-                  </p>
-                ) : !r.seats.length ? (
-                  <p className="fy-note">No seat of {r.onMerlin && r.memberId ? `${fnm}'s` : "theirs"} is on file yet.</p>
-                ) : (
-                  <ul className="fy-seats">
-                    {r.seats.map((s) => (
-                      <li key={s.id}>
-                        <SeatCard at={seatIndex.get(s.id) ?? null} now={s.now} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <span className="fy-sub">{r.onMerlin ? `From ${fnm}, and Revenue Nomad research.` : "From Revenue Nomad research."}</span>
-              </div>
-            )}
-            {tab === "ev" && (
-              <div className="fy-tabbody">
-                <span className="fy-note">
-                  {r.cases?.length
-                    ? `${fnm} chose to show ${plural(r.cases.length, "case")}. Client names stay hidden unless the client agreed.`
-                    : r.onMerlin
-                      ? `${fnm} has not chosen to show any evidence. You can ask in a message.`
-                      : `Evidence shows once ${fnm} joins Merlin and chooses to show it.`}
-                </span>
-                {(r.cases ?? []).map((x, i) => (
-                  <div key={i} className="fy-case">
-                    <strong>{x.title}</strong>
-                    {x.outcome && <span>{x.outcome}</span>}
-                    <span className="fy-sub">Client name hidden unless they agreed</span>
-                  </div>
+        <div role="tablist" aria-label="Card" className="wb-tabs fy-cardtabs">
+          {tabs.map(([k, t]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={`wb-tab${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>
+              {t}
+            </button>
+          ))}
+        </div>
+        {tab === "seats" && (
+          <div className="fy-tabbody">
+            {serve.length > 0 && (
+              <div className="fy-serve">
+                <span className="fy-k">Who they serve</span>
+                {serve.map((t) => (
+                  <span key={t} className="fy-schip">
+                    {t}
+                  </span>
                 ))}
+                <span className="fy-sub">{cl?.from === "stated" ? "In their own words" : "Read from their seats"}</span>
               </div>
             )}
-            {tab === "conn" && (
-              <div className="fy-tabbody">
-                <strong className="fy-conn-h">How you are connected</strong>
-                {conn.map((x) => (
-                  <div key={x.k} className="fy-conn">
-                    <span className="fy-k">{x.k}</span>
-                    <span>{x.v}</span>
-                    {x.link && (
-                      <button type="button" className="fy-link" onClick={x.link.go}>
-                        {x.link.t}
-                      </button>
-                    )}
-                  </div>
+            {waiting ? (
+              <p className="fy-sub" role="status">
+                Loading their seats
+              </p>
+            ) : !r.seats.length ? (
+              <p className="fy-note">No seat of {r.onMerlin && r.memberId ? `${fnm}'s` : "theirs"} is on file yet.</p>
+            ) : (
+              <ul className="fy-seats">
+                {r.seats.map((s) => (
+                  <li key={s.id}>
+                    <SeatCard at={seatIndex.get(s.id) ?? null} now={s.now} />
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </>
+            <span className="fy-sub">{r.onMerlin ? `From ${fnm}, and Revenue Nomad research.` : "From Revenue Nomad research."}</span>
+          </div>
+        )}
+        {tab === "ev" && (
+          <div className="fy-tabbody">
+            <span className="fy-note">
+              {r.cases?.length
+                ? `${fnm} chose to show ${plural(r.cases.length, "case")}. Client names stay hidden unless the client agreed.`
+                : r.onMerlin
+                  ? `${fnm} has not chosen to show any evidence. You can ask in a message.`
+                  : `Evidence shows once ${fnm} joins Merlin and chooses to show it.`}
+            </span>
+            {(r.cases ?? []).map((x, i) => (
+              <div key={i} className="fy-case">
+                <strong>{x.title}</strong>
+                {x.outcome && <span>{x.outcome}</span>}
+                <span className="fy-sub">Client name hidden unless they agreed</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {tab === "conn" && (
+          <div className="fy-tabbody">
+            <strong className="fy-conn-h">How you are connected</strong>
+            {conn.map((x) => (
+              <div key={x.k} className="fy-conn">
+                <span className="fy-k">{x.k}</span>
+                <span>{x.v}</span>
+                {x.link && (
+                  <button type="button" className="fy-link" onClick={x.link.go}>
+                    {x.link.t}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
       {sheet === "team" && r.memberId && <TeamSheet to={{ id: r.memberId, first: fnm }} infos={c.infos} onClose={() => setSheet(null)} />}

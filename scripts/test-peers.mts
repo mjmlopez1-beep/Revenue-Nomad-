@@ -237,7 +237,7 @@ async function main() {
       check("Hide my name: Cara is out of Peers for Ana, in every part", !h.serve.some((r) => r.name.startsWith("Cara")) && !h.know.some((r) => r.name.startsWith("Cara")) && !picksH.picks.some((p) => p.first === "Cara") && !JSON.stringify(await mcp.listPeers(ctxH)).includes("Cara"), h.serve.map((r) => r.name));
       const fr = await import("../lib/fractionals");
       const dirA = (await fr.fractionalsView(tok("mem_ana")))!;
-      check("and a hidden row in the directory, never named", !JSON.stringify(dirA).includes("Cara Diaz") && dirA.records.some((r) => r.keepsOut && r.fn === "Marketing"));
+      check("and out of the directory entirely: no row, never named", !JSON.stringify(dirA).includes("Cara Diaz") && !dirA.records.some((r) => r.memberId === pub("mem_cara") || r.id.startsWith("h_")));
       await act("mem_cara", { type: "settings", nameHidden: false });
       check("off again: Cara is back", (await view("mem_ana")).serve.some((r) => r.name.startsWith("Cara")));
     }
@@ -388,6 +388,17 @@ async function main() {
     check("either can write in the shared thread", sent.conversation?.kind === "team" && sent.conversation.messages.length === 2);
     await act("mem_cara", { type: "peer.teamDraft", id: t1.id, text: "Hi there, we're a CMO and a VP Sales who've done this together before." });
     check("the draft is shared", (await view("mem_ana")).teams.find((x) => x.id === t1.id)?.draft?.by === "them");
+    {
+      // Stage 6, an owner default: a member who hides their name stays off the Fractionals list even for a teammate. Peers keeps the team and says so (unlisted).
+      check("a teammate in the directory is not unlisted", !(await view("mem_ana")).unlisted?.includes(pub("mem_cara")));
+      await act("mem_cara", { type: "settings", nameHidden: true });
+      const va = await view("mem_ana");
+      const fmod = await import("../app/post/fractionalsModel");
+      const dirH = (await (await import("../lib/fractionals")).fractionalsView(tok("mem_ana")))!;
+      const merged = fmod.withPeers(dirH.records, va.teams.map((t) => ({ memberId: t.with.id, name: t.with.name, first: t.with.first, fn: t.with.fn })), va.unlisted ?? []);
+      check("Hide my name: the team stays, she is unlisted, and the Fractionals list has no row for her", !!va.teams.find((x) => x.id === t1.id) && !!va.unlisted?.includes(pub("mem_cara")) && !merged.some((r) => r.memberId === pub("mem_cara")) && !dirH.records.some((r) => r.memberId === pub("mem_cara")), va.unlisted);
+      await act("mem_cara", { type: "settings", nameHidden: false });
+    }
     check("the same team twice is refused", /already/.test((await refused("mem_ana", { type: "peer.team", companyId: ACME, memberId: pub("mem_cara") })) ?? ""));
     await act("mem_cara", { type: "peer.teamLeave", id: t1.id });
     const after = (await view("mem_ana")).teams.find((x) => x.id === t1.id);

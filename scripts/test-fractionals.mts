@@ -293,15 +293,8 @@ async function main() {
   check("a member who hasn't chosen: first name and last initial", theo?.name === "Theo W." && theo.onMerlin && !JSON.stringify(theo).includes("Wrenshaw"), theo);
   check("a member's seat and a seat file's seat with his key are one record", theo.seats.length === 2 && recOf(d, "e_theo_tide")?.id === theo.id);
   check("a member who said no is left out entirely", !recOf(d, "e_ines_tide"));
-  {
-    // Out of the directory is one hidden row: no name, seats, clients, cases or member id, under an id of the viewer's own.
-    const hid = d.records.filter((r) => r.keepsOut);
-    const ines = hid.find((r) => r.fn === "Operations");
-    check("a member who said no shows only as a hidden row: function, level and seat counts", hid.length === 1 && !!ines && ines.now === 1 && ines.past === 0 && ines.level === "C-level" && ines.locked === true && ines.onMerlin, hid);
-    check("the hidden row names nobody and links to nothing", !!ines && !ines.name && !ines.first && !ines.initials && !ines.title && !ines.memberId && !ines.conversationId && !ines.invite && !ines.cases && !ines.ball && !ines.common && !ines.headline && !ines.city && !ines.leads && ines.seats.length === 0 && ines.clients === null && !/Calderwood|Ines/.test(JSON.stringify(d)), ines);
-    const mo = (await dirOf("mem_mo")).records.find((r) => r.keepsOut);
-    check("its id is the viewer's own: another member's differs, and no record carries it", !!ines && !!mo && ines.id.startsWith("h_") && mo.id !== ines.id && d.records.filter((r) => r.id === ines.id).length === 1);
-  }
+  // Owner default (Stage 6): out of the directory is out of the list entirely. No row, no count, no function, level or seat numbers.
+  check("a member who said no has no row at all: nothing counts or names her", d.records.every((r) => r.memberId !== pub("mem_ines") && !r.id.startsWith("h_")) && !/Calderwood|Ines/.test(JSON.stringify(d)) && !d.records.some((r) => !r.you && !r.name && r.fn === "Operations" && r.level === "C-level" && r.onMerlin));
   const nell = recOf(d, "e_nell_north")!;
   check("a member who never signed in reads as Not on Merlin yet, named", !!nell && !nell.onMerlin && !nell.locked && nell.name === "Nell Neversigned");
   check("a seat with nobody named makes no record", !recOf(d, "e_nobody"));
@@ -313,6 +306,7 @@ async function main() {
   const coRec = (v: Awaited<ReturnType<typeof t.buildView>>, coId: string) => v.companies.find((c) => c.id === pub(coId))!;
   check("a member shown in the directory: who held her seats and the role are free", engCell(rv, "e_dana_kite", "operator").s === "value" && engCell(rv, "e_dana_moon", "role").s === "value" && !(engCell(rv, "e_dana_kite", "operator") as { paid?: boolean }).paid);
   check("a member who hasn't chosen: who held his seat stays behind the lock", engCell(rv, "e_theo_moon", "operator").s === "locked");
+  check("a member out of the directory: who held her seat still shows on the company, locked", engCell(rv, "e_ines_tide", "operator").s === "locked");
   check("no person key in the table", keysIn(JSON.stringify(rv)).length === 0);
 
   /* ---------- 3. credits ---------- */
@@ -626,16 +620,16 @@ async function main() {
     check("on again: open", (await danaOf("mem_robin"))?.leads === "open");
 
     // Hide my name on my seats: out of the directory everywhere, as the directory's own rule says.
+    const nBefore = (await dirOf("mem_robin")).records.length;
     await t.perform(DANA, { type: "settings", nameHidden: true }, BASE);
     const rd = await dirOf("mem_robin");
-    const hidRows = rd.records.filter((r) => r.keepsOut);
-    check("Hide my name: she is a hidden row, named nowhere in the directory", !rd.records.some((r) => r.memberId === pub("mem_dana")) && hidRows.some((r) => r.fn === "Finance" && r.now === 1 && r.past === 1) && !/Dana|Whitfield|I rebuild finance|Denver/.test(JSON.stringify(rd)), hidRows);
+    check("Hide my name: she is left out of the directory entirely, no row and no count", !rd.records.some((r) => r.memberId === pub("mem_dana")) && rd.records.length === nBefore - 1 && !rd.records.some((r) => r.id.startsWith("h_") || (!r.you && !r.name && r.fn === "Finance" && r.onMerlin)) && !/Dana|Whitfield|I rebuild finance|Denver/.test(JSON.stringify(rd)));
     const pv = (await pe.peersView(ROBIN))!;
     check("and in Peers: not suggested, not offered for a lead", !JSON.stringify(pv.serve).includes(pub("mem_dana")) && !JSON.stringify(pv.know).includes(pub("mem_dana")) && !((await pe.peerPicks(ROBIN, pub("c_kite"), null, false))?.picks ?? []).some((x) => x.id === pub("mem_dana")));
     const passHid = await refusal(pe.performPeer(ROBIN, { type: "peer.pass", memberId: pub("mem_dana"), companyId: pub("c_kite"), note: "" } as never));
     check("a lead passed to her is refused", !!passHid && /isn't in Peers right now/.test(passHid), passHid);
     check("her own record still shows to her, marked hidden, her name on it", (await dirOf("mem_dana")).records.find((r) => r.you)?.hidden === true && (await dirOf("mem_dana")).records.find((r) => r.you)?.name === "Dana Whitfield");
-    check("Home's line never counts a hidden row", ((await fr.fractionalsHome(ROBIN))?.initials ?? []).every((x) => x !== "DW"));
+    check("Home's line never counts her", ((await fr.fractionalsHome(ROBIN))?.initials ?? []).every((x) => x !== "DW"));
     await t.perform(DANA, { type: "settings", nameHidden: false }, BASE);
     check("off again: back by name", (await danaOf("mem_robin"))?.name === "Dana Whitfield");
   }
@@ -664,9 +658,9 @@ async function main() {
     const counts = fm.fxViewCounts(d2.records, x);
     check("views: All counts every other record, You know only the viewer's own", counts.all === d2.records.filter((r) => !r.you).length && counts.know === 1 && counts.passed === 0, counts);
     const rows = fm.fxRows(d2.records, "all", fm.fxNone(), x);
-    check("hidden rows come last", rows.findIndex((r) => r.keepsOut) === rows.length - rows.filter((r) => r.keepsOut).length);
+    check("rows: every other record, best for you first, none out of the directory", rows.length === counts.all && !rows.some((r) => r.memberId === pub("mem_ines")));
     const on = fm.fxRows(d2.records, "all", fm.fxFlip(fm.fxNone(), "on"), x);
-    check("On Merlin: members you can write to, never a hidden row", on.length > 0 && on.every((r) => r.onMerlin && !r.keepsOut && !!r.memberId));
+    check("On Merlin: members you can write to", on.length > 0 && on.every((r) => r.onMerlin && !!r.memberId));
     check("a chip turns its opposite off", JSON.stringify(fm.fxFlip(fm.fxFlip(fm.fxNone(), "on"), "off").chips) === JSON.stringify(["off"]));
     const openN = fm.fxChipCounts(d2.records, "all", fm.fxNone(), x).open;
     check("the Open to leads chip counts members who take leads", openN === d2.records.filter((r) => !r.you && r.leads === "open").length && openN > 0, openN);
@@ -676,7 +670,7 @@ async function main() {
     check("Ask Merlin: a view, and the words it didn't know said back, never guessed", b.f.fn === "RevOps" && b.view === "same" && b.unknown.includes("zebras"), b);
     check("Ask Merlin never names a company it wasn't given", !fm.askFx("CFO at Kitebright", [], ["Finance"]).said.includes("Kitebright"));
     const three = fm.startThree(d2.records, [], x);
-    check("three to start with: members on Merlin who serve your kind of client, never a hidden row or you", three.length <= 3 && three.every((r) => r.onMerlin && !r.keepsOut && !r.you && !!r.memberId && r.fits));
+    check("three to start with: members on Merlin who serve your kind of client, never you", three.length <= 3 && three.every((r) => r.onMerlin && !r.you && !!r.memberId && r.fits));
     check("your card's name: in full when shown, short until you choose, hidden when hidden", fm.cardName({ name: "Robin Kearney", fractionals: true }).name === "Robin Kearney" && fm.cardName({ name: "Robin Kearney", fractionals: null }).name === "Robin K." && fm.cardName({ name: "Robin Kearney", fractionals: true, nameHidden: true }).name === "A fractional (name hidden)");
     const merged = fm.withPeers(d2.records, [
       { memberId: "m_noseat", name: "Ola Noseat", fn: "Finance", fits: true },
@@ -685,7 +679,7 @@ async function main() {
     ]);
     const ola = merged.find((r) => r.memberId === "m_noseat");
     check("a member Peers shows with no seat on file joins the list, seatless, named as Peers names them; nobody twice", merged.length === d2.records.length + 1 && !!ola && ola.seats.length === 0 && ola.now === 0 && ola.onMerlin && ola.name === "Ola Noseat" && !merged.some((r) => r.name === "Someone Else"), ola);
-    check("the Open to leads cell", fm.leadsWord({ onMerlin: true, leads: "open" }) === "Open" && fm.leadsWord({ onMerlin: true, leads: "off" }) === "Not now" && fm.leadsWord({ onMerlin: false }) === "Not yet" && fm.leadsWord({ onMerlin: true, keepsOut: true }) === "Hidden");
+    check("the Open to leads cell", fm.leadsWord({ onMerlin: true, leads: "open" }) === "Open" && fm.leadsWord({ onMerlin: true, leads: "off" }) === "Not now" && fm.leadsWord({ onMerlin: false }) === "Not yet");
   }
 
   console.log(`\n${passes} passed, ${failures} failed`);

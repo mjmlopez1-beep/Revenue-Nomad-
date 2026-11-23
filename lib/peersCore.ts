@@ -465,6 +465,12 @@ export interface PeersView {
   sources: { linkedin: boolean; google: boolean };
   /** Members the viewer muted. */
   muted: { id: string; name: string }[];
+  /**
+   * Members (public ids) this view shows only because the two already work together (a lead, a team, a
+   * conversation), though they keep out of the directory or hide their name: the Fractionals page
+   * never lists them as a row (fractionalsModel.ts withPeers).
+   */
+  unlisted?: string[];
 }
 
 /** GET ?peers=home: From your peers on Home. */

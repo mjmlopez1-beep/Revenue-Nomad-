@@ -562,9 +562,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.fy-name.fy-muted {
-  color: var(--muted);
-}
 .fy-namebtn .fy-sub {
   white-space: nowrap;
   overflow: hidden;
@@ -725,19 +722,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 14px;
-}
-.fy-hidden-box {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #f3f5f4;
-  font-size: 14px;
-  line-height: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.fy-hidden-box strong {
-  color: var(--ink);
 }
 .fy-cardtabs {
   margin-top: 2px;

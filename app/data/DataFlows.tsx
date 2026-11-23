@@ -167,8 +167,7 @@ export function DataFlows() {
               Your card in Fractionals can carry one line about you and where you are based, both written by you and optional, and whether you are open to
               leads. Members see the line and the place only while you are in the directory; leave them empty and nothing shows. Emails, links and phone
               numbers are refused there, because members write to you in Messages. Turn Open to leads off and nobody can pass you a company. A fractional who
-              stays out of the directory, or hides their name on their seats, shows to other members only as a hidden row: no name, no seats and no way to reach
-              them, only their function, level and how many seats they hold or held. All of it is deleted with your profile when you close your account.
+              stays out of the directory, or hides their name on their seats, is not listed to other members at all. All of it is deleted with your profile when you close your account.
             </p>
           </section>
 

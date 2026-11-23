@@ -481,7 +481,6 @@ export function Avatar({ r, size = "md" }: { r: FractionalRec; size?: "md" | "lg
 
 /** "On Merlin", "Not on Merlin yet", "You". */
 function Status({ r }: { r: FractionalRec }) {
-  if (r.keepsOut) return <span className="fr-status">Keeps out of the directory</span>;
   if (r.you) return <span className="fr-status fr-status-on">You{r.hidden ? ", hidden from others" : ""}</span>;
   return r.onMerlin ? <span className="fr-status fr-status-on">On Merlin</span> : <span className="fr-status">Not on Merlin yet</span>;
 }
@@ -491,7 +490,7 @@ function Who({ r }: { r: FractionalRec }) {
     <span className="fr-who">
       <Avatar r={r} />
       <span className="fr-who-t">
-        {r.keepsOut ? <span className="fr-name fr-muted">Hidden fractional</span> : r.locked ? <LockedPerson seed={r.id} /> : <span className="fr-name">{r.name}</span>}
+        {r.locked ? <LockedPerson seed={r.id} /> : <span className="fr-name">{r.name}</span>}
         <Status r={r} />
         <BallChip r={r} />
       </span>
@@ -804,9 +803,6 @@ function Record({
         </div>
         {r.locked && !r.onMerlin && (
           <p className="fr-rnote">Fellow fractionals are free to see. Open it to see who this is.</p>
-        )}
-        {r.keepsOut && (
-          <p className="fr-rnote">This fractional keeps out of the directory. Their seats and roles still count, with the name hidden. They can&apos;t be messaged or passed a lead from here.</p>
         )}
         {!r.locked && !r.onMerlin && !r.you && (
           <p className="fr-rnote">

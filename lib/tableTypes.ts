@@ -1472,12 +1472,6 @@ export interface FractionalRec {
   ball?: { n: number; now: boolean; names: string[] };
   /** Evidence Bank cases they chose to show on their card (Close): the title and one outcome each, the client hidden unless they named it. */
   cases?: { title: string; outcome?: string }[];
-  /**
-   * A member who keeps out of the directory (they said no, or hide their name on their seats): a row
-   * with no name, no seats, no clients and no way to reach them from here. Their function, level
-   * and how many seats they hold or held still count. The id is the viewer's own, never their record's.
-   */
-  keepsOut?: boolean;
   /** Their one line about themselves and where they are based (Profile.headline, city): members in the directory, and the viewer's own record. */
   headline?: string;
   city?: string;

@@ -457,9 +457,15 @@ function viewOf(seed: Seed, s: State, me: Member, nowMs: number): PeersView {
     .sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) || b.at.localeCompare(a.at));
   const circle = circleOfMember(x.p, me.id);
   const n = s.network?.[me.id];
+  const knowShown = know.slice(0, SECTION_MAX);
+  // Members this view shows only because the two already work together, though they keep out of the
+  // directory (or hide their name): the Fractionals page never lists them (an owner default).
+  const unlisted = [...new Set([...knowShown.map((r) => r.memberId), ...inbox.map((l) => l.who.id), ...sent.map((l) => l.who.id), ...teams.map((t) => t.with.id)])].filter(
+    (pid): pid is string => !!pid && ((m) => !!m && x.hidden(m.id))(x.memberByPub.get(pid)),
+  );
   return {
     fn: myFn,
-    know: know.slice(0, SECTION_MAX),
+    know: knowShown,
     serve: serveScored.slice(0, SECTION_MAX).map((x) => x.r),
     inbox,
     sent,
@@ -470,6 +476,7 @@ function viewOf(seed: Seed, s: State, me: Member, nowMs: number): PeersView {
     everyone: recs.filter((r) => !r.you).length,
     sources: { linkedin: !!(s as State & { paths?: Record<string, { linkedin?: unknown }> }).paths?.[me.id]?.linkedin, google: networkOn() && !!n?.google },
     muted: (x.p.mutes[me.id] ?? []).filter((id) => x.idx.byId.has(id)).map((id) => ({ id: T.pubId(id), name: x.idx.byId.get(id)!.name })),
+    ...(unlisted.length ? { unlisted } : {}),
   };
 }
 

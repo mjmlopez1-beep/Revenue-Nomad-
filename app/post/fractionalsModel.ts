@@ -269,13 +269,13 @@ const industriesOf = (r: FractionalRec) => r.clients?.industries ?? [];
 function chipOk(r: FractionalRec, k: FxChip, x: FxCtx): boolean {
   switch (k) {
     case "on":
-      return r.onMerlin && !r.keepsOut;
+      return r.onMerlin;
     case "off":
       return !r.onMerlin;
     case "diff":
-      return !r.keepsOut && fnMatches(r, "diff", x.myFn);
+      return fnMatches(r, "diff", x.myFn);
     case "same":
-      return !r.keepsOut && fnMatches(r, "same", x.myFn);
+      return fnMatches(r, "same", x.myFn);
     case "clevel":
       return r.level === "C-level";
     case "open":
@@ -299,11 +299,11 @@ export function fxPasses(r: FractionalRec, f: FxFilters, x: FxCtx, skip?: FxChip
   return true;
 }
 
-/** Best for you first (frOrder); in You know, members you can write to first. Hidden rows last. */
+/** Best for you first (frOrder); in You know, members you can write to first. */
 export function fxRows(records: FractionalRec[], view: FxView, f: FxFilters, x: FxCtx): FractionalRec[] {
   return records
     .filter((r) => fxInView(r, view, x) && fxPasses(r, f, x))
-    .sort((a, b) => Number(!!a.keepsOut) - Number(!!b.keepsOut) || frOrder(a, b));
+    .sort(frOrder);
 }
 
 /** Each view's count, the filters off (the tabs). */
@@ -375,9 +375,8 @@ export function industryWords(r: Pick<FractionalRec, "clients">): { a: string; b
   return { a: c.industries.slice(0, 2).join(", ") || "Any industry", b: c.employees.length ? `${c.employees.slice(0, 2).join(", ")} people` : "" };
 }
 
-/** The Open to leads cell: Open, Not now, Not yet (not on Merlin), or nothing for a hidden row. */
-export function leadsWord(r: Pick<FractionalRec, "leads" | "onMerlin" | "keepsOut" | "you">): "Open" | "Not now" | "Not yet" | "Hidden" | "" {
-  if (r.keepsOut) return "Hidden";
+/** The Open to leads cell: Open, Not now, Not yet (not on Merlin), or nothing when unsaid. */
+export function leadsWord(r: Pick<FractionalRec, "leads" | "onMerlin" | "you">): "Open" | "Not now" | "Not yet" | "" {
   if (!r.onMerlin) return "Not yet";
   if (r.leads === "open") return "Open";
   if (r.leads === "off") return "Not now";
@@ -390,7 +389,7 @@ export function leadsWord(r: Pick<FractionalRec, "leads" | "onMerlin" | "keepsOu
  * directory's best fit.
  */
 export function startThree(records: FractionalRec[], peersOrder: string[], x: FxCtx): FractionalRec[] {
-  const ok = (r: FractionalRec) => !r.you && !r.keepsOut && r.onMerlin && !!r.memberId && (!x.hasIcp || r.fits);
+  const ok = (r: FractionalRec) => !r.you && r.onMerlin && !!r.memberId && (!x.hasIcp || r.fits);
   const by = new Map(records.filter(ok).map((r) => [keyOf(r), r] as const));
   const out: FractionalRec[] = [];
   for (const k of peersOrder) {
@@ -501,8 +500,9 @@ export interface PeerLike {
  * you. Each such member joins the list as a record with no seats, named as Peers names them (its own
  * privacy rules), so nobody Peers showed goes missing from the one page.
  */
-export function withPeers(records: FractionalRec[], peers: PeerLike[]): FractionalRec[] {
-  const have = new Set(records.map((r) => r.memberId).filter(Boolean));
+export function withPeers(records: FractionalRec[], peers: PeerLike[], unlisted: string[] = []): FractionalRec[] {
+  // Out of the directory (Peers names them only because the two already work together): never a row here.
+  const have = new Set([...records.map((r) => r.memberId).filter(Boolean), ...unlisted]);
   const out = [...records];
   for (const p of peers) {
     if (!p.memberId || have.has(p.memberId)) continue;

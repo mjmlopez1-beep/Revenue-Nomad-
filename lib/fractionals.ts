@@ -12,9 +12,8 @@
  * What the viewer sees of each:
  *  - a member who said "Show me in the Fractionals directory": their full name, title, seats and the
  *    clients they state, free (and their own line and city, Profile.headline and city). One who said
- *    no, or hides their name on their seats, is one hidden row (keepsOut): no name, seats, clients or
- *    member id, under an id of the viewer's own; only function, level and seat counts. One who hasn't chosen shows by first
- *    name and last initial (as Referral partners did), unless the viewer sees one of their seats.
+ *    no, or hides their name on their seats, is left out entirely (no row, no count). One who hasn't
+ *    chosen shows by first name and last initial (as Referral partners did), unless the viewer sees one of their seats.
  *  - someone not on Merlin yet: their full name, free (PEERS_FREE: fellow fractionals never cost a
  *    credit), with the role of each seat whose company the viewer can see. Names taken off with
  *    Remove my name, outside the US or unverified past RN_UNVERIFIED_NAMES_UNTIL are never on file.
@@ -24,7 +23,6 @@
  *    table, so a locked company there shows only its free facts.
  * Never a person key, a source id, an email, or a member's Google network.
  */
-import { createHash } from "crypto";
 import { cardCases } from "./evidenceWire";
 import { claimToken } from "./claimToken";
 import { fractionalInternals as F, inviteCode, loadSeed, normName, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
@@ -169,26 +167,9 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
   for (const b of base) {
     const you = b.member?.id === me.id;
     if (!you && closedNames.size && closedNames.has(normName(b.name ?? ""))) continue;
-    if (b.member && !you && b.on && (blocks(b.member.id, me.id) || blocks(me.id, b.member.id))) continue;
-    // Out of the directory: one hidden row. No name, title, clients, cases, seats or member id, and an id of the viewer's own
-    // (never the record's), so nothing links it to their seats. Their function, level and seat counts still count.
-    if (b.member && !you && b.on && hiddenMember(s, b.member.id)) {
-      out.push({
-        id: `h_${createHash("sha256").update(`${me.id}\u0000${b.rid}`).digest("base64url").slice(0, 16)}`,
-        onMerlin: true,
-        keepsOut: true,
-        locked: true,
-        fn: b.fn,
-        level: b.level,
-        fns: b.fns,
-        seats: [],
-        now: b.current.size,
-        past: b.seats.length - b.current.size,
-        clients: null,
-        fits: fitsIcp(icp, null, b.cos),
-      });
-      continue;
-    }
+    // Out of the directory (said no, Referral partners off before choosing, Hide my name on my seats) or a block either way:
+    // left out entirely, no row, no count. Who held their seats still shows on a company, locked at 1 credit (lib/tableFields.ts seatNameWho).
+    if (b.member && !you && b.on && (hiddenMember(s, b.member.id) || blocks(b.member.id, me.id) || blocks(me.id, b.member.id))) continue;
     const engs = b.seats.map((id) => g.engagements.get(id)!);
     const bought = !you && b.seats.some((id) => F.boughtSeat(s, me.id, g, id));
     // A name the viewer can see on one of their seats (bought, free, or their own) opens the record.
@@ -318,7 +299,7 @@ export async function fractionalsHome(token: string | null, nowMs = Date.now()):
   if (!me) return null;
   const icp = s.profiles[me.id]?.icp;
   if (!icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length)) return { n: 0, initials: [] };
-  const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && !r.keepsOut && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
+  const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
   return { n: fresh.length, initials: fresh.filter((r) => r.initials).slice(0, 3).map((r) => r.initials!) };
 }
 
