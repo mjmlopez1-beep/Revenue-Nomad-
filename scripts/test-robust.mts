@@ -705,6 +705,7 @@ console.log("\nThe API's routes");
     "api/account", "api/account/restore",
     // After a proposal or document goes out (lib/close): the member's cookie for their own activity and alert switches.
     "api/activity",
+    "api/ask",
     // api/billing/ai-pack: the AI usage pack's checkout, the member's cookie (Close and the trial).
     "api/billing", "api/billing/ai-pack", "api/billing/webhook",
     // Check a copy (/check, lib/seal.ts): public on purpose; the PDF is hashed in memory and kept nowhere, and the answer names only who signed and when.
