@@ -209,8 +209,9 @@ function GoogleAct({ google }: { google: { on: boolean; configured: boolean; con
     return (
       <div className="cp-acts">
         <span className="cp-ok">Google is connected{google.read ? `, read ${google.read}` : ""}. Merlin reads it again once a day.</span>
-        <a className="btn" href="/?p=network">
-          Open Your network
+        {/* Google's settings, Read again and Disconnect and delete moved from Your network to Settings / Connections. */}
+        <a className="btn" href="/?p=settings&sec=conn&open=google">
+          Manage in Settings
         </a>
       </div>
     );
@@ -235,7 +236,7 @@ function GoogleAct({ google }: { google: { on: boolean; configured: boolean; con
 
 /* ---------- the LinkedIn file ---------- */
 
-function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdded: () => void }) {
+export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdded: () => void }) {
   const file = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const [busy, setBusy] = useState<"read" | "delete" | null>(null);
@@ -341,7 +342,7 @@ function ColumnSelect({ label, field, header, map, onMap }: { label: string; fie
   );
 }
 
-function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide: boolean; onAdded: () => void }) {
+export function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide: boolean; onAdded: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const toast = useToast();

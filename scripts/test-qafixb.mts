@@ -106,6 +106,8 @@ Object.assign(process.env, {
   RN_SCAN_TEST: "1",
   RN_DIGEST: "0",
   RN_FREE_COMPANY: "off",
+  // The old look's top bar and drawer are what the browser checks drive: since Stage 9 the new look is the default, so the rollback is asked for by name.
+  RN_UI2: "off",
 });
 for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RESEND_API_KEY", "RN_INTEL_SEED_KEY", "RN_GOOGLE"]) delete process.env[k];
 const realFetch = globalThis.fetch;
@@ -197,7 +199,7 @@ async function inProcess() {
   /* ---------- the words ---------- */
   console.log("\nThe words");
   check("who sees a name on a seat follows PEERS_FREE", TF.PEERS_FREE ? /for free once they can see that company/.test(TF.seatNameWho()) && /costs other members 1 credit/.test(TF.seatNameWho(false)) : /spend 1 credit/.test(TF.seatNameWho()));
-  const ob = readFileSync("app/onboard/Onboarding.tsx", "utf8");
+  const ob = readFileSync("app/onboard/Classic.tsx", "utf8");
   check("onboarding says it from seatNameWho, links Hide my name, and no longer says a credit is always spent", /seatNameWho\(\)/.test(ob) && /HideNameToggle/.test(ob) && !/only after they spend 1 credit/.test(ob));
   check("Your seats, the directory switch and the Privacy page say the same and link the switch", /seatNameWho/.test(readFileSync("app/post/Seats.tsx", "utf8")) && /HideNameSwitch/.test(readFileSync("app/post/Seats.tsx", "utf8")) && /Hide my name on my seats/.test(readFileSync("app/post/PartnersSwitch.tsx", "utf8")) && /seatNameWho/.test(readFileSync("app/privacy/Privacy.tsx", "utf8")));
   const { faqItems } = await import("../app/landing/faq");
@@ -205,12 +207,12 @@ async function inProcess() {
   check("the Questions say who sees a name and how to hide it", /once they can see that company/.test(faq.get("What will other members see about me?") ?? "") && /name hidden/.test(faq.get("What will other members see about me?") ?? ""), faq.get("What will other members see about me?"));
   check("the free opens are one sentence", TF.OPENS_RULE === "On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that.");
   check("the Questions use it", (faq.get("What does it cost?") ?? "").includes(TF.OPENS_RULE));
-  for (const f of ["app/post/Credits.tsx", "app/post/todayModel.ts", "app/onboard/Onboarding.tsx", "app/landing/Pricing.tsx", "app/landing/faq.ts", "app/post/Today.tsx"]) check(`${f} uses OPENS_RULE`, /OPENS_RULE/.test(readFileSync(f, "utf8")));
+  for (const f of ["app/post/Credits.tsx", "app/post/todayModel.ts", "app/onboard/Classic.tsx", "app/onboard/Setup.tsx", "app/landing/Pricing.tsx", "app/landing/faq.ts", "app/post/Today.tsx"]) check(`${f} uses OPENS_RULE`, /OPENS_RULE/.test(readFileSync(f, "utf8")));
   check("the day's first free open says it in its toast, the rest count down", t.proOpenLine(14).includes(TF.OPENS_RULE) && /13 of today's 15 free opens left/.test(t.proOpenLine(13)) && /last of today's 15/.test(t.proOpenLine(0)));
   const TM = await import("../app/post/todayModel");
   check("Home's trial card says it", TM.trialCardLine(21, { left: 14, of: 15 }).includes(TF.OPENS_RULE) && /14 of 15 free opens left today/.test(TM.trialCardLine(21, { left: 14, of: 15 })), TM.trialCardLine(21, { left: 14, of: 15 }));
   check("PRO_STORY never promises Pro sends proposals", !/send the proposal/.test(rules.PRO_STORY) && /Close adds the proposal they sign/.test(rules.PRO_STORY), rules.PRO_STORY);
-  check("no \"Pro + Close\" anywhere in what changed", !["app/post/Credits.tsx", "app/landing/faq.ts", "lib/billing/rules.ts", "lib/tableFields.ts", "app/onboard/Onboarding.tsx"].some((f) => readFileSync(f, "utf8").includes("Pro + Close")));
+  check("no \"Pro + Close\" anywhere in what changed", !["app/post/Credits.tsx", "app/landing/faq.ts", "lib/billing/rules.ts", "lib/tableFields.ts", "app/onboard/Classic.tsx", "app/onboard/Setup.tsx"].some((f) => readFileSync(f, "utf8").includes("Pro + Close")));
   check("a 500 or above reads in plain words, a refusal keeps its own", S.errorText(500, "TypeError: x is undefined at line 4", "f") === S.SERVER_PROBLEM && S.errorText(503, "Merlin is busy", "f") === S.SERVER_PROBLEM && S.errorText(400, "Pick the company.", "f") === "Pick the company." && S.errorText(404, "", "Fallback.") === "Fallback.");
   check("the plain words", S.SERVER_PROBLEM === "Something went wrong on our side. Try again.");
 

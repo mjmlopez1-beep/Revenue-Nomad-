@@ -240,7 +240,7 @@ function ReviewRow({ r }: { r: View["reported"][number] }) {
   );
 }
 
-function Review({ view }: { view: View }) {
+export function Review({ view }: { view: View }) {
   return (
     <section className="tp-card cr-review" aria-labelledby="cr-review">
       <h2 className="tp-card-h" id="cr-review">

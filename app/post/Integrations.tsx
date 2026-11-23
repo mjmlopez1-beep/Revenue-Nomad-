@@ -76,7 +76,7 @@ async function call(body: Record<string, unknown>): Promise<Answer> {
   }
 }
 
-function SlackMark() {
+export function SlackMark() {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden focusable="false">
       <path fill="#E01E5A" d="M5.04 15.12a2.52 2.52 0 1 1-2.52-2.52h2.52v2.52Zm1.27 0a2.52 2.52 0 1 1 5.04 0v6.36a2.52 2.52 0 1 1-5.04 0v-6.36Z" />
@@ -87,7 +87,7 @@ function SlackMark() {
   );
 }
 /** A plain four-color mark for the "Add to Slack" button, drawn here (Slack's own assets aren't hotlinked). */
-function SlackGlyph() {
+export function SlackGlyph() {
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden focusable="false" className="in-addslack-g">
       <rect x="2" y="8" width="7" height="3.2" rx="1.6" fill="#36C5F0" />
@@ -214,7 +214,7 @@ export function pasteProblem(raw: string, field: "slack" | "webhook"): string | 
 }
 
 /** Paste a URL and connect it. A problem shows under the field and stays until the URL changes. */
-function ConnectForm({
+export function ConnectForm({
   id,
   label,
   placeholder,

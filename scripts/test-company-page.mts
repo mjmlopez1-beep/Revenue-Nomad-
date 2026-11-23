@@ -78,6 +78,8 @@ Object.assign(process.env, {
   RN_LOGO_LOOKUP: "off",
 });
 for (const k of ["RESEND_API_KEY", "RN_EMAIL_FROM", "RN_DIGEST", "RN_DIGEST_ALL", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_BILLING", "RN_UI2"]) delete process.env[k];
+// As before Stage 9 made the new look the default: the server's view here is the old look's (the page itself is checked by its own props).
+process.env.RN_UI2 = "off";
 globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
 
 let passes = 0;

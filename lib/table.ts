@@ -5161,6 +5161,7 @@ function cleanDraft(raw: unknown, alerts: { id: string }[], now: string): Onboar
     clients: [...new Set((Array.isArray(r.clients) ? r.clients : []).slice(0, 20).map((x) => draftText(x, 90)).filter(Boolean))],
     views: [...new Set((Array.isArray(r.views) ? r.views : []).map((x) => String(x ?? "")).filter((x) => own.has(x)))].slice(0, 2),
     saved: typeof r.saved === "string" && r.saved ? r.saved.slice(0, 3000) : null,
+    mine: [...new Set((Array.isArray(r.mine) ? r.mine : []).map((x) => draftText(x, 60)).filter(Boolean))].slice(0, 40),
     at,
   };
 }

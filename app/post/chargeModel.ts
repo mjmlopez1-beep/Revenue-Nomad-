@@ -13,6 +13,7 @@
 import type { BenchRate, BenchmarkRow, Benchmarks, RateStat } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
+import { ask as askRules } from "@/lib/ask";
 
 export type RateKind = "monthly" | "hourly";
 
@@ -109,6 +110,9 @@ export function sitsWords(own: number, f: Figure): string | null {
 export const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 export const per = (k: RateKind) => (k === "hourly" ? "an hour" : "a month");
 
+/** "$8,500 to $15,000", or one amount when both ends are the same (every rate in the group alike). */
+export const moneyRange = (a: number, b: number) => (a === b ? money(a) : `${money(a)} to ${money(b)}`);
+
 /** "3 of the 5 people it needs" for a figure below its floor. */
 export const fewWords = (f: Extract<Figure, { state: "few" }>) => `${f.n} of the ${f.min} people it needs`;
 
@@ -128,3 +132,214 @@ export function axisOf(f: Extract<Figure, { state: "range" }>, own: number | nul
 }
 /** "$8k", "$8.5k", "$150". */
 export const shortMoney = (n: number) => (n >= 1000 ? `$${(n / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 })}k` : `$${n}`);
+
+/* ---------- the Rate benchmarks page (rates/RatesPage.tsx): a group, its fallback, and "What should I charge" ---------- */
+
+/** "All" or one of RN_REVENUE: the benchmark's client-size bands. */
+export type Band = string;
+
+/** "Sales", "Sales, $5M–$20M". */
+export const groupLabel = (fn: string, band: Band) => (band === "All" ? fn : `${fn}, ${band}`);
+/** "at companies with $5M–$20M revenue", "at pre-revenue companies", "at companies of every size". */
+export const bandWho = (band: Band) =>
+  band === "All" ? "at companies of every size" : band === "Pre-revenue" ? "at pre-revenue companies" : `at companies with ${band === "Under $1M" ? "under $1M" : band} revenue`;
+
+/** One group as the page reads it: its row's figure for one way of charging, or null when the server sent no row. */
+export interface GroupFig {
+  fn: string;
+  band: Band;
+  fig: Figure | null;
+}
+export interface GroupPick {
+  /** The group the member asked for. `fig` null: no row (Free gets none by client size). */
+  asked: GroupFig;
+  /** On Free, a client-size group is Pro's: the server sends none, so the page shows every size and says so. */
+  sizeLocked: boolean;
+  /** The figure on show: the group asked for, or the function across every size when it has too few reports. Null: no figure anywhere in the function. */
+  shown: GroupFig | null;
+  /** The shown group is a wider one than asked ("Not enough reports yet for X, showing Y instead"). */
+  widened: boolean;
+  /** The nearest group with a middle half (for "What should I charge"), the asked one first. */
+  ranged: GroupFig | null;
+}
+
+const rowOf = (b: Benchmarks, fn: string, band: Band) => b.rows.find((r) => r.function === fn && r.revenue === band);
+
+/**
+ * The group the member picked, and what the page may show for it. Nothing is made up: the asked
+ * group's figure when it has one, else the function across every client size (the only wider group
+ * the server sends), else none at all with how many people it still needs.
+ */
+export function pickGroup(b: Benchmarks, fn: string, band: Band, kind: RateKind): GroupPick {
+  const at = (bd: Band): GroupFig => {
+    const r = rowOf(b, fn, bd);
+    return { fn, band: bd, fig: r ? figureOf(r[kind], b) : null };
+  };
+  const sizeLocked = band !== "All" && !!b.limited;
+  const asked = at(band);
+  const chain = band === "All" ? [asked] : [asked, at("All")];
+  const shown = chain.find((g) => g.fig && g.fig.state !== "few") ?? null;
+  const ranged = chain.find((g) => g.fig?.state === "range") ?? null;
+  return { asked, sizeLocked, shown, widened: !!shown && shown !== asked, ranged };
+}
+
+/** "3 of the 5 people it needs", or for a group with no row on file "No reports yet". */
+export const needWords = (g: GroupFig) => (g.fig && g.fig.state === "few" ? fewWords(g.fig) : g.fig ? "" : "No reports yet");
+
+/** Where an amount sits in a figure, as words about what others were paid (no "Your rate is"). Null: the figure has no median. */
+export function sitsShort(own: number, f: Figure | null): string | null {
+  if (!f) return null;
+  const w = sitsWords(own, f);
+  return w ? w.replace(/^Your rate is /, "") : null;
+}
+
+/* ---------- "What should I charge": the words of an ask, then the steps of the working ---------- */
+
+/** What an ask asks about. Everything is read from the words; nothing is guessed. */
+export interface ChargeAsk {
+  fn: string | null;
+  band: Band;
+  kind: RateKind;
+  /** Hours a week, when the words said ("2 days a week" is 16). */
+  hours: number | null;
+  /** A company the member can see, named in the words (its revenue sets the band). */
+  company: string | null;
+  /** An industry the words named: the benchmarks have no industry groups, so the working says it was left out. */
+  industry: boolean;
+}
+
+/** "2 days a week" 16, "20 hours a week" 20, "half time" 20, "full time" 40. Null when the words say no hours. */
+export function hoursOf(text: string): number | null {
+  const t = text.toLowerCase().replace(/,/g, "");
+  const days = /(\d+(?:\.\d+)?|one|two|three|four|five|half a)\s*days?\s*(?:a|per|each|\/)\s*week/.exec(t);
+  if (days) {
+    const w: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, "half a": 0.5 };
+    const n = w[days[1]] ?? Number(days[1]);
+    if (n > 0 && n <= 5) return Math.round(n * 8);
+  }
+  const hrs = /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s*(?:a|per|each|\/)?\s*(?:week|wk)\b/.exec(t) ?? /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b/.exec(t);
+  if (hrs) {
+    const n = Number(hrs[1]);
+    if (n > 0 && n <= 60) return Math.round(n);
+  }
+  if (/\bhalf[- ]time\b/.test(t)) return 20;
+  if (/\bfull[- ]time\b/.test(t)) return 40;
+  return null;
+}
+
+/** The words ask for hourly figures. */
+export const hourlyAsked = (text: string) => /\b(by the hour|per hour|an hour|hourly|\/\s*hr|hour rate)\b/i.test(text);
+
+/**
+ * The steps of Merlin's working, each from a figure the page shows: the group and its people, what
+ * they were paid, the check by the hour when hours were given (the hourly median times the hours,
+ * rounded as the server rounds), the member's own rate placed in it, and what to ask. `result`
+ * null when there is nothing to answer from: Merlin says so and never guesses.
+ */
+export interface Working {
+  steps: { t: string; s: string }[];
+  /** "Ask $9,000 to $11,000 a month", or "Start at $9,000 a month". */
+  big: string;
+  sub: string;
+  /** "Where this lands": the benchmark above is set to this group. */
+  lands: string;
+  /** The range Merlin suggests, for the chart: median to the top of the middle half. */
+  band: { from: number; to: number } | null;
+  answered: boolean;
+}
+
+const people = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "person" : "people"}`;
+/** Hours a week to hours a month, as the server reads hours on a seat (52 weeks over 12 months). */
+export const hoursMonth = (hoursWeek: number) => Math.round((hoursWeek * 52) / 12);
+
+export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own: Partial<Record<RateKind, OwnRate>>): Working {
+  const g = pickGroup(b, a.fn, a.band, a.kind);
+  const steps: Working["steps"] = [];
+  const add = (t: string, s: string) => steps.push({ t, s });
+  const per0 = per(a.kind);
+  const askedN = g.asked.fig ? g.asked.fig.n : 0;
+  let groupS = `${groupLabel(a.fn, a.band)}: ${people(askedN)}, each counted once.`;
+  if (a.company) groupS = `${a.company} is ${a.band === "All" ? "of unknown size" : a.band}. ${groupS}`;
+  if (g.sizeLocked) groupS = `${groupLabel(a.fn, "All")}: client size is Pro, so Merlin used every company size.`;
+  else if (g.widened && g.shown) groupS += ` That is under the ${g.asked.fig?.state === "few" ? g.asked.fig.min : b.minN} it needs, so Merlin widened to ${groupLabel(g.shown.fn, g.shown.band)}: ${people(g.shown.fig!.n)}.`;
+  if (a.industry) groupS += " The benchmarks have no industry groups yet, so every industry counts.";
+  add("The group", groupS);
+  if (!g.shown || !g.shown.fig || g.shown.fig.state === "few") {
+    add("What they were paid", `No figure in ${a.fn} yet. A group shows one at ${b.minN} people.`);
+    return { steps, big: "Merlin cannot answer from the numbers yet", sub: "It will not guess. Share your own rate privately, and ask two peers to do the same.", lands: "the benchmark above is set to this group, and shows how many people it still needs.", band: null, answered: false };
+  }
+  const f = g.shown.fig;
+  const rf = g.ranged?.fig?.state === "range" ? g.ranged.fig : null;
+  if (f.state === "range") add("What they were paid", `${moneyRange(f.p25, f.p75)} ${per0}. The middle is ${money(f.median)}.`);
+  else
+    add(
+      "What they were paid",
+      `A median of ${money(f.median)} ${per0}. ${f.rangeLocked ? "The middle half is Pro." : `No middle half under ${b.rangeN ?? 10} people.`}`,
+    );
+  // The check by the hour: the hourly median for the same group times the hours a month. Arithmetic on a figure shown here, rounded as the server rounds.
+  if (a.kind === "monthly" && a.hours) {
+    const h = pickGroup(b, a.fn, g.shown.band, "hourly").shown;
+    if (h?.fig && h.fig.state !== "few") {
+      const hm = hoursMonth(a.hours);
+      add("Checked by the hour", `${a.hours} hours a week is about ${hm} hours a month. At the hourly median of ${money(h.fig.median)} that is ${money(Math.round((hm * h.fig.median) / 250) * 250)} a month.`);
+    } else add("Checked by the hour", `${a.hours} hours a week. There is no hourly figure for this group yet to check against.`);
+  }
+  const mine = own[a.kind];
+  const base = rf ?? f;
+  add("Your own rate", mine ? `${money(mine.amount)} ${per0}${mine.at ? ` at ${mine.at}` : ""}: ${sitsShort(mine.amount, base) ?? "no figure to compare yet."}` : "You have not added one yet. Add a rate and Merlin places it. Only you see it.");
+  const lands = `the benchmark above is set to ${groupLabel(g.shown.fn, g.shown.band)}`;
+  if (rf) {
+    add("What to ask", `From the middle (${money(rf.median)}) to the top of the middle half (${money(rf.p75)}): 1 in 4 people in ${groupLabel(g.ranged!.fn, g.ranged!.band)} were paid more than that.`);
+    return {
+      steps,
+      big: `Ask ${moneyRange(rf.median, rf.p75)} ${per0}`,
+      sub: a.kind === "hourly" ? "Open at the high end. Keep the middle as your floor. Quote a set number of hours, so the total is clear." : "Open at the high end. Keep the middle as your floor.",
+      lands: `${lands}, with Merlin's range marked on the chart.`,
+      band: g.ranged === g.shown ? { from: rf.median, to: rf.p75 } : null,
+      answered: true,
+    };
+  }
+  add("What to ask", `Only a median here, so Merlin stays at the middle.`);
+  return {
+    steps,
+    big: `Start at ${money(f.median)} ${per0}`,
+    sub: f.state === "median" && f.rangeLocked ? "That is the middle for this group. Pro adds the middle half, so Merlin can show how far above it to ask." : `That is the middle for this group. Merlin can say more once ${b.rangeN ?? 10} people have a rate in it.`,
+    lands: `${lands}.`,
+    band: null,
+    answered: true,
+  };
+}
+
+/**
+ * The words of an ask, read by Ask Merlin's rules (lib/ask.ts) for the function and the client's
+ * revenue, plus the hours and "by the hour" here. A company counts only when the member can see it
+ * and the words name it in full; its revenue on file sets the band. Words the rules did not know
+ * come back in `unknown`, never guessed at.
+ */
+export function readChargeAsk(text: string, o: { myFn: string | null; companies?: { name: string; revenue: string | null }[] }): ChargeAsk & { unknown: string[] } {
+  const low = text.toLowerCase();
+  // The longest name a word-for-word match, so "Cedar and Pine" wins over "Cedar".
+  const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const co = (o.companies ?? [])
+    .filter((c) => c.name.length >= 3 && new RegExp(`(^|[^a-z0-9])${esc(c.name.toLowerCase())}($|[^a-z0-9])`).test(low))
+    .sort((x, y) => y.name.length - x.name.length)[0];
+  let rest = co ? text.replace(new RegExp(esc(co.name), "i"), " ") : text;
+  // Hours and "by the hour" are read here: take them out before the rules read the rest.
+  rest = rest
+    .replace(/(\d+(?:\.\d+)?|one|two|three|four|five|half a)\s*days?\s*(?:a|per|each|\/)\s*week/gi, " ")
+    .replace(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s*(?:a|per|each|\/)?\s*(?:week|wk)?\b/gi, " ")
+    .replace(/\b(by the hour|per hour|an hour|hourly|half[- ]time|full[- ]time|renewal|retainer|monthly|a month|per month|my function|any client|what should i charge|what to charge|how much)\b/gi, " ");
+  const p = askRules(rest, { myFn: o.myFn });
+  const fn = p.filters.fn?.find((f) => FUNCTIONS.includes(f)) ?? (o.myFn && FUNCTIONS.includes(o.myFn) ? o.myFn : null);
+  const coBand = co?.revenue && RN_REVENUE.includes(co.revenue) ? co.revenue : null;
+  const band = coBand ?? p.filters.revenue?.find((r) => RN_REVENUE.includes(r)) ?? "All";
+  return {
+    fn,
+    band,
+    kind: hourlyAsked(text) ? "hourly" : "monthly",
+    hours: hoursOf(text),
+    company: co?.name ?? null,
+    industry: !!p.filters.industry?.length,
+    unknown: p.unknown,
+  };
+}

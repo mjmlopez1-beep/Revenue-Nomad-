@@ -75,6 +75,8 @@ RN_PREVIEW_OPEN_ROLE_COMPANIES=0 serve preview-lock env PREVIEW_LOCKED=1 node sc
 RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 # What members read about prices: the connector's words and unlock plans for the bundles (who held a seat with their role, contact details after the name, people after the company) on view data shaped as the server sends it, and the landing page's matrix and Questions.
 run prices npx tsx scripts/test-prices.mts
+# Stage 8: Rate benchmarks and Credits and usage in the new look (tabs and old addresses, the working of What should I charge on the server's floors, ledger kinds with Other and Workflows, ways to earn, no export). In process.
+run rates-credits npx tsx scripts/test-rates-credits.mts
 # The company lock: every company's name, website and LinkedIn locked for a member until they unlock it (2 credits) or already know it, its About without its name or links, its logo through /api/logo read from the company's own site (a mock server on 127.0.0.1:6781, never an icon service), on a made-up seed in process.
 run lock npx tsx scripts/test-company-lock.mts
 # Health at the top of Pilot metrics (lib/health.ts) on a made-up state with known counts: the funnel, retention by month, facts and credits a week, invites, plans, the outcomes from members' pipelines (outcomeStats as rows, replies and wins through Merlin at 20 members a group), What's working and What isn't (20 members a group), CSV; and the public data page (app/data). In process.
@@ -199,6 +201,8 @@ run views npx tsx scripts/test-views.mts
 run alerts npx tsx scripts/test-alerts.mts
 # Agent access (Stage 7a, lib/mcp/agentTools.ts, lib/mcp/log.ts): every connector tool on the page, switches that refuse in plain words, a log with no arguments, the daily spend limit across calls and agents, export and purge, the page. In process, on a made-up seed.
 run agent npx tsx scripts/test-agent.mts
+# Settings (Stage 8, app/post/settings): the sections, the old addresses that land on one (?p=integrations, Google's return, ?p=voice), no export or download anywhere, each Connections Remove making its source's own delete, Your setup's counts, Notifications on Alerts and workflows' own switches, the sample note, the words, every section drawn for a made-up member. In process, no seed.
+run settings npx tsx scripts/test-settings.mts
 # The Stage 7a merge's wiring (lib/notify/knownView.ts, KnownMoves.tsx): Someone you know on Home and Warm paths from the LinkedIn file and CSV only (never Google, no Californian named, a locked company described), and the connector setting an alert's triggers and how often through the app's plan gate. In process, on a made-up seed.
 run known npx tsx scripts/test-known.mts
 # Workflows (Stage 7b, Beta, RN_WORKFLOWS, lib/workflows): a run's estimate equals what it spends, auto-spend by default, the warning once, the cap that stops and asks (yes runs, no doesn't), Merlin's daily caps, the workflow's name on every ledger line, notes as drafts only, never a locked company or a Californian named, the flag off running nothing, the plan gates, reminders, a signed proposal's Evidence Bank draft, export and purge. In process, on a made-up seed.

@@ -1,9 +1,10 @@
 /**
  * The new look ("Merlin Workspace", BUILD_PLAN F0) behind one flag, RN_UI2:
  *
- *   off     the default: the app is exactly as it was, and nothing below reaches a member
+ *   on      the default (Stage 9, the switch-over): every member gets it. Unset means on.
  *   optin   a member turns it on (and off) in the member menu: "Try the new Merlin", "Back to the old look"
- *   on      every member gets it
+ *   off     the rollback: the app is exactly as it was, and nothing below reaches a member.
+ *           RN_UI2=off (or 0, false, no) restores the old look for everyone.
  *
  * The member's choice is Profile.ui2 (lib/table.ts), so a second device agrees. Me carries the
  * outcome (Me.ui2, and Me.ui2Optin while the menu offers the switch); View.ui2 says the same for
@@ -16,10 +17,12 @@ import type { Action } from "./tableTypes";
 
 export type Ui2Mode = "off" | "optin" | "on";
 
-/** RN_UI2 as the server reads it. Anything but "optin" or "on" is off. */
+/** Values of RN_UI2 that mean the rollback, the old look for everyone. */
+const UI2_OFF = new Set(["off", "0", "false", "no"]);
+/** RN_UI2 as the server reads it: "off" (or 0, false, no) is the old look, "optin" the member's choice, anything else (unset included) on. */
 export function ui2Mode(): Ui2Mode {
   const v = (typeof process !== "undefined" ? process.env.RN_UI2 ?? "" : "").trim().toLowerCase();
-  return v === "on" || v === "optin" ? v : "off";
+  return UI2_OFF.has(v) ? "off" : v === "optin" ? "optin" : "on";
 }
 
 /** A strip's key: a page key, lower case ("companies", "home", "find"). */

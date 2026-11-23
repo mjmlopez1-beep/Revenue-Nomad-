@@ -81,6 +81,8 @@ import { Rail } from "./shell/Rail";
 import { HeaderActions, ShellHeader, type Crumb } from "./shell/Header";
 import { Bell } from "./shell/Bell";
 import { PageStrip } from "./shell/PageStrip";
+import { WhatsNew } from "./shell/WhatsNew";
+import { setFindStart } from "./find/start";
 import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
@@ -110,6 +112,7 @@ const preloadLater = (admin: boolean) => {
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
 import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, tableSlotOf, type AppCtx, type ShellPage } from "./shell/pages";
+import { atOf as settingsAtOf, openSettings } from "./settings/at";
 import { setPeopleStart } from "./people/start";
 
 export interface TradingPostProps {
@@ -251,9 +254,16 @@ const PAGE_TITLE: Record<Page, string> = {
   settings: "Settings",
   contracts: "Contracts",
 };
-/** A page's title: the new look's one Fractionals page (Peers and the directory) is "Fractionals" at all three of its addresses. */
-const pageTitle = (p: Page, ui2: boolean) => (ui2 && (p === "peers" || p === "fractionals" || p === "partners") ? "Fractionals" : PAGE_TITLE[p]);
+/**
+ * The new look's names for pages that kept their old key (the browser tab, the breadcrumb, the wait):
+ * the one Fractionals page (Peers and the directory) at all three of its addresses, Credits and usage
+ * for ?p=credits and ?p=billing (its Plans tab), Home for Today. The lists keep the rail's names (UI2_TYPE_TITLE).
+ */
+const UI2_TITLE: Partial<Record<Page, string>> = { today: "Home", peers: "Fractionals", fractionals: "Fractionals", partners: "Fractionals", credits: "Credits and usage", billing: "Credits and usage" };
+const pageTitle = (p: Page, ui2: boolean) => (ui2 ? UI2_TITLE[p] ?? PAGE_TITLE[p] : PAGE_TITLE[p]);
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
+/** The lists' names in the new look's rail: Decision makers is People there. */
+const UI2_TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
 const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["decision maker", "decision makers"] };
 
@@ -312,6 +322,12 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
     const cur = new URLSearchParams(window.location.search);
     // Also a contract an old Proposals address named (?p=proposals&dc=<id>, place.ts): it opens on Contracts, kept in the address.
     if ((cur.get("p") === "contracts" || cur.get("p") === "proposals") && cur.get("dc")) q.set("dc", cur.get("dc")!);
+  }
+  // Settings keeps its section and the Connections row open in the address (settings/at.ts atOf: its own sec= and open=, or the old address it came from), so a reload reopens it.
+  if (x.p === "settings" && typeof window !== "undefined") {
+    const at = settingsAtOf(window.location.search);
+    if (at.sec) q.set("sec", at.sec);
+    if (at.open) q.set("open", at.open);
   }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
@@ -1567,6 +1583,26 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
 
   /** Put the cursor in the search, on the table (a page or a phone's full-screen record closes first). */
   const focusSearch = useStable(() => {
+    // The new look has no search in the header (BUILD_PLAN part 2): "/" and Cmd+K open Find's lookup,
+    // unless the list on screen has its own search field showing.
+    if (ui2) {
+      const el = searchRef.current;
+      if (page === "table" && !drawer && el && el.isConnected && el.offsetParent !== null) {
+        el.focus();
+        el.select();
+        return;
+      }
+      setFindStart({ lookup: "" });
+      openShellPage("find");
+      const t0 = Date.now();
+      const tryFocus = () => {
+        const box = document.getElementById("fd-lk");
+        if (box) box.focus();
+        else if (Date.now() - t0 < 1500) setTimeout(tryFocus, 60);
+      };
+      setTimeout(tryFocus, 60);
+      return;
+    }
     const go = () => {
       const el = searchRef.current;
       if (!el) return;
@@ -1764,7 +1800,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
 
   // The tab's title says where the member is.
-  const docTitle = page !== "table" ? pageTitle(page, ui2) : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : TYPE_TITLE[recordType];
+  const docTitle = page !== "table" ? pageTitle(page, ui2) : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : ui2 ? (tab === "hiring" ? "Hiring now" : UI2_TYPE_TITLE[recordType]) : TYPE_TITLE[recordType];
   useEffect(() => {
     document.title = `${docTitle} · Merlin`;
   }, [docTitle]);
@@ -3084,7 +3120,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       return tab === "all" || !t ? `All ${(recordType === "people" ? "people" : TYPE_TITLE[recordType]).toLowerCase()}` : t.label;
     }
     if (onScreen === "today") return "Home";
-    return navOn2 && onScreen !== "seats" && (onScreen !== "network" || !network) && onScreen !== "billing" ? navOn2.label : PAGE_TITLE[onScreen];
+    // ?p=billing is Credits and usage's Plans tab in the new look: the page's own name, as ?p=credits.
+    return navOn2 && onScreen !== "seats" && (onScreen !== "network" || !network) ? navOn2.label : pageTitle(onScreen, ui2);
   })();
   const headCrumbs: Crumb[] =
     onScreen === "today"
@@ -3092,7 +3129,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       : [
           { label: "Home", href: pageHref("today"), go: goHome },
           ...(onScreen === "table" && navOn2 && navOn2.key !== "hiring" ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
-          ...((onScreen === "seats" || (onScreen === "network" && !!network) || onScreen === "billing") && navOn2 ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
+          ...((onScreen === "seats" || (onScreen === "network" && !!network)) && navOn2 ? [{ label: navOn2.label, href: navOn2.href, go: () => navTo2(navOn2) }] : []),
         ];
   const goPeers = () => openShellPage("peers");
   const bellEl = (
@@ -3375,6 +3412,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             )}
             {/* The help sheet, the Undo toast and the spend question, hosted once whatever the header draws. */}
             <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />
+            {/* Stage 9: the release notes for members who used the old look, once, until closed (shell/WhatsNew.tsx). */}
+            <WhatsNew />
             {stripKey && !defShown?.ownStrip && !(onScreen === "table" && recordOpen && phone) && <PageStrip page={stripKey} own={stripOwn} />}
           </>
         ) : (
@@ -3625,7 +3664,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             contact={contact}
             // The account only: every page is in the sidebar (or the tab bar and More).
             items={[
-              { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
+              // The new look: Settings at Profile and card (settings/SettingsPage.tsx); the old look keeps the profile sheet.
+              { label: "Your profile", hint: me.function ?? undefined, onClick: () => (ui2 ? openSettings(openShellPage, "profile") : setIcpOpen(true)) },
               // Every email and Slack post, and how often (the sidebar's foot has it too).
               { label: "Notifications", current: page === "notifications", onClick: () => openPage("notifications") },
               // One way to get signed in elsewhere: emailed when email is on, else the link copied.
