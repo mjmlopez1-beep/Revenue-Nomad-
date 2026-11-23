@@ -146,6 +146,40 @@ async function pure() {
   check("Undo brings it back, and an empty list goes", !!t5 && "profile" in t5 && t5.profile.stripsOff === undefined);
   check("a key that is no page key is refused", "refused" in (u2.ui2Setting({ stripOff: "../x" }, {}, "on") ?? {}));
   check("anything else is not the new look's", u2.ui2Setting({ digest: true }, {}, "on") === null);
+
+  // Stage 9, the switch-over: the new look is the default; RN_UI2=off is still the rollback.
+  const was = process.env.RN_UI2;
+  try {
+    delete process.env.RN_UI2;
+    check("RN_UI2 unset: the new look, for everyone", u2.ui2Mode() === "on" && u2.ui2Me({}).ui2 === true);
+    process.env.RN_UI2 = "";
+    check("RN_UI2 empty: the new look too", u2.ui2Mode() === "on");
+    for (const off of ["off", "OFF", "0", "false", "no"]) {
+      process.env.RN_UI2 = off;
+      check(`RN_UI2=${off}: the old look (the rollback), nothing of the new one sent`, u2.ui2Mode() === "off" && JSON.stringify(u2.ui2Me({ ui2: true })) === "{}");
+    }
+    process.env.RN_UI2 = "optin";
+    check("RN_UI2=optin: still the member's choice", u2.ui2Mode() === "optin");
+    process.env.RN_UI2 = "on";
+    check("RN_UI2=on: on", u2.ui2Mode() === "on");
+  } finally {
+    if (was === undefined) delete process.env.RN_UI2;
+    else process.env.RN_UI2 = was;
+  }
+
+  // What's new (shell/WhatsNew.tsx, releaseNotes.ts): once in the new look, dismissed like a strip.
+  const rn = await import("../app/post/shell/releaseNotes");
+  const { readFileSync } = await import("node:fs");
+  const words = rn.WHATS_NEW.map((x) => x.text).join(" ");
+  check("What's new: its key is a strip key the server keeps", u2.STRIP_KEY_RE.test(rn.WHATS_NEW_KEY));
+  check("What's new: shown in the new look until closed, on this device or another", rn.whatsNewShown({ ui2: true, stripsOff: [], gone: false }) && !rn.whatsNewShown({ ui2: true, stripsOff: ["whatsnew"], gone: false }) && !rn.whatsNewShown({ ui2: true, stripsOff: [], gone: true }) && !rn.whatsNewShown({ ui2: false, stripsOff: [], gone: false }));
+  const closed = u2.ui2Setting({ stripOff: rn.WHATS_NEW_KEY }, {}, "on");
+  check("What's new: closing it is kept on the profile", !!closed && "profile" in closed && closed.profile.stripsOff!.includes("whatsnew"));
+  check("What's new: saved views are lists with alerts, search and Invite moved, Settings in one place, Alerts and workflows", /Saved views are lists/.test(words) && /alert/.test(words) && /Search moved to Find/.test(words) && /Invite a fractional moved/.test(words) && /Settings is one page/.test(words) && /Alerts and workflows/.test(words));
+  check("What's new: plain words, no numbers, no exclamation marks, no dashes as punctuation", !/\d/.test(words) && !/!/.test(words) && !/ - |—|–/.test(words), words);
+  check("What's new: each line opens its page", rn.WHATS_NEW.every((x) => ["find", "credits", "settings", "alerts"].includes(x.page) && !!x.go));
+  check("What's new is drawn in the new look's shell", /<WhatsNew \/>/.test(readFileSync("app/post/TradingPost.tsx", "utf8")));
+  check("a member who starts in the new look never gets it: the set-up closes it as it ends", /stripOff: "whatsnew"/.test(readFileSync("app/onboard/Setup.tsx", "utf8")));
 }
 
 async function main() {
