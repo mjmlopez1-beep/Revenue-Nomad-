@@ -749,6 +749,8 @@ function Record({
   const c = r.clients;
   const they = r.first ?? "they";
   const seatsN = r.now + r.past;
+  // Evidence Bank is Close's: the hint to put a case on your own card shows only with it.
+  const closeOn = useUi().me.plan?.canClose ?? true;
   return (
     <aside ref={rootRef} className={phone ? "fr-rsheet" : "fr-drawer"} role="dialog" aria-modal={phone} aria-labelledby="fr-rec-h">
       <div className="fr-dbar">
@@ -825,6 +827,27 @@ function Record({
           )}
           {c?.from === "seats" && r.onMerlin && !r.you && <p className="fr-rnote">Until {they} says who {they === "they" ? "they serve" : "they serve"}, this is read from the companies of their seats.</p>}
         </section>
+
+        {(r.cases?.length || (r.you && closeOn)) && (
+          <section className="fr-rsec" aria-labelledby="fr-cases-h">
+            <h3 id="fr-cases-h">
+              Case studies{r.cases?.length ? <span className="num fr-cnt">{r.cases.length}</span> : null}
+              <span className="fr-rsec-sub">from {r.you ? "your" : "their"} Evidence Bank</span>
+            </h3>
+            {r.cases?.length ? (
+              <ul className="fr-cases">
+                {r.cases.map((x, k) => (
+                  <li key={k}>
+                    <strong>{x.title}</strong>
+                    {x.outcome && <span className="fr-sub">{x.outcome}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="fr-muted">None on your card. In Evidence Bank, turn on Show on my card for a ready case. The client&apos;s name stays hidden unless you named them.</p>
+            )}
+          </section>
+        )}
 
         <section className="fr-rsec" aria-labelledby="fr-seats-h">
           <h3 id="fr-seats-h">

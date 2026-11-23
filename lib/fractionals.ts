@@ -22,6 +22,7 @@
  *    table, so a locked company there shows only its free facts.
  * Never a person key, a source id, an email, or a member's Google network.
  */
+import { cardCases } from "./evidenceWire";
 import { claimToken } from "./claimToken";
 import { fractionalInternals as F, inviteCode, loadSeed, normName, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { clientsFromIcp, clientsFromSeats, clientsLine, fitsIcp, levelOf, levelRank, shortName, type ClientCo, type Clients, type Level } from "./fractionalsCore";
@@ -242,7 +243,24 @@ export async function fractionalsView(token: string | null): Promise<Fractionals
   if (!me) return null;
   const prof = s.profiles[me.id] ?? {};
   const fn = prof.function ?? functionOf(prof.title || me.title);
-  return { records: recordsFor(seed, s, me), fn: fn && fn !== "Other" ? fn : null, shown: prof.fractionals ?? (prof.partnersOff ? false : null) };
+  const records = recordsFor(seed, s, me);
+  await withCases(seed, s, me, records);
+  return { records, fn: fn && fn !== "Other" ? fn : null, shown: prof.fractionals ?? (prof.partnersOff ? false : null) };
+}
+
+/**
+ * Evidence Bank cases a member chose to show on their card (lib/evidenceWire.ts cardCases: ready,
+ * "Show on my card" on, the client hidden unless named, while they have Close). On a member's
+ * record when they are in the directory, and on the viewer's own record.
+ */
+async function withCases(seed: Seed, s: State, me: Member, records: FractionalRec[]): Promise<void> {
+  const byPub = new Map([...seed.members, ...s.members].map((m) => [T.pubId(m.id), m.id] as const));
+  for (const r of records) {
+    const owner = r.you ? me.id : r.memberId ? byPub.get(r.memberId) : undefined;
+    if (!owner || (!r.you && s.profiles[owner]?.fractionals !== true)) continue;
+    const cases = await cardCases(seed, s, owner);
+    if (cases.length) r.cases = cases;
+  }
 }
 
 const WEEK = 7 * 24 * 60 * 60 * 1000;

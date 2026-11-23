@@ -1465,6 +1465,8 @@ export interface FractionalRec {
    * there) for the prefilled message. A locked company is counted and never named. Left out at 0.
    */
   ball?: { n: number; now: boolean; names: string[] };
+  /** Evidence Bank cases they chose to show on their card (Close): the title and one outcome each, the client hidden unless they named it. */
+  cases?: { title: string; outcome?: string }[];
 }
 
 /** GET /api/table?fractionals=1: the directory. */
