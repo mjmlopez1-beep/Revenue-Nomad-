@@ -18,6 +18,21 @@
  *     last visit" counts companies once;
  *   - Home's search offers pages by name, never on two letters;
  *   - no copy names LinkedIn or Sales Navigator as a source.
+ *
+ * And the new look (RN_UI2, navModel.ts navItems2, place.ts with { ui2: true }), the same way:
+ *   - the rail's groups and order (Home, Find; Data; Signals; Close; Community; Automate;
+ *     Workspace), every page in it, each link's address opening its page in the new look;
+ *   - exactly one item on for every place, both looks: every page, the table's lists, Hiring now,
+ *     Following and a saved view (Companies), Your seats (Seats), Proposals at Contracts;
+ *   - every old address members hold (BUILD_PLAN constraint 2: ?c=, ?p=radar, ?sig=, ?p=getin,
+ *     ?p=network, ?p=peers, ?p=fractionals, ?p=partners, ?p=integrations, ?p=claude,
+ *     ?p=notifications, ?p=billing, ?p=credits, ?p=proposals&pr=, /table?k=) opens the right page
+ *     in both looks, and the new look's addresses are unknown pages with it off, as before;
+ *   - Evidence Bank is Close's (the plan pill without it), Hiring now's ember only when allowed,
+ *     the member's own things show no count while they have none;
+ *   - every page key has an entry in the registry (shell/pages.tsx), home2, companies2 and find2 too;
+ *   - the flag: off sends nothing, optin offers the switch and keeps the choice, on is everyone's;
+ *     the strips a member dismisses are kept (lib/ui2.ts through the settings action).
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -228,9 +243,202 @@ async function main() {
   check("new since a visit long ago: each company once", freshCount(rows, ago(365 * DAY)) === everyCo, { fresh: freshCount(rows, ago(365 * DAY)), everyCo });
   check("new since a visit in the future: none", freshCount(rows, ago(-DAY)) === 0);
 
+  await ui2Checks(nm, me);
+
   // Copy: LinkedIn and Sales Navigator are never named as a source.
   const files = ["Sidebar.tsx", "Home.tsx", "navModel.ts", "TopBar.tsx"].map((f) => readFileSync(path.join(process.cwd(), "app/post", f), "utf8")).join("\n");
   check("no LinkedIn or Sales Navigator in the way around or Home", !/linkedin|sales navigator/i.test(files));
+  // The new look's words (the strips, the six steps, the examples): LinkedIn only as the member's own connections file, Merlin's AI only as Merlin.
+  const fv = await import("../app/post/firstVisit");
+  const gs = await import("../app/post/getStarted");
+  const ex = await import("../app/post/examples");
+  const words = [
+    ...Object.values(fv.STRIPS).map((x) => x.text),
+    ...gs.sixSteps({ me: { icp: null, holdersUnlocked: 0, companiesUnlocked: 0, savedViews: [], started: { note: false, network: false } } as never, seatsHeld: 0, close: true, evidence: true }).steps.flatMap((x) => [x.label, x.takes, x.gives, x.go, x.pill ?? ""]),
+    JSON.stringify([ex.EXAMPLE_DEALS, ex.EXAMPLE_CONVERSATIONS, ex.EXAMPLE_PROPOSALS, ex.EXAMPLE_CONTRACTS]),
+  ].join("\n");
+  check("the new look names LinkedIn only as the member's own connections file, never Sales Navigator", !/linkedin|sales navigator/i.test(words.replace(/LinkedIn connections file/g, "")));
+  check("the new look's words: Claude only as an agent the member connects, never Anthropic", !/anthropic/i.test(words) && !/claude/i.test(words.replace(/such as Claude/g, "")));
+  check("plain words: no exclamation marks, no dashes as punctuation", !/!/.test(words) && !/ [-–—] /.test(words));
+}
+
+/* ---------- the new look (RN_UI2) ---------- */
+async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("../lib/tableTypes").Me) {
+  const t = await import("../lib/table");
+  const { parsePlace, isHome, UI2_PAGES } = await import("../app/post/place");
+  type In2 = Parameters<typeof nm.navItems2>[0];
+  const in2 = (x: Partial<In2> = {}): In2 => ({
+    page: "today",
+    recordType: "companies",
+    tab: "all",
+    hrefs: {
+      today: "/",
+      companies: "/?p=table",
+      engagements: "/?t=seats",
+      people: "/?t=people",
+      hiring: "/?v=hiring&t=seats",
+      find: "/?p=find",
+      contracts: "/?p=proposals&ct=1",
+      page: (p) => (p === "today" ? "/" : `/?p=${p}`),
+    },
+    admin: false,
+    close: true,
+    network: true,
+    networkN: 4,
+    totals: { companies: 40, engagements: 60, people: 12 },
+    hiringN: 14,
+    hiringHot: true,
+    radarN: 9,
+    pipelineN: 3,
+    unread: 2,
+    credits: 25,
+    ...x,
+  });
+  const all = nm.navItems2(in2({ admin: true }));
+  const keys = all.map((it) => it.key);
+  check("new look: the rail in its order", keys.join(",") === "today,find,companies,people,engagements,radar,hiring,warm,pipeline,proposals,contracts,evidence,fractionals,messages,alerts,agent,rates,credits,settings,metrics", keys);
+  check("new look: the groups in order", [...new Set(all.map((it) => it.group))].join(",") === "top,data,signals,close,community,automate,workspace");
+  check("new look: nothing listed twice", new Set(keys).size === keys.length);
+  check("new look: the labels are the mockup's", ["Home", "Find", "Companies", "People", "Seats", "Crystal Ball", "Hiring now", "Warm paths", "Pipeline", "Proposals", "Contracts", "Evidence Bank", "Fractionals", "Messages", "Alerts and workflows", "Agent access", "Rate benchmarks", "Credits and usage", "Settings"].every((l) => all.some((it) => it.label === l)));
+  const pagesOf = new Set(all.map((it) => it.page));
+  const notListed = nm.APP_PAGES2.filter((p) => !pagesOf.has(p) && !["partners", "fractionals", "network", "getin", "integrations", "notifications", "billing", "seats"].includes(p));
+  check("new look: every page has its item (old pages under their new home)", notListed.length === 0, notListed);
+  // Each link opens its page in the new look.
+  const wrong = all.filter((it) => {
+    const search = it.href.split("?")[1] ?? "";
+    if (it.page === "today") return !isHome(search);
+    const p = parsePlace(me, search, new Set(), undefined, { ui2: true });
+    if (it.key === "contracts") return p.p !== "proposals" || !p.ct;
+    if (it.page === "table") return p.p !== null || p.home;
+    return p.p !== it.page;
+  });
+  check("new look: each link's address opens its page", wrong.length === 0, wrong.map((it) => it.key));
+  check("new look: every item is a link", all.every((it) => !!it.href));
+
+  // Exactly one item on, for every place, in the new look.
+  const on2 = (x: Partial<In2>) => nm.navItems2(in2({ admin: true, ...x })).filter((it) => it.current).map((it) => it.key);
+  const cases: [string, Partial<In2>, string][] = [
+    ["Home", { page: "today" }, "today"],
+    ["Companies", { page: "table" }, "companies"],
+    ["People", { page: "table", recordType: "people" }, "people"],
+    ["Seats", { page: "table", recordType: "engagements" }, "engagements"],
+    ["Hiring now", { page: "table", recordType: "engagements", tab: "hiring" }, "hiring"],
+    ["Following (Companies)", { page: "table", tab: "following" }, "companies"],
+    ["Repeat hirers (Companies)", { page: "table", tab: "repeat" }, "companies"],
+    ["Proposals at Contracts", { page: "proposals", contracts: true }, "contracts"],
+    ["Proposals", { page: "proposals" }, "proposals"],
+    ["Your seats (Seats)", { page: "seats" }, "engagements"],
+    ...nm.APP_PAGES2.filter((p) => !["today", "table", "seats", "proposals"].includes(p)).map(
+      (p) =>
+        [
+          p,
+          { page: p },
+          ({ getin: "warm", network: "warm", partners: "fractionals", fractionals: "fractionals", peers: "fractionals", notifications: "alerts", integrations: "settings", billing: "credits" } as Record<string, string>)[p] ?? p,
+        ] as [string, Partial<In2>, string],
+    ),
+  ];
+  for (const [name, x, want] of cases) {
+    const got = on2(x);
+    check(`new look: one item on for ${name}: ${want}`, got.length === 1 && got[0] === want, got);
+  }
+
+  // Every old address opens the right page, in both looks.
+  const P = (q: string, ui2: boolean) => parsePlace(me, q, new Set(), undefined, { ui2 });
+  const old: [string, string | null, string | null, (p: ReturnType<typeof P>) => boolean][] = [
+    // address, page with the look off, page with it on, anything else that must hold
+    ["?c=c_navt03", null, null, (p) => p.c === "c_navt03" && !p.home],
+    ["?p=radar", "radar", "radar", () => true],
+    ["?sig=" + new Date().toISOString().slice(0, 10), "radar", "radar", (p) => !!p.sig],
+    ["?p=getin", "getin", "warm", () => true],
+    ["?p=getin&w=c_navt03", "getin", "warm", () => true],
+    ["?p=network", "network", "network", () => true],
+    ["?p=peers", "peers", "peers", (p) => !p.pt],
+    ["?p=fractionals", "peers", "peers", (p) => !!p.pt],
+    ["?p=partners", "peers", "peers", (p) => !!p.pt],
+    ["?p=integrations", "integrations", "settings", () => true],
+    ["?p=claude", "integrations", "agent", () => true],
+    ["?p=notifications", "notifications", "alerts", () => true],
+    ["?p=billing", "billing", "billing", () => true],
+    ["?p=credits", "credits", "credits", () => true],
+    ["?p=proposals&pr=pr_abc", "proposals", "proposals", () => true],
+    ["?p=seats", "seats", "seats", () => true],
+    ["?p=messages", "messages", "messages", () => true],
+    ["?p=rates", "rates", "rates", () => true],
+    ["?p=pipeline", "pipeline", "pipeline", () => true],
+    ["?v=hiring&t=seats", null, null, (p) => p.v === "hiring" && p.t === "engagements"],
+    ["?upgrade=radar", "radar", "radar", () => true],
+  ];
+  for (const [q, off, on, more] of old) {
+    const a = P(q, false);
+    const b = P(q, true);
+    check(`old address ${q}: the old look opens ${off ?? "the table"}, the new ${on ?? "the table"}`, a.p === off && b.p === on && more(a) && more(b), { off: a.p, on: b.p });
+  }
+  // An old /table?k= link is redirected to /?k= (app/table/page.tsx): Home, signed in, in both looks.
+  check("old address /table?k=: Home in both looks", isHome("?k=tok-abc") && !P("?k=tok-abc", false).p && !P("?k=tok-abc", true).p && P("?k=tok-abc", true).home);
+  check("old address ?p=proposals&ct=1 (Contracts): Proposals at Contracts in the new look", P("?p=proposals&ct=1", true).p === "proposals" && !!P("?p=proposals&ct=1", true).ct && !P("?p=proposals&ct=1", false).ct);
+  check("?p=contracts in the new look: Proposals at Contracts", P("?p=contracts", true).p === "proposals" && !!P("?p=contracts", true).ct);
+  for (const k of [...UI2_PAGES, "contracts"]) {
+    const a = P(`?p=${k}`, false);
+    check(`?p=${k} with the new look off: an unknown page, as before (the table)`, a.p === null && !a.home && !a.ct, a.p);
+  }
+  for (const k of UI2_PAGES) check(`?p=${k} in the new look opens it`, P(`?p=${k}`, true).p === k);
+
+  // Pills, counts and the ember.
+  const noClose = nm.navItems2(in2({ close: false })).find((it) => it.key === "evidence");
+  const withClose = nm.navItems2(in2({ close: true })).find((it) => it.key === "evidence");
+  check("Evidence Bank without Close: the plan's pill, and it opens the upgrade", noClose?.pill?.kind === "plan" && noClose.pill.text === "Close" && !!noClose.gated, noClose);
+  check("Evidence Bank with Close: New", withClose?.pill?.kind === "new" && !withClose.gated);
+  check("Contracts says New, Alerts and workflows Beta", all.find((it) => it.key === "contracts")?.pill?.kind === "new" && all.find((it) => it.key === "alerts")?.pill?.text === "Beta");
+  const hot = nm.navItems2(in2({ hiringHot: true })).find((it) => it.key === "hiring");
+  const quiet = nm.navItems2(in2({ hiringHot: false })).find((it) => it.key === "hiring");
+  check("Hiring now: ember only when the screen's ember allows it", hot?.pill?.kind === "hot" && hot.pill.text === "14" && !quiet?.pill && quiet?.count === 14);
+  const fresh = nm.navItems2(in2({ pipelineN: 0, networkN: 0, unread: 0, proposalsN: 0 }));
+  check("the member's own things show no count while they have none", ["pipeline", "warm", "messages", "proposals"].every((k) => fresh.find((it) => it.key === k)?.count == null));
+  check("Merlin's own data keeps its count", fresh.find((it) => it.key === "companies")?.count === 40);
+  check("no Warm paths while Your network is off", !nm.navItems2(in2({ network: false })).some((it) => it.key === "warm"));
+  check("Pilot metrics for an admin only", !nm.navItems2(in2()).some((it) => it.key === "metrics") && all.find((it) => it.key === "metrics")?.group === "workspace");
+  check("no export anywhere in the rail", !all.some((it) => /export|csv|download/i.test(it.label)));
+  check("the tab bar: Home, Companies, Crystal Ball, Messages; More is on elsewhere", nm.TAB_KEYS2.every((k) => all.some((it) => it.key === k)) && nm.moreOn2(nm.navItems2(in2({ page: "rates" }))) && !nm.moreOn2(nm.navItems2(in2({ page: "radar" }))));
+
+  // The registry: every page key has an entry (read as text: the registry draws React pages).
+  const reg = readFileSync(path.join(process.cwd(), "app/post/shell/pages.tsx"), "utf8");
+  const body = reg.slice(reg.indexOf("export const PAGES"));
+  const missing = [...nm.APP_PAGES2.filter((p) => p !== "today" && p !== "table" && p !== "find"), "home2", "companies2", "find2"].filter((k) => !new RegExp(`\\n  ${k}: \\{`).test(body));
+  check("every page has its registry entry, and the three mount points", missing.length === 0, missing);
+  check("the mount points start as placeholders that draw today's pages", /home2: \{[^}]*placeholder: "home"/.test(body) && /companies2: \{[^}]*placeholder: "table"/.test(body) && /find2: \{[^}]*placeholder: "table"/.test(body));
+
+  // The flag, through the settings action (lib/table.ts, lib/ui2.ts).
+  const was = process.env.RN_UI2;
+  try {
+    delete process.env.RN_UI2;
+    const off = await t.buildView("tok-ned-nav");
+    check("RN_UI2 off: nothing of the new look is sent", off.me!.ui2 === undefined && off.me!.ui2Optin === undefined && off.me!.stripsOff === undefined && off.ui2 === undefined);
+    const refused = await t.perform("tok-ned-nav", { type: "settings", ui2: true } as never).then(() => null, (e: Error) => e.message);
+    check("RN_UI2 off: turning it on is refused in plain words", refused === "The new look isn't open yet.", refused);
+    process.env.RN_UI2 = "optin";
+    const o1 = await t.buildView("tok-ned-nav");
+    check("RN_UI2 optin: the menu offers it, and it is off until the member says", o1.me!.ui2 === false && o1.me!.ui2Optin === true && !o1.ui2);
+    await t.perform("tok-ned-nav", { type: "settings", ui2: true } as never);
+    const o2 = await t.buildView("tok-ned-nav");
+    check("RN_UI2 optin: Try the new Merlin turns it on, kept on the profile", o2.me!.ui2 === true && o2.ui2 === true && Array.isArray(o2.me!.stripsOff));
+    const other = await t.buildView("tok-sal-nav");
+    check("RN_UI2 optin: only for the member who chose it", other.me!.ui2 === false);
+    await t.perform("tok-ned-nav", { type: "settings", stripOff: "companies" } as never);
+    await t.perform("tok-ned-nav", { type: "settings", stripOff: "home" } as never);
+    await t.perform("tok-ned-nav", { type: "settings", stripOn: "home" } as never);
+    const o3 = await t.buildView("tok-ned-nav");
+    check("a dismissed strip is kept (and Undo brings it back)", o3.me!.stripsOff!.join() === "companies", o3.me!.stripsOff);
+    const bad = await t.perform("tok-ned-nav", { type: "settings", stripOff: "<script>" } as never).then(() => null, (e: Error) => e.message);
+    check("a strip key that is no page key is refused", !!bad);
+    await t.perform("tok-ned-nav", { type: "settings", ui2: false } as never);
+    check("Back to the old look", (await t.buildView("tok-ned-nav")).me!.ui2 === false);
+    process.env.RN_UI2 = "on";
+    const on = await t.buildView("tok-sal-nav");
+    check("RN_UI2 on: everyone, and no switch in the menu", on.me!.ui2 === true && on.me!.ui2Optin === undefined && on.ui2 === true);
+  } finally {
+    if (was === undefined) delete process.env.RN_UI2;
+    else process.env.RN_UI2 = was;
+  }
 }
 
 try {

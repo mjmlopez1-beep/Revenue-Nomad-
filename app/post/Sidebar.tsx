@@ -17,7 +17,10 @@ import { Brand, IconChevron, initials } from "../ui/shared";
 import { Logo } from "../ui/Logo";
 import { Sheet } from "./ui";
 import { plural } from "./hooks";
-import { TAB_KEYS, moreOn, planLine, type NavIcon as NavIconName, type NavItem } from "./navModel";
+import { TAB_KEYS, TAB_KEYS2, moreOn, moreOn2, planLine, type NavIcon as NavIconName, type NavItem, type NavItem2 } from "./navModel";
+import { MemberChip, NavGroups2, NavIcon2, PlanLine2 } from "./shell/Rail";
+import { GettingStartedCard } from "./shell/GettingStarted";
+import type { SixSteps } from "./getStarted";
 import type { Me, PlanView } from "@/lib/tableTypes";
 import { Divider } from "../ui/fractions/lazy";
 
@@ -459,6 +462,87 @@ export function MoreSheet({
           </span>
           <IconChevron dir="right" size={14} />
         </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ---------- the new look (RN_UI2): the tab bar and More, in the rail's groups ---------- */
+
+/** Phones and tablets in the new look: Home, Companies, Crystal Ball, Messages and More. */
+export function TabBar2({ items, onNav, onMore, moreRef, moreOpen }: { items: NavItem2[]; onNav: (it: NavItem2) => void; onMore: () => void; moreRef: RefObject<HTMLButtonElement | null>; moreOpen: boolean }) {
+  const tabs = TAB_KEYS2.map((k) => items.find((it) => it.key === k)).filter((x): x is NavItem2 => !!x);
+  const more = moreOn2(items) || moreOpen;
+  return (
+    <nav className="tp-tabbar" aria-label="Merlin">
+      <ul>
+        {tabs.map((it) => (
+          <li key={it.key}>
+            <a
+              href={it.href}
+              className={`tp-nav-i tp-tab-i${it.current ? " on" : ""}`}
+              data-nav={it.key}
+              aria-current={it.current ? "page" : undefined}
+              aria-label={it.key === "messages" && it.count ? `${it.label}, ${it.count} unread` : it.label}
+              onClick={(e) => {
+                if (!ownClick(e)) return;
+                e.preventDefault();
+                onNav(it);
+              }}
+            >
+              <NavIcon2 name={it.icon} size={22} />
+              <span className="tp-nav-l">{it.label}</span>
+              {it.key === "messages" && it.count ? (
+                <span className="tp-nav-badge num" aria-hidden>
+                  {it.count}
+                </span>
+              ) : null}
+            </a>
+          </li>
+        ))}
+        <li>
+          <button ref={moreRef} type="button" className={`tp-nav-i tp-tab-i${more ? " on" : ""}`} data-nav="more" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={onMore}>
+            <IconMore />
+            <span className="tp-nav-l">More</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+  );
+}
+
+/** More in the new look: the rest of the rail in its groups, the plan line and the member. */
+export function MoreSheet2({
+  items,
+  me,
+  onNav,
+  onClose,
+  onUpgrade,
+  onAccount,
+  start,
+}: {
+  items: NavItem2[];
+  me: Me;
+  onNav: (it: NavItem2) => void;
+  onClose: () => void;
+  onUpgrade: () => void;
+  onAccount: () => void;
+  /** Getting started's card, while steps are left: the six steps and what its click does. */
+  start?: { six: SixSteps; go: () => void } | null;
+}) {
+  const go = (it: NavItem2) => {
+    onClose();
+    onNav(it);
+  };
+  return (
+    <Sheet title="More" onClose={onClose} className="tp-more-sheet" restore={() => document.querySelector<HTMLElement>(".tp-tabbar [data-nav='more']")}>
+      <div className="ws-more">
+        <NavGroups2 items={items} onNav={go} skip={TAB_KEYS2} />
+        <div className="ws-foot">
+          {start && <GettingStartedCard six={start.six} onClick={() => (onClose(), start.go())} />}
+          <PlanLine2 plan={me.plan} onUpgrade={() => (onClose(), onUpgrade())} />
+          <MemberChip me={me} onClick={onAccount} hint="Your profile, sign-in link, sign out" />
+        </div>
       </div>
     </Sheet>
   );
