@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Zone } from "@/lib/paths/rank";
 import { ZONES, betweenWords } from "@/lib/paths/rank";
-import { EXPORT_STEPS, lockedWaysWords, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
+import { EXPORT_STEPS, lockedWaysWords, namesOnlyShort, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
 import { gmailLink } from "@/lib/moveNote";
 import { IconX, useToast } from "../../ui/shared";
 import { useCopy } from "../Credits";
@@ -1060,8 +1060,17 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       name: "LinkedIn connections file",
       on: !!pv?.linkedin,
       status: pv?.linkedin ? `Added ${fmtDay(pv.linkedin.at)}` : "Not added",
-      count: pv?.linkedin ? `${n(pv.linkedin.rows)} connections · ${n(pv.linkedin.matched)} at companies on Merlin` : "The Connections.csv from your own export.",
-      meta: pv?.linkedin ? "A newer file finds more." : "Three steps, about 10 minutes.",
+      count: pv?.linkedin
+        ? pv.linkedin.namesOnly
+          ? `${n(pv.linkedin.rows)} connections · ${n(pv.linkedin.byLink ?? 0)} matched by profile link`
+          : `${n(pv.linkedin.rows)} connections · ${n(pv.linkedin.matched)} at companies on Merlin`
+        : "The Connections.csv from your own export.",
+      // LinkedIn's files from December 2026 have names and profile links only: a contacts file or Google finds more.
+      meta: pv?.linkedin
+        ? pv.linkedin.namesOnly
+          ? `Names and profile links only. A contacts file${net.view?.configured ? " or Google" : ""} finds more.`
+          : "Has companies and titles. Newer files have names and profile links only."
+        : "Names and profile links. Three steps, about 10 minutes.",
       btn: { t: pv?.linkedin ? "Upload a newer file" : "Add your file", go: () => onOpen("linkedin"), primary: first && net.off },
       paths: pv?.linkedin ? paths("linkedin") : undefined,
     },
@@ -1180,6 +1189,7 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
             <li key={s}>{s}</li>
           ))}
           <li>Up to 3 uploads a day.</li>
+          <li>{namesOnlyShort(!net.off && !!net.view?.configured)}</li>
         </ol>
       )}
     </section>

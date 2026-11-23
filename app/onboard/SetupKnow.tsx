@@ -62,7 +62,11 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
   const status = (k: SourceKey): string | null => {
     if (k === "google") return googleIn ? `Connected${g?.syncedAt ? `. Read ${new Date(g.syncedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}. Merlin reads it again once a day.` : null;
     const info = k === "linkedin" ? paths?.linkedin : paths?.csv;
-    return info ? `${plural(info.rows, k === "linkedin" ? "connection" : "contact", k === "linkedin" ? "connections" : "contacts")} read, ${info.matched.toLocaleString("en-US")} at companies on Merlin.` : null;
+    if (!info) return null;
+    const read = plural(info.rows, k === "linkedin" ? "connection" : "contact", k === "linkedin" ? "connections" : "contacts");
+    // A names-only LinkedIn file (December 2026 on): what its profile links placed.
+    if (info.namesOnly) return `${read} read, names and profile links only. ${(info.byLink ?? 0).toLocaleString("en-US")} matched by profile link.`;
+    return `${read} read, ${info.matched.toLocaleString("en-US")} at companies on Merlin.`;
   };
   // The three sources' words (ConnectPanel.tsx SOURCE_TEXT), said once for all three.
   const reads = ["Names, companies and titles of your contacts", "Who was in your calendar meetings, and in which months", "The rows of a file you choose to add, and for a CSV only the columns you pick"];
@@ -98,7 +102,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
                 </span>
                 <span className="su-src-t">
                   <strong>{t.name}</strong>
-                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "The Connections.csv from your own LinkedIn data export. It arrives by email a few minutes after you ask for it." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
+                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "The Connections.csv from your own LinkedIn data export. It arrives by email a few minutes after you ask for it. From December 2026 it has names and profile links only, so Merlin matches by profile link." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
                 </span>
               </span>
               {st ? (
