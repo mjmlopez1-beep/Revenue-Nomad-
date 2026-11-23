@@ -368,8 +368,10 @@ async function main() {
   check("a signer's email is needed", (await refused(S.sendProposal(PAT, p.id, { signer: { name: "Dana Whitfield", email: "not-an-email" } }, BASE)))?.includes("email"));
   check("not to yourself", (await refused(S.sendProposal(PAT, p.id, { signer: { name: "Pat Rowan", email: "pat.proposals@example.com" } }, BASE)))?.includes("not to yourself"));
   const n0 = mails.length;
+  const liveBefore = await S.liveCount(PAT);
   const sent = await S.sendProposal(PAT, p.id, { message: "Here's the plan we talked about." }, BASE);
   p = sent.proposal;
+  check("the new look's rail counts it as out now (sent, waiting on the client), the member's own only", (await S.liveCount(PAT)) === liveBefore + 1 && (await S.liveCount(OTH)) === 0, [liveBefore, await S.liveCount(PAT)]);
   const toDana = mails.slice(n0).filter((m) => m.to === "dana@acmerobotics.example");
   check("sent: one email to the signer, from the member by name", toDana.length === 1 && toDana[0].subject === "Pat Rowan sent you a proposal to sign" && /Review and sign/.test(toDana[0].html) && /No account needed/.test(toDana[0].text), toDana.map((m) => m.subject));
   check("replies go to the member", toDana[0]?.reply_to === "pat.proposals@example.com", toDana[0]?.reply_to);

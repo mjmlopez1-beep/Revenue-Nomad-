@@ -106,6 +106,8 @@ async function main() {
   const Q = await import("../lib/unlockQuote");
   const B = await import("../lib/unlockBatch");
   const C = await import("../app/post/workbench/columns");
+  // Ask Merlin's column words as the workbench's columns: "Your way in" has none here, so it is left out.
+  check("Ask's columns map to the workbench's, and wayIn is left out (no column backs it)", JSON.stringify(C.askColumns(["decisionMaker", "email", "rate", "holder", "wayIn", "email"])) === JSON.stringify(["decider", "email", "rate", "heldBy"]) && C.askColumns(["wayIn"]).length === 0);
   const TL = await import("../app/post/workbench/tools");
   const R = await import("../app/post/workbench/run");
   const M = await import("../app/post/model");
