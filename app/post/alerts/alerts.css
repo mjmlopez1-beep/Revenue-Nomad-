@@ -886,10 +886,18 @@
 
 /* phones: the table reads as cards, the builder on top */
 @media (max-width: 760px) {
-  /* Each channel and How often: 44px to tap. */
+  /* Each channel and How often: 44px to tap; a row's box keeps its 22px look with a 44px tap area. */
   .al-chip,
   .al-often-b {
     min-height: 44px;
+  }
+  .al-c-sel .al-check {
+    position: relative;
+  }
+  .al-c-sel .al-check::after {
+    content: "";
+    position: absolute;
+    inset: -11px;
   }
   .al-page {
     flex-direction: column-reverse;
@@ -1306,6 +1314,8 @@
 .wf-draft-body pre {
   margin: 6px 0;
   white-space: pre-wrap;
+  /* A long link in a draft wraps on a phone instead of pushing Messages sideways. */
+  overflow-wrap: anywhere;
   font-family: inherit;
   font-size: 13px;
   line-height: 19px;
