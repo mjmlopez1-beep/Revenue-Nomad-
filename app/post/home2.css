@@ -143,3 +143,6 @@
   .h2-gs-go button { min-height: 44px; }
   .h2-x { width: 44px; height: 44px; flex-basis: 44px; }
 }
+
+/* What's new under the greeting (shell/WhatsNew.tsx): aligned with Home's cards, not inset like under the shell's header. */
+.h2 > .ws-new { margin: 0; }
