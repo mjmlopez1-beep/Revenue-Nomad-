@@ -2977,6 +2977,20 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   /** A page drawn again from its start (Proposals moving between its list and Contracts from the rail). */
   const [pageBump, setPageBump] = useState(0);
   const hiringHot = !!hiringNav && emberTaken === 0;
+  /** The new look's rail: proposals out now (GET /api/proposals?count=live), on Close, asked again when the member leaves Proposals. */
+  const [liveProposals, setLiveProposals] = useState<number | null>(null);
+  const onProposals = onScreen === "proposals";
+  useEffect(() => {
+    if (!ui2 || !closeOn || onProposals) return;
+    let on = true;
+    void fetch("/api/proposals?count=live", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { live?: number } | null) => on && typeof j?.live === "number" && setLiveProposals(j.live))
+      .catch(() => {});
+    return () => {
+      on = false;
+    };
+  }, [ui2, closeOn, onProposals]);
   const nav2 = navItems2({
     page: onScreen as never,
     recordType,
@@ -3001,6 +3015,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     hiringHot,
     radarN: today.data ? today.data.newCount || today.data.total || null : null,
     pipelineN: pipelineOpen,
+    proposalsN: liveProposals,
     unread,
     credits: me.credits,
   });

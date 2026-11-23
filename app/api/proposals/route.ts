@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
-import { ProposalProblem, countersignDue, countersignProposal, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
+import { ProposalProblem, countersignDue, liveCount, countersignProposal, createProposal, deleteProposal, duplicateProposal, getProposal, linkProposal, listProposals, sendProposal, updateProposal, voidProposal } from "@/lib/proposals/store";
 import { deleteMySignature, getMySignature, myTitle, setMySignature } from "@/lib/proposals/memberSig";
 import { agreeToAi, draftWithClaude } from "@/lib/proposals/draft";
 import { MineProblem, deleteTemplate, renameTemplate } from "@/lib/proposals/mine";
@@ -66,6 +66,7 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "countersign", id, method?: "saved" | "drawn" | "typed", png?, typed?, consent?, save? }   The sender countersigns after the client signed.
  * POST { op: "signature_get" } | { op: "signature_set", method: "drawn" | "typed", png?, typed?, consent: true } | { op: "signature_delete" }   Their saved signature (Close).
  * GET ?countersign=due   Proposals the client signed over 24 hours ago that wait for their countersignature (Home).
+ * GET ?count=live        { live }: how many of their proposals are out now, sent or opened (the new look's rail).
  */
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
@@ -74,6 +75,7 @@ export const GET = guarded(async (req: NextRequest) => {
   if (limited(`prop-get:${me.id}`, 120, 60_000)) return err(SLOW, 429);
   const id = req.nextUrl.searchParams.get("id");
   if (req.nextUrl.searchParams.get("countersign") === "due") return answer(async () => ({ due: await countersignDue(token) }));
+  if (req.nextUrl.searchParams.get("count") === "live") return answer(async () => ({ live: await liveCount(token) }));
   return answer(() => (id ? getProposal(token, id, origin(req)) : listProposals(token, origin(req))));
 });
 

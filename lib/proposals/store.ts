@@ -1136,6 +1136,13 @@ export async function countersignProposal(
 const currentSendOf = (p: StoredProposal) => [...p.sends].reverse().find((x) => x.version === p.version) ?? null;
 
 /** Proposals the client signed more than `hours` ago that wait for the member's countersignature: Home shows them. Never countersigned for them. */
+/** How many of the member's proposals are out now: sent or opened, waiting on the client (the new look's rail count). */
+export async function liveCount(token: string | null, nowMs = Date.now()): Promise<number> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberOf(seed, s, token);
+  return (s.proposals ?? []).filter((p) => p.memberId === me.id && live(currentSend(p), nowMs)).length;
+}
+
 export async function countersignDue(token: string | null, hours = 24, nowMs = Date.now()): Promise<{ id: string; title: string; signer: string; signedAt: string }[]> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberOf(seed, s, token);
