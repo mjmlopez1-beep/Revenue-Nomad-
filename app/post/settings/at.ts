@@ -6,6 +6,8 @@
  * where to go and opens the page (a page already on screen moves there).
  */
 import { settingsSecOf, type SettingsSection } from "../place";
+// Granola's way back (?granola=connected) is read here too, with the shell, before the address is rewritten.
+import "../granolaNotice";
 
 export type ConnKey = "google" | "linkedin" | "csv" | "slack" | "hook" | "granola" | "agent";
 export const CONN_KEYS: readonly ConnKey[] = ["google", "linkedin", "csv", "slack", "hook", "granola", "agent"];

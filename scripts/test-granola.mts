@@ -888,6 +888,7 @@ async function main() {
   const pkSrc = readFileSync(new URL("../app/post/GranolaCallPicker.tsx", import.meta.url), "utf8");
   check("the cards: Connect Granola while oauth, the key form behind Or paste a Granola API key, the key form alone without it", [secSrc, conSrc].every((x) => /status\.oauth \?/.test(x) && x.includes("startGranola()") && x.includes("<summary>Or paste a Granola API key</summary>")) && /status\.oauth \? \(\s*<button[^>]*onClick=\{\(\) => \(setGoing\(true\), startGranola\(\)\)\}/.test(pkSrc), "");
   check("the words say what Merlin reads and never does, with no LinkedIn", /reads only the calls you pick/.test(secSrc) && /never stores a transcript, and never reads a call you didn.t pick/.test(secSrc) && ![secSrc, conSrc, pkSrc].some((x) => /linkedin/i.test(x.slice(x.indexOf("function GranolaDetail") >= 0 ? x.indexOf("function GranolaDetail") : 0))));
+  check("the way back's notice is read with the shell, before the address is rewritten (settings/at.ts loads granolaNotice.ts)", /import "\.\.\/granolaNotice";/.test(readFileSync(new URL("../app/post/settings/at.ts", import.meta.url), "utf8")) && /useGranolaNotice\(/.test(secSrc) && /useGranolaNotice\(/.test(conSrc) && /useGranolaNotice\(/.test(pkSrc));
   await G.disconnectGranola(JORDAN);
   oa.down = false;
   OA._oauth.reset();

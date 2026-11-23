@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import type { CallsAnswer, GranolaStatus, GranolaTranscript } from "@/lib/granola/types";
 import { errorText } from "../ui/shared";
+import { takeGranolaNotice, type GranolaNotice } from "./granolaNotice";
 
 const BASE = "/api/integrations/granola";
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -99,31 +100,14 @@ export function startGranola(back?: string): void {
   window.location.assign(`${BASE}/start?back=${encodeURIComponent(here)}`);
 }
 
-/** ?granola=connected|denied|failed|unavailable from the way back: read when this file loads, shown once by whichever Granola card is on screen first. */
-export type GranolaNotice = "connected" | "denied" | "failed" | "unavailable";
+export type { GranolaNotice } from "./granolaNotice";
 export const GRANOLA_NOTICE_WORDS: Record<GranolaNotice, string> = {
   connected: "Granola connected. Pick a call when you start a proposal.",
   denied: "Nothing was connected. You said no at Granola. Connect whenever you like.",
   failed: "We couldn't connect Granola, so nothing was saved. Try again in a moment.",
   unavailable: "Connecting with Granola isn't available right now. Paste a Granola API key instead, or try again later.",
 };
-let notice: GranolaNotice | null = (() => {
-  if (typeof window === "undefined") return null;
-  const v = new URLSearchParams(window.location.search).get("granola");
-  return v === "connected" || v === "denied" || v === "failed" || v === "unavailable" ? v : null;
-})();
-/** The notice, once, and off the address. */
-export function takeGranolaNotice(): GranolaNotice | null {
-  const n = notice;
-  notice = null;
-  if (n)
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.delete("granola");
-      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
-    } catch {}
-  return n;
-}
+
 /** Show the notice once, when a Granola card mounts. */
 export function useGranolaNotice(show: (words: string, err: boolean) => void): void {
   useEffect(() => {

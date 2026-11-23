@@ -104,7 +104,7 @@ export function GranolaCallPicker({ companyId, email, companyName, pickedId, onP
         <div className="gr-empty-t">
           <p className="gr-h">Start from a Granola call</p>
           {status.oauth ? (
-            <p className="gr-p">Connect Granola once and your recent calls show up here. You say yes at Granola, then come back to this proposal. {GRANOLA_READS}</p>
+            <p className="gr-p">Connect Granola once and your recent calls show up here. {GRANOLA_READS}</p>
           ) : (
             <p className="gr-p">Connect Granola once and your recent calls show up here. {GRANOLA_PLAN.split(".")[0]}.</p>
           )}
