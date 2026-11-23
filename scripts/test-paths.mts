@@ -22,7 +22,8 @@
  *     contact names and never a person key, the daily upload limit.
  *  7b. Disconnect and delete everything on Your network: the ways in through Google go, the
  *     LinkedIn import and its ways in stay (it has its own Delete).
- *  8. Delete removes everything derived from the file. RN_GOOGLE off: nothing.
+ *  8. Delete removes everything derived from the file. RN_GOOGLE off: ways in stay on without
+ *     Google's people (each source is independent); RN_PATHS=off: nothing.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -419,8 +420,14 @@ async function main() {
   check("the daily upload count stays (not from the file)", v3.importsLeft === 0);
   check("the connector's lines go with it", !("smart_ways_in" in (await tools.myAccount({ member: await member("mem_bo"), origin: ORIGIN }))));
   delete process.env.RN_GOOGLE;
-  check("Your network off: nothing", JSON.stringify(await P.pathsView(ANA)) === JSON.stringify({ on: false }) && JSON.stringify(await P.pathsLine(await member("mem_ana"), pub("c_acme"))) === "{}");
+  // The sources are independent (the owner's decision): with Google off, ways in stay on, without Google's people.
+  const offG = await P.pathsView(ANA);
+  const offAll = JSON.stringify([offG, ...(offG.on ? await Promise.all(Object.keys(offG.counts).map((id) => P.companyPaths(ANA, id))) : [])]);
+  check("Google off: ways in stay on, without anyone from Google", offG.on === true && offG.googleOn === false && !offAll.includes("Rae Kim") && offAll.includes("Kai Lane"), offAll.slice(0, 600));
+  process.env.RN_PATHS = "off";
+  check("ways in off (RN_PATHS=off): nothing", JSON.stringify(await P.pathsView(ANA)) === JSON.stringify({ on: false }) && JSON.stringify(await P.pathsLine(await member("mem_ana"), pub("c_acme"))) === "{}");
   check("and no import", (await P.importConnections(ANA, CSV).then(() => "ok", (e: Error) => e.message)) !== "ok");
+  delete process.env.RN_PATHS;
   check("the words of the chip", types.waysWords(2) === "2 ways in through people you know" && types.waysWords(1) === "1 way in through people you know");
 }
 

@@ -9,7 +9,13 @@
  * What is kept (State.paths[memberId]), and nothing else:
  *  - the member's LinkedIn connections as they uploaded them: name, company, position, the day
  *    they connected, the profile's address and the email when LinkedIn gave one;
+ *  - the member's own contacts CSV, only the columns they picked: name, company, title, email
+ *    (lib/paths/csv.ts parseContacts; the browser sends only those columns);
+ *  - the people they marked "Not a relationship" (their own keys, nothing else);
  *  - when they uploaded a file (the last few times, for the daily limit).
+ *
+ * Each source works on its own (the owner's decision): the LinkedIn file and the CSV need no Google,
+ * and Google needs neither. Together they merge into one list of people the member knows.
  * Everything else (the matches, the paths, the counts) is worked out when it is asked for and never
  * stored, so deleting the import deletes all of it. It is the member's alone, at the same level as
  * their Google network: never shown to another member or an admin, never in the export, never used
@@ -44,8 +50,31 @@ export interface LinkedInStore {
   skipped: number;
 }
 
+/**
+ * One row of the member's own contacts CSV as kept: n name, c company, t title, e email. Only the
+ * columns the member picked; every other column of their file never reaches Merlin.
+ */
+export interface ContactRow {
+  n: string;
+  c?: string;
+  t?: string;
+  e?: string;
+}
+
+export interface ContactsStore {
+  /** When the file was read (ISO). */
+  at: string;
+  rows: ContactRow[];
+  /** Rows not kept (no name, a duplicate, over the limit). A count only. */
+  skipped: number;
+}
+
 export interface MemberPaths {
   linkedin?: LinkedInStore;
+  /** The member's own contacts CSV (any list with a name and a company). */
+  csv?: ContactsStore;
+  /** People the member said are "Not a relationship": their own keys (KnownPersonView.key), at most AWAY_MAX. */
+  away?: string[];
   /** When the member uploaded a file (ISO), the last IMPORTS_DAILY: the daily limit. Not derived from any file. */
   imports?: string[];
 }
@@ -59,8 +88,10 @@ export type PathsState = Record<string, MemberPaths>;
 export const ROWS_MAX = 30_000;
 /** The file, as uploaded. A full 30,000-row export is about 4 MB. */
 export const FILE_MAX_BYTES = 8 * 1024 * 1024;
-/** Uploads a member can make in any rolling 24 hours. */
+/** Uploads a member can make in any rolling 24 hours (the LinkedIn file and a CSV together). */
 export const IMPORTS_DAILY = 3;
+/** People a member can set aside as "Not a relationship". */
+export const AWAY_MAX = 2000;
 /** Targets "Your hidden paths" lists. */
 export const TARGETS_MAX = 20;
 /** Paths a company's record shows. */
@@ -68,8 +99,8 @@ export const COMPANY_PATHS_MAX = 8;
 
 /* ---------- what the app gets ---------- */
 
-/** Where Merlin knows the person from: the member's own LinkedIn, their own Google network, a member they messaged. */
-export type PathSource = "linkedin" | "google" | "messages";
+/** Where Merlin knows the person from: the member's own LinkedIn file, their own Google network, a member they messaged, their own contacts CSV. */
+export type PathSource = "linkedin" | "google" | "messages" | "csv";
 
 /**
  * The kinds of way in, strongest first.
@@ -152,6 +183,10 @@ export interface LinkedInInfo {
 export interface PathsView {
   on: true;
   linkedin: LinkedInInfo | null;
+  /** The member's own contacts CSV, when they added one: the same counts as the LinkedIn file. */
+  csv: LinkedInInfo | null;
+  /** Google is a source on this Merlin (RN_GOOGLE): it can be connected. The LinkedIn file and a CSV work either way. */
+  googleOn: boolean;
   /** Uploads left in the rolling day. */
   importsLeft: number;
   /** The best targets first (Crystal Ball and saved views), at most TARGETS_MAX. */
@@ -165,6 +200,47 @@ export interface PathsView {
   people: IntroPlanView[];
 }
 export type PathsAnswer = PathsView | { on: false };
+
+/**
+ * GET /api/paths?known=1: everyone the member knows at a company on Merlin, from each of their own
+ * sources, merged into one entry a person (the People page's "People I know" and the person bubble's
+ * "How you know them"). The member's own words only: the name, title and email are what their own
+ * file, contacts or messages say. Merlin's own records keep their locks: `record` only says which
+ * record on file is this person (matched precisely, lib/paths/find.ts leadersOfContact), never what
+ * that record holds.
+ */
+export interface KnownPersonView {
+  /** The member's own key for this person (stable across reads). */
+  key: string;
+  name: string;
+  title: string | null;
+  /** The company on Merlin they are at (its public id), or null for a member at no company on file. */
+  company: string | null;
+  src: PathSource[];
+  /** How warm, from Google or messages on Merlin; null for a file alone. */
+  warmth: Warmth | null;
+  /** Why, in words: "4 meetings, last in March", "LinkedIn connection since 2021", "In your contacts file". */
+  why: string;
+  /** The last meeting, email or message (YYYY-MM-DD), when Merlin saw one. Never what was said. */
+  last: string | null;
+  /** "Meeting", "Email", "Message" for the last touch, or null. */
+  lastKind: "Meeting" | "Email" | "Message" | null;
+  /** Their email and public profile as the member's own file gave them, or null. */
+  email: string | null;
+  profile: string | null;
+  /** The person record on Merlin this is (PersonRec.id), when one matches precisely. */
+  record: string | null;
+  /** A Revenue Nomad member (their public member id), for their Fractionals card. */
+  member: string | null;
+  /** The member said "Not a relationship": kept out of ways in, listed under Set aside. */
+  away: boolean;
+}
+
+export interface KnownView {
+  people: KnownPersonView[];
+  /** What each source brought, as counts. */
+  sources: { google: boolean; linkedin: number | null; csv: number | null; messages: number };
+}
 
 /** GET /api/paths?company=: one company's ways in, best first. */
 export interface CompanyPathsView {

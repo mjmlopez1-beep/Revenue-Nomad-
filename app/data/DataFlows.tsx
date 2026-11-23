@@ -160,6 +160,26 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-known">
+            <h2 className="df-h" id="df-known">
+              Inside Merlin: who you know
+            </h2>
+            <p className="cl-p">
+              You can bring in who you know from three places, each on its own: your Google contacts and calendar, your LinkedIn connections file, and any contacts
+              CSV. The two files need no Google. Merlin matches the people in them to the companies it holds, so you see who you know there and your ways in.
+            </p>
+            <p className="cl-p">
+              A contacts CSV is read in your browser first. Merlin guesses which columns are the name, company, title and email, shows you a preview, and you can
+              change its guess. Only those four columns are sent to Merlin: every other column of your file stays on your computer. Merlin keeps the name, company,
+              title and email of each person, and when you added the file. Never the file itself.
+            </p>
+            <p className="cl-p">
+              Only you see the people you bring in. They are never shown to another member or an admin, never in Revenue Nomad&apos;s copy for admins, and never named
+              to an assistant you connect. When you mark someone Not a relationship, Merlin keeps only that you did. You can delete your LinkedIn connections or your
+              contacts file at any time, and every way in found from it goes with it.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-ways">
             <h2 className="df-h" id="df-ways">
               Inside Merlin: Your way in
@@ -170,8 +190,8 @@ export function DataFlows() {
             </p>
             <p className="cl-p">
               What happened at each step is also counted without anyone in it (how many people were in between, how warm each link was, whether the last person decides),
-              so the estimate gets better as members record what worked. No member, company or person is in those counts. Deleting your Google network or your contacts
-              file deletes the plans that went through them. When you close your account they stay for the 30 days you can bring it back, then all of them are deleted with your personal data.
+              so the estimate gets better as members record what worked. No member, company or person is in those counts. Deleting your Google network, your LinkedIn
+              connections or your contacts file deletes the plans that went through them. When you close your account they stay for the 30 days you can bring it back, then all of them are deleted with your personal data.
             </p>
           </section>
 
@@ -224,6 +244,7 @@ export function DataFlows() {
             </h2>
             <h3 className="df-h3">You</h3>
             <ul className="df-bullets">
+              <li>Your LinkedIn connections and your contacts file: People, Bring in who you know, or Your network. Each has its own Delete, and every way in found from it goes with it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added.</li>
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
@@ -234,7 +255,7 @@ export function DataFlows() {
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection and the connections file you uploaded, your network, your pipeline and plans for a way in, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>
