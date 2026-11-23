@@ -242,8 +242,8 @@ async function main() {
   const cd = await api.card("r1", true);
   check("card: { op, id, on }", !api.failed(cd) && JSON.stringify(calls.at(-1)!.body) === JSON.stringify({ op: "card", id: "r1", on: true }));
   answer = () => ({ json: { items: [] } });
-  const tp = await api.toProof("r1", "pr_1");
-  check("toProof: this case into this proposal", !api.failed(tp) && JSON.stringify(calls.at(-1)!.body) === JSON.stringify({ op: "toProof", caseIds: ["r1"], proposalId: "pr_1" }));
+  const tp = await api.toProof("r1", { id: "pr_1", proofCases: ["r0", "r9"] });
+  check("toProof: this case first in that proposal's Proof, beside the one it held (the proposals route)", !api.failed(tp) && calls.at(-1)!.url === "/api/proposals" && JSON.stringify(calls.at(-1)!.body) === JSON.stringify({ op: "update", id: "pr_1", proofCases: ["r1", "r0"] }));
   // The route's list: CaseView (client { named, label, name? }, answers apart, its own words in text) and its pick lists.
   answer = () => ({
     json: {

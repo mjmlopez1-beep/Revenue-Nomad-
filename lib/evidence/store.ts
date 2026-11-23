@@ -38,11 +38,13 @@ import {
   PROBLEMS,
   SEAT_NOT_YOURS,
   datesOf,
+  outcomeLine,
   type CaseAnswers,
   type CaseMatch,
   type CaseView,
   type EvidenceCase,
   type EvidenceList,
+  type EvidenceMatch,
   type EvidenceState,
   type MatchRows,
   type MatchView,
@@ -544,7 +546,8 @@ export function matchRowsIn(seed: Seed, s: State, memberId: string, pubs: string
     const facts = id ? companyFactsIn(seed, s, id) : null;
     const top = facts && ready.length ? rankCases(ready, facts)[0] : null;
     const c = top ? ready.find((x) => x.id === top.caseId)! : null;
-    out[pub] = top && c ? { caseId: top.caseId, title: safeText(c, top.title), label: top.label, same: top.same, diff: top.diff } : null;
+    const first = c?.outcomes[0];
+    out[pub] = top && c ? { caseId: top.caseId, title: safeText(c, top.title), label: top.label, same: top.same, diff: top.diff, ...(first ? { outcome: outcomeLine({ ...first, k: safeText(c, first.k) }) } : {}) } : null;
   }
   return out;
 }
@@ -589,6 +592,20 @@ export function markUsedIn(s: State, memberId: string, caseIds: string[], propos
       if (c.usedIn.length > L.usedIn) c.usedIn.splice(0, c.usedIn.length - L.usedIn);
     }
 }
+/**
+ * These of the member's cases as they go into a proposal's Proof part (the member's pick: Swap
+ * case, Use in a proposal), in the order asked. Throws NOT_YOURS for one that isn't theirs and
+ * ONLY_READY for a draft. Hidden-client-safe.
+ */
+export function readyItemsIn(s: State, memberId: string, ids: string[]): ProofItem[] {
+  const cases = ids.map((id) => mineIn(s, memberId).find((c) => c.id === id));
+  if (cases.some((c) => !c)) throw new EvidenceProblem(NOT_YOURS, 404);
+  if (cases.some((c) => c!.status !== "ready")) throw new EvidenceProblem(ONLY_READY);
+  return cases.map((c) => proofItem(c!));
+}
+/** Every ready case of the member's as it would go into Proof, newest first (no company to match). Hidden-client-safe. */
+export const readyAllIn = (s: State, memberId: string): ProofItem[] => [...readyOf(s, memberId)].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).map((c) => proofItem(c));
+
 /** A proposal deleted: it leaves the cases' Used in. */
 export function forgetProposalIn(s: State, memberId: string, proposalId: string): void {
   for (const c of mineIn(s, memberId)) c.usedIn = c.usedIn.filter((x) => x !== proposalId);
@@ -606,11 +623,7 @@ export async function toProof(token: string | null, a: { companyId?: unknown; ca
   gate(s, me.id, nowMs, o.origin);
   let items: ProofItem[];
   if (Array.isArray(a.caseIds)) {
-    const want = a.caseIds.filter((x): x is string => typeof x === "string").slice(0, 6);
-    const cases = want.map((id) => mineIn(s, me.id).find((c) => c.id === id));
-    if (cases.some((c) => !c)) throw new EvidenceProblem(NOT_YOURS, 404);
-    if (cases.some((c) => c!.status !== "ready")) throw new EvidenceProblem(ONLY_READY);
-    items = cases.map((c) => proofItem(c!));
+    items = readyItemsIn(s, me.id, a.caseIds.filter((x): x is string => typeof x === "string").slice(0, 6));
   } else {
     const id = a.companyId == null || a.companyId === "" ? null : companyIdOf(seed, s, a.companyId);
     if (a.companyId && !id) throw new EvidenceProblem("That company isn't on Merlin.", 404);
@@ -740,12 +753,22 @@ export const casesIn = (s: State, memberId: string): CaseView[] => mineIn(s, mem
 export async function listCases(memberId: string): Promise<CaseView[]> {
   return casesIn(await loadState(), memberId);
 }
-/** A member's ready cases ranked for one company (public or internal id). Null without Close or for a company not on file. */
-export async function matchCompany(memberId: string, companyId: string, nowMs = Date.now()): Promise<MatchView | null> {
-  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+/**
+ * A member's ready cases ranked for one company (public or internal id): the MatchView, with the
+ * closest case's label and words on top (caseId absent when every case reads Different) and
+ * `ranked`, every ready case closest first. Null without Close or for a company not on file.
+ */
+export function matchCompanyIn(seed: Seed, s: State, memberId: string, companyId: string, nowMs = Date.now()): EvidenceMatch | null {
   if (!T.closeNow(s, memberId, nowMs)) return null;
   const id = T.graph(seed, s).companies.has(companyId) ? companyId : companyIdOf(seed, s, companyId);
-  return id ? matchIn(seed, s, memberId, id) : null;
+  const m = id ? matchIn(seed, s, memberId, id) : null;
+  if (!m) return null;
+  const top = m.cases.find((c) => c.closest);
+  return { ...m, label: top?.label ?? "Different", same: top ? [...top.same] : [], diff: top ? [...top.diff] : [], ...(top ? { caseId: top.caseId } : {}), ranked: m.cases };
+}
+export async function matchCompany(memberId: string, companyId: string, nowMs = Date.now()): Promise<EvidenceMatch | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return matchCompanyIn(seed, s, memberId, companyId, nowMs);
 }
 /** The closest one or two ready cases for a company (public or internal id), hidden-client-safe. Empty without Close. */
 export async function proofFor(memberId: string, companyId: string | null, nowMs = Date.now()): Promise<ProofItem[]> {

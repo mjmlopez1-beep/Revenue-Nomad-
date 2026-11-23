@@ -38,7 +38,7 @@ import { useMedia } from "./hooks";
 import { openPlans } from "./Billing";
 import { DocText, dayOf } from "../sign/doc";
 import type { CoInfo } from "./model";
-import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
+import { dropWantCases, peekWantCases, startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import { StartSheet, TEMPLATE_ACCEPT, uploadTemplate } from "./ProposalStart";
 import { AddBlock, AlertGrid, AutoText, CallPanel, ProposalStatus, RatePanel, SendPanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder } from "./DocBuilder";
@@ -124,7 +124,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   useOpenItem(useCallback((x: { pr?: string; dc?: string }) => (x.pr ? (setOpenDoc(null), setOpenId(x.pr)) : (setOpenId(null), setOpenDoc(x.dc ?? null))), []));
   const [starting, setStarting] = useState<{ companyId: string | null; mode?: StartMode; templateId?: string } | null>(() => {
     const c = takeWantCompany();
-    return c ? { companyId: c } : typeof window !== "undefined" && subNow().new ? { companyId: null } : null;
+    // Evidence Bank's Use in a new proposal opens the start too, with the cases for Proof.
+    return c ? { companyId: c } : typeof window !== "undefined" && (subNow().new || peekWantCases()) ? { companyId: null } : null;
   });
   // The new look (RN_UI2): the list page of Proposals.dc.html, the start as a panel on it, and the editor in three columns.
   const app = useAppMaybe();
@@ -302,7 +303,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         data={data}
         infos={infos}
         companyId={starting?.companyId ?? null}
-        onClose={() => setStarting(null)}
+        onClose={() => (dropWantCases(), setStarting(null))}
         onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
         onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenTab(null), setOpenId(p.id))}
         // From Granola (GranolaCallPicker.tsx): only while Granola is switched on for Merlin (RN_GRANOLA). Off, there is no Granola card and paste or drop works as before.

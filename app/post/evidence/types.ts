@@ -15,17 +15,12 @@
  * pick list), "What changed, in numbers?" fills outcomes.
  */
 
-export type EvidenceStatus = "draft" | "ready";
+import { EVIDENCE_LIMITS, PROBLEMS as SERVER_PROBLEMS, type CaseStatus, type MatchLabel, type Outcome } from "@/lib/evidence/types";
 
-/** One before and after number, as the member typed it. */
-export interface EvidenceOutcome {
-  /** What was measured: "Win rate", "Sales cycle". */
-  k: string;
-  before: string;
-  after: string;
-  /** Optional unit when the numbers carry none ("days", "%"). */
-  unit?: string;
-}
+export type EvidenceStatus = CaseStatus;
+
+/** One before and after number, as the member typed it (lib/evidence/types.ts Outcome). */
+export type EvidenceOutcome = Outcome;
 
 export interface EvidenceCase {
   id: string;
@@ -79,13 +74,13 @@ export type EvidenceInput = Partial<Omit<EvidenceCase, "createdAt" | "updatedAt"
 /** How close one case is to one company (lib/evidence/match.ts): words only, never a percentage. */
 export interface EvidenceMatch {
   caseId: string;
-  label: "Same" | "Close" | "Different";
+  label: MatchLabel;
   same: string[];
   diff: string[];
 }
 
 /** The most cases a member keeps (F8). */
-export const MAX_CASES = 50;
+export const MAX_CASES = EVIDENCE_LIMITS.cases;
 
 /**
  * Type of work, the fit tags: categories, each with its tags. A case carries tags; the category
@@ -96,12 +91,12 @@ export const MAX_CASES = 50;
 export const WORK_TAGS_DEFAULT: { cat: string; tags: string[] }[] = [
   { cat: "Sales Leadership", tags: ["Sales process design", "Forecast methodology", "Founder-led sales exit", "Sales team hiring and ramp", "Pipeline inspection", "Quota and territory planning", "Product-led to sales bridge", "Pricing and packaging"] },
   { cat: "Marketing", tags: ["Positioning and messaging", "Demand generation", "Account-based marketing", "Content program", "Marketing team build"] },
-  { cat: "Revenue Operations", tags: ["CRM sales configuration", "Revenue reporting and dashboards", "Lead routing and assignment", "Tech stack cleanup", "Comp plan design"] },
+  { cat: "Revenue Operations", tags: ["CRM sales configuration", "Revenue reporting and dashboards", "Lead routing and assignment", "Tech stack cleanup"] },
   { cat: "Sales Enablement", tags: ["Sales playbook", "Call coaching and feedback", "Onboarding program", "Sales training"] },
-  { cat: "Customer Success and Growth", tags: ["Renewal management", "Expansion motion", "Churn reduction", "Customer onboarding"] },
+  { cat: "Customer Success and Growth", tags: ["Renewal management", "Expansion motion"] },
   { cat: "AI go-to-market", tags: ["AI lead scoring", "AI outbound workflows", "AI research for sellers"] },
   { cat: "Partnerships", tags: ["Reseller channel build", "Partner enablement", "Alliances and co-selling"] },
-  { cat: "Sellers", tags: ["Discovery call execution", "Deal closing", "Outbound prospecting"] },
+  { cat: "Sellers", tags: ["Discovery call execution", "Deal closing"] },
 ];
 let tagsNow = WORK_TAGS_DEFAULT;
 let problemsNow: readonly string[] | null = null;
@@ -118,16 +113,5 @@ export function setPicks(p: { tags?: { cat: string; tags: string[] }[]; problems
   if (p.problems && p.problems.length) problemsNow = p.problems;
 }
 
-/** Problems members solve most, to pick from (the member can type their own). */
-export const PROBLEMS = [
-  "The founder closed every deal",
-  "No shared sales process",
-  "The forecast kept missing",
-  "Pipeline too thin to hit the number",
-  "Inbound leads sat for days",
-  "Renewals had no owner",
-  "Nothing written down for a new hire",
-  "Revenue flat for a year or more",
-  "Sign-ups grew but nobody followed up",
-  "Sales and marketing pulled in different directions",
-];
+/** Problems members solve most, to pick from (the member can type their own): the server's list (lib/evidence/types.ts), which its list answer sends too. */
+export const PROBLEMS: readonly string[] = SERVER_PROBLEMS;

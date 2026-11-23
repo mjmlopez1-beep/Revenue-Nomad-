@@ -35,6 +35,23 @@ export const takeWantCompany = () => {
   return c;
 };
 
+/**
+ * Evidence Bank's "Use in a new proposal": the cases picked there (two at most, Proof's most) go
+ * into the next proposal started, as its Proof. Read by the start (peekWantCases) and let go once
+ * the proposal is made or the start is closed (dropWantCases).
+ */
+let wantCases: string[] | null = null;
+export const peekWantCases = () => wantCases;
+export const dropWantCases = () => {
+  wantCases = null;
+};
+/** Open Proposals on a new proposal whose Proof starts with these Evidence Bank cases (for this company, when one was matched). */
+export function proposalWithCases(ui: { openPage: (p: "proposals") => void }, caseIds: string[], companyId?: string | null) {
+  wantCases = [...new Set(caseIds)].slice(0, 2);
+  want = companyId ?? null;
+  ui.openPage("proposals");
+}
+
 /** Open Proposals with a proposal started for this company (its public id), as "Write a proposal" does. */
 export function proposalFor(ui: { openPage: (p: "proposals") => void }, companyId: string) {
   want = companyId;

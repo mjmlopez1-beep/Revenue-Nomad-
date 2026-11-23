@@ -108,7 +108,7 @@ export function CasePanel({
   const addTo = async (p: api.ProposalLine) => {
     setBusy(p.id);
     setErr(null);
-    const r = await api.toProof(c.id, p.id);
+    const r = await api.toProof(c.id, p);
     setBusy(null);
     if (api.failed(r)) return setErr(r.error);
     onChange(c.usedIn.includes(p.id) ? c : { ...c, usedIn: [...c.usedIn, p.id] });

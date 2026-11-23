@@ -91,6 +91,15 @@ export function clientSpellings(name?: string, site?: string): string[] {
 /** A text with every spelling of the client replaced by "the client". */
 export function scrubClient(text: string, spellings: string[]): string {
   let t = String(text ?? "");
+  // "Northwind Clinics: sales off the founder's desk" reads "Sales off the founder's desk", not "The client: ...".
+  for (const s of spellings) {
+    const lead = new RegExp(`^\\s*${esc(s)}\\s*:\\s*`, "i");
+    if (lead.test(t)) {
+      t = t.replace(lead, "");
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+      break;
+    }
+  }
   for (const s of spellings) t = t.replace(new RegExp(`(^|[^A-Za-z0-9])${esc(s)}(?=$|[^A-Za-z0-9])`, "gi"), (_m, pre: string) => `${pre}the client`);
   // "the client's" stays; a sentence that now starts with "the client" starts with a capital.
   return t.replace(/(^|[.!?]\s+)the client/g, (_m, pre: string) => `${pre}The client`);

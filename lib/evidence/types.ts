@@ -230,8 +230,17 @@ export interface MatchView {
   /** Drafts are skipped until their questions are answered. */
   skipped: number;
 }
-/** A company's row in a list: its closest ready case, or null. */
-export type MatchRows = Record<string, (CaseMatch & { caseId: string; title: string }) | null>;
+/**
+ * matchCompany (by member id, for the rest of Merlin): the MatchView, with the closest case's own
+ * label and words on top (`caseId` absent when every case reads Different), and `ranked`, every
+ * ready case closest first, each with its label and words (the same list as `cases`).
+ */
+export interface EvidenceMatch extends MatchView, CaseMatch {
+  caseId?: string;
+  ranked: RankedCase[];
+}
+/** A company's row in a list: its closest ready case (with its first outcome, as outcomeLine says it), or null. */
+export type MatchRows = Record<string, (CaseMatch & { caseId: string; title: string; outcome?: string }) | null>;
 
 /** A case as it goes into a proposal's Proof part or onto a card: hidden-client-safe. */
 export interface ProofItem {
@@ -247,6 +256,27 @@ export interface ProofItem {
 }
 
 /* ---------- small helpers ---------- */
+
+/** A value with its unit, as the member typed them: "74" and "days" read "74 days", "30" and "%" read "30%". */
+export const withUnit = (v: string, u?: string) => `${v}${u && v && !v.endsWith(u) ? (/^[%x]$/.test(u) ? u : ` ${u}`) : ""}`.trim();
+/** One outcome in a line: "Sales cycle: 74 days to 51 days". */
+export const outcomeLine = (o: Outcome) => `${o.k}: ${withUnit(o.before, o.unit)} to ${withUnit(o.after, o.unit)}`;
+/**
+ * A case's one line in a proposal's Proof part, the only place that line is written (the proposal
+ * store, the editor's Proof, Evidence Bank's Use in a proposal): who the client was (the label
+ * unless named), the title, the case's words and the numbers as typed. Built from a ProofItem, so
+ * the hidden client's name is already out of every part of it.
+ */
+export function proofLine(i: Pick<ProofItem, "client" | "title" | "text" | "outcomes">): string {
+  const end = (x: string) => (/[.!?]$/.test(x) ? x : `${x}.`);
+  const head = i.title && i.title !== i.client ? `${i.client}: ${i.title}` : i.client;
+  // The template's own "The client: ..." opener is said by the head already.
+  const story = String(i.text ?? "").replace(/\s+/g, " ").trim().replace(/^The client: .*?\.(\s+|$)/, "");
+  // Numbers the case's words already carry aren't said twice.
+  const has = (v: string) => !String(v ?? "").trim() || story.includes(String(v).trim());
+  const outs = (i.outcomes ?? []).filter((o) => o && String(o.k ?? "").trim() && (String(o.before ?? "").trim() || String(o.after ?? "").trim()) && !(has(o.before) && has(o.after)));
+  return `${end(head)}${story ? ` ${end(story)}` : ""}${outs.length ? ` ${outs.map(outcomeLine).join("; ")}.` : ""}`.replace(/\s+/g, " ").trim();
+}
 
 /** "2024-02" -> "Feb 2024"; "2024" stays; "Ongoing" -> "now". */
 export function monthWords(m: string): string {

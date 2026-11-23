@@ -38,6 +38,7 @@ import { commitClientSignature, commitSendSignature, dropStaged, readClientSigna
 import { dataUrl, pngFromDataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
 import { properCase } from "./startCall";
 import { autoProof, proofFromCases } from "../evidenceWire";
+import { forgetProposalIn, markUsedIn } from "../evidence";
 import { hasProofBlock } from "./proof";
 import { prefOn, type CloseAlertKind } from "../close/types";
 import {
@@ -512,6 +513,16 @@ function fillProof(p: StoredProposal, proof: { ids: string[]; text: string }) {
   p.proofCases = proof.ids;
 }
 
+/**
+ * Evidence Bank's Used in, kept with Proof: the cases Proof holds are noted as used in this
+ * proposal (lib/evidence markUsedIn). Before anything went out, a case taken out of Proof leaves
+ * it too; once a version was sent, a case that went out stays noted.
+ */
+function syncUsed(s: State, memberId: string, p: StoredProposal): void {
+  if (!p.sends.length && !isSigned(p)) forgetProposalIn(s, memberId, p.id);
+  if (p.proofCases?.length) markUsedIn(s, memberId, p.proofCases, p.id);
+}
+
 /** What NOT_LINKED says: the proposal names no company on Merlin, so the pipeline can't move. */
 export const NOT_LINKED = "Not linked to a company yet. Your pipeline won't move when they sign.";
 
@@ -540,6 +551,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
     p.companyPub = pub;
     if (!p.companyName) p.companyName = co.name || cleanLine(a.name, 120);
     if (proof && proofOpen(p)) fillProof(p, proof);
+    syncUsed(s, me.id, p);
     touch(p, now);
     // Already out, or signed: the pipeline catches up, as if it had been linked from the start.
     const signed = p.sends.find((x) => fullySigned(x));
@@ -553,7 +565,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
 /** A new proposal from a template (or blank), for a company on Merlin or one typed in. */
 export async function createProposal(
   token: string | null,
-  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string },
+  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string; proofCases?: unknown },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<ProposalRec> {
@@ -577,8 +589,11 @@ export async function createProposal(
   if (picked && !co) throw new ProposalProblem("That company isn't on Merlin. Type its name instead.");
   const name = co ? co.name || typed : typed;
   const now = new Date(nowMs).toISOString();
-  // Proof (Evidence Bank, Close, which building needs anyway): the closest one or two of the member's ready cases for this company. None that fit: Proof stays empty.
-  const proof = co ? await autoProof(me0.id, co.internal) : null;
+  // Proof (Evidence Bank, Close, which building needs anyway): the cases the member chose (Evidence Bank's
+  // Use in a new proposal), else the closest one or two of their ready cases for this company. None that fit: Proof stays empty.
+  // A pick that is no longer there (a case removed or back in draft meanwhile) never stops the proposal: the closest ones fill it instead.
+  const chosen = a.proofCases !== undefined ? await proofFromCases(me0.id, a.proofCases) : null;
+  const proof = chosen && !("error" in chosen) && chosen.ids.length ? chosen : co ? await autoProof(me0.id, co.internal) : null;
   return T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const list = (s.proposals ??= []);
@@ -626,6 +641,7 @@ export async function createProposal(
       delete p.proofCases;
       if (p.sources.caseStudies === "evidence" && !p.fields.caseStudies) delete p.sources.caseStudies;
     }
+    syncUsed(s, me.id, p);
     list.push(p);
     return recOf(p, nowMs, origin);
   });
@@ -655,6 +671,7 @@ export async function updateProposal(token: string | null, id: string, a: Propos
     applyPatch(p, proof ? { ...a, setFields: set === undefined ? { caseStudies: proof.text } : set && typeof set === "object" && !Array.isArray(set) ? { ...(set as Record<string, unknown>), caseStudies: proof.text } : set } : a, now, nowMs);
     if (proof?.ids.length) (p.proofCases = proof.ids), (p.sources.caseStudies = "evidence");
     else if (proof || (p.proofCases && (p.fields.caseStudies ?? "") !== before)) delete p.proofCases;
+    syncUsed(s, me.id, p);
     return recOf(p, nowMs, origin);
   });
   // A company picked or typed for a proposal not linked yet: linked (linkProposal), quietly when a typed name matches nothing.
@@ -678,6 +695,7 @@ export async function duplicateProposal(token: string | null, id: string, origin
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
     const copy: StoredProposal = { ...structuredClone(p), id: newId("pr_"), title: `${p.title} (copy)`.slice(0, LIMITS.title), version: 1, sends: [], createdAt: now, updatedAt: now };
     delete copy.versions;
+    syncUsed(s, me.id, copy);
     s.proposals!.push(copy);
     return recOf(copy, nowMs, origin);
   });
@@ -689,6 +707,8 @@ export async function deleteProposal(token: string | null, id: string): Promise<
     const p = mine(s, memberOf(seed, s, token), id);
     if (isSigned(p)) throw new ProposalProblem("A signed proposal is kept as the record of what was agreed.");
     s.proposals = (s.proposals ?? []).filter((x) => x !== p);
+    // It leaves its Evidence Bank cases' Used in.
+    forgetProposalIn(s, p.memberId, p.id);
     dropItemRecords(s, p.memberId, p.id);
   });
 }

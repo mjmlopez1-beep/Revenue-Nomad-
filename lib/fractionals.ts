@@ -244,21 +244,21 @@ export async function fractionalsView(token: string | null): Promise<Fractionals
   const prof = s.profiles[me.id] ?? {};
   const fn = prof.function ?? functionOf(prof.title || me.title);
   const records = recordsFor(seed, s, me);
-  await withCases(seed, s, me, records);
+  withCases(seed, s, me, records);
   return { records, fn: fn && fn !== "Other" ? fn : null, shown: prof.fractionals ?? (prof.partnersOff ? false : null) };
 }
 
 /**
- * Evidence Bank cases a member chose to show on their card (lib/evidenceWire.ts cardCases: ready,
+ * Evidence Bank cases a member chose to show on their card (lib/evidenceWire.ts cardCases, lib/evidence cardFor's cardIn: ready,
  * "Show on my card" on, the client hidden unless named, while they have Close). On a member's
  * record when they are in the directory, and on the viewer's own record.
  */
-async function withCases(seed: Seed, s: State, me: Member, records: FractionalRec[]): Promise<void> {
+function withCases(seed: Seed, s: State, me: Member, records: FractionalRec[]): void {
   const byPub = new Map([...seed.members, ...s.members].map((m) => [T.pubId(m.id), m.id] as const));
   for (const r of records) {
     const owner = r.you ? me.id : r.memberId ? byPub.get(r.memberId) : undefined;
     if (!owner || (!r.you && s.profiles[owner]?.fractionals !== true)) continue;
-    const cases = await cardCases(seed, s, owner);
+    const cases = cardCases(s, owner);
     if (cases.length) r.cases = cases;
   }
 }

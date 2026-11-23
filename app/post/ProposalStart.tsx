@@ -19,6 +19,7 @@
  * never guessed), and where each part came from.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { dropWantCases, peekWantCases } from "./WriteProposal";
 import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals/types";
 import { DISCOVERY_TARGET, acceptInto, blanksInWords, blanksOf, docFields, fieldLabel } from "@/lib/proposals/library";
 import { extract, transcriptOk } from "@/lib/proposals/extract";
@@ -190,6 +191,9 @@ export function StartSheet({
   const toast = useToast();
   const known = useMemo(() => infos.filter((i) => !i.c.hidden && i.c.name).sort((a, b) => a.c.name.localeCompare(b.c.name)), [infos]);
   const preset = companyId ? infos.find((i) => i.c.id === companyId) : undefined;
+  // Evidence Bank's Use in a new proposal: these cases start its Proof (WriteProposal.tsx).
+  const [cases] = useState(() => peekWantCases());
+  const casesWords = cases?.length ? ` Proof starts with the ${cases.length === 1 ? "case" : "two cases"} you picked in Evidence Bank.` : "";
   const [q, setQ] = useState(preset && !preset.c.hidden ? preset.c.name : "");
   const [pick, setPick] = useState<string | null>(companyId);
   const [src, setSrc] = useState<Source>(granolaSlot && granolaFirst ? "granola" : "paste");
@@ -320,7 +324,7 @@ export function StartSheet({
   const draft = async () => {
     setErr(null);
     if (!company && !pick) return setErr("Pick the company, or type its name.");
-    const base = { templateId: tplNow === "blank" ? null : tplNow, companyId: pick, companyName: picked && !picked.c.hidden ? undefined : q.trim() };
+    const base = { templateId: tplNow === "blank" ? null : tplNow, companyId: pick, companyName: picked && !picked.c.hidden ? undefined : q.trim(), ...(cases?.length ? { proofCases: cases } : {}) };
     const sign = signer.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(signer.email.trim()) ? { name: signer.name.trim(), email: signer.email.trim(), ...(signer.title.trim() ? { title: signer.title.trim() } : {}) } : null;
     const terms = hasCall ? readTerms(callText) : { fields: {}, checks: [] };
     if (ai) {
@@ -340,6 +344,12 @@ export function StartSheet({
         const u = await post<ProposalRec>({ op: "update", id: p.id, signer: sign });
         if (!u.error) p = u;
       }
+      // The cases picked in Evidence Bank fill Proof, as the member asked (the draft from a call doesn't take them itself).
+      if (cases?.length && (p.proofCases ?? []).join() !== cases.join()) {
+        const u = await post<ProposalRec>({ op: "update", id: p.id, proofCases: cases });
+        if (!u.error) p = u;
+      }
+      dropWantCases();
       setBusy(null);
       setText(""), setAgreed("");
       live.reset();
@@ -376,6 +386,7 @@ export function StartSheet({
     const r = await post<ProposalRec>({ op: "create", ...base, ...(hasCall ? { fields, notes, signerOnCall } : Object.keys(fields).length ? { fields } : {}), ...(sign ? { signer: sign } : {}) });
     setBusy(null);
     if (r.error) return setErr(r.error);
+    dropWantCases();
     setText(""), setAgreed("");
     onDrafted?.(r);
     setReady(summarise(r, [], terms.checks));
@@ -402,7 +413,7 @@ export function StartSheet({
   if (layout === "panel") {
     const isCall = mode === "call";
     const panelTitle = ready ? "Draft ready" : isCall ? "New proposal from a call" : mode === "blank" ? "New blank proposal" : "New proposal from a template";
-    const panelSub = ready ? "Read it through before you send it." : isCall ? "Start from the conversation you already had." : "Nothing is filled in from a call.";
+    const panelSub = ready ? "Read it through before you send it." : `${isCall ? "Start from the conversation you already had." : "Nothing is filled in from a call."}${casesWords}`;
     const running = live.state.status === "running" || (busy === "draft" && live.state.status !== "idle");
     const companyField = (
       <div className="pz-cofield">
@@ -767,7 +778,7 @@ export function StartSheet({
         <h1 className="cu-h1" ref={head} tabIndex={-1}>
           {title}
         </h1>
-        <p className="cu-lead">Start from the conversation you already had. Merlin fills in what was said, in your template, in your words.</p>
+        <p className="cu-lead">Start from the conversation you already had. Merlin fills in what was said, in your template, in your words.{casesWords}</p>
       </header>
 
       {!(picked && !picked.c.hidden) && (

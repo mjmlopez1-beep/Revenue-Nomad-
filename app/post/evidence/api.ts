@@ -10,13 +10,14 @@
  *   draftFromSeat(seatId)           the draft for a seat of theirs: the one there is, or a new one with
  *                                   the size, industry, revenue and dates filled in from the seat
  *   match(companyId)                how close each ready case is to one company (words only, free)
- *   toProof(caseId, proposalId)     puts the case in that proposal's Proof part
+ *   toProof(caseId, proposal)       puts the case in that draft proposal's Proof part (the proposals route)
  *   card(id, on)                    shows it on the member's card in Fractionals, or not
  *
  * Nothing here spends a credit: Evidence Bank is part of Close, and none of its actions cost.
  * Errors come back as { error } in plain words, never thrown.
  */
 import { errorText } from "../../ui/shared";
+import { refreshEvidence } from "../useClosest";
 import { setPicks, type EvidenceCase, type EvidenceInput, type EvidenceMatch, type EvidenceOutcome } from "./types";
 
 const URL = "/api/evidence";
@@ -142,10 +143,21 @@ export async function match(companyId: string, caseIds?: string[]): Promise<Evid
     .map((m) => ({ caseId: str(m.caseId), label: str(m.label) as EvidenceMatch["label"], same: strs(m.same), diff: strs(m.diff) }));
 }
 
-/** Put a ready case in one proposal's Proof part. */
-export async function toProof(caseId: string, proposalId: string): Promise<{ ok: true } | Fail> {
-  const j = await post("toProof", { caseIds: [caseId], proposalId });
-  return failed(j) ? j : { ok: true };
+/**
+ * Put a ready case in one draft proposal's Proof part, first, beside the one it holds already (two
+ * at most): the proposals route's update with proofCases (lib/proposals/store.ts), which writes
+ * Proof's words from the cases and notes the case as used in that proposal.
+ */
+export async function toProof(caseId: string, p: Pick<ProposalLine, "id" | "proofCases">): Promise<{ ok: true } | Fail> {
+  const ids = [caseId, ...(p.proofCases ?? []).filter((x) => x !== caseId)].slice(0, 2);
+  try {
+    const r = await fetch("/api/proposals", { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ op: "update", id: p.id, proofCases: ids }) });
+    const j = (await r.json().catch(() => ({}))) as J;
+    if (!r.ok) return { error: errorText(r.status, j.error, "That didn't go through. Try again."), ...(typeof j.upgrade === "string" ? { upgrade: j.upgrade } : {}) };
+    return { ok: true };
+  } catch {
+    return { error: NETWORK };
+  }
 }
 
 /** Show a ready case on the member's card, or take it off. */
@@ -160,13 +172,15 @@ export interface ProposalLine {
   title: string;
   company: string;
   status: string;
+  /** The Evidence Bank cases its Proof holds. */
+  proofCases?: string[];
 }
 export async function proposals(): Promise<ProposalLine[] | Fail> {
   try {
     const r = await fetch("/api/proposals", { headers: { accept: "application/json" } });
-    const j = (await r.json().catch(() => ({}))) as { proposals?: { id: string; title: string; status: string; company?: { name?: string } }[]; error?: unknown };
+    const j = (await r.json().catch(() => ({}))) as { proposals?: { id: string; title: string; status: string; company?: { name?: string }; proofCases?: unknown }[]; error?: unknown };
     if (!r.ok) return { error: errorText(r.status, j.error, "Proposals didn't load.") };
-    return (j.proposals ?? []).map((p) => ({ id: p.id, title: p.title, company: p.company?.name ?? "", status: p.status }));
+    return (j.proposals ?? []).map((p) => ({ id: p.id, title: p.title, company: p.company?.name ?? "", status: p.status, ...(strs(p.proofCases).length ? { proofCases: strs(p.proofCases) } : {}) }));
   } catch {
     return { error: NETWORK };
   }
@@ -184,5 +198,6 @@ export async function draftNewSeats(before: ReadonlySet<string>, now: readonly s
   const fresh = now.filter((id) => !before.has(id) && !asked.has(id));
   for (const id of fresh) asked.add(id);
   await Promise.all(fresh.map((id) => draftFromSeat(id)));
+  if (fresh.length) refreshEvidence();
   return fresh;
 }

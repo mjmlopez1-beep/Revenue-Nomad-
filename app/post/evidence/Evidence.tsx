@@ -26,6 +26,8 @@ import * as api from "./api";
 import { Builder, buildHead } from "./Builder";
 import { CasePanel, MatchPanel, type CaseTab, type MatchCo } from "./Panels";
 import { onOpenEvidence, takeEvidenceSeat } from "./open";
+import { proposalWithCases } from "../WriteProposal";
+import { refreshEvidence } from "../useClosest";
 import { seatLiteOf } from "./seatLite";
 import { EvidenceUpgrade } from "./Upgrade";
 import { catOf, workCats, type EvidenceCase, type EvidenceMatch } from "./types";
@@ -208,7 +210,8 @@ function Bank() {
   const draftSeats = own.filter((r) => r.kind === "seat").map((r) => r.seat!);
   const hero = !!first && !built && mode === "build";
 
-  const put = (x: EvidenceCase) => setCases((cs) => (cs ? (cs.some((y) => y.id === x.id) ? cs.map((y) => (y.id === x.id ? x : y)) : [x, ...cs]) : [x]));
+  // A case saved here changes the closest cases other pages show (Companies, a company, Hiring now, Proof): they ask again.
+  const put = (x: EvidenceCase) => (setCases((cs) => (cs ? (cs.some((y) => y.id === x.id) ? cs.map((y) => (y.id === x.id ? x : y)) : [x, ...cs]) : [x])), refreshEvidence());
   // On a phone the panel sits above the list: bring it into view when it opens.
   const toPanel = () => phone && setTimeout(() => document.querySelector(".ev-aside")?.scrollIntoView({ block: "start" }), 60);
   const openRow = (r: EvRow) => {
@@ -263,6 +266,7 @@ function Bank() {
     const x = await api.remove(r.c.id);
     if (api.failed(x)) return toast(x.error, true);
     setCases((cs) => (cs ?? []).filter((y) => y.id !== r.c.id));
+    refreshEvidence();
     setRemoving(null);
     setMode(null);
     setOpenKey(null);
@@ -376,7 +380,7 @@ function Bank() {
           onMatch={() => setMode("match")}
           onRemove={() => setRemoving(caseOpen.key)}
           proposalHref={(id) => `/?p=proposals&pr=${encodeURIComponent(id)}`}
-          openProposals={() => c.openPage("proposals")}
+          openProposals={() => (caseOpen.c.status === "ready" ? proposalWithCases(c, [caseOpen.c.id], matching?.co.id) : c.openPage("proposals"))}
           fractionalsHref={c.hrefOf("fractionals")}
           openFractionals={() => c.openPage("fractionals")}
         />
@@ -788,7 +792,7 @@ function Bank() {
       {selCases.length > 0 && (
         <div className="wb-selbar" role="toolbar" aria-label="Actions for selected cases">
           <strong className="wb-sel-n">{selCases.length} selected</strong>
-          <button type="button" className="wb-sel-btn wb-sel-primary" onClick={() => c.openPage("proposals")}>
+          <button type="button" className="wb-sel-btn wb-sel-primary" onClick={() => proposalWithCases(c, selCases.filter((r) => r.c.status === "ready").map((r) => r.c.id), matching?.co.id)}>
             Use in a new proposal
           </button>
           <button type="button" className="wb-sel-btn" onClick={() => (setScope("sel"), setMode("match"))}>

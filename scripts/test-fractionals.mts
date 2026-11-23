@@ -548,13 +548,17 @@ async function main() {
   /* ---------- Evidence Bank on a card (Close, opt-in) ---------- */
   console.log("\nEvidence Bank cases on a card");
   {
-    const W = await import("../lib/evidenceWire");
+    // Her cases as lib/evidence keeps them (State.evidence), the client's name kept only to be scrubbed while hidden.
     const mk = (id: string, status: "draft" | "ready", showOnCard: boolean, more: Record<string, unknown> = {}) => ({
-      id, status, showOnCard, companyId: "c_kite", clientNamed: false, clientLabel: "A SaaS company, $5M to $20M", title: "Kitebright: a forecast the board trusts",
+      id, status, showOnCard, companyId: "c_kite", clientNamed: false, clientName: "Kitebright", clientLabel: "A SaaS company, $5M to $20M", title: "Kitebright: a forecast the board trusts",
+      role: "Fractional VP Sales", fn: "Sales", start: "2024-01", end: "2024-09", hours: "", size: "", revenue: "", motion: "", industry: "", soldTo: "", answers: { problem: "", did: "", numbers: "" }, textBy: "member",
       problems: [], workType: [], outcomes: [{ k: "Forecast miss", before: "30%", after: "8%" }], workedWith: [], text: "At Kitebright the close took 20 days.", usedIn: [], createdAt: ago(9 * DAY), updatedAt: ago(DAY), ...more,
     });
-    const cases: Record<string, ReturnType<typeof mk>[]> = { mem_dana: [mk("ev_a", "ready", true), mk("ev_b", "ready", false, { title: "Not for the card" }), mk("ev_c", "draft", true, { title: "A draft" })] };
-    W.evidenceWireInternals.use({ listCases: async (m: string) => (cases[m] ?? []) as never });
+    const setCases = (xs: ReturnType<typeof mk>[]) =>
+      t.tableInternals.mutate((s) => {
+        (s.evidence ??= {}).mem_dana = xs as never;
+      });
+    await setCases([mk("ev_a", "ready", true), mk("ev_b", "ready", false, { title: "Not for the card" }), mk("ev_c", "draft", true, { title: "A draft" })]);
     const danaRec = async (who: string) => (await dirOf(who)).records.find((r) => r.seats.some((x) => x.id === pub("e_dana_kite")));
     check("no Close for her: no cases on her card (Evidence Bank is Close's)", !(await danaRec("mem_robin"))?.cases);
     await t.tableInternals.mutate((s) => {
@@ -565,12 +569,11 @@ async function main() {
     check("the client's name stays hidden on her card (taken out of her own words)", !!got && !/Kitebright/i.test(JSON.stringify(got)) && got[0].title === "A forecast the board trusts", got);
     check("each with one outcome", got?.[0].outcome === "Forecast miss: 30% to 8%", got);
     check("no internal company id on the card", !JSON.stringify(await dirOf("mem_robin")).includes("c_kite"));
-    cases.mem_dana[0] = mk("ev_a", "ready", true, { clientNamed: true });
+    await setCases([mk("ev_a", "ready", true, { clientNamed: true })]);
     check("a client she named shows by name", /Kitebright/.test(JSON.stringify((await danaRec("mem_robin"))?.cases)));
     await t.perform(tok("mem_dana"), { type: "settings", fractionals: false }, BASE);
     check("out of the directory: her cases go with her record", !(await danaRec("mem_robin")));
     await t.perform(tok("mem_dana"), { type: "settings", fractionals: true }, BASE);
-    W.evidenceWireInternals.use(null);
   }
 
   console.log(`\n${passes} passed, ${failures} failed`);
