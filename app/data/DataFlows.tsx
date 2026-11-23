@@ -35,7 +35,7 @@ const SERVICES: Service[] = [
   },
   {
     who: "Granola",
-    gets: "Only for a member who connects Granola with their own Granola API key: Merlin's requests to Granola's API, sent with that key. When the member opens the call picker, Merlin asks Granola for their recent notes with a company's web address or a person's email on the invite, and reads when each call was and who was on it. Only when the member picks a call does Merlin read its transcript, to draft that one proposal. Merlin keeps the key encrypted and nothing else from Granola: no note, title, summary or transcript.",
+    gets: "Only for a member who connects Granola: with Connect Granola, the member signs in at Granola and says yes there, and Merlin gets an access token for their calls; or, as a fallback, the member pastes their own Granola API key. When the member opens the call picker, Merlin asks Granola for their recent meetings with a company's web address or a person's email on the invite, and reads when each call was and who was on it. Only when the member picks a call does Merlin read its transcript, to draft that one proposal. Merlin never reads a call the member didn't pick. Merlin keeps the access and refresh tokens, or the key, encrypted, and nothing else from Granola: no note, title, summary or transcript.",
     why: "Starting a proposal from a call the member recorded in Granola.",
     when: "Only while the Granola feature is on, and only for members who connect it.",
   },
@@ -361,7 +361,7 @@ export function DataFlows() {
               <li>Your connections file and your contacts file: People, Bring in who you know, or Your network. Each has its own Delete, and every way in found from it goes with it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added. On Agent access: Revoke an assistant, switch off its tools, or set a daily spend limit for all of them.</li>
-              <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
+              <li>Granola: Integrations, Disconnect (or Settings, Connections). Merlin asks Granola to end its access and deletes it at once, and closing your account does the same. If you connected a key, revoke it in Granola as well, under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
               <li>Your Evidence Bank: remove any case, hide its client, or take it off your card, on the Evidence Bank page.</li>
