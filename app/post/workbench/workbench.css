@@ -346,6 +346,8 @@
 }
 .wb-scroll {
   flex: none;
+  /* The table's screen-reader-only words (.sr-only, position: absolute) stay inside the side scroll, never widening the page. */
+  position: relative;
 }
 .wb-table {
   width: 100%;
