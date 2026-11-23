@@ -133,7 +133,8 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
   const exRows = useMemo(() => EXAMPLE_ROWS.map((x) => x.value), []);
   const rows = ex ? exRows : v.rows;
   const shown = rows.filter((r) => passes(r, zone, f, who));
-  const onMap = rows.filter((r) => r.onMap);
+  // The map's marks, and the company picked from the list even when it isn't one of them (at its place, unspread).
+  const onMap = rows.filter((r) => r.onMap || r.id === sel);
   const cur = rows.find((r) => r.id === sel) ?? shown[0] ?? rows[0] ?? null;
   // A company opened here (the usual unlock): read again so its name and routes come.
   const hiddenNow = cur && isHidden ? isHidden(cur.id) : null;
@@ -346,7 +347,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
 
       <div className="wp-foot" role="status">
         <span>
-          {ex ? "Example: made-up companies and people, never counted." : `${n(v.total)} companies that fit you · ${withPath === 1 ? "1 has a way in" : `${n(withPath)} have a way in`}`}
+          {ex ? "Example: made-up companies and people, never counted." : `${n(v.total)} companies that fit you · ${through === 1 ? "1 has a way in through someone" : `${n(through)} have a way in through someone`}`}
         </span>
         <button type="button" className="wp-link" onClick={() => c.start.run("network")}>
           Everyone you know
@@ -485,9 +486,9 @@ function MapCard({
       )}
       <div className="wp-plot">
         <div className="wp-yaxis" aria-hidden>
-          <span>Strong fit</span>
-          <strong>How well the company fits you</strong>
-          <span>Loose fit</span>
+          <span className="wp-y-top">Strong fit</span>
+          <strong className="wp-y-mid">How well the company fits you</strong>
+          <span className="wp-y-bot">Loose fit</span>
         </div>
         <div className="wp-plot-main">
           <div className={cx("wp-field", ex && "wp-field-ex")} role="group" aria-label="Companies by how well they fit you and how strong your way in is">
@@ -554,8 +555,7 @@ function MapCard({
         </div>
       </div>
       <p className="wp-lines">
-        The lines sit in the middle of {ex ? "these" : `your ${n(v.total)}`} companies, so each quadrant holds some: above the line across is {lines.fit.words.charAt(0).toLowerCase() + lines.fit.words.slice(1)}; right of the line down is{" "}
-        {lines.way.words.charAt(0).toLowerCase() + lines.way.words.slice(1)}. They move as your companies and ways in change.{" "}
+        The lines sit in the middle of {ex ? "these" : `your ${n(v.total)}`} companies, so each quadrant holds some. Above the line across: {lines.fit.words}. Right of the line down: {lines.way.words}. They move as your companies and ways in change.{" "}
         {warmest === null
           ? "No way in yet at any of them."
           : warmest < 35

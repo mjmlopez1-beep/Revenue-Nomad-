@@ -387,7 +387,7 @@ export interface Split {
 }
 
 /** The least share of rows a whole-value line must leave on each side, or the line goes by rank. */
-export const SPLIT_MIN_SHARE = 0.3;
+export const SPLIT_MIN_SHARE = 0.2;
 
 /**
  * Where a middle line goes. `coarse` is each row's whole value (null: always low, a company with no

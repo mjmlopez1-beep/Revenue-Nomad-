@@ -637,7 +637,7 @@ function stepsOfDraft(cx: Cx, d: Draft, companyName: string | null, sig: Signals
     const body = direct
       ? `Hi ${t.startsWith("their") || t.startsWith("whoever") ? "there" : t}, I saw ${co} ${sig.openRole ? `is hiring for a ${lc(sig.openRole).replace(/^open /, "")}` : "has worked with fractional leaders before"}. I'm ${voice.as || "a fractional leader"}${voice.clients ? ` and I help ${voice.clients}` : ""}. Worth 20 minutes to see if I can help?\n\n${sign}`
       : d.note?.body ?? "";
-    const note: RouteNote = { to: T0, subject: direct ? `A fractional ${cx.fn ?? "leader"} for ${co}` : (d.note?.subject ?? `About ${co}`), body, email: direct ? null : d.email };
+    const note: RouteNote = { to: T0, subject: direct ? `A fractional ${cx.fn ? `${cx.fn} leader` : "leader"} for ${co}` : (d.note?.subject ?? `About ${co}`), body, email: direct ? null : d.email };
     out.push({
       n: 1, kind: "ask", who: "Your move", title: `Send ${t} a short note`, detail: direct ? "Built around why now. Sent from your own email." : "You know each other. Keep it short and specific.",
       note, nudge: null, act: d.act.kind === "message" ? d.act : { kind: "note", first: T0 }, primary: d.act.kind === "message" ? `Send to ${T0} on Merlin` : "Open in Gmail with the note", alt: "Edit the note", cant: null,
