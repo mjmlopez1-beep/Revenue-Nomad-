@@ -102,6 +102,12 @@ export interface StoredDocument {
   /** The final PDF: the fields stamped in and the audit trail page added. */
   completed?: { at: string; sha256: string; signedPagesSha256: string; size: number; seal?: import("../proposals/types").SealRec };
   events: DocEvent[];
+  /**
+   * A saved contract (lib/documents/templates.ts): kept to send again, never sent itself. Its PDF
+   * and fields stay as placed; the other side's signers are empty places ("roles") filled in each
+   * time it is used. Saved contracts are not in the member's list of documents (docRecsOf).
+   */
+  saved?: { at: string; uses: number; lastAt?: string };
 }
 
 export type DocStatus = "draft" | "sent" | "viewed" | "signed" | "declined" | "void" | "expired";

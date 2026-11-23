@@ -55,6 +55,13 @@ export const stageSendSignature = (sendId: string, png: Uint8Array) => stage(sen
 export const commitSendSignature = (sendId: string, staged: string) => commit(sendSig(sendId), staged);
 export const readSendSignature = (sendId: string): Promise<Buffer | null> => fs.readFile(sendSig(sendId)).catch(() => null);
 
+/* ---------- the client's drawn signature on a send (proposals/<send id>/client-sig.png) ---------- */
+
+const clientSig = (sendId: string) => path.join(folder(sendId), "client-sig.png");
+export const stageClientSignature = (sendId: string, png: Uint8Array) => stage(clientSig(sendId), png);
+export const commitClientSignature = (sendId: string, staged: string) => commit(clientSig(sendId), staged);
+export const readClientSignature = (sendId: string): Promise<Buffer | null> => fs.readFile(clientSig(sendId)).catch(() => null);
+
 /* ---------- a member's saved signature (RN_DATA_DIR/members/<member id>/signature.png) ---------- */
 
 const MEMBER = /^[A-Za-z0-9_-]{1,64}$/;

@@ -209,7 +209,8 @@ export interface StoredSend {
   code?: { hash: string; at: string; tries: number };
   codesSent?: string[];
   codeVerifiedAt?: string;
-  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string; choice?: ChoiceRec };
+  /** `method` "drawn": the client drew their signature (its PNG is a file kept with the send, proposals/<send id>/client-sig.png, its SHA-256 here); a typed one before draws were offered has none. */
+  signed?: { name: string; at: string; ip: string; ua: string; consent: string; consentVersion: string; hash: string; email: string; choice?: ChoiceRec; method?: "typed" | "drawn"; pngSha256?: string };
   declined?: { at: string; reason: string; ip: string; ua: string };
   voided?: { at: string; why: "member" | "changed" | "passed" };
   /** The client passed it to someone else to sign: this link is read only now, and `to` has the new one. */
@@ -305,6 +306,8 @@ export interface ProposalSendRec {
   codeVerifiedAt: string | null;
   signedAt: string | null;
   signedName: string | null;
+  /** The client's drawn signature as a data URL, once they signed by drawing it (null when typed). */
+  signedImg?: string | null;
   declinedAt: string | null;
   declineReason: string | null;
   voidedAt: string | null;
@@ -439,6 +442,8 @@ export interface SignerView {
   consentVersion: string;
   signedAt: string | null;
   signedName: string | null;
+  /** The client's drawn signature as a data URL, once they signed by drawing it (null when typed). */
+  signedImg?: string | null;
   declinedAt: string | null;
   expiresAt: string | null;
   copyUrl: string | null;
@@ -473,6 +478,8 @@ export interface SignedCopy {
   member: SignerView["member"];
   awaitingMember: boolean;
   signer: { name: string; title: string };
+  /** The client's drawn signature (a data URL), when they drew it. */
+  signedImg?: string | null;
 }
 
 /**

@@ -111,6 +111,9 @@ export const STARTER: Record<string, string> = {
   next_steps: "{{nextStep}}\n- Today: you read this proposal and sign it online.\n- Within 2 days of signing: a kickoff call to plan week one.\n- Week 1: access to the CRM and data, and the first weekly session.\n{{commitment}}",
   terms:
     "This proposal is the statement of work under our consulting agreement. Governing law: {{terms.governingLaw}}. What you share with us stays confidential. Neither side hires the other's people for 12 months after the work ends. A signature made electronically, and an electronic copy of this document, count the same as a signed original.",
+  // The agreement in numbered parts (sections.ts agreementParts): the client's page shows each as a line that opens, the first one open.
+  agreement:
+    "1. Services. {{client.companyName}} retains {{provider.name}} to provide the services in the Scope above. {{provider.name}} performs only the work {{client.companyName}} asks for, to generally accepted professional standards.\n2. Fees and payment. Fees are as set out in Timeline and investment, for the option and add-ons signed. Expenses approved in advance by email are repaid at cost.\n3. Independent contractor. {{provider.name}} is an independent contractor, not an employee, agent or partner, and is responsible for their own taxes and insurance.\n4. Confidential information. {{provider.name}} keeps {{client.companyName}}'s information private, uses it only for this work, and returns it on request. This lasts for {{agreement.confidentialityYears}} years after the work ends.\n5. Work product. Everything prepared for {{client.companyName}} under this agreement belongs to {{client.companyName}} once it is paid for.\n6. Term and ending it. The agreement runs for the term in Timeline and investment, then month to month. Either side may end it with {{term.noticeDays}} days' notice by email.\n7. General. This is the whole agreement. Changes must be in writing. Signed copies, including electronic ones, are binding.",
   signature: "Signed for {{client.companyName}} by {{client.signerName}}, {{client.signerTitle}}.\nSigned for the provider by {{provider.signerName}}.",
   addendum_header: "This addendum follows the terms of our agreement of {{addendum.originalAgreementDate}} and changes only what is below, from {{addendum.effectiveDate}}.\n{{addendum.changes}}\n\nWe review it together on {{addendum.reviewDate}}.",
 };
@@ -176,7 +179,7 @@ export function fieldLabel(key: string): string {
     .trim();
   return words ? words[0].toUpperCase() + words.slice(1) : key;
 }
-const NAMESPACES = new Set(["client", "provider", "company", "pricing", "proposal", "term", "terms", "goals", "goal", "deal", "call", "signer", "member", "me", "you"]);
+const NAMESPACES = new Set(["client", "provider", "company", "pricing", "proposal", "term", "terms", "agreement", "goals", "goal", "deal", "call", "signer", "member", "me", "you"]);
 /** Blanks in words, first few by name: "Headline, Signer name and 3 more". */
 export function blanksInWords(keys: string[], n = 4): string {
   const l = keys.slice(0, n).map((k) => fieldLabel(k).replace(/\s*\([^)]*\)$/, ""));
@@ -404,7 +407,7 @@ export function checklist(p: { blocks: ProposalBlock[]; fields: Record<string, s
   );
   const next = textOf(blocks, fields, ["next_steps"]);
   push("next", "A dated next step", has(blocks, "next_steps") && (/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|week \d|within \d|\d{1,2}\/\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(next) || filled(fields, "nextStep")), "Add Next steps with dates and who does each.");
-  push("esign", "Electronic signatures count", /electronic/i.test(textOf(blocks, fields, ["terms", "signature"])), "Add Terms: it says an electronic signature counts as the original.", true);
+  push("esign", "Electronic signatures count", /electronic/i.test(textOf(blocks, fields, ["terms", "agreement", "signature"])), "Add Terms: it says an electronic signature counts as the original.", true);
   const blanks = blanksOf(blocks, fields);
   push("blanks", "Every blank filled", blanks.length === 0, `${blanks.length} ${blanks.length === 1 ? "blank" : "blanks"} left to fill.`);
   const call = Date.parse(fields["discovery.callDate"] ?? "");

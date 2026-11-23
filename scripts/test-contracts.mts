@@ -489,6 +489,16 @@ async function main() {
   const flow = ["app/post/ProposalStart.tsx", "app/post/Proposals.tsx", "app/post/ProposalParts.tsx", "app/post/ProposalLink.tsx", "app/post/WriteProposal.tsx", "app/post/Billing.tsx", "app/post/ChangeIt.tsx", "app/post/Live.tsx", "app/post/contracts/ContractsHome.tsx", "lib/proposals/aiUsage.ts", "lib/proposals/draft.ts", "lib/proposals/change.ts"].map((f) => [f, readFileSync(path.join(import.meta.dirname, "..", f), "utf8")] as const);
   check("no Build it in Claude anywhere in the proposal flow or Billing", flow.every(([, src]) => !/build it in (your own )?claude|improve it in claude|claudePrompt|buildInClaude/i.test(src)), flow.filter(([, src]) => /build it in (your own )?claude|improve it in claude|claudePrompt|buildInClaude/i.test(src)).map(([f]) => f));
 
+  /* ---------- 11. the numbered agreement block, and the starter contracts ---------- */
+  const LB = await import("../lib/proposals/library");
+  const SEC = await import("../lib/proposals/sections");
+  const ag = LB.makeBlock("agreement");
+  const placed = SEC.arrange({ blocks: [{ title: ag.title, text: ag.body, kind: "agreement" }] });
+  check("the Consulting agreement block: in the library, numbered, placed as the agreement on the client's page in 7 parts that open", !!LB.blockDef("agreement") && placed.terms.length === 1 && placed.terms[0].sections.length === 7 && placed.terms[0].sections[0].title === "Services" && placed.terms[0].sections[6].title === "General" && placed.scope.length === 0, placed.terms[0]?.sections.map((x) => x.title));
+  check("  its electronic-signature line counts for the checklist", /electronic/i.test(ag.body) && /Signed copies, including electronic ones, are binding/.test(ag.body));
+  const SMP = await import("../lib/documents/samples");
+  check("two starter contracts, made up, offered on a first visit", SMP.STARTERS.length === 2 && SMP.STARTERS.map((x) => x.layout).join() === "two-column,nda" && (await (await import("pdf-lib")).PDFDocument.load(await SMP.makeSamplePdf("nda"))).getPageCount() === 3);
+
   console.log(`\n${passes} passed, ${failures} failed`);
 }
 

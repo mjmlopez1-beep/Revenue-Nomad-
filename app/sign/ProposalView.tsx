@@ -53,13 +53,21 @@ export interface ProposalViewProps {
   onAddOn?: (addOnId: string, on: boolean) => void;
   /** The signatures section's content. */
   sign: ReactNode;
-  /** The top bar's "Review and sign", while it can be signed. */
+  /** While it can be signed: the nav's last item reads Sign (else Sealed copy, once sealed). */
   canSign?: boolean;
   /** The title's heading level: h1 on the signing page, h2 where the page has its own h1 (the signed copy). */
   titleAs?: "h1" | "h2";
+  /** Under the header: the three steps (read, pick, sign) and where to ask or pass it on (the signing page, while open). */
+  guide?: ReactNode;
+  /** The summary beside the proposal, sticky on wide screens (ClientView.dc.html): the choice, its total, sign, ask, pass on. */
+  side?: ReactNode;
+  /** A chip for when it was signed ("Signed 22 November 2026"), once signed. */
+  signedAt?: string | null;
+  /** The nav's last item, once signed: "Sealed copy" when there is one. */
+  sealed?: boolean;
 }
 
-export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign, canSign, titleAs = "h1" }: ProposalViewProps) {
+export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign, canSign, titleAs = "h1", guide, side, signedAt, sealed }: ProposalViewProps) {
   const Title = titleAs;
   const g = arrange(d);
   const p = d.pricing;
@@ -67,6 +75,7 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
   const rec = p && pick ? choiceRec(p, pick) : null;
   const many = !!p && p.options.length > 1;
   const live = !!onPick;
+  const mins = readMinutes(d);
   const nav: [string, string][] = [];
   if (g.scope.length) nav.push(["scope", "01 Scope"]);
   for (const [k, label] of [
@@ -75,29 +84,18 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
     ["phases_workstreams", "The plan"],
     ["commitments", "Deliverables"],
     ["success_measures", "Success"],
+    ["proof", "Proof"],
     ["assumptions", "Assumptions"],
   ] as const)
     if (g.scope.some((b) => (k === "team" ? TEAM.has(b.kind) : k === "assumptions" ? SIDE.has(b.kind) : b.kind === k))) nav.push([k === "team" ? "team" : k === "assumptions" ? "assume" : k, label]);
   if (p || g.invest.length) nav.push(["invest", `02 ${many ? "Options" : "Investment"}`]);
   if (g.terms.length) nav.push(["terms", "03 Agreement"]);
-  nav.push(["sign", "Sign"]);
+  nav.push(["sign", canSign || !sealed ? "Sign" : "Sealed copy"]);
 
   return (
-    <div className="cv">
-      <div className="cv-bar">
-        <span className="cv-bar-l">
-          Sent to {d.to.name} by {d.from.name}
-          {openUntil === "none" ? " · no end date" : openUntil ? ` · open until ${dayOf(openUntil)}` : ""} · about {readMinutes(d)} {readMinutes(d) === 1 ? "minute" : "minutes"} to read
-        </span>
-        {canSign && (
-          <a className="cv-bar-go" href="#sign">
-            Review and sign
-          </a>
-        )}
-      </div>
-
-      <article className="cv-doc" aria-label="The proposal">
-        <header className="cv-head" data-section="header" {...(g.cover?.title ? { "data-section-title": g.cover.title } : { "data-section-group": "" })}>
+    <div className="cv" data-side={!!side}>
+      <header className="cv-head" data-section="header" {...(g.cover?.title ? { "data-section-title": g.cover.title } : { "data-section-group": "" })}>
+        <div className="cv-head-in">
           <span className="cv-kicker-l">Proposal · Version {d.version}</span>
           <Title className="cv-h1">{d.title}</Title>
           <span className="cv-parties">
@@ -113,21 +111,30 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           )}
           <div className="cv-chips">
             <span className="cv-chip">Sent {dayOf(d.preparedAt)}</span>
-            {openUntil && <span className="cv-chip">{openUntil === "none" ? "No end date" : `Open until ${dayOf(openUntil)}`}</span>}
+            {openUntil ? <span className="cv-chip">{openUntil === "none" ? "No end date" : `Open until ${dayOf(openUntil)}`}</span> : signedAt ? <span className="cv-chip">Signed {dayOf(signedAt)}</span> : null}
             {rec && <span className="cv-chip">{many && live ? `${p!.options.length} options to pick from` : live ? priced(rec.price, rec.billing) : rec.total}</span>}
+            <span className="cv-chip">
+              About {mins} {mins === 1 ? "minute" : "minutes"} to read
+            </span>
           </div>
-        </header>
+          {guide}
+        </div>
+      </header>
 
-        {nav.length > 2 && (
-          <nav className="cv-nav" aria-label="Sections">
+      {nav.length > 2 && (
+        <nav className="cv-nav" aria-label="Sections">
+          <div className="cv-nav-in">
             {nav.map(([id, label]) => (
-              <a key={id} href={`#${id}`}>
+              <a key={id} href={`#${id}`} data-hot={id === "sign" || undefined}>
                 {label}
               </a>
             ))}
-          </nav>
-        )}
+          </div>
+        </nav>
+      )}
 
+      <div className="cv-cols">
+      <article className="cv-doc" aria-label="The proposal">
         <div className="cv-body">
           {g.scope.length > 0 && <Scope blocks={g.scope} from={d.from} />}
 
@@ -192,6 +199,8 @@ export function ProposalView({ doc: d, openUntil, choice, onPick, onAddOn, sign,
           </section>
         </div>
       </article>
+      {side && <aside className="cv-side" aria-label="Your summary">{side}</aside>}
+      </div>
     </div>
   );
 }
@@ -570,7 +579,7 @@ export function Parties({
 }: {
   doc: FrozenDoc;
   /** The person who signs on this link (the addressee, or who it was passed to), with their title. */
-  client: { state: "here" | "signed"; name?: string | null; title?: string | null; at?: string | null };
+  client: { state: "here" | "signed"; name?: string | null; title?: string | null; at?: string | null; /** Their drawn signature (a data URL), when they drew it. */ img?: string | null };
   member: { state: "signed" | "after" | "waiting" | "none"; sig?: (Sig & { name: string; title: string; at: string; how: string }) | null };
 }) {
   const ms = member.state === "signed" ? member.sig ?? null : null;
@@ -578,7 +587,7 @@ export function Parties({
     <div className="cv-grid cv-grid-260">
       <div className="cv-party" data-state={client.state === "here" ? "here" : "signed"}>
         <span className="cv-party-co">{d.company || "For the client"}</span>
-        {client.state === "signed" && <SigMark sig={null} name={client.name ?? d.to.name} />}
+        {client.state === "signed" && <SigMark sig={client.img ? { kind: "drawn", typed: null, img: client.img } : null} name={client.name ?? d.to.name} />}
         <strong>
           {client.name ?? d.to.name}
           {(client.title ?? d.to.title) ? `, ${client.title ?? d.to.title}` : ""}
@@ -613,7 +622,7 @@ export const memberState = (mode: "now" | "after" | "none", member: unknown, cli
 /* ---------- the seal ---------- */
 
 /** "Sealed by Merlin": who signed, how they were checked, the audit trail, the download and Check a copy. */
-export function SealCard({ at, signers, events, pdf, check, track }: { at: string; signers: string[]; events: number; pdf: string | null; check: string; /** The page's own link: the sender is told of a download (activity.tsx). */ track?: string }) {
+export function SealCard({ at, signers, events, pdf, check, track }: { at: string; signers: string[]; /** Audit trail events, when known. */ events?: number; pdf: string | null; check: string; /** The page's own link: the sender is told of a download (activity.tsx). */ track?: string }) {
   return (
     <section className="cv-seal" aria-labelledby="cv-seal-h">
       <div className="cv-seal-top">
@@ -642,7 +651,7 @@ export function SealCard({ at, signers, events, pdf, check, track }: { at: strin
         </div>
         <div>
           <dt>Audit trail</dt>
-          <dd>{events} events, last page</dd>
+          <dd>{events ? `${events} events, last page` : "On its last page"}</dd>
         </div>
       </dl>
       <div className="cv-seal-go">

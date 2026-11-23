@@ -177,7 +177,7 @@ export function navMatches(text: string, items: NavItem[]): NavItem[] {
 /* ---------- the new look's rail (RN_UI2, Rail.dc.html) ---------- */
 
 /** Every page the new look draws or names: the old pages and its own (place.ts UI2_PAGES). */
-export const APP_PAGES2 = [...APP_PAGES, "find", "warm", "evidence", "alerts", "agent", "settings"] as const;
+export const APP_PAGES2 = [...APP_PAGES, "find", "warm", "evidence", "alerts", "agent", "settings", "contracts"] as const;
 export type AppPageKey2 = (typeof APP_PAGES2)[number];
 
 /** The rail's groups, top to bottom: the two at the top, then Data, Signals, Close, Community, Automate, Workspace. */
@@ -222,7 +222,7 @@ export interface NavInput2 {
   page: AppPageKey2;
   recordType: RecordType;
   tab: Tab;
-  /** Proposals is on its Contracts screen (?p=proposals&ct=1). */
+  /** Proposals is on its Contracts screen (the old look's ?p=proposals&ct=1). The new look's Contracts is its own page ("contracts"). */
   contracts?: boolean;
   hrefs: {
     today: string;
@@ -272,6 +272,8 @@ export function currentKey2(x: Pick<NavInput2, "page" | "recordType" | "tab" | "
       return "warm";
     case "proposals":
       return x.contracts ? "contracts" : "proposals";
+    case "contracts":
+      return "contracts";
     case "peers":
     case "partners":
     case "fractionals":
@@ -314,7 +316,7 @@ export function navItems2(x: NavInput2): NavItem2[] {
     ...(x.network || x.paths ? [{ key: "warm", label: "Warm paths", group: "signals" as const, icon: "warm" as const, href: p("warm"), page: "warm" as const, count: x.networkN || null }] : []),
     { key: "pipeline", label: "Pipeline", group: "close", icon: "pipeline", href: p("pipeline"), page: "pipeline", count: x.pipelineN || null, spoken: x.pipelineN ? `${x.pipelineN} open deals` : undefined },
     { key: "proposals", label: "Proposals", group: "close", icon: "proposals", href: p("proposals"), page: "proposals", count: x.proposalsN || null },
-    { key: "contracts", label: "Contracts", group: "close", icon: "contracts", href: x.hrefs.contracts, page: "proposals", pill: { text: "New", kind: "new" } },
+    { key: "contracts", label: "Contracts", group: "close", icon: "contracts", href: x.hrefs.contracts, page: "contracts", pill: { text: "New", kind: "new" } },
     {
       key: "evidence", label: "Evidence Bank", group: "close", icon: "evidence", href: p("evidence"), page: "evidence",
       pill: x.close ? { text: "New", kind: "new" } : { text: "Close", kind: "plan" }, ...(x.close ? {} : { gated: true, spoken: "on the Close plan" }),

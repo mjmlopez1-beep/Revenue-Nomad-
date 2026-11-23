@@ -216,7 +216,7 @@ type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 // Every page but "today" and "table" is drawn from the registry (shell/pages.tsx PAGES).
 type Page = ShellPage;
 /** The page an old page key opens with the new look off (a new page's old home). */
-const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table", evidence: "today" };
+const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table", evidence: "today", contracts: "proposals" };
 /** The page `p` opens in the look on screen (`ui2`: the new look). A page whose new one isn't built yet and stands in for the table (Find, for now) opens the table. */
 const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (opensTable(p) ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
 
@@ -248,6 +248,7 @@ const PAGE_TITLE: Record<Page, string> = {
   alerts: "Alerts and workflows",
   agent: "Agent access",
   settings: "Settings",
+  contracts: "Contracts",
 };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "Decision makers" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -303,6 +304,11 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
     const cur = new URLSearchParams(window.location.search);
     if (cur.get("p") === "proposals") for (const k of ["pr", "dc", "new", "ct"]) if (cur.get(k)) q.set(k, cur.get(k)!);
   }
+  // Contracts keeps the contract open in the address (contracts/ContractsPage.tsx), so a reload reopens it.
+  if (x.p === "contracts" && typeof window !== "undefined") {
+    const cur = new URLSearchParams(window.location.search);
+    if (cur.get("p") === "contracts" && cur.get("dc")) q.set("dc", cur.get("dc")!);
+  }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
   if (x.p === "table" && !q.toString()) q.set("p", "table");
@@ -357,19 +363,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const copy = useCopy();
 
   /* ----- the place: from the address bar, else the member's onboarding answers ----- */
-  const [place0] = useState(() => {
-    const x = readPlace(me);
-    // The new look's ?p=contracts is Proposals on its Contracts screen, which reads ?p=proposals&ct=1 (Proposals.tsx): the address says so before it draws.
-    if (x.ct && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "contracts") {
-      try {
-        const u = new URL(window.location.href);
-        u.searchParams.set("p", "proposals");
-        u.searchParams.set("ct", "1");
-        window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
-      } catch {}
-    }
-    return x;
-  });
+  // The new look's Contracts is its own page (contracts/ContractsPage.tsx); Proposals' old Contracts address (?p=proposals&ct=1) opens it (place.ts).
+  const [place0] = useState(() => readPlace(me));
   /** Opened from an old "Use it in Claude" link: Integrations opens at the Claude section. */
   const [claudeLink, setClaudeLink] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "claude");
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
@@ -2967,7 +2962,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * ----- the new look's way around (RN_UI2): the rail, the header, the tab bar and More -----
    * navModel.ts navItems2, drawn by shell/Rail.tsx and Sidebar.tsx TabBar2 and MoreSheet2.
    */
-  /** Proposals on its Contracts screen (?p=proposals&ct=1): the rail marks Contracts. */
+  /** Proposals on its Contracts screen (the old look's ?p=proposals&ct=1): the rail marks Contracts. The new look's Contracts is its own page. */
   const onContracts = page === "proposals" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ct") === "1";
   /** Proposals at its list or at Contracts, as an address. */
   const proposalsHref = (ct: boolean) => {
@@ -3005,7 +3000,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       people: tableHref("people", listTab),
       hiring: tableHref("engagements", "hiring", hiringFilters, null, false),
       find: opensTable("find") ? tableHref("companies", listTab) : placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: "find", all: allFns }),
-      contracts: proposalsHref(true),
+      contracts: placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: "contracts", all: allFns }),
       page: (x) => (x === "proposals" ? proposalsHref(false) : placeUrl(me, { t: recordType, v: tabPicked, s: sortPicked, f: filters, q: "", c: null, p: x as Page, all: allFns })),
     },
     admin: !!me.admin && !!view.admin,
@@ -3053,9 +3048,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       setPage("table");
       return;
     }
-    if (k === "proposals" || k === "contracts") {
+    if (k === "proposals") {
       // Proposals reads its screen from the address when it opens (Proposals.tsx): the address first, then the page, drawn again.
-      const href = proposalsHref(k === "contracts");
+      const href = proposalsHref(false);
       try {
         if (here() !== href) window.history.pushState({ tpd: 1 }, "", href);
       } catch {}

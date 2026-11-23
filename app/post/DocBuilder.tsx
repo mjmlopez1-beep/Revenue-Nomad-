@@ -86,9 +86,15 @@ export function DocBuilder({
   onBack,
   onGone,
   onOpen,
+  place: placeFirst,
+  backLabel = "All proposals",
 }: {
   /** A line at the top: why it opened here (Merlin found no signature lines, or reading it was refused). */
   notice?: string | null;
+  /** Contracts' "Adjust by hand": a field type ready to place, for the signer with this email. */
+  place?: { kind: FieldKind; email: string } | null;
+  /** The back button's words (Contracts: "All contracts"). */
+  backLabel?: string;
   initial: DocumentRec;
   data: ProposalsView;
   infos: CoInfo[];
@@ -104,8 +110,8 @@ export function DocBuilder({
   const [fields, setFields] = useState<DocField[]>(initial.fields);
   const [ordered, setOrdered] = useState(initial.ordered);
   const [company, setCompany] = useState<{ id: string | null; name: string }>(initial.company);
-  const [who, setWho] = useState<string | null>(initial.signers[0]?.id ?? null);
-  const [placing, setPlacing] = useState<FieldKind | null>(null);
+  const [who, setWho] = useState<string | null>(() => initial.signers.find((x) => placeFirst && x.email === placeFirst.email.toLowerCase())?.id ?? initial.signers[0]?.id ?? null);
+  const [placing, setPlacing] = useState<FieldKind | null>(() => (placeFirst && initial.status === "draft" ? placeFirst.kind : null));
   const [sel, setSel] = useState<string | null>(null);
   const [save, setSave] = useState<"saved" | "saving" | "error">("saved");
   const [sending, setSending] = useState(false);
@@ -285,6 +291,13 @@ export function DocBuilder({
     if (op === "copy") return toast("A copy to change and send."), onOpen(r);
     setD(r), onSaved(r), toast("Voided. The links stopped working.");
   };
+  /** Save to reuse (lib/documents/templates.ts): this PDF and its fields, for the next client. */
+  const keep = async () => {
+    await flush();
+    const r = await dapi<{ name: string }>({ op: "save", id: d.id });
+    if (r.error) return toast(r.error, true);
+    toast(`Saved as ${r.name}. It is in Saved contracts with its fields in place.`);
+  };
   const me = d.signers.find((x) => x.sender);
   const myTurn = !!me && (me.status === "sent" || me.status === "viewed");
   const signNow = async () => {
@@ -296,7 +309,7 @@ export function DocBuilder({
   return (
     <div className="page-wide pp-page pp-editing df-page">
       <button type="button" className="page-back" onClick={() => (void flush(), onBack())}>
-        <IconChevron dir="left" /> All proposals
+        <IconChevron dir="left" /> {backLabel}
       </button>
       <header className="pp-top">
         <div className="pp-top-main">
@@ -335,6 +348,11 @@ export function DocBuilder({
           {!draft && (
             <button type="button" className="btn btn-ghost" onClick={() => act("copy")}>
               Copy to change
+            </button>
+          )}
+          {fields.length > 0 && signers.length > 0 && (
+            <button type="button" className="btn btn-ghost" onClick={() => void keep()}>
+              Save to reuse
             </button>
           )}
           {d.status !== "signed" && d.status !== "sent" && d.status !== "viewed" && (

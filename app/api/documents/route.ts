@@ -6,6 +6,7 @@ import { ProposalProblem } from "@/lib/proposals/store";
 import { DOC_MAX_BYTES } from "@/lib/documents/files";
 import { readContract } from "@/lib/documents/smart";
 import { copyDocument, deleteDocument, getDocument, myDocLink, sendDocument, updateDocument, uploadDocument, voidDocument } from "@/lib/documents/store";
+import { getSaved, listSaved, removeSaved, saveContract, useContract } from "@/lib/documents/templates";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,12 +40,22 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "void" | "delete" | "copy" | "mylink", id }
  * POST { op: "read", id }                      Close: where the signature lines are, who signs, a title and a note
  *                                              (lib/documents/smart.ts). Nothing is saved; the app saves what the member keeps.
+ *
+ * Saved contracts (lib/documents/templates.ts):
+ * GET ?saved=1                                 SavedContract[]
+ * GET ?saved=<id>                              { saved, document }: a saved contract and its page, for the preview
+ * POST { op: "save", id, name? }               keep a document to reuse          SavedContract
+ * POST { op: "use", id, signers, companyId?, companyName?, title?, me? }   a new draft from a saved one   DocumentRec
+ * POST { op: "unsave", id }                    delete a saved contract
  */
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
   const me = await memberForToken(token);
   if (!me) return err("You're signed out. Sign in again to see your documents.", 401);
   if (limited(`doc-get:${me.id}`, 120, 60_000)) return err(SLOW, 429);
+  const saved = req.nextUrl.searchParams.get("saved");
+  if (saved === "1") return answer(() => listSaved(token));
+  if (saved) return answer(() => getSaved(token, saved, origin(req)));
   return answer(() => getDocument(token, req.nextUrl.searchParams.get("id") ?? "", origin(req)));
 });
 
@@ -89,6 +100,12 @@ export const POST = guarded(async (req: NextRequest) => {
       return answer(() => readContract(token, id, o));
     case "mylink":
       return answer(() => myDocLink(token, id, o));
+    case "save":
+      return answer(() => saveContract(token, id, { name: b.name }));
+    case "use":
+      return answer(() => useContract(token, id, { signers: b.signers, companyId: b.companyId, companyName: b.companyName, title: b.title, me: b.me }, o));
+    case "unsave":
+      return answer(async () => (await removeSaved(token, id), { ok: true }));
     default:
       return err("That didn't go through. Refresh the page and try again.");
   }

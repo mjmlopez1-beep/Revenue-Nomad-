@@ -94,7 +94,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
           sign={
             <div className="cv-accept">
               <h2 className="cv-h2">Signatures</h2>
-              <Parties doc={d} client={{ state: "signed", name: c.signed.name, title: c.signer.title, at: c.signed.at }} member={{ state: memberState(c.memberMode, c.member, true), sig: c.member }} />
+              <Parties doc={d} client={{ state: "signed", name: c.signed.name, title: c.signer.title, at: c.signed.at, img: c.signedImg }} member={{ state: memberState(c.memberMode, c.member, true), sig: c.member }} />
             </div>
           }
         />
@@ -104,7 +104,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
             {c.member ? "Signatures" : "Signature"}
           </h2>
           <div className="sg-sig sg-sig-done">
-            <span className="sg-sig-name">{c.signed.name}</span>
+            {c.signed.method === "drawn" && c.signedImg ? <img src={c.signedImg} alt={`${c.signed.name}'s signature`} className="cv-sigimg" /> : <span className="sg-sig-name">{c.signed.name}</span>}
             <span className="sg-sig-line">
               {c.signed.name}
               {c.signer.title ? `, ${c.signer.title}` : ""} · {stamp(c.signed.at)}
@@ -114,6 +114,10 @@ export default async function Page({ params }: { params: Promise<{ token: string
             <div>
               <dt>Email confirmed</dt>
               <dd>{c.signed.email}</dd>
+            </div>
+            <div>
+              <dt>How</dt>
+              <dd>{c.signed.method === "drawn" ? "Drawn, with the full name typed" : "Typed full name"}</dd>
             </div>
             <div>
               <dt>IP address</dt>
