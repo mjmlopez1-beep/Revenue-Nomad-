@@ -21,7 +21,8 @@ import { baseOf, deliver, functionFor, postWatch, track } from "./index";
 import { detectSignals, fundingCompanies } from "../radar/signals";
 import { fundingSource } from "../radar/sources/funding";
 import { personKey } from "../paths/match";
-import { coKey, knownLine, knownMoves, type KnownPerson, type NewLeader } from "./known";
+import { knownLine, knownMoves } from "./known";
+import { companyByName, hasKnownSources, knownPeopleOf, lockedWords, newLeadersIn } from "./knownView";
 import { emptyWatch, fixedPref, logAlert, pushInbox, WATCH_KEYS, type FixedPref, type InboxEntry, type QueuedLine } from "../inbox";
 import { renderAlertEmail } from "../digest";
 import { emailEnabled, sendEmail } from "../email";
@@ -360,13 +361,6 @@ interface WatchLine extends QueuedLine {
   trigger: AlertTrigger | "follows" | "known";
 }
 
-/** What a company the member hasn't opened reads as: "a locked SaaS company with 51-200 employees". */
-function lockedWords(g: G, s: State, companyId: string): string {
-  const c = g.companies.get(companyId);
-  const ind = T.live(c, s, "industry");
-  const emp = T.live(c, s, "employees");
-  return `a locked ${ind ? `${ind} ` : ""}company${emp ? ` with ${emp} employees` : ""}`;
-}
 const capFirst = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 const listWords2 = (xs: string[]) => (xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
@@ -451,8 +445,8 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       const follows = fixedPref(s, m.id, "follows");
       const known = fixedPref(s, m.id, "known");
       const watchesFollows = follows.on && (s.follows[m.id] ?? []).length > 0;
-      const p = (s as State & { paths?: Record<string, { linkedin?: { rows: unknown[] }; csv?: { rows: unknown[] } }> }).paths?.[m.id];
-      const watchesKnown = known.on && !!(p?.linkedin?.rows.length || p?.csv?.rows.length || s.network?.[m.id]);
+      // Someone you know reads the member's LinkedIn file and contacts CSV only, never Google (lib/notify/knownView.ts).
+      const watchesKnown = known.on && hasKnownSources(s, m.id);
       if (!lists.length && !watchesFollows && !watchesKnown) continue;
       who.push({ m, lists, follows: watchesFollows ? follows : { ...follows, on: false }, known: watchesKnown ? known : { ...known, on: false }, free: T.freeNow(s, m.id, nowMs) });
     }
@@ -497,24 +491,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       for (const x of s.leaderArrivals ?? []) if (inWin(x.at)) factAt(x.companyId, "a new leader on its website", "website");
     }
     // New leaders, for Someone you know: a leader its website shows now (with the name kept), or a person a member added.
-    const leaders: NewLeader[] = [];
-    if (who.some((w) => w.known.on)) {
-      for (const x of s.leaderArrivals ?? []) {
-        if (!inWin(x.at) || !g.companies.has(x.companyId)) continue;
-        const fnRec = s.leaders?.[x.companyId]?.functions?.[x.fn];
-        const nk = personKey(fnRec?.name);
-        if (!fnRec?.name || !nk) continue;
-        leaders.push({ key: `lead:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, companyId: x.companyId, companyName: g.companies.get(x.companyId)?.name ?? "", nameKey: nk, fn: x.fn, at: x.at, californian: fnRec.california === true });
-      }
-      for (const c of s.contacts) {
-        if (!inWin(c.at)) continue;
-        const name = s.values[`${c.id}.name`];
-        const coId = c.companyId ?? (c.engagementId ? g.engagements.get(c.engagementId)?.companyId : undefined);
-        const nk = personKey(name?.status === "live" ? name.value : null);
-        if (!coId || !nk || !g.companies.has(coId)) continue;
-        leaders.push({ key: `added:${T.pubId(c.id)}`, companyId: coId, companyName: g.companies.get(coId)?.name ?? "", nameKey: nk, fn: null, at: c.at, californian: false });
-      }
-    }
+    const leaders = who.some((w) => w.known.on) ? newLeadersIn(s, g, inWin) : [];
 
     /* ---- each member's lines ---- */
     const linesOf = new Map<string, WatchLine[]>();
@@ -561,16 +538,11 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       if (w.known.on && leaders.length) {
         const people = knownPeopleOf(s, m);
         const self = personKey(m.name);
-        const byName = new Map<string, string>();
-        for (const [id, c] of g.companies) {
-          const k = coKey(c.name);
-          if (k) byName.set(k, byName.has(k) ? "" : id);
-        }
-        for (const mv of knownMoves(people, leaders, self, (k) => byName.get(k) || null)) {
+        for (const mv of knownMoves(people, leaders, self, companyByName(g))) {
           const name = named(mv.leader.companyId);
           lines.push({
             id: `known:${mv.leader.key}`, alert: "known", name: "Someone you know changed jobs", at: mv.leader.at, kind: "known", trigger: "known",
-            line: knownLine(mv, name), sub: "From your own contacts", href: href(mv.leader.companyId), email: w.known.email, slack: w.known.slack, bell: w.known.bell, every: "instant",
+            line: knownLine(mv, name, name ? null : lockedWords(g, s, mv.leader.companyId)), sub: "From your own contacts", href: href(mv.leader.companyId), email: w.known.email, slack: w.known.slack, bell: w.known.bell, every: "instant",
           });
         }
       }
@@ -700,25 +672,3 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
   }
 }
 
-/** The member's own people, from their LinkedIn file, their contacts CSV and their Google network, for Someone you know. */
-function knownPeopleOf(s: State, m: Member): KnownPerson[] {
-  const out: KnownPerson[] = [];
-  const p = (s as State & { paths?: Record<string, { linkedin?: { rows: { f: string; l: string; c?: string }[] }; csv?: { rows: { n: string; c?: string }[] } }> }).paths?.[m.id];
-  for (const r of p?.linkedin?.rows ?? []) {
-    const name = `${r.f} ${r.l}`.trim();
-    const nk = personKey(name);
-    if (nk) out.push({ name, nameKey: nk, companyId: null, company: r.c ?? null, src: "linkedin" });
-  }
-  for (const r of p?.csv?.rows ?? []) {
-    const nk = personKey(r.n);
-    if (nk) out.push({ name: r.n, nameKey: nk, companyId: null, company: r.c ?? null, src: "csv" });
-  }
-  const n = s.network?.[m.id];
-  for (const src of [n?.cal, n?.con, n?.gm, n?.claude])
-    for (const [companyId, co] of Object.entries(src?.companies ?? {}))
-      for (const x of co.people ?? []) {
-        const nk = personKey(x.name);
-        if (x.name && nk) out.push({ name: x.name, nameKey: nk, companyId, company: null, src: "google" });
-      }
-  return out;
-}

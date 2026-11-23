@@ -234,7 +234,7 @@ async function main() {
   check("funding as the filing says it, named where opened", lines.some((l) => /^Northwind Clinics raised about \$2\.5M \(equity\) · SEC filing, [A-Z][a-z]{2} \d{4}$/.test(l)), lines);
   check("funding at a locked company: described, never named", lines.some((l) => /^A locked .+ company with 11.50 employees raised about \$6M \(SAFE\)/.test(l)), lines);
   check("a new leader on a list company's website", lines.some((l) => /new Marketing leader \(VP\) on the website of Northwind Clinics/.test(l)), lines);
-  check("someone you know at a locked company: nobody named", lines.includes("Someone you know started at a locked company") && !/Dana/.test(all), lines);
+  check("someone you know at a locked company: nobody named, the company described by its free facts", lines.some((l) => /^Someone you know started at a locked [A-Za-z ]*company( with [^ ]+ employees)?$/.test(l)) && !/Dana/.test(all), lines);
   check("someone you know at an open company: named, from the member's own source", lines.includes("Sam Ortiz, someone you know, is a new Marketing leader at Northwind Clinics"), lines);
   check("a name at two companies in the sources is never matched", !/Pat Lee/.test(all));
   check("no line names a company Jordan hasn't opened", !/Cedar and Pine|Larkspur|Halcyon/.test(all), lines);

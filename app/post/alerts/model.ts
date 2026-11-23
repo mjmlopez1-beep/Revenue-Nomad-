@@ -269,7 +269,7 @@ export function alertGroups(x: Inputs): Group[] {
     group: "you",
     kind: "known",
     name: "Someone you know changed jobs",
-    watch: alerts?.sources ? "Your own contacts · Google, your LinkedIn file, your contacts file" : "Bring in who you know to start",
+    watch: alerts?.sources ? "Your own contacts · your LinkedIn file and your contacts file" : "Bring in who you know to start",
     tag: "New",
     trig: "A new leader you know",
     det: "matched on their whole name and the new company",

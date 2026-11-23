@@ -226,6 +226,8 @@ const patchless = (a: Action) =>
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
+ * GET ?known=1    Someone you know changed jobs for Home and Warm paths (lib/notify/knownView.ts KnownView): the last
+ *                  30 days' moves from the member's own LinkedIn file and contacts CSV, never Google. 401 signed out.
  * GET ?inbox=1    the bell (lib/inbox.ts InboxView): the member's inbox, newest first, and how many are unread. 401 signed out.
  *                  POST { action: { type: "inbox.read", ids? } } marks lines read.
  * GET ?alerts=1&since=ISO   the Alerts page (lib/inbox.ts AlertsView): the fixed alerts' switches, alerts sent since then,
@@ -314,6 +316,10 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("inbox") !== null) {
     const v = await (await import("@/lib/inbox")).inboxFor(token);
     return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err(SIGNED_OUT_ALERTS, 401);
+  }
+  if (req.nextUrl.searchParams.get("known") !== null) {
+    const v = await (await import("@/lib/notify/knownView")).knownFor(token);
+    return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err("You're signed out. Sign in again to see who you know.", 401);
   }
   if (req.nextUrl.searchParams.get("alerts") !== null) {
     const v = await (await import("@/lib/inbox")).alertsFor(token, req.nextUrl.searchParams.get("since"));

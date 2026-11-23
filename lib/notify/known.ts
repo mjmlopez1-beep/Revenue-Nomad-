@@ -1,6 +1,6 @@
 /**
  * "Someone you know changed jobs" (the owner, 2026-11-23): a person in the member's own sources
- * (their Google network, their LinkedIn connections file, their contacts CSV) who now shows as a new
+ * (their LinkedIn connections file, their contacts CSV; never Google, lib/notify/knownView.ts) who now shows as a new
  * leader at another company Merlin holds (a leader read from the company's own website, or a person
  * a member added there). Pure: no I/O, so the watch pass (lib/notify/events.ts) and the checks share it.
  *
@@ -13,7 +13,8 @@
  *     the source already places there didn't move;
  *   - never the member themself.
  * The names follow the person rules: a Californian by their own location is never named (lib/california.ts),
- * and at a company the member hasn't opened the line names nobody: "someone you know started at a locked company".
+ * and at a company the member hasn't opened the line names nobody: "someone you know started at a locked company",
+ * described by its industry and size at most, never named.
  */
 
 /** One person from the member's own sources. */
@@ -25,7 +26,8 @@ export interface KnownPerson {
   /** Where the source places them: a company on Merlin (internal id), and the source's own words for it. */
   companyId: string | null;
   company: string | null;
-  src: "google" | "linkedin" | "csv";
+  /** The member's LinkedIn connections file or their contacts CSV. Google never feeds this. */
+  src: "linkedin" | "csv";
 }
 
 /** A new leader at a company on Merlin. */
@@ -101,9 +103,13 @@ export function knownMoves(people: KnownPerson[], leaders: NewLeader[], self: st
   return out;
 }
 
-/** The line a move reads as. `companyName` null: the member hasn't opened the company, so nobody is named. */
-export function knownLine(m: KnownMove, companyName: string | null): string {
-  if (!companyName) return "Someone you know started at a locked company";
+/**
+ * The line a move reads as. `companyName` null: the member hasn't opened the company, so nobody is
+ * named; `locked` is then how the company reads by its free facts ("a locked SaaS company with 51-200
+ * employees"), never its name.
+ */
+export function knownLine(m: KnownMove, companyName: string | null, locked?: string | null): string {
+  if (!companyName) return `Someone you know started at ${locked && /^a locked\b/.test(locked) ? locked : "a locked company"}`;
   const who = m.leader.californian ? "Someone you know" : `${m.person.name}, someone you know,`;
   const fn = m.leader.fn && m.leader.fn !== "Other" ? ` ${m.leader.fn}` : "";
   return `${who} is a new${fn} leader at ${companyName}`;
