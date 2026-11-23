@@ -591,7 +591,8 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   fractionals: { title: "Peers", component: PeersP, mainClass: peersMain },
   partners: { title: "Peers", component: PeersP, mainClass: peersMain },
   seats: { title: "Your seats", component: SeatsP, mainClass: (c) => (c.ui2 && !c.phone ? "wb-host sp-host" : "ys-main"), ownStrip: true },
-  pipeline: { title: "Your pipeline", component: PipelineP },
+  // The new look draws the board full width (pipeline/Board.tsx) with its own first-visit strip.
+  pipeline: { title: "Your pipeline", component: PipelineP, ownStrip: true, mainClass: (c) => (c.ui2 ? "wb-host pl2-host" : "") },
   proposals: { title: "Proposals", component: ProposalsP },
   getin: { title: "Where you can get in", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.ui2 && !c.shell.wayCo ? "wp-main" : "") },
   network: { title: "Your network", component: NetworkP },
