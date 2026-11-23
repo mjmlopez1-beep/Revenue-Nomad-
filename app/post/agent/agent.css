@@ -159,6 +159,7 @@
   flex: 1 1 320px;
 }
 .ag-strip-x {
+  margin-left: auto;
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
@@ -854,6 +855,13 @@
 @media (max-width: 767px) {
   .ag-page {
     gap: 16px;
+  }
+  .ag-strip {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+  .ag-strip-on {
+    flex-wrap: wrap;
   }
   .ag-table {
     overflow-x: visible;
