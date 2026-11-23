@@ -333,3 +333,103 @@ export function VersionsSheet({ p, onClose, onRestored }: { p: ProposalRec; onCl
     </Sheet>
   );
 }
+
+/**
+ * Versions, in the editor's Change it tab (the new look): the one now and the last 20 before it,
+ * each with Compare (what reads differently, section by section, opened in place) and Bring back
+ * (it comes back as a new version, and the one now is kept too).
+ */
+export function VersionsList({ p, onRestored }: { p: ProposalRec; onRestored: (r: ProposalRec) => void }) {
+  const [list, setList] = useState<ProposalVersion[] | null>(null);
+  const [cur, setCur] = useState<ProposalRec | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const kept = p.versions ?? [];
+  const locked = p.status === "signed" || p.status === "client_signed";
+  // The text of the kept versions loads once, the first time one is compared (and again after the proposal changes).
+  useEffect(() => setList(null), [p.version, p.rev]);
+  const compare = async (n: number) => {
+    if (open === n) return setOpen(null);
+    setOpen(n);
+    if (list && cur) return;
+    const r = await api<{ current: ProposalRec; versions: ProposalVersion[] }>({ op: "versions", id: p.id });
+    if (r.error) return setErr(r.error);
+    setList(r.versions);
+    setCur(r.current);
+  };
+  const diff = (n: number) => {
+    const v = list?.find((x) => x.version === n);
+    if (!v || !cur) return null;
+    const was = v.blocks.map((b) => ({ key: b.id, title: b.title, text: fill(b.body, v.fields) }));
+    const now = cur.blocks.map((b) => ({ key: b.id, title: b.title, text: fill(b.body, cur.fields) }));
+    const keys = [...new Set([...was.map((x) => x.key), ...now.map((x) => x.key)])];
+    return keys.map((k) => ({ was: was.find((x) => x.key === k) ?? null, now: now.find((x) => x.key === k) ?? null })).filter((r) => r.was?.text !== r.now?.text || r.was?.title !== r.now?.title);
+  };
+  const restore = async (n: number) => {
+    setBusy(n);
+    const r = await api<ProposalRec>({ op: "version_restore", id: p.id, version: n, rev: p.rev });
+    setBusy(null);
+    if (r.error) return setErr(r.error);
+    setOpen(null);
+    onRestored(r);
+  };
+  return (
+    <section className="pz-vers" aria-labelledby="pz-vers-h">
+      <span className="pz-vers-head">
+        <strong id="pz-vers-h">Versions</strong>
+        <span className="pz-note">The last 20 are kept</span>
+      </span>
+      <div className="pz-ver" data-now>
+        <span>
+          <strong>Version {p.version}</strong>
+          <span className="pz-note">Now · {dayOf(p.updatedAt)}</span>
+        </span>
+      </div>
+      {kept.map((v) => {
+        const rows = open === v.version ? diff(v.version) : null;
+        return (
+          <div key={v.version} className="pz-ver">
+            <span>
+              <strong>Version {v.version}</strong>
+              <span className="pz-note">
+                {dayOf(v.at)} · {v.note}
+              </span>
+            </span>
+            <span className="pz-ver-acts">
+              <button type="button" className="btn btn-sm" aria-expanded={open === v.version} onClick={() => void compare(v.version)}>
+                {open === v.version ? "Close" : "Compare"}
+              </button>
+              {!locked && (
+                <button type="button" className="btn btn-sm" aria-busy={busy === v.version} disabled={busy !== null} onClick={() => void restore(v.version)}>
+                  {busy === v.version ? "Bringing it back" : "Bring back"}
+                </button>
+              )}
+            </span>
+            {open === v.version && (
+              <div className="pz-diff">
+                {!rows && <div className="pp-skel" aria-busy="true" />}
+                {rows && rows.length === 0 && <span className="pz-note">It reads the same as the version you have now.</span>}
+                {rows?.map((r, i) => (
+                  <div key={i} className="pz-diff-row">
+                    <strong>{r.now?.title ?? r.was?.title}</strong>
+                    <div className="pz-diff-was">
+                      <span className="pz-k">Version {v.version}</span>
+                      <div className="sg-text">{r.was ? <DocText text={r.was.text} blanks label={fieldLabel} /> : <p className="pz-note">Not in this version.</p>}</div>
+                    </div>
+                    <div className="pz-diff-now">
+                      <span className="pz-k">Now</span>
+                      <div className="sg-text">{r.now ? <DocText text={r.now.text} blanks label={fieldLabel} /> : <p className="pz-note">Taken out.</p>}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!kept.length && <span className="pz-note">No earlier versions yet. Each change you accept keeps the one before it here, to compare or bring back.</span>}
+      {err && <p className="pp-err">{err}</p>}
+    </section>
+  );
+}

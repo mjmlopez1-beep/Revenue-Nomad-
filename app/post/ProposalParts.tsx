@@ -5,9 +5,10 @@
  * who signs, what was kept from the call (and reading more of it, in this browser), sending for
  * signature and its status with the audit trail, and the small inputs they use.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DiscoveryNote, ProposalRec, SignerInfo } from "@/lib/proposals/types";
-import { SENDER_DUTY, type LinkDays, type MemberSignMode } from "@/lib/proposals/types";
+import { LINK_DAYS, LINK_DAYS_SAY, SENDER_DUTY, type LinkDays, type MemberSignMode } from "@/lib/proposals/types";
+import { ALERT_ROWS, type Channel, type CloseAlertKind, type CloseInboxView } from "@/lib/close/types";
 import { LinkDaysPick } from "./LinkDays";
 import { SendReminders, saveReminders, useSendReminders } from "./SendReminders";
 import { Countersign, YourSignatureChoice, useMySignature } from "./MySignature";
@@ -271,6 +272,45 @@ export function CallPanel({ memberName, readOnly, notes, onAccept, onNotes, onOn
 
 /* ---------- sending ---------- */
 
+/**
+ * What sending needs, the same in the sheet (the old look) and the editor's Send tab (the new look):
+ * who signs, the note, how the member signs, how long the link works and the reminders. The
+ * reminders are saved first, then it is sent.
+ */
+export function useSend(p: ProposalRec, o: { canSend: boolean; email: boolean; blanks: string[]; onSent: (p: ProposalRec, message: string) => void }) {
+  const { canSend, email, blanks, onSent } = o;
+  const [s, setS] = useState({ name: p.signer?.name ?? p.fields["client.signerName"] ?? "", email: p.signer?.email ?? p.fields["client.signerEmail"] ?? "", title: p.signer?.title ?? p.fields["client.signerTitle"] ?? "" });
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Their own signature on it (MySignature.tsx): now, after the client's, or none.
+  const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
+  const [mySig, setMySig] = useMySignature();
+  // No saved signature yet: start on "I'll countersign after they sign", as the server would (a picked mode stays).
+  const picked = useRef(!!p.memberSignPicked);
+  useEffect(() => {
+    if (mySig.loaded && !mySig.sig && !picked.current && mode === "now") setMode("after");
+  }, [mySig.loaded, mySig.sig, mode]);
+  const [days, setDays] = useState<LinkDays>(p.linkDays ?? 30);
+  // The reminders to the signer (SendReminders.tsx, lib/close): each on unless turned off here, saved just before it goes.
+  const [rem, setRem] = useSendReminders(p.id, canSend);
+  const emailOk = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim());
+  const ok = !!s.name.trim() && emailOk && blanks.length === 0 && canSend && email && (mode !== "now" || !!mySig.sig);
+  /** Why it can't go yet, in a line (the Send tab says it under the button). */
+  const why = !canSend ? PRO_SEND : !email ? "Email isn't set up on Merlin yet, so a proposal can't go out for signature." : !s.name.trim() || !emailOk ? "Add the name and email of the person who signs." : blanks.length ? `${blanks.length === 1 ? "1 blank" : `${blanks.length} blanks`} to fill first: ${blanksInWords(blanks)}.` : mode === "now" && !mySig.sig ? "Save your signature, or pick another way to sign." : "";
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    const off = await saveReminders(p.id, rem);
+    if (off) return setBusy(false), setErr(off);
+    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode, linkDays: days });
+    setBusy(false);
+    if (r.error) return setErr(r.error);
+    onSent(r.proposal, r.message);
+  };
+  return { s, setS, note, setNote, busy, err, mode, setMode, picked, mySig, setMySig, days, setDays, rem, setRem, ok, why, go };
+}
+
 export function SendSheet({
   p,
   canSend,
@@ -290,32 +330,7 @@ export function SendSheet({
   onClose: () => void;
   onSent: (p: ProposalRec, message: string) => void;
 }) {
-  const [s, setS] = useState({ name: p.signer?.name ?? "", email: p.signer?.email ?? "", title: p.signer?.title ?? "" });
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  // Their own signature on it (MySignature.tsx): now, after the client's, or none.
-  const [mode, setMode] = useState<MemberSignMode>(p.memberSign ?? "now");
-  const [mySig, setMySig] = useMySignature();
-  // No saved signature yet: start on "I'll countersign after they sign", as the server would (a picked mode stays).
-  const picked = useRef(!!p.memberSignPicked);
-  useEffect(() => {
-    if (mySig.loaded && !mySig.sig && !picked.current && mode === "now") setMode("after");
-  }, [mySig.loaded, mySig.sig, mode]);
-  const [days, setDays] = useState<LinkDays>(p.linkDays ?? 30);
-  // The reminders to the signer (SendReminders.tsx, lib/close): each on unless turned off here, saved just before it goes.
-  const [rem, setRem] = useSendReminders(p.id, canSend);
-  const ok = s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s.email.trim()) && blanks.length === 0 && canSend && email && (mode !== "now" || !!mySig.sig);
-  const go = async () => {
-    setBusy(true);
-    setErr(null);
-    const off = await saveReminders(p.id, rem);
-    if (off) return setBusy(false), setErr(off);
-    const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode, linkDays: days });
-    setBusy(false);
-    if (r.error) return setErr(r.error);
-    onSent(r.proposal, r.message);
-  };
+  const { s, setS, note, setNote, busy, err, mode, setMode, picked, mySig, setMySig, days, setDays, rem, setRem, ok, go } = useSend(p, { canSend, email, blanks, onSent });
   return (
     <Sheet
       title="Send for signature"
@@ -373,6 +388,177 @@ export function SendSheet({
         {err && <p className="pp-err">{err}</p>}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * Send, as the editor's right panel tab in the new look (ProposalEditor.dc.html): who signs (saved
+ * to the proposal as it is typed), whether they were on the call, a note, the member's own
+ * signature (add it now, countersign after, or none), how long the link works, the reminders until
+ * they sign and where the alerts go. The button says why it can't go yet, under it.
+ */
+export function SendPanel({
+  p,
+  canSend,
+  email,
+  blanks,
+  missing,
+  flags,
+  onSent,
+  onSigner,
+  onOnCall,
+  alerts,
+}: {
+  p: ProposalRec;
+  canSend: boolean;
+  email: boolean;
+  blanks: string[];
+  missing: string[];
+  flags: string[];
+  onSent: (p: ProposalRec, message: string) => void;
+  onSigner: (s: SignerInfo | null) => void;
+  onOnCall: (v: boolean | null) => void;
+  /** Where each alert goes (the grid), placed by the editor. */
+  alerts?: ReactNode;
+}) {
+  const f = useSend(p, { canSend, email, blanks, onSent });
+  const first = f.s.name.trim().split(/\s+/)[0] || "";
+  const commit = () => {
+    const ok = f.s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(f.s.email.trim());
+    if (ok) onSigner({ name: f.s.name.trim(), email: f.s.email.trim(), ...(f.s.title.trim() ? { title: f.s.title.trim() } : {}) });
+  };
+  const until = f.days ? new Date(Date.now() + f.days * 86_400_000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+  return (
+    <div className="pz-send">
+      <div className="pz-send-body">
+        {!canSend && <p className="pp-warn">{PRO_SEND}</p>}
+        {!email && canSend && <p className="pp-warn">Email isn&#39;t set up on Merlin yet, so a proposal can&#39;t go out for signature.</p>}
+        {p.status !== "draft" && <p className="pz-note">This goes out as version {p.version + 1}. Earlier links stop working.</p>}
+        <strong className="pz-h">Who signs</strong>
+        <span className="pz-note">Send it to the person who owns the budget. Proposals that went through a go-between lost more often.</span>
+        <div className="pz-signer-f">
+          {(["name", "title", "email"] as const).map((k) => (
+            <label key={k} className="pz-f" data-wide={k === "email" || undefined}>
+              <span>{k === "name" ? "Name" : k === "title" ? "Title" : "Email"}</span>
+              <input className="input" type={k === "email" ? "email" : "text"} value={f.s[k]} autoComplete="off" placeholder={k === "email" && f.s.name && !f.s.email ? "Not in the call yet: type it" : undefined} onChange={(e) => f.setS({ ...f.s, [k]: e.target.value })} onBlur={commit} />
+            </label>
+          ))}
+        </div>
+        <span className="pz-oncall">
+          Was {first || "the signer"} on the call?
+          {([true, false] as const).map((v) => (
+            <button key={String(v)} type="button" className="pz-chip" aria-pressed={p.signerOnCall === v} onClick={() => onOnCall(p.signerOnCall === v ? null : v)}>
+              {v ? "Yes" : "No"}
+            </button>
+          ))}
+        </span>
+        <label className="pz-f">
+          <span>A note above the link (optional)</span>
+          <textarea className="input" rows={2} maxLength={600} value={f.note} onChange={(e) => f.setNote(e.target.value)} placeholder="Great talking today. Here is the plan we discussed." />
+        </label>
+        {canSend && f.mySig.loaded && <YourSignatureChoice mode={f.mode} onMode={(m) => ((f.picked.current = true), f.setMode(m))} sig={f.mySig.sig} onSig={f.setMySig} name={f.mySig.name} title={f.mySig.title} />}
+        {canSend && (
+          <>
+            <strong className="pz-h">The link works for</strong>
+            <span className="pz-chips" role="radiogroup" aria-label="How long the link works">
+              {LINK_DAYS.map((d) => (
+                <button key={d} type="button" role="radio" aria-checked={f.days === d} className="pz-chip" onClick={() => f.setDays(d)}>
+                  {LINK_DAYS_SAY[d]}
+                </button>
+              ))}
+            </span>
+            <span className="pz-note">{f.days ? `${first || "They"} can open and sign until ${until}.` : "No end date. The link works until it is signed, declined or voided."}</span>
+            <SendReminders value={f.rem} onChange={f.setRem} noEnd={f.days === 0} disabled={f.busy} />
+          </>
+        )}
+        {alerts}
+        {missing.length > 0 && <p className="pz-note">Still missing from the checklist: {missing.join("; ")}.</p>}
+        {flags.length > 0 && (
+          <ul className="pp-flaglist">
+            {flags.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="pz-send-foot">
+        <span className="pz-note">{first || "They"} gets an email from you with a link. No account needed. They confirm their email with a code, agree to sign electronically and type their name. You both get the signed copy.</span>
+        {canSend ? (
+          <button type="button" className="btn btn-pine btn-lg" aria-busy={f.busy} aria-disabled={!f.ok || undefined} disabled={f.busy} onClick={() => (f.ok ? void f.go() : undefined)}>
+            {f.busy ? "Sending" : `Send to ${first || "the signer"}`}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-pine btn-lg" onClick={() => openPlans("proposals")}>
+            See the Close plan: ${PRICES.closeMonth} a month
+          </button>
+        )}
+        <span className="pz-note" role="status">
+          {f.err ? <span className="pp-err">{f.err}</span> : f.why || SENDER_DUTY}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** "Tell me when": each proposal alert by email and in Slack (lib/close prefs, the same switches as Alerts). */
+export function AlertGrid({ alertsHref, onAlerts }: { alertsHref?: string; onAlerts?: () => void }) {
+  const toast = useToast();
+  const [v, setV] = useState<CloseInboxView | null>(null);
+  useEffect(() => {
+    void fetch("/api/activity", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: CloseInboxView | null) => j && setV(j))
+      .catch(() => {});
+  }, []);
+  if (!v || !v.open) return null;
+  const set = async (kind: CloseAlertKind, channel: Channel, on: boolean) => {
+    setV({ ...v, prefs: { ...v.prefs, [kind]: { ...v.prefs[kind], [channel]: on } } });
+    try {
+      const r = await fetch("/api/activity", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "pref", kind, channel, on }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return toast(errorText(r.status, j.error, "That didn't save. Try again."), true);
+      setV((x) => (x ? { ...x, prefs: j } : x));
+    } catch {
+      toast(NETWORK, true);
+    }
+  };
+  const rows = ALERT_ROWS.filter((r) => r.kind !== "renewal");
+  return (
+    <div className="pz-alerts">
+      <strong className="pz-h">Tell me when</strong>
+      <div className="pz-agrid" role="table" aria-label="Alerts for your proposals">
+        <span role="row" className="pz-arow pz-arow-h">
+          <span role="columnheader" />
+          <span role="columnheader">Email</span>
+          <span role="columnheader">Slack</span>
+        </span>
+        {rows.map((r) => {
+          const fixed = r.kind === "signed";
+          return (
+            <span key={r.kind} role="row" className="pz-arow">
+              <span role="rowheader">{r.label}</span>
+              {(["email", "slack"] as const).map((ch) => {
+                const off = ch === "slack" ? !v.slack : !v.email;
+                const on = ch === "email" && fixed ? true : v.prefs[r.kind][ch] && !off;
+                return (
+                  <span key={ch} role="cell">
+                    <input type="checkbox" aria-label={`${r.label}, ${ch === "email" ? "by email" : "in Slack"}`} checked={on} disabled={off || (ch === "email" && fixed)} title={ch === "email" && fixed ? "The signed copy and a decline always come by email." : off && ch === "slack" ? "Connect Slack first." : undefined} onChange={(e) => void set(r.kind, ch, e.target.checked)} />
+                  </span>
+                );
+              })}
+            </span>
+          );
+        })}
+      </div>
+      <span className="pz-note">
+        {v.slack ? "For every proposal you send. Every alert also shows on the bell." : "Slack is not connected, so alerts come by email and the bell. Merlin posts to one channel you pick, and never reads your messages."}{" "}
+        {alertsHref && (
+          <a href={alertsHref} onClick={(e) => onAlerts && (e.preventDefault(), onAlerts())}>
+            All alerts
+          </a>
+        )}
+      </span>
+    </div>
   );
 }
 

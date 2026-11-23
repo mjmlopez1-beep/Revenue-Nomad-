@@ -31,8 +31,10 @@ const fromDraft = (d: ReturnType<typeof toDraft>): Pricing | null =>
       }
     : null;
 
-export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | null; readOnly: boolean; onChange: (p: Pricing | null) => void }) {
+export function PricingEditor({ value, readOnly, onChange, compact = false }: { value: Pricing | null; readOnly: boolean; onChange: (p: Pricing | null) => void; /** The editor's Pricing tab (the new look): each option's name, price and billing, its other lines behind Edit. */ compact?: boolean }) {
   const [d, setD] = useState(() => toDraft(value));
+  // Compact: the option opened for its other lines.
+  const [openOpt, setOpenOpt] = useState<string | null>(null);
   const mine = useRef(JSON.stringify(value ?? null));
   // A change from elsewhere (a new version loaded, Claude's edit): start from it.
   useEffect(() => {
@@ -83,6 +85,21 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
               </select>
             </label>
           </div>
+          {compact && (
+            <div className="pe-row pe-foot">
+              {n > 1 && (
+                <label className="pe-check">
+                  <input type="radio" name="pe-rec" checked={o.recommended} onChange={() => setOpt(i, { recommended: true })} />
+                  <span>Recommend this one</span>
+                </label>
+              )}
+              <button type="button" className="tp-flink" aria-expanded={openOpt === o.id} onClick={() => setOpenOpt(openOpt === o.id ? null : o.id)}>
+                {openOpt === o.id ? "Less" : `${o.included.split("\n").filter((t) => t.trim()).length} ${o.included.split("\n").filter((t) => t.trim()).length === 1 ? "line" : "lines"} included · Edit`}
+              </button>
+            </div>
+          )}
+          {(!compact || openOpt === o.id) && (
+          <>
           <label className="pe-f">
             <span>A line under the price (optional)</span>
             <input className="input" value={o.note} maxLength={PRICING_LIMITS.note} placeholder="e.g. Months 1 to 3, then $11,000 a month" onChange={(e) => setOpt(i, { note: e.target.value })} />
@@ -96,16 +113,18 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
             <textarea className="input pe-area" rows={3} value={o.included} onChange={(e) => setOpt(i, { included: e.target.value })} />
           </label>
           <div className="pe-row pe-foot">
-            {n > 1 && (
+            {n > 1 && !compact && (
               <label className="pe-check">
                 <input type="radio" name="pe-rec" checked={o.recommended} onChange={() => setOpt(i, { recommended: true })} />
                 <span>Recommend this one</span>
               </label>
             )}
             <button type="button" className="btn btn-sm" onClick={() => put({ ...d, options: d.options.filter((_, k) => k !== i), addOns: n === 1 ? [] : d.addOns })}>
-              Remove
+              {compact ? "Remove this option" : "Remove"}
             </button>
           </div>
+          </>
+          )}
         </fieldset>
       ))}
       {d.addOns.map((a, i) => (
@@ -142,6 +161,7 @@ export function PricingEditor({ value, readOnly, onChange }: { value: Pricing | 
       ))}
       {!readOnly && (
         <div className="pe-row">
+          {compact && <span className="pe-s">{n} of {PRICING_LIMITS.options} options · {d.addOns.length} of {PRICING_LIMITS.addOns} add-ons</span>}
           {n < PRICING_LIMITS.options && (
             <button type="button" className="btn btn-sm" onClick={() => put({ ...d, options: [...d.options, { id: rid("o"), name: "", price: "", billing: "month", note: "", about: "", included: "", recommended: false }] })}>
               Add an option

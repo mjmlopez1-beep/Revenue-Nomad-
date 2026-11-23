@@ -40,10 +40,10 @@ import { DocText, dayOf } from "../sign/doc";
 import type { CoInfo } from "./model";
 import { startDone, startProposal, takeWantCompany } from "./WriteProposal";
 import { StartSheet, TEMPLATE_ACCEPT, uploadTemplate } from "./ProposalStart";
-import { AddBlock, AutoText, CallPanel, ProposalStatus, RatePanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
+import { AddBlock, AlertGrid, AutoText, CallPanel, ProposalStatus, RatePanel, SendPanel, SendSheet, SendStatus, SignerCard, api } from "./ProposalParts";
 import { DocBuilder } from "./DocBuilder";
 import { ContractsHome } from "./contracts/ContractsHome";
-import { ChangeItPanel, VersionsSheet } from "./ChangeIt";
+import { ChangeItPanel, VersionsList, VersionsSheet } from "./ChangeIt";
 import { withChange, type ChangeProposal } from "@/lib/proposals/changeShape";
 import { LinkCompany } from "./ProposalLink";
 import { ActivityPanel, takeItem, useOpenItem } from "./Activity";
@@ -54,6 +54,9 @@ import { GranolaCallPicker } from "./GranolaCallPicker";
 import { useGranola } from "./granolaClient";
 import "../sign/sign.css";
 import { TeamBlockOffer } from "./PeerSheets";
+import { useAppMaybe } from "./shell/pages";
+import { ProposalsHome, type StartMode } from "./proposalsPage/ProposalsHome";
+import { EditorFrame, type SideTab } from "./proposalsPage/EditorFrame";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -118,10 +121,15 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   const [openDoc, setOpenDoc] = useState<string | null>(() => takeItem("dc"));
   // The bell or Home opened one while Proposals was already open.
   useOpenItem(useCallback((x: { pr?: string; dc?: string }) => (x.pr ? (setOpenDoc(null), setOpenId(x.pr)) : (setOpenId(null), setOpenDoc(x.dc ?? null))), []));
-  const [starting, setStarting] = useState<{ companyId: string | null } | null>(() => {
+  const [starting, setStarting] = useState<{ companyId: string | null; mode?: StartMode; templateId?: string } | null>(() => {
     const c = takeWantCompany();
     return c ? { companyId: c } : typeof window !== "undefined" && subNow().new ? { companyId: null } : null;
   });
+  // The new look (RN_UI2): the list page of Proposals.dc.html, the start as a panel on it, and the editor in three columns.
+  const app = useAppMaybe();
+  const ui2 = !!app?.ui2;
+  // The editor's right panel opens at this tab (the list's Countersign opens Send).
+  const [openTab, setOpenTab] = useState<SideTab | null>(null);
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
   // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
@@ -239,6 +247,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onBack={() => (setOpenId(null), setFixFirst([]))}
         onGone={(id) => (setData((d) => (d ? { ...d, proposals: d.proposals.filter((x) => x.id !== id) } : d)), setOpenId(null))}
         onOpen={(p) => (put(p), setOpenId(p.id))}
+        ui2={ui2}
+        tab={openTab}
       />
     );
   if (doc && data)
@@ -255,16 +265,22 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onOpen={(x) => (putDoc(x), setOpenDoc(x.id))}
       />
     );
-  if (starting && data && data.canBuild)
-    return (
+  /** The start: today's full screen, or the new look's panel on the list (from a call, a template or blank). */
+  const startSheet = (layout: "page" | "panel", mode: StartMode = "call", templateId?: string) =>
+    data && (
       <StartSheet
+        key={layout === "panel" ? `${mode}:${templateId ?? ""}:${starting?.companyId ?? ""}` : "page"}
+        layout={layout}
+        mode={mode}
+        templateId={templateId}
+        onDrafted={put}
         view={view}
         data={data}
         infos={infos}
-        companyId={starting.companyId}
+        companyId={starting?.companyId ?? null}
         onClose={() => setStarting(null)}
         onTemplate={(t) => setData((d) => (d ? { ...d, templates: [t, ...d.templates] } : d))}
-        onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenId(p.id))}
+        onMade={(p, toFix) => (put(p), setStarting(null), setFixFirst(toFix ?? []), setOpenTab(null), setOpenId(p.id))}
         // From Granola (GranolaCallPicker.tsx): only while Granola is switched on for Merlin (RN_GRANOLA). Off, there is no Granola card and paste or drop works as before.
         granolaFirst={!!granola.status?.connected}
         granolaSlot={
@@ -283,6 +299,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         }
       />
     );
+  if (starting && data && data.canBuild && !ui2) return startSheet("page");
   if (contract && data)
     return (
       <ContractsHome
@@ -291,6 +308,33 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onSaved={putDoc}
         onManual={(x, notice) => (putDoc(x), setDocNotice(notice ?? null), setContract(false), setOpenDoc(x.id))}
         onOpenDoc={(x) => (putDoc(x), setDocNotice(null), setContract(false), setOpenDoc(x.id))}
+      />
+    );
+
+  if (ui2 && !data)
+    return error ? (
+      <Problem title="Proposals didn't load" onRetry={() => void reload()} reload={false} on="bg">
+        {error}
+      </Problem>
+    ) : (
+      <div className="pz">
+        <div className="pp-skel" aria-busy="true" />
+      </div>
+    );
+  if (ui2 && data)
+    return (
+      <ProposalsHome
+        data={data}
+        start={starting && data.canBuild ? { mode: starting.mode ?? "call", templateId: starting.templateId } : null}
+        onStart={(x) => setStarting(x ? { companyId: starting?.companyId ?? null, mode: x.mode, templateId: x.templateId } : null)}
+        startPanel={(mode, templateId) => startSheet("panel", mode, templateId)}
+        onOpen={(id, tab) => (setOpenTab(tab ?? null), setFixFirst([]), setOpenId(id))}
+        onContracts={() => setContract(true)}
+        onTemplates={(t) => setData((d) => (d ? { ...d, templates: t } : d))}
+        onPut={put}
+        onGone={(id) => setData((d) => (d ? { ...d, proposals: d.proposals.filter((x) => x.id !== id) } : d))}
+        closePrompt={<CloseBuildPrompt />}
+        granola={{ on: !!granola.status?.on, connected: !!granola.status?.connected }}
       />
     );
 
@@ -505,6 +549,8 @@ function Editor({
   onBack,
   onGone,
   onOpen,
+  ui2 = false,
+  tab = null,
 }: {
   initial: ProposalRec;
   data: ProposalsView;
@@ -514,6 +560,9 @@ function Editor({
   onBack: () => void;
   onGone: (id: string) => void;
   onOpen: (p: ProposalRec) => void;
+  /** The new look: three columns, the right panel's tabs (EditorFrame.tsx). The saving below is the same. */
+  ui2?: boolean;
+  tab?: SideTab | null;
 }) {
   const toast = useToast();
   const phone = useMedia("(max-width: 1023px)");
@@ -774,6 +823,124 @@ function Editor({
       <CallPanel memberName={data.me.name} readOnly={readOnly} notes={p.notes} onAccept={accept} onNotes={setNotes} onOnCall={(v) => p.signerOnCall === null && setSignerOnCall(v)} />
     </aside>
   );
+
+  if (ui2) {
+    const leave = () => okToLeave() && (void flush(), onBack());
+    const banners = (
+      <>
+        {conflict && (
+          <div className="pp-banner pp-conflict" role="alert">
+            <p>
+              <strong>This proposal changed in another tab or window.</strong> Merlin loaded the latest.{conflict.text ? " Your last edit didn't save. Copy it, then add it where it goes." : ""}
+            </p>
+            {conflict.text && (
+              <>
+                <textarea className="input pp-conflict-text" readOnly rows={Math.min(8, conflict.text.split("\n").length + 1)} value={conflict.text} aria-label="Your edit that didn't save" />
+                <button type="button" className="btn btn-sm" onClick={() => void navigator.clipboard?.writeText(conflict.text).then(() => toast("Copied."), () => toast("Select the text and copy it.", true))}>
+                  Copy my edit
+                </button>
+              </>
+            )}
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConflict(null)}>
+              Done
+            </button>
+          </div>
+        )}
+        {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev })), onSaved(r))} />}
+        {locked && <CloseBuildPrompt />}
+        {signed && (
+          <div className="pp-banner pp-banner-won" role="status">
+            <p>{p.status === "client_signed" ? "They signed. It's finished once you countersign, under Signing." : "Signed, so it's kept as it was signed. Duplicate it to start the next one, an addendum or a new term."}</p>
+          </div>
+        )}
+        {savedChange && (
+          <div className="pp-banner" role="status">
+            <p>
+              <strong>
+                {savedChange.changed} {savedChange.changed === 1 ? "change" : "changes"} saved as version {savedChange.version}.
+              </strong>{" "}
+              Version {savedChange.previous} is kept if you want it back, under Versions.
+            </p>
+          </div>
+        )}
+      </>
+    );
+    return (
+      <EditorFrame
+        p={p}
+        data={data}
+        readOnly={readOnly}
+        locked={locked}
+        signed={signed}
+        out={out}
+        changing={changing}
+        save={save}
+        blocks={shown?.blocks ?? p.blocks}
+        fields={shownFields}
+        marked={marked}
+        previewing={!!preview}
+        editing={editing}
+        setEditing={setEditing}
+        onTitle={(v) => change({ title: v }, { title: v })}
+        move={move}
+        removeBlock={(id) => (setBlocks(p.blocks.filter((x) => x.id !== id)), editing === id && setEditing(null))}
+        section={(b) => (
+          <Section b={b} fields={shownFields} p={p} readOnly={readOnly || !!preview} mark={marked.has(b.id)} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
+        )}
+        guide={(b) => <Guide b={b} templateId={p.templateId} />}
+        addBlock={
+          <AddBlock
+            addable={addable}
+            onAdd={(id) => {
+              const nb = makeBlock(id);
+              setBlocks([...p.blocks, nb]);
+              setEditing(nb.id);
+            }}
+          />
+        }
+        teamOffer={!readOnly && <TeamBlockOffer company={p.company.id} has={p.blocks.some((b) => b.title === "Your team")} onAdd={(b) => setBlocks([...p.blocks, b])} />}
+        onAddSection={() => {
+          const nb = makeBlock("custom");
+          setBlocks([...p.blocks, nb]);
+          setEditing(nb.id);
+        }}
+        banners={banners}
+        fixLine={!signed && (!out || changing) ? <FixLine fixes={fixes} blanks={blanks.length} /> : null}
+        changeIt={changeIt}
+        versions={<VersionsList p={p} onRestored={(r) => (take(r), onSaved(r), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />}
+        callPanel={<CallPanel memberName={data.me.name} readOnly={readOnly} notes={p.notes} onAccept={accept} onNotes={setNotes} onOnCall={(v) => p.signerOnCall === null && setSignerOnCall(v)} />}
+        rates={<RatePanel advice={advice} fn={advice.suggestion?.fn ?? null} />}
+        pricing={(data.canBuild || p.pricing) && <PricingEditor compact value={p.pricing} readOnly={readOnly} onChange={(pricing) => change({ pricing }, { pricing })} />}
+        sendPanel={
+          <SendPanel
+            key={`${p.id}:${p.version}`}
+            p={p}
+            canSend={data.canSend}
+            email={data.email}
+            blanks={blanks}
+            missing={checks.filter((c) => !c.ok && !c.soft).map((c) => c.label)}
+            flags={flags.map((f) => f.message)}
+            onSigner={setSigner}
+            onOnCall={setSignerOnCall}
+            onSent={(r, message) => (void flush(), take(r), onSaved(r), setChanging(false), toast(message))}
+            alerts={<AlertGrid alertsHref="/?p=alerts" />}
+          />
+        }
+        sentPanel={
+          p.send && (
+            <>
+              <SendStatus p={p} onChange={(r) => (take(r), onSaved(r))} />
+              <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} quiet />
+            </>
+          )
+        }
+        tab={tab}
+        onBack={leave}
+        act={(op) => void act(op)}
+        onChangeIt={() => setChanging(true)}
+      />
+    );
+  }
 
   return (
     <div className="page-wide pp-page pp-editing">
