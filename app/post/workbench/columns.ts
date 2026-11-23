@@ -203,14 +203,17 @@ const eng = (field: string, label: string, width: string, extra: Partial<ColumnD
 export const SEAT_COLUMNS: ColumnDef[] = [
   { ...COMPANY_COLUMNS[0], type: "engagements" },
   eng("function", "Function", "minmax(110px, 0.7fr)", { def: true, sort: "fn" }),
-  eng("role", "Role", "minmax(150px, 1fr)", { def: true, cost: 1, needs: "Comes with who held it" }),
+  eng("role", "Seat", "minmax(150px, 1fr)", { def: true, cost: 1, needs: "Comes with who held it", tip: "The seat's title. It comes with who held it." }),
+  eng("operator", "Held by", "minmax(150px, 0.9fr)", { def: true, cost: 1, needs: "Opens with the company", word: "named", tip: "Free once the company is open." }),
   eng("type", "Type", "minmax(90px, 0.6fr)", { def: true }),
-  eng("status", "Status", "minmax(100px, 0.6fr)", { def: true }),
-  eng("operator", "Held by", "minmax(140px, 0.9fr)", { def: true, cost: 1, needs: "Opens with the company", word: "named", tip: "Free once the company is open." }),
-  eng("start", "Start", "minmax(90px, 0.6fr)", { def: true, sort: "start" }),
-  eng("end", "End", "minmax(90px, 0.6fr)", { def: true, cost: 1, needs: "A dated end on a seat that ended" }),
-  eng("rate", "Rate", "minmax(100px, 0.6fr)", { def: true, cost: 1, needs: "Opens after the company", num: true }),
-  eng("hours", "Hours a week", "minmax(90px, 0.6fr)", { num: true }),
+  eng("status", "Status", "minmax(110px, 0.6fr)", { def: true }),
+  eng("start", "Started", "minmax(90px, 0.6fr)", { def: true, sort: "start" }),
+  eng("end", "Ended", "minmax(120px, 0.7fr)", { def: true, cost: 1, needs: "A dated end on a seat that ended", tip: "How long ago a seat ended is free. The month costs 1 credit." }),
+  eng("hours", "Hours", "minmax(80px, 0.5fr)", { def: true, num: true, tip: "Hours a week." }),
+  eng("rate", "Rate", "minmax(110px, 0.7fr)", { def: true, cost: 1, needs: "Opens after the company", num: true }),
+  // Why the company hired, and where the seat came from. Both free.
+  eng("reason", "Why they hired", "minmax(170px, 1.1fr)", { def: true }),
+  { id: "source", type: "engagements", label: "Added by", cost: "free", def: true, word: "on file", fill: (r) => (r.e?.source ? "value" : "empty"), width: "minmax(140px, 0.8fr)", tip: "Where the seat came from. Merlin never says which member added a fact." },
   eng("posting", "Job posting", "minmax(120px, 0.7fr)", { cost: 1 }),
 ];
 
@@ -304,10 +307,16 @@ export function rowNeed(colId: string, r: Row): FactRef | "skip" | "wait" {
     if (i.c.hidden || d.p.cells.name?.s === "locked" || d.p.cells.title?.s === "locked") return "wait";
     return { entity: "contact", id: d.p.id, field: "email" };
   }
-  if (colId === "rate") {
-    const e = i.latest;
-    if (!e || e.cells.rate?.s !== "locked") return "skip";
-    return i.c.hidden ? "wait" : { entity: "engagement", id: e.id, field: "rate" };
+  if (colId === "rate" || colId === "end") {
+    // A seat row (the Seats page) buys its own seat's fact; a company row its latest seat's rate.
+    const e = r.e ?? (colId === "rate" ? i.latest : null);
+    if (!e || e.cells[colId]?.s !== "locked") return "skip";
+    return i.c.hidden ? "wait" : { entity: "engagement", id: e.id, field: colId };
+  }
+  if (colId === "operator" && r.e) {
+    // Who held a seat: free once the company is open, except a holder who keeps out of the directory (one credit).
+    if (r.e.cells.operator?.s !== "locked") return "skip";
+    return i.c.hidden ? "wait" : { entity: "engagement", id: r.e.id, field: "operator" };
   }
   return "skip";
 }

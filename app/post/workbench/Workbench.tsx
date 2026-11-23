@@ -42,11 +42,13 @@ export interface WorkbenchProps {
   fresh?: ReadonlySet<string>;
   /** The row number of the first row in view (the page's start). */
   start?: number;
+  /** A page's own drawing of a column (the Seats page's Held by), or undefined for the usual cell. */
+  cell?: (id: string, r: Row) => ReactNode | undefined;
 }
 
 const cellOf = (type: RecordType, id: string, r: Row, mine: string | null) => (type === "companies" ? companyCell(id, r, mine) : type === "engagements" ? seatCell(id, r, mine) : personCell(id, r));
 
-const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, hero }: { r: Row; n: number; type: RecordType; cols: ColumnDef[]; mine: string | null; on: boolean; onPick: (key: string, on: boolean) => void; onOpen: (r: Row) => void; hero: ReactNode | null }) {
+const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, hero, cell }: { r: Row; n: number; type: RecordType; cols: ColumnDef[]; mine: string | null; on: boolean; onPick: (key: string, on: boolean) => void; onOpen: (r: Row) => void; hero: ReactNode | null; cell?: WorkbenchProps["cell"] }) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <tr
@@ -71,7 +73,7 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
           </td>
         ) : (
           <td key={c.id} className={`wb-td${c.id === "company" ? " wb-td-co" : ""}${c.num ? " num" : ""}`}>
-            {cellOf(type, c.id, r, mine)}
+            {cell?.(c.id, r) ?? cellOf(type, c.id, r, mine)}
           </td>
         ),
       )}
@@ -80,7 +82,7 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
   );
 });
 
-export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, onAddColumn, hero, fillNote, fresh, start = 0 }: WorkbenchProps) {
+export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, onAddColumn, hero, fillNote, fresh, start = 0, cell }: WorkbenchProps) {
   const all = rows.length > 0 && rows.every((r) => selected.has(r.key));
   const some = !all && rows.some((r) => selected.has(r.key));
   const minWidth = 40 + 36 + 44 + cols.reduce((n, c) => n + minPx(c.width), 0);
@@ -147,7 +149,7 @@ export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll,
             </tr>
           )}
           {rows.map((r, k) => (
-            <WbRow key={r.key} r={r} n={start + k + 1} type={type} cols={cols} mine={mine} on={selected.has(r.key)} onPick={onPick} onOpen={onOpen} hero={hero && hero.key === r.key ? hero.node : null} />
+            <WbRow key={r.key} r={r} n={start + k + 1} type={type} cols={cols} mine={mine} on={selected.has(r.key)} onPick={onPick} onOpen={onOpen} hero={hero && hero.key === r.key ? hero.node : null} cell={cell} />
           ))}
         </tbody>
       </table>

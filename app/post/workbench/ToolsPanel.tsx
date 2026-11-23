@@ -42,7 +42,7 @@ export function ToolsPanel({
   return (
     <aside className="wb-tools" aria-label="Tools">
       {run ? (
-        <RunConfig key={run} col={run} rows={rows} picked={picked} onBack={() => onRun(null)} onDone={onRunDone} />
+        <RunConfig key={run} col={run} type={type} rows={rows} picked={picked} onBack={() => onRun(null)} onDone={onRunDone} />
       ) : (
         <div className="wb-tools-list">
           <div className="wb-tools-top">

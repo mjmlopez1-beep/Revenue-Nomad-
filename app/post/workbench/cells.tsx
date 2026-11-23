@@ -10,6 +10,7 @@ import type { Row } from "../model";
 import { coverOf, personCoverOf, personNoun, personUnseen, ADD_AFTER_NAME, PERSON_NO_ADD } from "../model";
 import { CompanyName, engCell, Fit, FunctionsCell, HeldBy, NameAndTitle, None, PeopleCell, RowFact, SeatCell, ownCompany } from "../Tables";
 import { RoleDate, datesAreStatus, statusText } from "../RoleDate";
+import { SOURCE_LABEL } from "@/lib/tableFields";
 import { deciderOf } from "./columns";
 
 const coFact = (r: Row, field: string) => <RowFact t={{ entity: "company", id: r.i.c.id, field }} cell={r.i.c.cells[field]} cover={coverOf(r.i, null, field)} own={ownCompany(r.i)} />;
@@ -67,6 +68,8 @@ export function seatCell(id: string, r: Row, mine: string | null): ReactNode {
       return datesAreStatus(e) ? <RoleDate e={e} /> : engCell(i, e, "status", { render: statusText });
     case "operator":
       return <HeldBy e={e} cover={coverOf(i, e, "operator")} />;
+    case "source":
+      return <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>;
     default:
       return engCell(i, e, id);
   }

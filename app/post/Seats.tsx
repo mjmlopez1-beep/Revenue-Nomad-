@@ -34,11 +34,11 @@ import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
-interface Saved {
+export interface Saved {
   earned: boolean;
   bench?: string;
 }
-type OnSaved = (t: FactRef, s: Saved) => void;
+export type OnSaved = (t: FactRef, s: Saved) => void;
 
 /** A seat you held is active or ended. Open and closed roles are postings, not seats. */
 const OWN_STATUSES = ["Active", "Ended"];
@@ -61,7 +61,7 @@ const optionsFor = (t: FactRef, f: FieldDef, fn: string | null) =>
   t.entity === "engagement" && t.field === "status" ? OWN_STATUSES : t.entity === "engagement" && t.field === "reason" ? reasonsFor(fn, f.options ?? []) : f.options ?? [];
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
-const benchText = (kind: "monthly" | "hourly", amount: number) => `${money(amount)} ${kind === "hourly" ? "an hour" : "a month"}`;
+export const benchText = (kind: "monthly" | "hourly", amount: number) => `${money(amount)} ${kind === "hourly" ? "an hour" : "a month"}`;
 
 /** How each missing thing is asked, the way one fractional would ask another. */
 const SEAT_Q: Record<string, { q: string; hint?: string }> = {
@@ -91,7 +91,7 @@ const companyQ = (name: string): Record<string, { q: string; hint?: string }> =>
 });
 
 /** An active seat has no end yet, so its End is not asked (or counted as missing). */
-const isActive = (e: EngagementRec) => shown(e.cells.status) === "Active";
+export const isActive = (e: EngagementRec) => shown(e.cells.status) === "Active";
 
 /* ---------- one question ---------- */
 
@@ -261,7 +261,7 @@ function MonthAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial
  * The rate, and who can see it: members who unlock it on the seat, or the benchmarks only.
  * `initial`: the member's rate on the seat, asked again to change it (it stays on the seat).
  */
-function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing: string | null; initial?: string; onSaved: OnSaved }) {
+export function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing: string | null; initial?: string; onSaved: OnSaved }) {
   const ui = useUi();
   const [v, setV] = useState(initial ?? "");
   const [who, setWho] = useState<RateChoice | null>(initial !== undefined ? "record" : null);
@@ -347,7 +347,7 @@ interface Item {
   hint?: string;
 }
 
-function SeatCard({
+export function SeatCard({
   s,
   total,
   left,
@@ -360,6 +360,8 @@ function SeatCard({
   onToggle,
   focus,
   onGone,
+  variant = "card",
+  startAt = null,
 }: {
   s: SeatInfo;
   /** Everything this seat can hold, and how much of it is still empty. */
@@ -377,12 +379,19 @@ function SeatCard({
   onToggle?: () => void;
   focus: boolean;
   onGone: (id: string, message: string) => void;
+  /**
+   * "card": today's card (header, then what is on file, the question, the foot). "row": the new
+   * Seats page's open row (Seats.dc.html): the question on the left, what is on file on the right.
+   */
+  variant?: "card" | "row";
+  /** The question to ask first ("e.rate" from the row's "Add · +1"). */
+  startAt?: string | null;
 }) {
   const ui = useUi();
   const { i, e } = s;
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(startAt);
   const [skipped, setSkipped] = useState<string[]>([]);
   /** An answer the member gave, asked again. */
   const [reask, setReask] = useState<string | null>(null);
@@ -508,64 +517,8 @@ function SeatCard({
   };
   const earns = earnRoom(ui.me) > 0;
   const filled = total - left;
-  return (
-    <article className={`ys-seat${focus ? " focus" : ""}${open ? "" : " folded"}`} id={`ys-${e.id}`} aria-label={`Your seat at ${name}`}>
-      <header
-        className={`ys-seat-head${onToggle ? " can-fold" : ""}`}
-        onClick={(ev) => {
-          // The whole header folds the card. The chevron does the same for a keyboard.
-          if (onToggle && !(ev.target as HTMLElement).closest("button")) onToggle();
-        }}
-      >
-        <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company">
-          <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} seed={i.c.id} />
-          <span className="ys-co-name">{i.c.hidden ? <LockedName seed={i.c.id} /> : name}</span>
-        </button>
-        <span className="ys-seat-what">
-          {fn && (
-            <button
-              type="button"
-              className={`chip tp-fn ys-fn-b${reask === "e.function" ? " chip-on" : ""}`}
-              aria-pressed={reask === "e.function"}
-              aria-label={`Function, ${fn}. Change it`}
-              title="Change the function"
-              onClick={() => {
-                setReporting(null);
-                setReask(reask === "e.function" ? null : "e.function");
-                fnAsked();
-              }}
-            >
-              {fn}
-              <IconPencil size={11} />
-            </button>
-          )}
-          {role && (
-            <span className="ys-role" title={role}>
-              {role}
-            </span>
-          )}
-        </span>
-        {left > 0 ? (
-          <span className="ys-count num">
-            <b>{filled}</b> of {total}
-            <span className="sr-only"> filled in</span>
-          </span>
-        ) : (
-          <span className="ys-complete">
-            <span className="ys-check" aria-hidden>
-              <IconCheck size={11} />
-            </span>
-            Complete
-          </span>
-        )}
-        {onToggle && (
-          <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-expanded={open} aria-label={open ? `Fold the seat at ${name}` : `Show the seat at ${name}`} onClick={onToggle}>
-            <IconChevron dir={open ? "up" : "down"} />
-          </button>
-        )}
-      </header>
-      {open && (
-        <>
+  const knownEl = (
+    <>
           {known.length > 0 && (
             <div className="ys-known-box">
               <dl className="ys-known">
@@ -645,6 +598,10 @@ function SeatCard({
               )}
             </div>
           )}
+    </>
+  );
+  const fnCheckEl = (
+    <>
           {fn && fnFromRecords && !fnOk && reask !== "e.function" && (
             <div className="ys-fncheck" role="group" aria-label="Check the function">
               <p>Is {fn} right for this seat?</p>
@@ -666,6 +623,10 @@ function SeatCard({
               </div>
             </div>
           )}
+    </>
+  );
+  const questionEl = (
+    <>
           {active ? (
             <div className={`ys-q${editing ? " again" : ""}`} key={`${editing ? "again:" : ""}${active.key}`} ref={qRef} data-ask={cellKey(active.t.id, active.t.field)}>
               <div className="ys-q-top">
@@ -725,6 +686,9 @@ function SeatCard({
           ) : (
             <p className="ys-allin">That is everything for this seat. Thank you.</p>
           )}
+    </>
+  );
+  const footEl = (
           <footer className="ys-seat-foot">
             {confirm ? (
               <>
@@ -742,6 +706,101 @@ function SeatCard({
               </button>
             )}
           </footer>
+  );
+  if (variant === "row")
+    return (
+      <div className={`ys2-detail${focus ? " focus" : ""}`} id={`ys-${e.id}`} aria-label={`Your seat at ${name}`} role="group">
+        <div className="ys2-ask">
+          <div className="ys2-prog" role="status">
+            <span>
+              <strong className="num">
+                {filled} of {total}
+              </strong>{" "}
+              filled in
+            </span>
+            <span className="ys-bar" aria-hidden>
+              <span style={{ width: `${total ? Math.round((filled / total) * 100) : 100}%` }} />
+            </span>
+            <span className="ys2-prog-r">{left > 0 ? `${plural(left, "answer")} left${earns ? ` · up to ${plural(Math.min(earnRoom(ui.me), left), "credit")} today` : ""}` : "Complete"}</span>
+          </div>
+          {fnCheckEl}
+          {questionEl}
+        </div>
+        <div className="ys2-known">
+          <strong className="ys2-known-h">On file for this seat</strong>
+          {known.length ? knownEl : <p className="ys-known-hint">Nothing on file yet. Each answer you give shows here.</p>}
+          <p className="ys2-known-fine">Change an answer you gave at any time. A change earns no credit. Report one somebody else gave and it hides until an admin looks.</p>
+          <div className="ys2-known-foot">
+            <button type="button" className="tp-flink" onClick={() => ui.openCompany(i.c.id, e.id)}>
+              Open the company
+            </button>
+            {footEl}
+          </div>
+        </div>
+      </div>
+    );
+  return (
+    <article className={`ys-seat${focus ? " focus" : ""}${open ? "" : " folded"}`} id={`ys-${e.id}`} aria-label={`Your seat at ${name}`}>
+      <header
+        className={`ys-seat-head${onToggle ? " can-fold" : ""}`}
+        onClick={(ev) => {
+          // The whole header folds the card. The chevron does the same for a keyboard.
+          if (onToggle && !(ev.target as HTMLElement).closest("button")) onToggle();
+        }}
+      >
+        <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company">
+          <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} seed={i.c.id} />
+          <span className="ys-co-name">{i.c.hidden ? <LockedName seed={i.c.id} /> : name}</span>
+        </button>
+        <span className="ys-seat-what">
+          {fn && (
+            <button
+              type="button"
+              className={`chip tp-fn ys-fn-b${reask === "e.function" ? " chip-on" : ""}`}
+              aria-pressed={reask === "e.function"}
+              aria-label={`Function, ${fn}. Change it`}
+              title="Change the function"
+              onClick={() => {
+                setReporting(null);
+                setReask(reask === "e.function" ? null : "e.function");
+                fnAsked();
+              }}
+            >
+              {fn}
+              <IconPencil size={11} />
+            </button>
+          )}
+          {role && (
+            <span className="ys-role" title={role}>
+              {role}
+            </span>
+          )}
+        </span>
+        {left > 0 ? (
+          <span className="ys-count num">
+            <b>{filled}</b> of {total}
+            <span className="sr-only"> filled in</span>
+          </span>
+        ) : (
+          <span className="ys-complete">
+            <span className="ys-check" aria-hidden>
+              <IconCheck size={11} />
+            </span>
+            Complete
+          </span>
+        )}
+        {onToggle && (
+          <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-expanded={open} aria-label={open ? `Fold the seat at ${name}` : `Show the seat at ${name}`} onClick={onToggle}>
+            <IconChevron dir={open ? "up" : "down"} />
+          </button>
+        )}
+      </header>
+      {open && (
+        <>
+          {knownEl}
+          {fnCheckEl}
+          {questionEl}
+          {footEl}
         </>
       )}
     </article>
@@ -765,7 +824,7 @@ export function waitingSeats(infos: CoInfo[]): { i: CoInfo; e: EngagementRec }[]
  * while nothing is under their name yet. `autoFocus`: they came here to search (Get started step
  * 2, the zero-credits wall).
  */
-function FindSeatsHere({ infos, autoFocus, empty }: { infos: CoInfo[]; autoFocus: boolean; empty: boolean }) {
+export function FindSeatsHere({ infos, autoFocus, empty }: { infos: CoInfo[]; autoFocus: boolean; empty: boolean }) {
   const ui = useUi();
   const me = ui.me;
   const [clients, setClients] = useState<string[]>([]);
@@ -806,6 +865,71 @@ function FindSeatsHere({ infos, autoFocus, empty }: { infos: CoInfo[]; autoFocus
   );
 }
 
+/**
+ * The member's seats as Your seats keeps them for a visit: the order they first showed in and what
+ * was missing on each then (both stay put, so nothing reorders under the member), the answers saved
+ * in this visit, the seats taken off ("This isn't me", with what the server said), and how much of
+ * each is filled in. Today's page (Seats) and the new Seats page's Your seats tab share it.
+ */
+export function useSeatList(seats: SeatInfo[]) {
+  const ui = useUi();
+  const me = ui.me;
+  const [gone, setGone] = useState<Map<string, string>>(() => new Map());
+  const [saved, setSaved] = useState<Record<string, Saved>>({});
+  const frozen = useRef(new Map<string, { asks: string[]; co: string[] }>());
+  const order = useRef<string[]>([]);
+  for (const s of seats) {
+    if (frozen.current.has(s.e.id)) continue;
+    frozen.current.set(s.e.id, { asks: s.missing, co: s.coMissing });
+    order.current.push(s.e.id);
+  }
+  const byId = useMemo(() => new Map(seats.map((s) => [s.e.id, s])), [seats]);
+  const list = order.current.map((id) => byId.get(id)).filter((s): s is SeatInfo => !!s && !gone.has(s.e.id));
+  const benchBySeat = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of me.benchRates) if (b.engagementId) m.set(b.engagementId, benchText(b.kind, b.amount));
+    return m;
+  }, [me.benchRates]);
+  const onSaved: OnSaved = (t, s) => setSaved((o) => ({ ...o, [cellKey(t.id, t.field)]: s }));
+  // A rate shared for the benchmarks only is done as soon as it saves (the member's list of them arrives with the next sync).
+  // An active seat has no end month to ask for.
+  const leftOf = (s: SeatInfo) => s.missing.filter((f) => !saved[cellKey(s.e.id, f)]?.bench && !(f === "end" && isActive(s.e))).length + s.coMissing.length;
+  // Everything a seat can hold: its own facts, and how the company sells (asked once per company, on the first seat there).
+  const totalOf = (s: SeatInfo) => {
+    const firstThere = seats.find((x) => x.i.c.id === s.i.c.id) === s;
+    const co = firstThere && !s.i.c.hidden ? SEAT_CO_ASK.filter((f) => s.i.c.cells[f]).length : 0;
+    return SEAT_ASK.filter((f) => s.e.cells[f] && !(f === "end" && isActive(s.e) && s.e.cells.end.s === "empty")).length + co;
+  };
+  const left = list.reduce((n, s) => n + leftOf(s), 0);
+  const total = list.reduce((n, s) => n + totalOf(s), 0);
+  const filled = Math.max(0, total - left);
+  return { gone, setGone, saved, frozen, order, byId, list, benchBySeat, onSaved, leftOf, totalOf, left, total, filled };
+}
+export type SeatList = ReturnType<typeof useSeatList>;
+
+/** One seat open as a row of the new Seats page (SeatCard's "row" variant), with this visit's answers. */
+export function SeatRowDetail({ sl, s, startAt, onGone }: { sl: SeatList; s: SeatInfo; startAt?: string | null; onGone: (id: string, message: string) => void }) {
+  const fz = sl.frozen.current.get(s.e.id) ?? { asks: s.missing, co: s.coMissing };
+  return (
+    <SeatCard
+      key={`${s.e.id}:${startAt ?? ""}`}
+      variant="row"
+      s={s}
+      total={sl.totalOf(s)}
+      left={sl.leftOf(s)}
+      asks={fz.asks}
+      coAsks={fz.co}
+      saved={sl.saved}
+      bench={sl.benchBySeat.get(s.e.id)}
+      onSaved={sl.onSaved}
+      open
+      focus={false}
+      startAt={startAt ?? null}
+      onGone={(id, m) => (sl.setGone((g) => new Map(g).set(id, m)), onGone(id, m))}
+    />
+  );
+}
+
 export function Seats({
   seats,
   focus,
@@ -823,22 +947,10 @@ export function Seats({
 }) {
   const ui = useUi();
   const me = ui.me;
-  /** Seats taken off the list in this visit ("This isn't me"), with what the server said. */
-  const [gone, setGone] = useState<Map<string, string>>(() => new Map());
+  const sl = useSeatList(seats);
+  const { gone, setGone, saved, frozen, order, byId, list, benchBySeat, onSaved, leftOf, totalOf, left, total, filled } = sl;
   // [google network] "We think you held these seats" is on the page: its card carries the page's one picture.
   const [guessing, setGuessing] = useState(false);
-  const [saved, setSaved] = useState<Record<string, Saved>>({});
-  // What was missing on each seat when it first showed, and the order the seats showed in. Both
-  // stay put for the visit, so nothing reorders under the member.
-  const frozen = useRef(new Map<string, { asks: string[]; co: string[] }>());
-  const order = useRef<string[]>([]);
-  for (const s of seats) {
-    if (frozen.current.has(s.e.id)) continue;
-    frozen.current.set(s.e.id, { asks: s.missing, co: s.coMissing });
-    order.current.push(s.e.id);
-  }
-  const byId = useMemo(() => new Map(seats.map((s) => [s.e.id, s])), [seats]);
-  const list = order.current.map((id) => byId.get(id)).filter((s): s is SeatInfo => !!s && !gone.has(s.e.id));
   // Where seats under their name came from (FIRST-1): ours were matched by name to work they published with us.
   const matched = list.filter((s) => s.e.source === "Published engagement" || s.e.source === "Member success story").length;
   const matchedLine = matched
@@ -867,25 +979,6 @@ export function Seats({
     setOpen((o) => new Set([...o, ...fresh]));
   }, [seats]);
 
-  const benchBySeat = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const b of me.benchRates) if (b.engagementId) m.set(b.engagementId, benchText(b.kind, b.amount));
-    return m;
-  }, [me.benchRates]);
-
-  const onSaved: OnSaved = (t, s) => setSaved((o) => ({ ...o, [cellKey(t.id, t.field)]: s }));
-  // A rate shared for the benchmarks only is done as soon as it saves (the member's list of them arrives with the next sync).
-  // An active seat has no end month to ask for.
-  const leftOf = (s: SeatInfo) => s.missing.filter((f) => !saved[cellKey(s.e.id, f)]?.bench && !(f === "end" && isActive(s.e))).length + s.coMissing.length;
-  // Everything a seat can hold: its own facts, and how the company sells (asked once per company, on the first seat there).
-  const totalOf = (s: SeatInfo) => {
-    const firstThere = seats.find((x) => x.i.c.id === s.i.c.id) === s;
-    const co = firstThere && !s.i.c.hidden ? SEAT_CO_ASK.filter((f) => s.i.c.cells[f]).length : 0;
-    return SEAT_ASK.filter((f) => s.e.cells[f] && !(f === "end" && isActive(s.e) && s.e.cells.end.s === "empty")).length + co;
-  };
-  const left = list.reduce((n, s) => n + leftOf(s), 0);
-  const total = list.reduce((n, s) => n + totalOf(s), 0);
-  const filled = Math.max(0, total - left);
   const room = earnRoom(me);
   const addSeat = () => ui.openAdd({ mine: true });
 

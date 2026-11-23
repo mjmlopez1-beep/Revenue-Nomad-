@@ -108,7 +108,7 @@ const preloadLater = (admin: boolean) => {
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
-import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, type AppCtx, type ShellPage } from "./shell/pages";
+import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, tableSlotOf, type AppCtx, type ShellPage } from "./shell/pages";
 
 export interface TradingPostProps {
   view: View;
@@ -3070,6 +3070,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       const v = views.find((x) => x.id === currentView);
       if (v) return v.name;
       if (tab === "hiring") return "Hiring now";
+      // The Seats page's second tab (seatsPage/SeatsPage.tsx): seats with an end in the last months.
+      if (ui2 && recordType === "engagements" && eff.endedWithin > 0) return "Seats that ended lately";
       // The Companies workbench's view of the ideal client (its View menu's first item).
       if (recordType === "companies" && tab === "all" && eff.icp && !icpEmpty(me.icp)) return "Your ideal client";
       const t = TABS.find((x) => x.key === tab);
@@ -3270,9 +3272,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const pageMain = defNow ? (typeof defNow.mainClass === "function" ? defNow.mainClass(ctx) : defNow.mainClass ?? "") : "";
   /** The new look's Home and Companies workbench, once they exist (shell/pages.tsx home2, companies2). */
   const Home2 = ui2 ? pageDef("home2")?.component ?? null : null;
-  const Companies2 = ui2 && onScreen === "table" && recordType === "companies" ? pageDef("companies2")?.component ?? null : null;
+  // The page in the table's place for this list (shell/pages.tsx tableSlotOf): the Companies workbench, or Seats.
+  const tableSlot = ui2 && onScreen === "table" ? tableSlotOf(recordType, tab) : null;
+  const Companies2 = tableSlot ? pageDef(tableSlot)?.component ?? null : null;
   /** The entry on screen (Home's, the workbench's or the page's): whether it draws its own header and strip. */
-  const defShown = onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 ? pageDef("companies2") : null) : defNow;
+  const defShown = onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 && tableSlot ? pageDef(tableSlot) : null) : defNow;
   const headOwn = !!defShown?.ownHeader && !!defShown.component;
 
   /* ----- layout ----- */

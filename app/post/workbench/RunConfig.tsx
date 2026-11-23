@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import type { UnlockQuote } from "@/lib/tableTypes";
 import { useToast } from "../../ui/shared";
-import type { FactRef, Row } from "../model";
+import type { FactRef, RecordType, Row } from "../model";
 import { useUi } from "../ui";
 import { columnOf, costWords, rowNeed } from "./columns";
 import { appDeps, creditWords, fetchQuote } from "./quote";
@@ -41,6 +41,12 @@ const DESC: Record<string, { title: string; desc: string; wait: string }> = {
   email: { title: "Work email", desc: "The decision maker's work email, where one is on file. Their name has to be open first.", wait: "need the company or the decision maker's name first" },
   rate: { title: "Rate paid", desc: "What the latest seat paid, where a member shared it. A company has to be open first.", wait: "need the company opened first" },
 };
+/** A seat row's own facts (the Seats page): each row is one seat, not a company's latest. */
+const SEAT_DESC: Record<string, { title: string; desc: string; wait: string }> = {
+  rate: { title: "Rate paid", desc: "What the seat paid, where a member shared it. It never says who added it.", wait: "are at a locked company" },
+  end: { title: "Month it ended", desc: "The month a seat ended. How long ago is free. The dated end costs 1 credit, and only on a seat that has ended.", wait: "are at a locked company" },
+  operator: { title: "A holder out of the directory", desc: "The name and role of a fractional who keeps out of the directory, one unlock for both. Every other holder is free once the company is open.", wait: "are at a locked company" },
+};
 
 export function RunConfig({
   col,
@@ -48,8 +54,11 @@ export function RunConfig({
   picked,
   onBack,
   onDone,
+  type = "companies",
 }: {
   col: string;
+  /** The list the rows are (a seat row buys its own seat's fact). */
+  type?: RecordType;
   /** The rows in view. */
   rows: Row[];
   /** The rows picked, in view order. */
@@ -60,8 +69,8 @@ export function RunConfig({
 }) {
   const ui = useUi();
   const toast = useToast();
-  const def = columnOf("companies", col);
-  const d = DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
+  const def = columnOf(type, col) ?? columnOf("companies", col);
+  const d = (type === "engagements" ? SEAT_DESC[col] : undefined) ?? DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
   const [scope, setScope] = useState<Scope>(picked.length ? "sel" : "all");
   const scopeRows = (s: Scope) => (s === "all" ? rows : s === "sel" ? picked : rows.slice(0, 5));
   const plan = runPlan(col, scopeRows(scope));
