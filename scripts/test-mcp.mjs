@@ -401,7 +401,7 @@ async function main() {
   check("a notification gets 202", note.status === 202, note.status);
   const list = await rpc(at, "tools/list");
   const names = (list.json?.result?.tools ?? []).map((t) => t.name).sort();
-  const want = ["add_company_fact", "add_my_seat", "add_person", "alerts", "change_proposal", "create_or_update_proposal", "draft_proposal_from_call", "find_company", "follow_company", "get_company", "get_proposal", "get_proposal_kit", "leads_passed_to_me", "list_open_roles", "list_peers", "list_proposal_templates", "my_account", "my_pipeline", "my_voice", "pass_lead", "rate_benchmarks", "save_my_voice", "search_companies", "send_document_for_signature", "send_proposal_for_signature", "todays_moves", "unlock", "update_pipeline", "ways_in"];
+  const want = ["add_company_fact", "add_my_seat", "add_person", "alerts", "change_proposal", "create_or_update_proposal", "draft_proposal_from_call", "find_company", "follow_company", "get_company", "get_proposal", "get_proposal_kit", "leads_passed_to_me", "list_evidence", "list_open_roles", "list_peers", "list_proposal_templates", "match_evidence", "my_account", "my_pipeline", "my_voice", "pass_lead", "rate_benchmarks", "save_evidence_case", "save_my_voice", "search_companies", "send_document_for_signature", "send_proposal_for_signature", "todays_moves", "unlock", "update_pipeline", "ways_in"];
   check("tools/list has every tool", JSON.stringify(names) === JSON.stringify(want), names);
   const unlockTool = list.json?.result?.tools?.find((t) => t.name === "unlock");
   check("the unlock tool tells the model to ask first", /ASK THE MEMBER FIRST/.test(unlockTool?.description ?? "") && unlockTool.inputSchema?.properties?.confirm?.type === "boolean");
@@ -822,6 +822,28 @@ async function main() {
   const bList = await tool(ba.access_token, "alerts", { action: "list" });
   check("saved searches are each member's own", bList.out?.saved_searches?.length === 0);
 
+  /* Evidence Bank (lib/mcp/evidence.ts): Close only, asks first, the client hidden, each member's own */
+  const evList0 = await tool(at, "list_evidence");
+  if (evList0.out?.can_use === false) {
+    check("list_evidence off the Close plan: the plan's words and the upgrade link, no case", /Evidence Bank is on Close/.test(evList0.out.plan ?? "") && /p=billing/.test(evList0.out.plan) && !("cases" in evList0.out), evList0.out);
+    const evSave0 = await tool(at, "save_evidence_case", { problem: "x", confirm: true });
+    check("save_evidence_case off the Close plan saves nothing", evSave0.out?.can_use === false, evSave0.out);
+  } else {
+    const EV = { title: "One sales process", problem: "Four reps at Northwind Clinics sold four different ways.", what_i_did: "Set one sales process and a weekly forecast.", numbers: "Win rate went from 22% to 31%.", client_name: "Northwind Clinics", industry: "Health Care", revenue: "$20M–$50M", ready: true };
+    const evPrev = await tool(at, "save_evidence_case", EV);
+    check("save_evidence_case without confirm saves nothing and shows how it reads", evPrev.out?.confirmed === false && /Nothing was saved/.test(evPrev.out.message) && (await tool(at, "list_evidence")).out?.cases?.length === evList0.out.cases.length, evPrev.out);
+    check("  the preview keeps the client hidden: its label, never its name", evPrev.out?.would_save?.client === "A health care company, $20M to $50M" && !evPrev.text.includes("Northwind"), evPrev.text.slice(0, 300));
+    const evSaved = await tool(at, "save_evidence_case", { ...EV, confirm: true });
+    check("with confirm it saves the case, the numbers as typed", evSaved.out?.confirmed === true && evSaved.out.case?.numbers?.[0]?.before === "22%" && evSaved.out.case.numbers[0].after === "31%", evSaved.out);
+    const evList = await tool(at, "list_evidence");
+    check("list_evidence never names a hidden client, and gives no company or seat id", evList.out?.cases?.length === evList0.out.cases.length + 1 && !evList.text.includes("Northwind") && !/"company_id"|"seat_id"|"companyId"|"seatId"/.test(evList.text), evList.text.slice(0, 300));
+    const someCo = (await tool(at, "search_companies", { limit: 1 })).out?.companies?.[0]?.id;
+    const evMatch = someCo ? await tool(at, "match_evidence", { company_id: someCo }) : null;
+    check("match_evidence: Same, Close or Different in words, no percentage", !!evMatch && evMatch.out?.ranked?.length >= 1 && evMatch.out.ranked.every((r) => ["Same", "Close", "Different"].includes(r.match) && Array.isArray(r.same)) && !/%"|percent/i.test(JSON.stringify(evMatch.out.ranked)), evMatch?.out);
+    const bEv = await tool(ba.access_token, "list_evidence");
+    check("another member's assistant never sees the case", bEv.out?.can_use === false || (Array.isArray(bEv.out?.cases) && !bEv.text.includes("One sales process")), bEv.text.slice(0, 200));
+  }
+
   /* Connected apps */
   const apps = await call("GET", "/api/oauth/apps", { cookie: A.token });
   check("Connected apps lists the member's apps", apps.status === 200 && apps.json?.apps?.some((x) => x.name === "Claude") && apps.json.apps.every((x) => x.id && x.connectedAt), apps.json?.apps?.length);
@@ -889,8 +911,8 @@ async function main() {
     await c2c.connect(new StreamableHTTPClientTransport(new URL(MCP), { authProvider: provider }));
     check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "merlin");
     const tl = await c2c.listTools();
-    // 25 with RN_GOOGLE off (as this test runs): the base 15, my_pipeline and update_pipeline (Your pipeline), the five proposal tools, and the three peer tools (list_peers, pass_lead, leads_passed_to_me). RN_GOOGLE=1 adds save_my_network and my_network (27).
-    check("SDK client: it lists the tools (ways_in with ways in on, RN_PATHS)", tl.tools.length === 29, tl.tools.length);
+    // 25 with RN_GOOGLE off (as this test runs): the base 15, my_pipeline and update_pipeline (Your pipeline), the five proposal tools, and the three peer tools (list_peers, pass_lead, leads_passed_to_me), and the three Evidence Bank tools (list_evidence, match_evidence, save_evidence_case). RN_GOOGLE=1 adds save_my_network and my_network (27).
+    check("SDK client: it lists the tools (ways_in with ways in on, RN_PATHS)", tl.tools.length === 32, tl.tools.length);
     const res = await c2c.callTool({ name: "search_companies", arguments: { hiring_now: true, limit: 3 } });
     const parsed = JSON.parse(res.content?.[0]?.text ?? "{}");
     check("SDK client: it calls a tool and reads the answer", Array.isArray(parsed.companies) && parsed.companies.length > 0, res);
