@@ -218,10 +218,11 @@ export function needsFirst(rows: Row[]): Row[] {
 /* ---------- the editor's outline ---------- */
 
 export type BlockTone = "ready" | "wait" | "work" | "fix";
-export function blockState(b: ProposalBlock, p: ProposalRec, fields: Record<string, string>, o: { marked?: boolean; editing?: boolean } = {}): { text: string; tone: BlockTone } {
+export function blockState(b: ProposalBlock, p: ProposalRec, fields: Record<string, string>, o: { marked?: boolean; editing?: boolean; close?: boolean } = {}): { text: string; tone: BlockTone } {
   if (o.marked) return { text: "Changed, not saved yet", tone: "work" };
   if (o.editing) return { text: "Editing", tone: "work" };
-  if (b.blockId === "proof") return { text: "Evidence Bank is coming", tone: "wait" };
+  // Evidence Bank is a Close feature: without Close (a proposal kept read only) Proof reads as any section.
+  if (b.blockId === "proof" && o.close !== false) return { text: "Evidence Bank is coming", tone: "wait" };
   const n = blanksOf([b], fields).length;
   if (n) return { text: plural(n, "blank"), tone: "fix" };
   if (b.blockId === "investment" && p.pricing?.options.length) return { text: `${plural(p.pricing.options.length, "option")} · ${plural(p.pricing.addOns.length, "add-on")}`, tone: "ready" };

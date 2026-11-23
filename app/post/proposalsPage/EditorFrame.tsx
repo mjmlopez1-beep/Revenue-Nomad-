@@ -223,7 +223,7 @@ export function EditorFrame(x: EditorFrameProps) {
             </span>
             <ol>
               {x.blocks.map((b, i) => {
-                const st = blockState(b, p, x.fields, { marked: x.marked.has(b.id), editing: x.editing === b.id });
+                const st = blockState(b, p, x.fields, { marked: x.marked.has(b.id), editing: x.editing === b.id, close: !x.locked });
                 const on = picked?.id === b.id;
                 return (
                   <li key={b.id} data-on={on || undefined}>
@@ -291,7 +291,7 @@ export function EditorFrame(x: EditorFrameProps) {
             {x.blocks.map((b) => (
               <div key={b.id} className="pz-blk" data-on={picked?.id === b.id || undefined} onFocusCapture={() => setSel(b.id)}>
                 {x.section(b)}
-                {b.blockId === "proof" && (
+                {b.blockId === "proof" && !x.locked && (
                   <div className="pz-proof" role="note">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                       <path d="M4 5h16v14H4zM8 9h8M8 13h5" />

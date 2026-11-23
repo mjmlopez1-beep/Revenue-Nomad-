@@ -155,6 +155,7 @@ console.log("\nthe editor");
 const p0 = base({ blocks: [L.makeBlock("proof"), { id: "b2", blockId: "investment", title: "Investment", body: "{{pricing.monthlyFee}}" }, L.makeBlock("signature")], pricing });
 const f0 = L.docFields(p0);
 check("Proof: Evidence Bank is coming", M.blockState(p0.blocks[0], p0, f0).text === "Evidence Bank is coming");
+check("Proof without Close (read only): no word of Evidence Bank, a Close feature", M.blockState(p0.blocks[0], p0, f0, { close: false }).text !== "Evidence Bank is coming");
 check("a section with a blank says how many", M.blockState(p0.blocks[1], p0, f0).text === "1 blank");
 check("the signature says how you sign", M.blockState(p0.blocks[2], { ...p0, memberSign: "after" }, f0).text === "You countersign" || M.blockState(p0.blocks[2], { ...p0, memberSign: "after" }, f0).tone === "fix");
 check("a change shown and not accepted is marked", M.blockState(p0.blocks[1], p0, f0, { marked: true }).text === "Changed, not saved yet");

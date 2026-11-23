@@ -543,6 +543,8 @@ export function ContractsPage() {
     return (
       <>
         {header}
+        {/* The page's one heading (the field placer's title is a box to edit). */}
+        <h1 className="sr-only">{full.title || "Contract"}</h1>
         <DocBuilder
           key={full.id}
           notice={open.notice ?? null}
