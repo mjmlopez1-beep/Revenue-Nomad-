@@ -1,8 +1,7 @@
 /**
  * Saved lists in the app (BUILD_PLAN F5, Stage 1): the list fields on saved views, the "Made for
- * you" starter lists from the ideal client, and the savedView ops the app sends for them. Pure but
- * for the action's type: the merge adds `alert`, `list` and `opened` to the savedView action in
- * lib/tableTypes.ts (and the list fields to SavedViewRec); until then listAct casts.
+ * you" starter lists from the ideal client, and the savedView ops the app sends for them
+ * (lib/tableTypes.ts Action savedView, read by lib/hunt.ts savedViewAction).
  */
 import type { Action, Me, SavedViewCriteria, SavedViewRec } from "@/lib/tableTypes";
 import { listOf, placeKey, type SavedListRec } from "@/lib/hunt";
@@ -18,7 +17,7 @@ export type ListOp =
   | { op: "alert"; id: string; list: { alert: Partial<ListAlert> } }
   | { op: "list"; id: string; list: { kind?: ListKind; cols?: string[]; starter?: boolean } }
   | { op: "opened"; id: string };
-export const listAct = (x: ListOp): Action => ({ type: "savedView", ...x }) as unknown as Action;
+export const listAct = (x: ListOp): Action => ({ type: "savedView", ...x });
 
 /** The member's saved views, read as lists. */
 export const listsOf = (me: Me): SavedListRec[] => (me.savedViews ?? []).map(listOf);

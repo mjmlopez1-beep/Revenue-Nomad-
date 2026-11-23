@@ -11,25 +11,6 @@ import type { Cell, CompanyRec, EngagementRec, Me, PersonRec, PlanView, View } f
 import type { RadarRow } from "./radar/types";
 import type { MovesWire } from "./moves";
 
-/*
- * The new look (lib/ui2.ts, RN_UI2), on the member and the view. Declared here, beside the wire
- * format, so lib/tableTypes.ts stays as it is; with the flag off none of these is ever sent.
- */
-declare module "./tableTypes" {
-  interface Me {
-    /** The new look is on for this member (RN_UI2=on, or optin with "Try the new Merlin"). */
-    ui2?: boolean;
-    /** RN_UI2=optin: the member menu offers "Try the new Merlin" or "Back to the old look". */
-    ui2Optin?: true;
-    /** The "what this page is for" strips they dismissed (page keys), with the new look on. */
-    stripsOff?: string[];
-  }
-  interface View {
-    /** The view is drawn in the new look (Me.ui2). */
-    ui2?: boolean;
-  }
-}
-
 /**
  * GET /api/table?today=1[&since=ISO]: what Today draws before the full view arrives, a few KB
  * (under 20). The same sign-in as the view (401 signed out), and the same locks: the radar rows

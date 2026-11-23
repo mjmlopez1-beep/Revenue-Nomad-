@@ -48,8 +48,8 @@ export interface Ui2Fields {
   stripOn?: string;
 }
 
-/** The settings action carrying the new look's fields (the Action union is lib/tableTypes.ts's). */
-export const ui2Action = (x: Ui2Fields): Action => ({ type: "settings", ...x }) as unknown as Action;
+/** The settings action carrying the new look's fields. */
+export const ui2Action = (x: Ui2Fields): Action => ({ type: "settings", ...x });
 
 /**
  * The settings action, for the new look's fields: the profile as it becomes and what to say, or

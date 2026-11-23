@@ -11,6 +11,7 @@ import type { MovesWire } from "./moves";
 import type { Channel, ManualStage, MoveStage, PipelineView } from "./pipeline";
 import type { PeersView } from "./peersCore";
 import type { VoiceProfile } from "./voice";
+import type { ListAlert, ListKind } from "./mcp/alerts";
 
 /**
  * What one field looks like to the viewer.
@@ -380,6 +381,13 @@ export interface Me {
    * alerts (lib/mcp/alerts.ts): a view saved in the app shows there, and one saved there shows here.
    */
   savedViews?: SavedViewRec[];
+  /* The new look (lib/ui2.ts, RN_UI2). With the flag off none of these is sent. */
+  /** The new look is on for this member (RN_UI2=on, or optin with "Try the new Merlin"). */
+  ui2?: boolean;
+  /** RN_UI2=optin: the member menu offers "Try the new Merlin" or "Back to the old look". */
+  ui2Optin?: true;
+  /** The "what this page is for" strips they dismissed (page keys), with the new look on. */
+  stripsOff?: string[];
   /**
    * The fractional functions this member says usually get hired before them (onboarding's "Which
    * fractional usually gets hired before you?", and Your profile), up to 3 (BEFORE_MAX). `[]` is
@@ -574,6 +582,21 @@ export interface SavedViewRec {
   /** Email me new matches each week. */
   email: boolean;
   createdAt: string;
+  /*
+   * A saved list's own fields (BUILD_PLAN F5, lib/hunt.ts savedViewsOut). The server sends them on
+   * every view; a view the app makes before it is saved (a starter list, one just saved) may leave
+   * them out, and lib/hunt.ts listOf reads them with their defaults.
+   */
+  /** What the list holds; null: what its place says. */
+  kind?: ListKind | null;
+  /** The workbench's columns for it, by column id, in order. Empty: the table's own. */
+  cols?: string[];
+  /** A "Made for you" list Merlin made from the ideal client. */
+  starter?: boolean;
+  /** When the member last opened it in the app (ISO), or null. */
+  openedAt?: string | null;
+  /** Its alert: on, weekly, by email and by Slack (lib/mcp/alerts.ts alertOf). */
+  alert?: ListAlert;
 }
 
 /* ---------- messages between members ---------- */
@@ -726,6 +749,8 @@ export interface Benchmarks {
 
 export interface View {
   demo: boolean;
+  /** The view is drawn in the new look (Me.ui2, lib/ui2.ts). Left out with the flag off. */
+  ui2?: boolean;
   me: Me | null;
   /** Signed out: companies come back with every gated cell locked and people names hidden. */
   companies: CompanyRec[];
@@ -1056,7 +1081,7 @@ export type Action =
    */
   | {
       type: "savedView";
-      op: "save" | "rename" | "delete" | "restore" | "email";
+      op: "save" | "rename" | "delete" | "restore" | "email" | "alert" | "list" | "opened";
       id?: string;
       name?: string;
       place?: string;
@@ -1065,6 +1090,12 @@ export type Action =
       on?: boolean;
       view?: SavedViewRec;
       at?: number;
+      /**
+       * A saved list's own fields (F5). save and list: its kind, columns and starter flag; save and
+       * alert: its alert (on, email, Slack). alert: `id` and `list.alert`; list: `id` and the fields
+       * that change; opened: `id` (the lists table's Opened and New read it).
+       */
+      list?: { kind?: ListKind; cols?: string[]; starter?: boolean; alert?: Partial<ListAlert> };
     }
   | { type: "report"; entity: Entity; id: string; field: string }
   /** Confirm a value you can see is correct (one confirmation per member per value). */
@@ -1112,7 +1143,12 @@ export type Action =
    * `partners`: the same switch under its old name (Referral partners).
    */
   /** `nameHidden`: "Hide my name on my seats". */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean }
+  /**
+   * The new look's fields (lib/ui2.ts): `ui2` "Try the new Merlin" (true) or "Back to the old look"
+   * (false), only while RN_UI2 is optin; `stripOff` dismisses a page's "what this page is for"
+   * strip and `stripOn` brings it back (Profile.stripsOff).
+   */
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean; ui2?: boolean; stripOff?: string; stripOn?: string }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.

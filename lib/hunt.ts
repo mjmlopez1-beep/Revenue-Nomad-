@@ -43,10 +43,7 @@ function criteriaOfView(a: SavedSearch): SavedViewCriteria {
   return criteria;
 }
 
-/**
- * A saved view as a list (F5): what Me.savedViews carries beyond SavedViewRec. The merge adds these
- * fields to SavedViewRec in lib/tableTypes.ts; until then the app reads them with listOf.
- */
+/** A saved view as a list (F5): SavedViewRec's list fields, each with its default filled in. */
 export interface SavedListFields {
   kind: ListKind | null;
   cols: string[];
@@ -75,8 +72,7 @@ export function savedViewsOut(list: SavedSearch[] | undefined): SavedListRec[] {
 
 /** A saved view read as a list, whatever server sent it (an older one leaves the list fields out). */
 export function listOf(v: SavedViewRec): SavedListRec {
-  const x = v as Partial<SavedListRec> & SavedViewRec;
-  return { ...v, kind: x.kind ?? null, cols: Array.isArray(x.cols) ? x.cols : [], starter: x.starter === true, openedAt: x.openedAt ?? null, alert: x.alert ?? alertOf({ email: v.email }) };
+  return { ...v, kind: v.kind ?? null, cols: Array.isArray(v.cols) ? v.cols : [], starter: v.starter === true, openedAt: v.openedAt ?? null, alert: v.alert ?? alertOf({ email: v.email }) };
 }
 
 /* ---------- the same view twice ---------- */
