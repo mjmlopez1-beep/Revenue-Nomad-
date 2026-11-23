@@ -106,7 +106,7 @@ export const CLOSE_ACCOUNT = {
   lead: "Your account closes now: you're signed out everywhere, you leave Peers and the Fractionals directory, and Merlin stops emailing you.",
   restore: "For 30 days you can bring it back with the link we email you, or by writing to us.",
   after:
-    "After 30 days Merlin deletes your personal data: your profile, your Google and LinkedIn imports and network, the messages you wrote, your proposals and documents, your AI usage log and your saved views. Facts you added to companies stay, with your name taken off.",
+    "After 30 days Merlin deletes your personal data: your profile, your Google and LinkedIn imports and network, the messages you wrote, your proposals and documents, your Evidence Bank cases, your AI usage log and your saved views. Facts you added to companies stay, with your name taken off.",
   plan: "A paid plan stops renewing at the end of the period you paid for.",
   confirm: "Close my account",
 };

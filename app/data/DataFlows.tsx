@@ -222,7 +222,9 @@ export function DataFlows() {
               On Close you can keep up to 50 case studies of your work: the client, the problem, what you did, the numbers before and after as you typed them, and
               the type of work. The client is hidden unless you choose to name it: it reads as a short description, like a health care company of its size, and
               its name is taken out of the words wherever a case is used. Only you see your cases. They are not in anyone else&apos;s view or in Revenue
-              Nomad&apos;s copy for admins. A case goes into one of your proposals, or onto your Fractionals card, only when you put it there.
+              Nomad&apos;s copy for admins. When you start a proposal, Merlin puts your one or two closest ready cases in its Proof part, read as above, and you can
+              swap them or take them out before it goes; the proposal keeps which of your cases it holds, so the case can show where it was used. A case goes onto
+              your Fractionals card only when you put it there.
             </p>
             <p className="cl-p">
               Merlin writes a case by joining your answers. Only if you switch on writing with Merlin and agree, your answers and anything you paste go to Merlin&apos;s
