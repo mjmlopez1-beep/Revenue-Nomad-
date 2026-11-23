@@ -23,7 +23,7 @@ const textList = (raw: unknown, max: number, len: number) =>
  */
 export function cleanIcp(raw: unknown): Icp | null {
   if (raw === null) return null;
-  if (!raw || typeof raw !== "object") throw new HuntError("Pick your Ideal Fractional Profile from the lists.");
+  if (!raw || typeof raw !== "object") throw new HuntError("Pick your ideal client from the lists.");
   const r = raw as Record<string, unknown>;
   const pick = (v: unknown, list: readonly string[]) =>
     [...new Set((Array.isArray(v) ? v : []).slice(0, 40).map((x) => pickFrom(list, x)).filter((x): x is string => !!x))];

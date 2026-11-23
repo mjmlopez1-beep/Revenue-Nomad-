@@ -273,7 +273,7 @@ export function HiredSentence({
               onEditIcp();
             }}
           >
-            {hasIcp ? "Edit your profile" : "Set up your Ideal Fractional Profile"}
+            {hasIcp ? "Edit your profile" : "Set your ideal client"}
           </button>
         </Anchored>
       )}

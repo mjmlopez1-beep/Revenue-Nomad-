@@ -173,13 +173,13 @@ export function IcpFields({
 }
 
 /**
- * "Ideal Fractional Profile" (IFP): the companies a fractional wants as clients. Written out in
- * full, and as "IFP" only where a phone can't fit the words (hunt.css shows one or the other).
+ * The member's ideal client: the companies a fractional wants as clients (once called the Ideal
+ * Fractional Profile). Written out, and shorter only where a phone can't fit the words (hunt.css).
  */
 export function IfpName({ short = "IFP" }: { short?: string }) {
   return (
     <>
-      <span className="ifp-long">Ideal Fractional Profile</span>
+      <span className="ifp-long">ideal client</span>
       <span className="ifp-short" aria-hidden>
         {short}
       </span>
@@ -214,15 +214,15 @@ export function IcpPill({
   const label = icpLabel(icp);
   if (icpEmpty(icp))
     return (
-      <div className="hunt-pill hunt-pill-off" role="group" aria-label="Your Ideal Fractional Profile">
-        <span className="hunt-pill-text">Set your Ideal Fractional Profile, the companies you want as clients, and the table leads with companies like them.</span>
+      <div className="hunt-pill hunt-pill-off" role="group" aria-label="Your ideal client">
+        <span className="hunt-pill-text">Set your ideal client, the companies you want as clients, and the table leads with companies like them.</span>
         <button type="button" className="hunt-pill-btn" onClick={onEdit}>
           Set it up
         </button>
       </div>
     );
   return (
-    <div className={`hunt-pill${on ? "" : " hunt-pill-off"}`} role="group" aria-label="Your Ideal Fractional Profile">
+    <div className={`hunt-pill${on ? "" : " hunt-pill-off"}`} role="group" aria-label="Your ideal client">
       <span className="hunt-pill-text">
         {on ? (
           <>
@@ -247,7 +247,7 @@ export function IcpPill({
         <button type="button" className="hunt-pill-btn hunt-pill-edit" onClick={onEdit}>
           Edit
         </button>
-        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} ${everyone === 1 ? noun[0] : noun[1]} without your Ideal Fractional Profile` : `${shownN} ${shownN === 1 ? noun[0] : noun[1]} shown`}>
+        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} ${everyone === 1 ? noun[0] : noun[1]} without your ideal client` : `${shownN} ${shownN === 1 ? noun[0] : noun[1]} shown`}>
           {on ? "Show everyone" : "Show your matches"}
         </button>
       </span>
@@ -387,7 +387,7 @@ export function IcpSheet({
         <BeforeFields fn={f} companies={companies} value={nb} onChange={setB} />
       </div>
       <div className="hunt-sub">
-        <div className="hunt-h">Your Ideal Fractional Profile</div>
+        <div className="hunt-h">Your ideal client</div>
         <p className="hunt-lead">The companies you want as clients. The table leads with companies like these. Pick as many as fit, and leave a part empty for any.</p>
         {!icpEmpty(v) && (
           <button type="button" className="btn btn-sm" onClick={() => setV(EMPTY_ICP)}>

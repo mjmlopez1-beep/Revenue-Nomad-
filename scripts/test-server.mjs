@@ -1500,7 +1500,7 @@ section("hunt", async () => {
     v1.icp,
   );
   const bad = await H.act({ type: "profile", icp: "everyone" });
-  check("an ideal client that isn't lists is refused", bad.status === 400 && /Pick your Ideal Fractional Profile/.test(bad.json?.error ?? ""), bad.json);
+  check("an ideal client that isn't lists is refused", bad.status === 400 && /Pick your ideal client/.test(bad.json?.error ?? ""), bad.json);
   await H.act({ type: "profile", icp: null });
   check("null clears the ideal client", (await H.view()).me.icp === null);
   await H.act({ type: "profile", icp: { industries: ["Software"], employees: [], revenue: [], countries: [] } });
