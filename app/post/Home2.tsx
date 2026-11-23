@@ -51,6 +51,7 @@ import { AskBar } from "./AskBar";
 import { fillRate } from "./find/findModel";
 import { alertWords, icpChips, kindLabel, kindOfList, listAct, listsOf, readFavs, starterLists, writeFavs, type SavedListRec, type StarterList } from "./find/lists";
 import { sixLine, type SixKey, type SixSteps as SixStepsT } from "./getStarted";
+import { planLine } from "./firstVisit";
 import "./home2.css";
 
 /* ---------- Home ---------- */
@@ -104,7 +105,7 @@ export function Home2(p: Home2Props) {
 
   const daySub = first
     ? me.proOpens
-      ? `Your trial is on${me.plan?.trialDaysLeft ? ` for ${plural(me.plan.trialDaysLeft, "more day")}` : ""}. Any company opens free, up to ${me.proOpens.of} a day.`
+      ? `${planLine(me.plan)}Any company opens free, up to ${me.proOpens.of} a day.`
       : "Merlin's own data is all here. The six steps below are your list for today."
     : todoN
       ? `${["", "One move", "Two moves", "Three moves", "Four moves", "Five moves"][Math.min(todoN, 5)] || `${todoN} moves`} for today. About ${Math.max(2, todoN * 2)} minutes.`

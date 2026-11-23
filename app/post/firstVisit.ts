@@ -10,6 +10,18 @@
  * shows on a guess. Dismissed strips are Profile.stripsOff (lib/ui2.ts), so a second device agrees.
  */
 import type { Me, View } from "@/lib/tableTypes";
+import { planName } from "@/lib/billing/rules";
+
+/**
+ * Home's first visit names the member's plan as it is: the trial with its days left, or the paid
+ * plan by name (Pro or Close), never "Your trial is on" for a member who pays. Billing off: nothing.
+ */
+export function planLine(plan: Me["plan"]): string {
+  if (!plan) return "";
+  if (plan.name === "trial") return `Your trial is on${plan.trialDaysLeft ? ` for ${plan.trialDaysLeft} more ${plan.trialDaysLeft === 1 ? "day" : "days"}` : ""}. `;
+  if (plan.name === "pro") return `You're on ${planName(plan)}. `;
+  return "";
+}
 import type { SixKey } from "./getStarted";
 import { icpEmpty } from "./model";
 

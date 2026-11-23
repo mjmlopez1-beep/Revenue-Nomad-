@@ -75,6 +75,12 @@ async function pure() {
   const ex = await import("../app/post/examples");
   const u2 = await import("../lib/ui2");
   type SixMe = Parameters<typeof gs.sixSteps>[0]["me"];
+  {
+    type P = NonNullable<Parameters<typeof fv.planLine>[0]>;
+    const plan = (x: Partial<P>) => ({ name: "pro", tier: "close", trialDaysLeft: null, ...x }) as P;
+    check("Home's plan line: a paid Close member reads Close, never the trial", fv.planLine(plan({})) === "You're on Close. " && !/trial/i.test(fv.planLine(plan({}))));
+    check("…paid Pro reads Pro; the trial its days left; billing off nothing", fv.planLine(plan({ tier: "pro" })) === "You're on Pro. " && fv.planLine(plan({ name: "trial", trialDaysLeft: 9 })) === "Your trial is on for 9 more days. " && fv.planLine(plan({ name: "trial", trialDaysLeft: 1 })) === "Your trial is on for 1 more day. " && fv.planLine(undefined) === "");
+  }
   const blank: SixMe = { icp: null, holdersUnlocked: 0, companiesUnlocked: 0, savedViews: [], started: { note: false, network: false }, crystal: "all" } as SixMe;
   const icp = { industries: ["SaaS"], employees: [], revenue: [], countries: [] };
   const view = (email: boolean) => ({ id: "v1", name: "Open Sales roles", place: "v=hiring", criteria: {}, email, createdAt: "2026-11-01T00:00:00Z" });
