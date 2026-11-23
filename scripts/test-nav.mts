@@ -450,6 +450,9 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
   const was = process.env.RN_UI2;
   try {
     delete process.env.RN_UI2;
+    const dflt = await t.buildView("tok-ned-nav");
+    check("RN_UI2 unset (Stage 9): the new look is the default, for everyone, with no switch", dflt.me!.ui2 === true && dflt.ui2 === true && dflt.me!.ui2Optin === undefined);
+    process.env.RN_UI2 = "off";
     const off = await t.buildView("tok-ned-nav");
     check("RN_UI2 off: nothing of the new look is sent", off.me!.ui2 === undefined && off.me!.ui2Optin === undefined && off.me!.stripsOff === undefined && off.ui2 === undefined);
     const refused = await t.perform("tok-ned-nav", { type: "settings", ui2: true } as never).then(() => null, (e: Error) => e.message);

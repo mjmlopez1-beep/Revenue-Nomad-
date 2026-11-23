@@ -284,6 +284,8 @@ async function inBrowser() {
   const env: NodeJS.ProcessEnv = { ...process.env, RN_DATA_DIR: bdir, RN_INTEL_SEED: path.join(bdir, "intel-seed.json"), RN_STARTER_CREDITS: "25", RN_ADMIN_EMAILS: "admin-qa6u-web@example.com", RN_SCAN_TEST: "1", RN_LOGO_LOOKUP: "off", RN_DIGEST: "0", RN_FREE_COMPANY: "off" };
   // The old look here (the rollback): the record is the drawer. The new look's record page is checked below on its own server.
   for (const k of ["RN_UI2", "RN_INTEL_SEED_KEY", "RESEND_API_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_GOOGLE", "RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR", "STRIPE_API_URL"]) delete env[k];
+  // The new look is the default since Stage 9: the rollback is asked for by name.
+  env.RN_UI2 = "off";
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
   server.stdout.on("data", (d) => (log += d));

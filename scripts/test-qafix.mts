@@ -135,6 +135,8 @@ Object.assign(process.env, {
   RN_SCAN_TEST: "1",
   RN_DIGEST: "0",
   RN_FREE_COMPANY: "off",
+  // The old look's sheets and top bar are what the browser checks drive: since Stage 9 the new look is the default, so the rollback is asked for by name.
+  RN_UI2: "off",
 });
 for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "RN_SCAN", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_RADAR", "RESEND_API_KEY", "RN_INTEL_SEED_KEY", "RN_GOOGLE"]) delete process.env[k];
 /** The real fetch, for the browser checks' own server; lib/ in process gets one that answers "ok" and goes nowhere. */
