@@ -213,3 +213,46 @@
     flex: 1 1 auto;
   }
 }
+
+/* "Or paste a Granola API key": the second way in, under Connect Granola (Integrations and Settings, Connections). */
+.gr-keyalt {
+  margin: 4px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.gr-keyalt > summary {
+  cursor: pointer;
+  width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.gr-keyalt > summary:focus-visible {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.gr-keyalt[open] > summary {
+  margin-bottom: 8px;
+}
+.gr-keyalt .st-form,
+.gr-keyalt .in-form {
+  margin-top: 8px;
+}
+.gr-reads {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.gr-signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}

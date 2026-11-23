@@ -1,21 +1,28 @@
 /**
- * Granola for one member (lib/granola/types.ts says what is kept and why): connect a personal API
- * key, the status the page shows, Disconnect, the recent calls with a company or a person, and
- * one picked call's transcript for drafting (granolaTranscript).
+ * Granola for one member (lib/granola/types.ts says what is kept and why): Connect Granola (the
+ * sign-in, lib/granola/oauth.ts) or a personal API key, the status the page shows, Disconnect, the
+ * recent calls with a company or a person, and one picked call's transcript for drafting
+ * (granolaTranscript). A sign-in link asks Granola's MCP tools (lib/granola/mcp.ts); a key link
+ * Granola's REST API (lib/granola/api.ts). The member sees one status and one Disconnect either way.
  *
- * The key is sealed at rest and opened only here, right before a request to Granola. It is never
- * logged, never in an answer (only its last four characters) and never in the admin export.
+ * Tokens and the key are sealed at rest and opened only here, right before a request to Granola.
+ * They are never logged, never in an answer (only a key's last four characters) and never in the
+ * admin export.
  * Nothing Granola returns is stored: calls are read when the member opens the picker and dropped
  * with the answer, a transcript when the member picks a call, for that request alone. A note's
  * title goes to the member only when they asked for titles, and never into a log, an alert or a count.
  */
+import { randomBytes } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { seal, unseal } from "../google/crypto";
 import { domainOf } from "../google/types";
 import { MAX_TRANSCRIPT } from "../proposals/extract";
 import * as G from "./api";
+import * as O from "./oauth";
+import { McpClient, codeOfToolError, type ToolAnswer } from "./mcp";
+import { nextCursor, readMeetings, readTranscriptPage, transcriptLines, type Meeting } from "./meetings";
 import {
-  CALLS_MAX, CALL_DAYS, GRANOLA_WORDS as W, KEY_SHAPE, NOTES_READ_MAX, NOTE_ID, granolaOn,
+  CALLS_MAX, CALL_DAYS, GRANOLA_WORDS as W, KEY_SHAPE, MEETING_ID, NOTES_READ_MAX, NOTE_ID, granolaOn,
   type CallPerson, type CallsAnswer, type GranolaCall, type GranolaLink, type GranolaStatus, type GranolaTranscript,
 } from "./types";
 
@@ -56,21 +63,34 @@ function statusOf(s: State, m: Member, nowMs = Date.now()): GranolaStatus {
   const canDraft = T.closeNow(s, m.id, nowMs);
   if (!granolaOn()) return { on: false, connected: false, canDraft };
   if (!l) return { on: true, connected: false, canDraft };
-  return { on: true, connected: true, last4: l.last4, connectedAt: l.connectedAt, ...(l.badAt ? { broken: true } : {}), canDraft };
+  if (l.via === "oauth") return { on: true, connected: true, via: "oauth", connectedAt: l.connectedAt, ...(l.badAt ? { broken: true } : {}), canDraft };
+  return { on: true, connected: true, via: "key", last4: l.last4, connectedAt: l.connectedAt, ...(l.badAt ? { broken: true } : {}), canDraft };
+}
+/** The status, and for a member not connected whether Connect Granola can be offered (discovery and Merlin's client, cached a few hours). */
+async function statusNow(s: State, m: Member, nowMs = Date.now()): Promise<GranolaStatus> {
+  const st = statusOf(s, m, nowMs);
+  if (st.on && !st.connected) st.oauth = await O.signInReady();
+  return st;
 }
 
 /** GET status: what the Integrations card and the picker show. Null when signed out. */
 export async function granolaStatus(token: string | null | undefined, nowMs = Date.now()): Promise<GranolaStatus | null> {
   const w = await who(token);
-  return w ? statusOf(w.s, w.m, nowMs) : null;
+  return w ? statusNow(w.s, w.m, nowMs) : null;
 }
 
-/** Granola's refusal in the member's words. `transcript`: the request was for a transcript. */
-function wordsFor(e: unknown, o: { connecting?: boolean; transcript?: boolean } = {}): GranolaProblem {
+/** Granola's refusal in the member's words. `transcript`: the request was for a transcript. `oauth`: the member connected with Granola's sign-in. */
+function wordsFor(e: unknown, o: { connecting?: boolean; transcript?: boolean; oauth?: boolean } = {}): GranolaProblem {
   if (!(e instanceof G.GranolaError)) return new GranolaProblem(W.down, 424, "error");
   switch (e.code) {
     case "bad_key":
+    case "bad_client":
+      if (o.oauth) return new GranolaProblem(W.signInRevoked, 409, "bad_key");
       return new GranolaProblem(o.connecting ? W.badKey : W.revoked, o.connecting ? 400 : 409, "bad_key");
+    case "pending":
+      return new GranolaProblem(W.pending, 409, "pending");
+    case "no_transcript":
+      return new GranolaProblem(W.noTranscript, 404, "no_transcript");
     case "no_plan":
       return new GranolaProblem(W.noPlan, 403, "no_plan");
     case "suspended":
@@ -89,40 +109,101 @@ function wordsFor(e: unknown, o: { connecting?: boolean; transcript?: boolean } 
 }
 
 /** The member's key, opened. A key that won't open (another server secret) is as good as none. */
-async function keyFor(memberId: string): Promise<string> {
-  const s = await loadState();
-  const l = linkOf(s, memberId);
-  if (!l) throw new GranolaProblem(W.notConnected, 409, "not_connected");
+function keyOf(l: GranolaLink): string {
   const key = unseal(l.key);
   if (!key) throw new GranolaProblem(W.revoked, 409, "bad_key");
   return key;
 }
 
-/** After a call: a refused key is marked (the card says so), a working one dated (at most hourly, so reads don't write each time). */
-async function noteOutcome(memberId: string, e: unknown, nowMs = Date.now()) {
-  const bad = e instanceof G.GranolaError && e.code === "bad_key";
+/** After a call: a refused key or sign-in is marked (the card says so), a working one dated (at most hourly, so reads don't write each time). */
+async function noteOutcome(memberId: string, e: unknown, connectedAt: string, nowMs = Date.now()) {
+  const bad = e instanceof G.GranolaError && (e.code === "bad_key" || e.code === "bad_client");
   const l = linkOf(await loadState(), memberId);
-  if (!l) return;
-  if (bad && !l.badAt) await T.mutate((s) => void (linkOf(s, memberId) && (linkOf(s, memberId)!.badAt = new Date(nowMs).toISOString())));
+  if (!l || l.connectedAt !== connectedAt) return;
+  if (bad && !l.badAt) await T.mutate((s) => void (linkOf(s, memberId)?.connectedAt === connectedAt && (linkOf(s, memberId)!.badAt = new Date(nowMs).toISOString())));
   if (!e && (l.badAt || !l.okAt || nowMs - Date.parse(l.okAt) > 3_600_000))
     await T.mutate((s) => {
       const x = linkOf(s, memberId);
-      if (!x) return;
+      if (!x || x.connectedAt !== connectedAt) return;
       x.okAt = new Date(nowMs).toISOString();
       delete x.badAt;
     });
 }
-async function withKey<T>(memberId: string, work: (key: string) => Promise<T>, o: { transcript?: boolean } = {}): Promise<T> {
-  const key = await keyFor(memberId);
+
+/* ---------- a sign-in link: Granola's MCP server, the tokens renewed as they run out ---------- */
+
+/** A new access token from the refresh token, kept sealed (a rotated refresh token too). One at a time per member. */
+function renewFor(memberId: string, connectedAt: string): Promise<string> {
+  return O.renewOnce(memberId, async () => {
+    const l = linkOf(await loadState(), memberId);
+    if (!l || l.via !== "oauth" || l.connectedAt !== connectedAt) throw new GranolaProblem(W.notConnected, 409, "not_connected");
+    const refresh = unseal(l.refresh);
+    if (!refresh) throw new G.GranolaError("bad_key", 401);
+    const p = await O.prepared().catch(() => {
+      throw new G.GranolaError("unreachable");
+    });
+    // Tokens issued to an earlier registration don't refresh on the new one: connect again.
+    if (l.client && l.client !== p.app.clientId) throw new G.GranolaError("bad_key", 401);
+    let t: O.Tokens;
+    try {
+      t = await O.refreshGrant(p, refresh);
+    } catch (e) {
+      if (e instanceof G.GranolaError && e.code === "bad_client") await O.dropApp(p.app.clientId);
+      throw e;
+    }
+    await T.mutate((s) => {
+      const x = linkOf(s, memberId);
+      if (!x || x.connectedAt !== connectedAt) return;
+      x.access = seal(t.access);
+      if (t.refresh) x.refresh = seal(t.refresh);
+      if (t.expiresAt) x.expiresAt = t.expiresAt;
+      else delete x.expiresAt;
+    });
+    return t.access;
+  });
+}
+
+async function mcpFor(memberId: string, l: GranolaLink): Promise<McpClient> {
+  const p = await O.prepared().catch(() => {
+    throw new G.GranolaError("unreachable");
+  });
+  let access = unseal(l.access);
+  if (!access) throw new G.GranolaError("bad_key", 401);
+  // Running out within a minute: renewed first.
+  if (l.expiresAt && Date.parse(l.expiresAt) - Date.now() < 60_000 && l.refresh) access = await renewFor(memberId, l.connectedAt);
+  return new McpClient(
+    p.d.mcpUrl,
+    () => access!,
+    async () => {
+      if (!l.refresh) throw new G.GranolaError("bad_key", 401);
+      access = await renewFor(memberId, l.connectedAt);
+      return access;
+    },
+    G.keyId(`oauth:${memberId}`),
+  );
+}
+
+/** A tool's answer, or its error as a GranolaError. */
+async function tool(c: McpClient, name: string, args: Record<string, unknown>): Promise<ToolAnswer> {
+  const a = await c.tool(name, args);
+  if (a.isError) throw new G.GranolaError(codeOfToolError(a.text));
+  return a;
+}
+
+/** Work with the member's connection, either kind: refusals in the member's words, the outcome noted on the link. */
+async function withLink<T>(memberId: string, work: { key: (key: string) => Promise<T>; mcp: (c: McpClient) => Promise<T> }, o: { transcript?: boolean } = {}): Promise<T> {
+  const l = linkOf(await loadState(), memberId);
+  if (!l) throw new GranolaProblem(W.notConnected, 409, "not_connected");
+  const oauth = l.via === "oauth";
   try {
-    const out = await work(key);
-    await noteOutcome(memberId, null).catch(() => {});
+    const out = oauth ? await work.mcp(await mcpFor(memberId, l)) : await work.key(keyOf(l));
+    await noteOutcome(memberId, null, l.connectedAt).catch(() => {});
     return out;
   } catch (e) {
     if (e instanceof GranolaProblem) throw e;
-    await noteOutcome(memberId, e).catch(() => {});
-    console.error(`Granola: a request failed (${e instanceof G.GranolaError ? e.code : "error"})`);
-    throw wordsFor(e, o);
+    await noteOutcome(memberId, e, l.connectedAt).catch(() => {});
+    console.error(`Granola: a request failed (${e instanceof G.GranolaError ? e.code : "error"}${oauth ? ", sign-in" : ""})`);
+    throw wordsFor(e, { ...o, oauth });
   }
 }
 
@@ -141,27 +222,148 @@ export async function connectGranola(token: string | null | undefined, rawKey: u
   }
   const at = new Date(nowMs).toISOString();
   const link: GranolaLink = { key: seal(key), last4: key.slice(-4), connectedAt: at, okAt: at };
+  let was: GranolaLink | undefined;
   const s = await T.mutate((d) => {
+    was = linksOf(d)[w.m.id];
     linksOf(d)[w.m.id] = link;
     return d;
   });
+  // A sign-in this key replaces: its tokens end at Granola too.
+  if (was?.via === "oauth") void endAtGranola(was);
   return { status: statusOf(s, w.m, nowMs), message: "Granola is connected. Pick a call when you start a proposal." };
 }
 
-/** POST disconnect: delete the key. Granola keeps it until the member revokes it there. */
+/* ---------- Connect Granola: the sign-in ---------- */
+
+/** Where Granola sends the member back to: a path in the app only (never another site), else Settings at the Granola row. */
+export function backPath(x: unknown): string {
+  const v = typeof x === "string" ? x.trim() : "";
+  if (!/^\/(?!\/)[^\s\\]{0,400}$/.test(v) || /^\/api\//.test(v)) return "/?p=settings&sec=conn&open=granola";
+  try {
+    const u = new URL(v, "https://merlin.invalid");
+    if (u.origin !== "https://merlin.invalid") return "/?p=settings&sec=conn&open=granola";
+    u.searchParams.delete("granola");
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return "/?p=settings&sec=conn&open=granola";
+  }
+}
+/** The back path with the outcome on it (?granola=connected|denied|failed|unavailable), read once by the page. */
+export const backWith = (back: string, outcome: SignInOutcome) => `${back}${back.includes("?") ? "&" : "?"}granola=${outcome}`;
+
+export type SignInOutcome = "connected" | "denied" | "failed" | "unavailable";
+export type StartAnswer = { ok: true; url: string; cookie: string } | { ok: false; why: "off" | "signed_out" | "unavailable"; back: string };
+
+/**
+ * GET start?back=<path>: the member's consent page at Granola. A state and a PKCE verifier go in
+ * a sealed cookie bound to the member and this session (10 minutes, used once); Granola gets the
+ * state, the S256 challenge, Merlin's client and the redirect address.
+ */
+export async function startSignIn(token: string | null | undefined, back: unknown, nowMs = Date.now()): Promise<StartAnswer> {
+  const to = backPath(back);
+  if (!granolaOn()) return { ok: false, why: "off", back: to };
+  const w = await who(token);
+  if (!w || !token) return { ok: false, why: "signed_out", back: to };
+  let p: O.Prepared;
+  try {
+    p = await O.prepared();
+  } catch {
+    return { ok: false, why: "unavailable", back: to };
+  }
+  const { verifier, challenge } = O.pkce();
+  const state = randomBytes(32).toString("base64url");
+  const cookie = O.packState({ state, verifier, memberId: w.m.id, token, back: to, clientId: p.app.clientId, issuer: p.d.issuer }, nowMs);
+  return { ok: true, url: O.authorizeUrl(p, state, challenge), cookie };
+}
+
+/**
+ * GET callback: Granola's answer. The cookie's state must match, for this member and session,
+ * once. Then the code is swapped (with the verifier) for tokens, kept sealed. A client Granola
+ * no longer knows is dropped, so the next start registers Merlin again.
+ */
+export async function finishSignIn(
+  token: string | null | undefined,
+  q: { state: string | null; code: string | null; error: string | null },
+  cookie: string | null | undefined,
+  nowMs = Date.now(),
+): Promise<{ outcome: SignInOutcome; back: string }> {
+  const fallback = backPath(O.backOf(cookie));
+  if (!granolaOn()) return { outcome: "failed", back: fallback };
+  const w = await who(token);
+  if (!w || !token) return { outcome: "failed", back: fallback };
+  const st = O.openState(cookie, q.state, token, w.m.id, nowMs);
+  if (!st) return { outcome: "failed", back: fallback };
+  const back = backPath(st.back);
+  if (q.error) {
+    if (q.error === "invalid_client" || q.error === "unauthorized_client") await O.dropApp(st.clientId);
+    return { outcome: q.error === "access_denied" ? "denied" : "failed", back };
+  }
+  const code = String(q.code ?? "");
+  if (!code || code.length > 2000) return { outcome: "failed", back };
+  let p: O.Prepared;
+  try {
+    p = await O.prepared();
+  } catch {
+    return { outcome: "unavailable", back };
+  }
+  if (p.app.clientId !== st.clientId || p.d.issuer !== st.issuer) return { outcome: "failed", back };
+  let t: O.Tokens;
+  try {
+    t = await O.exchangeCode(p, code, st.verifier);
+  } catch (e) {
+    console.error(`Granola connect: the code exchange failed (${e instanceof G.GranolaError ? e.code : "error"})`);
+    if (e instanceof G.GranolaError && e.code === "bad_client") await O.dropApp(p.app.clientId);
+    return { outcome: "failed", back };
+  }
+  const at = new Date(nowMs).toISOString();
+  const link: GranolaLink = { via: "oauth", access: seal(t.access), ...(t.refresh ? { refresh: seal(t.refresh) } : {}), ...(t.expiresAt ? { expiresAt: t.expiresAt } : {}), client: p.app.clientId, connectedAt: at, okAt: at };
+  // Connected either way, once: a key on file before is replaced (and deleted).
+  await T.mutate((d) => void (linksOf(d)[w.m.id] = link));
+  return { outcome: "connected", back };
+}
+
+/** Ask Granola to end a sign-in's tokens, when it advertises a revocation endpoint. Best effort; never throws. */
+async function endAtGranola(l: GranolaLink): Promise<boolean> {
+  if (l.via !== "oauth") return false;
+  try {
+    const p = await O.prepared();
+    if (!p.d.revoke) return false;
+    const refresh = unseal(l.refresh);
+    const access = unseal(l.access);
+    const done = await Promise.all([refresh ? O.revokeToken(p, refresh, "refresh_token") : true, access ? O.revokeToken(p, access, "access_token") : true]);
+    return done.every(Boolean);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * POST disconnect: delete the connection. A sign-in's tokens are revoked at Granola first when it
+ * advertises a revocation endpoint; a key stays valid at Granola until the member revokes it there.
+ */
 export async function disconnectGranola(token: string | null | undefined, nowMs = Date.now()): Promise<{ status: GranolaStatus; message: string }> {
   const w = await who(token);
   if (!w) throw new GranolaProblem("You're signed out. Sign in again.", 401, "signed_out");
+  const l = linkOf(w.s, w.m.id);
+  const ended = l?.via === "oauth" ? await endAtGranola(l) : false;
   const s = await T.mutate((d) => {
     delete (d as GState).granola?.[w.m.id];
     return d;
   });
-  return { status: statusOf(s, w.m, nowMs), message: "Granola is disconnected. Merlin deleted your key. To turn it off in Granola too, revoke it under Settings, Connectors, API keys." };
+  const message =
+    l?.via === "oauth"
+      ? ended
+        ? "Granola is disconnected. Merlin ended its access at Granola and deleted it here."
+        : "Granola is disconnected. Merlin deleted its access. Granola may still list Merlin among your connected apps until you remove it there."
+      : "Granola is disconnected. Merlin deleted your key. To turn it off in Granola too, revoke it under Settings, Connectors, API keys.";
+  return { status: await statusNow(s, w.m, nowMs), message };
 }
 
-/** Account closure (lib/account.ts) and the 30-day delete (lib/table.ts purgeMember): the key goes, inside the caller's mutate. */
+/** Account closure (lib/account.ts) and the 30-day delete (lib/table.ts purgeMember): the connection goes, inside the caller's mutate; a sign-in's tokens are revoked at Granola afterwards. */
 export function forgetGranolaIn(s: State, memberId: string): void {
+  const l = (s as GState).granola?.[memberId];
   delete (s as GState).granola?.[memberId];
+  if (l?.via === "oauth") setTimeout(() => void endAtGranola(l), 0);
 }
 
 /* ---------- the calls ---------- */
@@ -230,47 +432,96 @@ export async function callsFor(m: Member, a: { companyId?: unknown; email?: unkn
   const titles = a.titles === true || a.titles === "1";
   const fromMs = nowMs - CALL_DAYS * DAY;
   const own = ownOf(m);
-  return withKey(m.id, async (key) => {
-    const refs = new Map<string, G.NoteRef>();
-    const add = (ns: G.NoteRef[]) => ns.forEach((n) => NOTE_ID.test(n.id) && !refs.has(n.id) && refs.set(n.id, n));
-    if (f.kind === "recent") add((await G.listNotes(key, { createdAfterMs: fromMs })).notes);
-    else {
-      const participant = f.kind === "email" ? f.email : f.domain;
-      try {
-        let page = await G.searchNotes(key, { participant, fromMs });
+  return withLink(m.id, { key: (key) => callsByKey(key, f, own, titles, fromMs, nowMs), mcp: (c) => callsByMcp(c, f, own, titles, fromMs, nowMs) });
+}
+
+/** By key (Granola's REST API): the search by domain or email, the newest notes, each read once without its transcript. */
+async function callsByKey(key: string, f: Filter, own: Set<string>, titles: boolean, fromMs: number, nowMs: number): Promise<CallsAnswer> {
+  const refs = new Map<string, G.NoteRef>();
+  const add = (ns: G.NoteRef[]) => ns.forEach((n) => NOTE_ID.test(n.id) && !refs.has(n.id) && refs.set(n.id, n));
+  if (f.kind === "recent") add((await G.listNotes(key, { createdAfterMs: fromMs })).notes);
+  else {
+    const participant = f.kind === "email" ? f.email : f.domain;
+    try {
+      let page = await G.searchNotes(key, { participant, fromMs });
+      add(page.notes);
+      if (page.cursor) {
+        page = await G.searchNotes(key, { participant, fromMs, cursor: page.cursor });
         add(page.notes);
-        if (page.cursor) {
-          page = await G.searchNotes(key, { participant, fromMs, cursor: page.cursor });
-          add(page.notes);
-        }
-      } catch (e) {
-        // A search Granola won't run (an odd domain): the newest notes alone still answer.
-        if (!(e instanceof G.GranolaError) || e.code !== "invalid") throw e;
       }
-      add((await G.listNotes(key, { createdAfterMs: nowMs - 2 * DAY })).notes);
+    } catch (e) {
+      // A search Granola won't run (an odd domain): the newest notes alone still answer.
+      if (!(e instanceof G.GranolaError) || e.code !== "invalid") throw e;
     }
-    const newest = [...refs.values()]
-      .map((r) => ({ r, at: Date.parse(r.meeting_at ?? r.created_at ?? "") || 0 }))
-      .filter((x) => !x.at || x.at >= fromMs - DAY)
-      .sort((x, y) => y.at - x.at)
-      .slice(0, NOTES_READ_MAX);
-    const notes = await Promise.all(
-      newest.map(({ r }) =>
-        G.getNote(key, r.id).catch((e) => {
-          // A note deleted or not readable since the list: left out. Anything else stops the answer.
-          if (e instanceof G.GranolaError && e.code === "not_found") return null;
-          throw e;
-        }),
-      ),
-    );
-    const calls = notes
-      .map((n, i) => (n && typeof n.id === "string" ? callOf(n, newest[i].r, own, f, titles) : null))
-      .filter((c): c is GranolaCall & { hit: boolean } => !!c && Date.parse(c.when) >= fromMs && (f.kind === "recent" || c.hit))
-      .sort((x, y) => y.when.localeCompare(x.when))
-      .slice(0, CALLS_MAX)
-      .map(({ hit: _hit, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
-    return { calls, by: f, days: CALL_DAYS };
-  });
+    add((await G.listNotes(key, { createdAfterMs: nowMs - 2 * DAY })).notes);
+  }
+  const newest = [...refs.values()]
+    .map((r) => ({ r, at: Date.parse(r.meeting_at ?? r.created_at ?? "") || 0 }))
+    .filter((x) => !x.at || x.at >= fromMs - DAY)
+    .sort((x, y) => y.at - x.at)
+    .slice(0, NOTES_READ_MAX);
+  const notes = await Promise.all(
+    newest.map(({ r }) =>
+      G.getNote(key, r.id).catch((e) => {
+        // A note deleted or not readable since the list: left out. Anything else stops the answer.
+        if (e instanceof G.GranolaError && e.code === "not_found") return null;
+        throw e;
+      }),
+    ),
+  );
+  const calls = notes
+    .map((n, i) => (n && typeof n.id === "string" ? callOf(n, newest[i].r, own, f, titles) : null))
+    .filter((c): c is GranolaCall & { hit: boolean } => !!c && Date.parse(c.when) >= fromMs && (f.kind === "recent" || c.hit))
+    .sort((x, y) => y.when.localeCompare(x.when))
+    .slice(0, CALLS_MAX)
+    .map(({ hit: _hit, ...c }) => c); // eslint-disable-line @typescript-eslint/no-unused-vars
+  return { calls, by: f, days: CALL_DAYS };
+}
+
+/** Who else was on a meeting: not the member, not the note's creator, only real addresses. */
+const othersOf = (x: Meeting, own: Set<string>) => x.people.filter((p) => !own.has(p.email) && p.email !== x.creator && domainOf(p.email));
+
+/** A meeting from Granola's MCP tools as a call: who else was on it (without the member and the note's creator), when, how long. */
+function callOfMeeting(x: Meeting, own: Set<string>, f: Filter, titles: boolean): (GranolaCall & { hit: boolean }) | null {
+  if (!x.when) return null;
+  const people = othersOf(x, own);
+  const sorted = [...people.filter((p) => matches(f, p.email)), ...people.filter((p) => !matches(f, p.email))];
+  // Granola's search matched the participant itself: a meeting it lists without anyone else's email still counts.
+  const hit = f.kind === "recent" || !people.length || people.some((p) => matches(f, p.email));
+  return { noteId: x.id, when: x.when, minutes: x.minutes, with: sorted.slice(0, 8), more: Math.max(0, sorted.length - 8), ...(titles && x.title ? { title: x.title.slice(0, 200) } : {}), hit };
+}
+
+/**
+ * By sign-in (Granola's MCP tools): search_meetings for the member's own meetings (attended_only)
+ * in the last 30 days, with participant = the company's domain or the person's email (none for any
+ * recent call), newest first, up to two pages. A meeting the search lists without anyone's email
+ * is read with get_meetings (up to 10 at once) for its attendees. Nothing is kept.
+ */
+async function callsByMcp(c: McpClient, f: Filter, own: Set<string>, titles: boolean, fromMs: number, nowMs: number): Promise<CallsAnswer> {
+  const found = new Map<string, Meeting>();
+  const args: Record<string, unknown> = { from_date: new Date(fromMs).toISOString(), to_date: new Date(nowMs).toISOString(), limit: 20, attended_only: true, ...(f.kind === "company" ? { participant: f.domain } : f.kind === "email" ? { participant: f.email } : {}) };
+  let cursor: string | null = null;
+  for (let page = 0; page < 2; page++) {
+    const a = await tool(c, "search_meetings", cursor ? { cursor } : args);
+    for (const x of readMeetings(a)) if (MEETING_ID.test(x.id) && !found.has(x.id)) found.set(x.id, x);
+    cursor = nextCursor(a);
+    if (!cursor || found.size >= CALLS_MAX) break;
+  }
+  const bare = [...found.values()].filter((x) => !othersOf(x, own).length || !x.when).slice(0, 10);
+  if (bare.length) {
+    const a = await tool(c, "get_meetings", { meeting_ids: bare.map((x) => x.id), attachments: "none", max_participants: 20 });
+    for (const x of readMeetings(a)) {
+      const was = found.get(x.id);
+      if (was) found.set(x.id, { ...was, when: was.when ?? x.when, minutes: was.minutes ?? x.minutes, title: was.title || x.title, people: x.people.length ? x.people : was.people, creator: was.creator ?? x.creator });
+    }
+  }
+  const calls = [...found.values()]
+    .map((x) => callOfMeeting(x, own, f, titles))
+    .filter((x): x is GranolaCall & { hit: boolean } => !!x && Date.parse(x.when) >= fromMs && Date.parse(x.when) <= nowMs + 60_000 && x.hit)
+    .sort((x, y) => y.when.localeCompare(x.when))
+    .slice(0, CALLS_MAX)
+    .map(({ hit: _hit, ...x }) => x); // eslint-disable-line @typescript-eslint/no-unused-vars
+  return { calls, by: f, days: CALL_DAYS };
 }
 
 /** GET calls (the picker): the signed-in member's calls. */
@@ -324,44 +575,77 @@ function minutesOf(items: G.TranscriptItem[]): number | null {
 export async function granolaTranscript(memberId: string, noteId: string, o: { titles?: boolean } = {}): Promise<GranolaTranscript> {
   if (!granolaOn()) throw new GranolaProblem(W.off, 404, "off");
   const id = String(noteId ?? "").trim();
-  if (!NOTE_ID.test(id)) throw new GranolaProblem(W.notFound, 404, "not_found");
+  if (!MEETING_ID.test(id)) throw new GranolaProblem(W.notFound, 404, "not_found");
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = T.memberIndex(seed, s).all.find((x) => x.id === memberId);
   if (!m) throw new GranolaProblem("You're signed out. Sign in again.", 401, "signed_out");
-  return withKey(
+  return withLink(
     m.id,
-    async (key) => {
-      let note: G.Note;
-      let items: G.TranscriptItem[] | null;
-      try {
-        note = await G.getNote(key, id, true);
-        items = Array.isArray(note.transcript) ? note.transcript : null;
-      } catch (e) {
-        if (!(e instanceof G.GranolaError) || e.code !== "too_large") throw e;
-        // Too long to come with the note: the note alone, then the transcript in pages.
-        note = await G.getNote(key, id, false);
-        items = [];
-        let cursor: string | null = null;
-        for (let i = 0; i < MAX_PAGES; i++) {
-          const p = await G.transcriptPage(key, id, cursor);
-          items.push(...p.items);
-          if (!p.cursor) break;
-          cursor = p.cursor;
+    {
+      mcp: (c) => transcriptByMcp(c, m, id, !!o.titles),
+      key: async (key) => {
+        // The REST API knows its own note ids only.
+        if (!NOTE_ID.test(id)) throw new G.GranolaError("not_found", 404);
+        let note: G.Note;
+        let items: G.TranscriptItem[] | null;
+        try {
+          note = await G.getNote(key, id, true);
+          items = Array.isArray(note.transcript) ? note.transcript : null;
+        } catch (e) {
+          if (!(e instanceof G.GranolaError) || e.code !== "too_large") throw e;
+          // Too long to come with the note: the note alone, then the transcript in pages.
+          note = await G.getNote(key, id, false);
+          items = [];
+          let cursor: string | null = null;
+          for (let i = 0; i < MAX_PAGES; i++) {
+            const p = await G.transcriptPage(key, id, cursor);
+            items.push(...p.items);
+            if (!p.cursor) break;
+            cursor = p.cursor;
+          }
         }
-      }
-      // No transcript with the note: either transcripts are off over the API for the workspace (the transcript route says 403), or there is none.
-      if (items === null) {
-        items = (await G.transcriptPage(key, id, null, 1)).items;
-      }
-      const call = callOf(note, undefined, ownOf(m), { kind: "recent" }, !!o.titles);
-      const attendees = call?.with ?? [];
-      const others = attendees.filter((p) => p.name);
-      const text = linesOf(items ?? [], m.name || "Me", others.length === 1 ? others[0].name : "Them");
-      if (!text.trim()) throw new GranolaProblem(W.noTranscript, 404, "no_transcript");
-      return { noteId: note.id || id, when: call?.when ?? new Date().toISOString(), minutes: minutesOf(items ?? []) ?? call?.minutes ?? null, attendees, text, ...(call?.title ? { title: call.title } : {}) };
+        // No transcript with the note: either transcripts are off over the API for the workspace (the transcript route says 403), or there is none.
+        if (items === null) {
+          items = (await G.transcriptPage(key, id, null, 1)).items;
+        }
+        const call = callOf(note, undefined, ownOf(m), { kind: "recent" }, !!o.titles);
+        const attendees = call?.with ?? [];
+        const others = attendees.filter((p) => p.name);
+        const text = linesOf(items ?? [], m.name || "Me", others.length === 1 ? others[0].name : "Them");
+        if (!text.trim()) throw new GranolaProblem(W.noTranscript, 404, "no_transcript");
+        return { noteId: note.id || id, when: call?.when ?? new Date().toISOString(), minutes: minutesOf(items ?? []) ?? call?.minutes ?? null, attendees, text, ...(call?.title ? { title: call.title } : {}) };
+      },
     },
     { transcript: true },
   );
+}
+
+/** A transcript page's size from get_meeting_transcript: Granola's own default. */
+const PAGE_CHARS = 40_000;
+
+/**
+ * By sign-in: get_meetings for who was on the call and when, then get_meeting_transcript paged
+ * through next_offset until the end or Merlin's size cap (MAX_TRANSCRIPT). Returned, never kept.
+ */
+async function transcriptByMcp(c: McpClient, m: Member, id: string, titles: boolean): Promise<GranolaTranscript> {
+  const meta = readMeetings(await tool(c, "get_meetings", { meeting_ids: [id], attachments: "none", max_participants: 20 })).find((x) => x.id === id);
+  if (!meta) throw new G.GranolaError("not_found", 404);
+  const call = callOfMeeting(meta, ownOf(m), { kind: "recent" }, titles);
+  const attendees = call?.with ?? [];
+  const named = attendees.filter((p) => p.name);
+  let raw = "";
+  let offset = 0;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const page = readTranscriptPage(await tool(c, "get_meeting_transcript", { meeting_id: id, include_timestamps: true, max_chars: PAGE_CHARS, ...(offset ? { offset } : {}) }));
+    if (page.unavailable && !raw) throw new G.GranolaError(page.unavailable === "transcript_pending" ? "pending" : "no_transcript", 404);
+    // Offsets are into the whole text, so pages join as they are; a page that starts a new line of its own ("[10:04:12] Dana: ...") gets its line break back.
+    raw += (raw && !raw.endsWith("\n") && /^\s*\[\d/.test(page.text) ? "\n" : "") + page.text;
+    if (!page.next || page.next <= offset || raw.length >= MAX_TRANSCRIPT) break;
+    offset = page.next;
+  }
+  const { text, minutes } = transcriptLines(raw, m.name || "Me", named.length === 1 ? named[0].name : "Them", MAX_TRANSCRIPT);
+  if (!text.trim()) throw new GranolaProblem(W.noTranscript, 404, "no_transcript");
+  return { noteId: id, when: call?.when ?? meta.when ?? new Date().toISOString(), minutes: minutes ?? meta.minutes ?? null, attendees, text, ...(call?.title ? { title: call.title } : {}) };
 }
 
 /** GET transcript (the picker): the signed-in member's picked call. Drafting from a call is Close (the trial counts). */

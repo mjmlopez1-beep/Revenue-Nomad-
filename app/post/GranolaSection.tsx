@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * Integrations, Granola: connect a personal API key from Granola, so a proposal can start from a
- * call it recorded (GranolaCallPicker). The key is pasted in a password field, checked with one
- * call to Granola, kept encrypted, and only its last four characters ever come back. Disconnect
- * deletes it. Nothing renders with RN_GRANOLA off. Connecting works on every plan; drafting from a
- * call is Close.
+ * Integrations, Granola: so a proposal can start from a call Granola recorded (GranolaCallPicker).
+ * The way in is Connect Granola: one button to Granola's own consent page and back here
+ * (lib/granola/oauth.ts). When Merlin can't use Granola's sign-in (discovery or registration
+ * failed), the fallback is a personal API key, pasted in a password field, checked with one call
+ * to Granola, kept encrypted, and only its last four characters ever come back. Connected either
+ * way, the member sees one status and one Disconnect. Nothing renders with RN_GRANOLA off.
+ * Connecting works on every plan; drafting from a call is Close.
  */
 import { useRef, useState } from "react";
 import { Chip } from "../ui/system";
 import { useToast } from "../ui/shared";
 import { openPlans } from "./Billing";
-import { connectKey, disconnectKey, useGranola } from "./granolaClient";
+import { connectKey, disconnectKey, startGranola, useGranola, useGranolaNotice } from "./granolaClient";
 import "./granola.css";
 
 const day = (iso: string) =>
@@ -28,6 +30,8 @@ export function GranolaMark({ size = 24 }: { size?: number }) {
 }
 
 export const GRANOLA_PLAN = "Personal API keys need a Granola Business or Enterprise plan. On Enterprise, your Granola admin may have to turn on API access first.";
+/** What Merlin reads and never does, said wherever Granola is connected. */
+export const GRANOLA_READS = "Merlin reads only the calls you pick: your recent calls when you start a proposal, and one transcript when you ask for a draft. It never stores a transcript, and never reads a call you didn't pick.";
 
 export function GranolaSection() {
   const { status } = useGranola();
@@ -36,7 +40,9 @@ export function GranolaSection() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<"connect" | "disconnect" | null>(null);
   const [asking, setAsking] = useState(false);
+  const [going, setGoing] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  useGranolaNotice((t, bad) => toast(t, bad));
   if (!status || !status.on) return null;
 
   const connect = async () => {
@@ -67,12 +73,68 @@ export function GranolaSection() {
     else toast(r.message);
   };
 
+  // The fallback, and the second way in: a personal API key (shown open when Granola's sign-in isn't available).
+  const keyBtn = status.oauth ? "Connect this key" : "Connect Granola";
+  const keyForm = (
+    <>
+      <ol className="uc-steps in-steps">
+        <li>In the Granola desktop app, open Settings, then Connectors, then API keys.</li>
+        <li>Pick Create new key. Tick Personal notes, then pick Generate API Key.</li>
+        <li>Copy the key. It starts with grn_. Paste it below and pick {keyBtn}.</li>
+      </ol>
+      <p className="cr-note">{GRANOLA_PLAN}</p>
+      {/* Connecting works on every plan; drafting from a call doesn't, so it is said before they connect. */}
+      {!status.canDraft && !status.oauth && <p className="cr-note">Drafting a proposal from a Granola call is on Close. You can connect your key now, and draft from your calls once you're on Close.</p>}
+      <form
+        className="in-form"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy) void connect();
+        }}
+      >
+        <label className="in-label" htmlFor="in-granola-key">
+          Granola API key
+        </label>
+        <div className="in-row">
+          <input
+            ref={input}
+            id="in-granola-key"
+            className={`input mono in-input${err ? " bad" : ""}`}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="grn_…"
+            value={key}
+            onChange={(e) => {
+              setKey(e.target.value);
+              if (err) setErr(null);
+            }}
+            aria-invalid={!!err}
+            aria-describedby={`${err ? "in-granola-err " : ""}in-granola-hint`}
+          />
+          <button type="submit" className={`btn${status.oauth ? "" : " btn-pine"}`} aria-busy={busy === "connect"} disabled={!!busy}>
+            {busy === "connect" ? "Checking" : keyBtn}
+          </button>
+        </div>
+        {err && (
+          <p className="in-err" id="in-granola-err" role="alert">
+            {err}
+          </p>
+        )}
+        <p className="in-hint" id="in-granola-hint">
+          Merlin checks the key with Granola once, then keeps it encrypted. You only ever see its last four characters.
+        </p>
+      </form>
+    </>
+  );
+
   return (
     <section className="in-section" id="granola" aria-labelledby="in-granola-h">
       <h2 className="in-h" id="in-granola-h">
         Your calls from Granola
       </h2>
-      <p className="uc-lead">Start a proposal from a call Granola recorded. Merlin reads a call only when you pick it, and keeps the draft, not the transcript.</p>
+      <p className="uc-lead">Start a proposal from a call Granola recorded. {GRANOLA_READS}</p>
       <section className="tp-card in-card" aria-labelledby="in-granola-card">
         <div className="in-card-h">
           <span className="in-mark in-mark-sm gr-mark-box" aria-hidden>
@@ -81,17 +143,25 @@ export function GranolaSection() {
           <h3 className="tp-card-h" id="in-granola-card">
             Granola
           </h3>
-          <Chip tone={status.connected && !status.broken ? "mint" : "outline"}>{status.connected ? (status.broken ? "Key stopped working" : "Connected") : "Not set up"}</Chip>
+          <Chip tone={status.connected && !status.broken ? "mint" : "outline"}>{status.connected ? (status.broken ? (status.via === "oauth" ? "Needs connecting again" : "Key stopped working") : "Connected") : "Not set up"}</Chip>
         </div>
         {status.connected ? (
           <div className="in-conn">
-            <p className="in-conn-where">
-              Connected · key ending <span className="mono">••••{status.last4}</span>
-            </p>
-            {status.connectedAt && <p className="in-conn-meta">Since {day(status.connectedAt)}. Merlin keeps the key encrypted and never shows the rest of it.</p>}
+            {status.via === "oauth" ? (
+              <p className="in-conn-where">Connected with your Granola account</p>
+            ) : (
+              <p className="in-conn-where">
+                Connected · key ending <span className="mono">••••{status.last4}</span>
+              </p>
+            )}
+            {status.connectedAt && (
+              <p className="in-conn-meta">
+                Since {day(status.connectedAt)}. {status.via === "oauth" ? "Merlin keeps Granola's access encrypted and never shows it." : "Merlin keeps the key encrypted and never shows the rest of it."}
+              </p>
+            )}
             {status.broken && (
               <p className="in-problem" role="status">
-                Granola stopped accepting this key. Disconnect it, make a new key in Granola and connect that one.
+                {status.via === "oauth" ? "Granola stopped letting Merlin read your calls. Disconnect, then connect Granola again." : "Granola stopped accepting this key. Disconnect it, make a new key in Granola and connect that one."}
               </p>
             )}
             {!status.canDraft && (
@@ -105,7 +175,7 @@ export function GranolaSection() {
             )}
             {asking ? (
               <div className="in-ask" role="group" aria-label="Disconnect Granola">
-                <span>Disconnect Granola? Merlin deletes your key.</span>
+                <span>{status.via === "oauth" ? "Disconnect Granola? Merlin ends its access and deletes it." : "Disconnect Granola? Merlin deletes your key."}</span>
                 <button type="button" className="btn btn-pine" onClick={() => void disconnect()} aria-busy={busy === "disconnect"} disabled={!!busy}>
                   {busy === "disconnect" ? "Disconnecting" : "Disconnect"}
                 </button>
@@ -121,58 +191,22 @@ export function GranolaSection() {
               </div>
             )}
           </div>
-        ) : (
+        ) : status.oauth ? (
           <>
-            <ol className="uc-steps in-steps">
-              <li>In the Granola desktop app, open Settings, then Connectors, then API keys.</li>
-              <li>Pick Create new key. Tick Personal notes, then pick Generate API Key.</li>
-              <li>Copy the key. It starts with grn_. Paste it below and pick Connect Granola.</li>
-            </ol>
-            <p className="cr-note">{GRANOLA_PLAN}</p>
-            {/* Connecting works on every plan; drafting from a call doesn't, so it is said before they connect. */}
-            {!status.canDraft && <p className="cr-note">Drafting a proposal from a Granola call is on Close. You can connect your key now, and draft from your calls once you're on Close.</p>}
-            <form
-              className="in-form"
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!busy) void connect();
-              }}
-            >
-              <label className="in-label" htmlFor="in-granola-key">
-                Granola API key
-              </label>
-              <div className="in-row">
-                <input
-                  ref={input}
-                  id="in-granola-key"
-                  className={`input mono in-input${err ? " bad" : ""}`}
-                  type="password"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="grn_…"
-                  value={key}
-                  onChange={(e) => {
-                    setKey(e.target.value);
-                    if (err) setErr(null);
-                  }}
-                  aria-invalid={!!err}
-                  aria-describedby={`${err ? "in-granola-err " : ""}in-granola-hint`}
-                />
-                <button type="submit" className="btn btn-pine" aria-busy={busy === "connect"} disabled={!!busy}>
-                  {busy === "connect" ? "Checking" : "Connect Granola"}
-                </button>
-              </div>
-              {err && (
-                <p className="in-err" id="in-granola-err" role="alert">
-                  {err}
-                </p>
-              )}
-              <p className="in-hint" id="in-granola-hint">
-                Merlin checks the key with Granola once, then keeps it encrypted. You only ever see its last four characters.
-              </p>
-            </form>
+            <p className="in-conn-meta">One button takes you to Granola to say yes, then back here. Merlin never sees your Granola password.</p>
+            {!status.canDraft && <p className="cr-note">Drafting a proposal from a Granola call is on Close. You can connect Granola now, and draft from your calls once you're on Close.</p>}
+            <div className="in-actions">
+              <button type="button" className="btn btn-pine" aria-busy={going} disabled={going} onClick={() => (setGoing(true), startGranola())}>
+                {going ? "Opening Granola" : "Connect Granola"}
+              </button>
+            </div>
+            <details className="gr-keyalt">
+              <summary>Or paste a Granola API key</summary>
+              {keyForm}
+            </details>
           </>
+        ) : (
+          keyForm
         )}
       </section>
     </section>

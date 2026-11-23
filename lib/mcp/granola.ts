@@ -1,7 +1,7 @@
 /**
  * Granola in Claude (lib/granola): list_granola_calls(company or email) gives the member's recent
- * calls from their own Granola, read with the key they connected on Merlin: when, how long, who was
- * on it and Granola's note id. Read only. Never a note's title, summary or transcript: drafting from
+ * calls from their own Granola, read with the connection they made on Merlin (Connect Granola, or a
+ * pasted API key): when, how long, who was on it and Granola's meeting id. Read only. Never a note's title, summary or transcript: drafting from
  * a call takes the note id (lib/granola granolaTranscript reads the transcript then, for that draft
  * alone). Only with RN_GRANOLA=1.
  */
@@ -38,7 +38,7 @@ setGranolaTranscript(granolaForDraft);
 export async function listGranolaCalls(ctx: Ctx, a: { company_id?: string; email?: string }): Promise<ToolOut> {
   if (!granolaOn()) throw new ToolProblem("Granola isn't switched on for Merlin.");
   if (!linkOf(await loadState(), ctx.member.id))
-    return { connected: false, calls: [], next: "The member hasn't connected Granola on Merlin. They can, in Integrations (a personal API key from Granola; it needs Granola's Business or Enterprise plan). Or they can paste the transcript." };
+    return { connected: false, calls: [], next: "The member hasn't connected Granola on Merlin. They can, in Settings, Connections: Connect Granola signs in with their Granola account. Or they can paste the transcript." };
   if (!a.company_id && !a.email) throw new ToolProblem("Pass company_id (from search_companies or get_company) or the person's email.");
   try {
     const r = await callsFor(ctx.member, { companyId: a.company_id, email: a.email });

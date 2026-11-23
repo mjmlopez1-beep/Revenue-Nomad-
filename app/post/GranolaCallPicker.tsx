@@ -9,8 +9,9 @@
  * it to `onPick` with who was on it; Merlin keeps nothing of it. The note's title shows only when
  * the member ticks Show note titles (it is their own note).
  *
- * States: off (RN_GRANOLA: renders nothing), not connected (a link to Integrations, the plan it
- * needs, and the paste fallback), no Close (the upgrade prompt), loading, calls, no matching calls
+ * States: off (RN_GRANOLA: renders nothing), not connected (Connect Granola: to Granola's consent
+ * page and back to this same start, with "Granola connected"; when Granola's sign-in isn't
+ * available, a link to the key form in Settings and the plan it needs; and the paste fallback), no Close (the upgrade prompt), loading, calls, no matching calls
  * (search by email, or any recent call), and errors in plain words.
  *
  * Props (for StartSheet's step 1):
@@ -26,9 +27,10 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { CallsAnswer, GranolaCall, GranolaTranscript } from "@/lib/granola/types";
 import { UiCtx } from "./ui";
 import { openPlans } from "./Billing";
-import { fetchCalls, fetchTranscript, loadGranola, useGranola } from "./granolaClient";
+import { useToast } from "../ui/shared";
+import { fetchCalls, fetchTranscript, loadGranola, startGranola, useGranola, useGranolaNotice } from "./granolaClient";
 import { callLine, callTitle } from "./granolaWords";
-import { GRANOLA_PLAN, GranolaMark } from "./GranolaSection";
+import { GRANOLA_PLAN, GRANOLA_READS, GranolaMark } from "./GranolaSection";
 import "./granola.css";
 
 export type GranolaPick = Pick<GranolaTranscript, "noteId" | "text" | "attendees" | "when" | "minutes" | "title">;
@@ -60,6 +62,9 @@ export function GranolaCallPicker({ companyId, email, companyName, pickedId, onP
   const [search, setSearch] = useState(email ?? "");
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [going, setGoing] = useState(false);
+  const toast = useToast();
+  useGranolaNotice((t, bad) => toast(t, bad));
   const ready = !!status?.on && status.connected && status.canDraft;
 
   // A new company or signer from the parent starts over.
@@ -98,11 +103,21 @@ export function GranolaCallPicker({ companyId, email, companyName, pickedId, onP
         </span>
         <div className="gr-empty-t">
           <p className="gr-h">Start from a Granola call</p>
-          <p className="gr-p">Connect Granola once and your recent calls show up here. {GRANOLA_PLAN.split(".")[0]}.</p>
+          {status.oauth ? (
+            <p className="gr-p">Connect Granola once and your recent calls show up here. {GRANOLA_READS}</p>
+          ) : (
+            <p className="gr-p">Connect Granola once and your recent calls show up here. {GRANOLA_PLAN.split(".")[0]}.</p>
+          )}
           <div className="gr-row">
-            <button type="button" className="btn" onClick={toIntegrations}>
-              Connect Granola
-            </button>
+            {status.oauth ? (
+              <button type="button" className="btn btn-pine" aria-busy={going} disabled={going} onClick={() => (setGoing(true), startGranola())}>
+                {going ? "Opening Granola" : "Connect Granola"}
+              </button>
+            ) : (
+              <button type="button" className="btn" onClick={toIntegrations}>
+                Connect Granola
+              </button>
+            )}
             {paste}
           </div>
         </div>

@@ -23,7 +23,17 @@
  *  8. The connector's list_granola_calls; the routes over a NextRequest.
  *  9. The picker's words. The top row's statuses: Claude (none, active, revoked or expired grants),
  *     Google (Calendar, Contacts, Gmail, reconnect, RN_GOOGLE off), Granola, Slack.
+ * 10. Connect Granola, against a fake OAuth and MCP server on 127.0.0.1 (RN_GRANOLA_MCP_URL, http
+ *     only with RN_SCAN_TEST=1): discovery (RFC 9728, RFC 8414 with a path) cached, Merlin
+ *     registered once (RFC 7591), the consent URL (PKCE S256, state, resource, the redirect
+ *     address), a wrong state or another member refused, the code swapped, the tokens sealed; the
+ *     calls by company, email and any recent call over MCP (search_meetings, get_meetings by event
+ *     stream), the picked transcript paged through next_offset and not stored; a 401 refreshes
+ *     once, an expiring token is refreshed first, a refused refresh asks to connect again;
+ *     Disconnect revokes and deletes; a rejected client registered again; discovery down hides
+ *     the button and the key path still works; the routes; closing an account purges and revokes.
  */
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -56,6 +66,7 @@ const seed = {
   members: [
     { id: "mem_jordan", name: "Jordan Avery", email: "jordan@averyadvisory.example", title: "Fractional CRO", token: "tok-jordan-0001" },
     { id: "mem_bo", name: "Bo Other", email: "bo.other@example.org", title: "Fractional CMO", token: "tok-bo-0001" },
+    { id: "mem_sam", name: "Sam Tester", email: "sam.tester@example.org", title: "Fractional COO", token: "tok-sam-0001" },
   ],
   companies: [
     { id: "c_cedar", fields: { name: "Cedar and Pine Software", website: "https://www.cedarpine.example", industry: "SaaS", employees: "51–200" } },
@@ -86,9 +97,9 @@ writeFileSync(
     values: {},
     // Jordan opened Cedar and Pine (its identity): the company is theirs to see. Hidden Works stays locked.
     unlocks: { "c_cedar.identity": ["mem_jordan"] },
-    seen: { mem_jordan: iso(NOW - DAY), mem_bo: iso(NOW - DAY) },
+    seen: { mem_jordan: iso(NOW - DAY), mem_bo: iso(NOW - DAY), mem_sam: iso(NOW - DAY) },
     profiles: {},
-    billing: { members: { mem_jordan: trial, mem_bo: { trialStartedAt: iso(NOW - 40 * DAY), trialEndsAt: iso(NOW - 26 * DAY) } }, events: [], payments: [], ended: [] },
+    billing: { members: { mem_jordan: trial, mem_bo: { trialStartedAt: iso(NOW - 40 * DAY), trialEndsAt: iso(NOW - 26 * DAY) }, mem_sam: trial }, events: [], payments: [], ended: [] },
     connector: {
       clients: [],
       grants: [grant("g_live", "mem_jordan", "Claude", NOW - 2 * 3_600_000, NOW + 20 * DAY), grant("g_old", "mem_bo", "ChatGPT", NOW - 40 * DAY, NOW - DAY)],
@@ -230,6 +241,172 @@ const granola = createServer(async (req: IncomingMessage, res: ServerResponse) =
 });
 await new Promise<void>((r) => granola.listen(0, "127.0.0.1", () => r()));
 const BASE = `http://127.0.0.1:${(granola.address() as AddressInfo).port}`;
+
+
+/* ---------- the fake Granola sign-in and MCP server (made-up meetings: the notes above, and one with a UUID id) ---------- */
+const UUID_MEET = "5f0c2d4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f";
+const meetings: FakeNote[] = [
+  ...notes,
+  { id: UUID_MEET, title: "Halcyon check-in", at: NOW - 6 * DAY, minutes: 20, attendees: [ownerJ, { name: "Kim Lowe", email: "kim@halcyonfreight.example" }], searchable: true, lines: [] },
+];
+const oa = {
+  down: false,
+  json: false,
+  registered: [] as Record<string, unknown>[],
+  clients: new Map<string, string>(),
+  rejected: new Set<string>(),
+  codes: new Map<string, { challenge: string; client: string; redirect: string; resource: string; used: boolean }>(),
+  access: new Map<string, string>(),
+  refresh: new Map<string, string>(),
+  expired: new Set<string>(),
+  deadRefresh: false,
+  n: 0,
+  pkceOk: [] as boolean[],
+  token: [] as Record<string, string>[],
+  revoked: [] as string[],
+  wellKnown: [] as string[],
+  mcp: [] as { method: string; tool?: string; args?: Record<string, unknown>; session: string }[],
+  issued: [] as string[],
+};
+const hhmmss = (ms: number) => new Date(ms).toISOString().slice(11, 19);
+const mcpTranscript = (n: FakeNote) =>
+  n.lines.map(([name, who, text], i) => `[${hhmmss(n.at + (i === n.lines.length - 1 ? 42 * 60_000 : (i * 42 * 60_000) / Math.max(1, n.lines.length - 1)))}] ${name || (who === "me" ? "Microphone" : "System audio")}: ${text}`).join("\n");
+const xmlEsc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const fakeOauth = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  const u = new URL(req.url ?? "/", "http://x");
+  let raw = "";
+  for await (const ch of req) raw += ch;
+  const p = u.pathname;
+  const json = (status: number, body: unknown, h: Record<string, string> = {}) => (res.writeHead(status, { "content-type": "application/json", ...h }), res.end(JSON.stringify(body)));
+  if (p.startsWith("/.well-known/")) {
+    oa.wellKnown.push(p);
+    if (oa.down) return json(404, { error: "not_found" });
+    if (p === "/.well-known/oauth-protected-resource/mcp") return json(200, { resource: `${OBASE}/mcp`, authorization_servers: [`${OBASE}/auth`], scopes_supported: ["meetings:read"], bearer_methods_supported: ["header"] });
+    if (p === "/.well-known/oauth-authorization-server/auth")
+      return json(200, {
+        issuer: `${OBASE}/auth`,
+        authorization_endpoint: `${OBASE}/auth/authorize`,
+        token_endpoint: `${OBASE}/auth/token`,
+        registration_endpoint: `${OBASE}/auth/register`,
+        revocation_endpoint: `${OBASE}/auth/revoke`,
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        code_challenge_methods_supported: ["S256"],
+        token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+        scopes_supported: ["meetings:read", "offline_access"],
+      });
+    return json(404, { error: "not_found" });
+  }
+  if (p === "/auth/register" && req.method === "POST") {
+    const b = JSON.parse(raw || "{}") as Record<string, unknown>;
+    oa.registered.push(b);
+    const id = `cl_${oa.registered.length}`;
+    oa.clients.set(id, `sec_reg_${oa.registered.length}_CLIENTSECRET`);
+    return json(201, { client_id: id, client_secret: oa.clients.get(id), client_id_issued_at: Math.floor(NOW / 1000), client_secret_expires_at: 0, token_endpoint_auth_method: "client_secret_post", redirect_uris: b.redirect_uris, grant_types: b.grant_types });
+  }
+  if (p === "/auth/authorize") {
+    // The consent page, simulated: the member says yes, and Granola sends them back with a code and the state.
+    const q = u.searchParams;
+    if (q.get("response_type") !== "code" || q.get("code_challenge_method") !== "S256" || !q.get("code_challenge") || !oa.clients.has(q.get("client_id") ?? "")) return json(400, { error: "invalid_request" });
+    const code = `code_${++oa.n}_AUTHCODE`;
+    oa.codes.set(code, { challenge: q.get("code_challenge")!, client: q.get("client_id")!, redirect: q.get("redirect_uri") ?? "", resource: q.get("resource") ?? "", used: false });
+    res.writeHead(302, { location: `${q.get("redirect_uri")}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(q.get("state") ?? "")}` });
+    return res.end();
+  }
+  if (p === "/auth/token" && req.method === "POST") {
+    const f = Object.fromEntries(new URLSearchParams(raw));
+    oa.token.push(f);
+    if (!oa.clients.has(f.client_id) || oa.clients.get(f.client_id) !== f.client_secret || oa.rejected.has(f.client_id)) return json(401, { error: "invalid_client" });
+    const issue = () => {
+      const at = `at_${++oa.n}_ACCESSTOKEN`;
+      const rt = `rt_${oa.n}_REFRESHTOKEN`;
+      oa.access.set(at, f.client_id);
+      oa.refresh.set(rt, f.client_id);
+      oa.issued.push(at, rt);
+      return json(200, { access_token: at, token_type: "Bearer", expires_in: 3600, refresh_token: rt, scope: "meetings:read offline_access" });
+    };
+    if (f.grant_type === "authorization_code") {
+      const c = oa.codes.get(f.code);
+      if (!c || c.used || c.client !== f.client_id || c.redirect !== f.redirect_uri) return json(400, { error: "invalid_grant" });
+      c.used = true;
+      const ok = createHash("sha256").update(f.code_verifier ?? "").digest("base64url") === c.challenge;
+      oa.pkceOk.push(ok);
+      if (!ok || f.resource !== `${OBASE}/mcp`) return json(400, { error: "invalid_grant" });
+      return issue();
+    }
+    if (f.grant_type === "refresh_token") {
+      if (oa.deadRefresh || oa.refresh.get(f.refresh_token) !== f.client_id) return json(400, { error: "invalid_grant" });
+      oa.refresh.delete(f.refresh_token);
+      return issue();
+    }
+    return json(400, { error: "unsupported_grant_type" });
+  }
+  if (p === "/auth/revoke" && req.method === "POST") {
+    const f = Object.fromEntries(new URLSearchParams(raw));
+    oa.revoked.push(f.token);
+    oa.access.delete(f.token);
+    oa.refresh.delete(f.token);
+    res.writeHead(200);
+    return res.end();
+  }
+  if (p === "/mcp" && req.method === "POST") {
+    const tok = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+    if (!oa.access.has(tok) || oa.expired.has(tok)) return json(401, { error: "invalid_token" }, { "www-authenticate": `Bearer resource_metadata="${OBASE}/.well-known/oauth-protected-resource/mcp"` });
+    const m = JSON.parse(raw || "{}") as { id?: number; method: string; params?: { name?: string; arguments?: Record<string, unknown> } };
+    const session = String(req.headers["mcp-session-id"] ?? "");
+    oa.mcp.push({ method: m.method, tool: m.params?.name, args: m.params?.arguments, session });
+    if (m.method === "initialize") return json(200, { jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "granola-fake", version: "1" } } }, { "mcp-session-id": "sess_fake_1" });
+    if (m.method === "notifications/initialized") return (res.writeHead(202), res.end());
+    if (session !== "sess_fake_1") return json(400, { jsonrpc: "2.0", id: m.id, error: { code: -32600, message: "no session" } });
+    if (m.method !== "tools/call") return json(200, { jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "unknown" } });
+    const a = m.params?.arguments ?? {};
+    const out = (text: string, isError = false) => json(200, { jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text }], isError } });
+    const people = (n: FakeNote, emails = true) =>
+      n.attendees.map((x) => (x.email === ownerJ.email ? `<participant name="${xmlEsc(x.name)}" email="${x.email}" role="creator"/>` : emails ? `${xmlEsc(x.name)} &lt;${x.email}&gt;` : xmlEsc(x.name))).join("\n");
+    if (m.params?.name === "search_meetings") {
+      const from = Date.parse(String(a.from_date ?? "")) || 0;
+      const to = Date.parse(String(a.to_date ?? "")) || Infinity;
+      const part = String(a.participant ?? "").toLowerCase();
+      const hit = meetings
+        .filter((n) => n.at >= from && n.at <= to && (!part || n.attendees.some((x) => x.email === part || x.email.endsWith(`@${part}`) || x.email.endsWith(`.${part}`))))
+        .sort((x, y) => y.at - x.at)
+        .slice(0, Number(a.limit ?? 30));
+      if (oa.json)
+        return out(JSON.stringify({ meetings: hit.map((n) => ({ id: n.id, title: n.title, meeting_at: iso(n.at), end: iso(n.at + n.minutes * 60_000), participants: n.attendees })), next_cursor: null }));
+      // Today's call has no emails yet in the search (names only): Merlin reads it with get_meetings.
+      return out(
+        `<upcoming_meetings><meeting id="evt_future0001" title="Next week" meeting_at="${iso(NOW + 2 * DAY)}"><known_participants>Dana Whitfield &lt;dana@cedarpine.example&gt;</known_participants></meeting></upcoming_meetings>\n<meetings count="${hit.length}">\n${hit
+          .map((n) => `<meeting id="${n.id}" title="${xmlEsc(n.title)}" meeting_at="${iso(n.at)}" meeting_end="${iso(n.at + n.minutes * 60_000)}">\n<known_participants total="${n.attendees.length}">\n${people(n, n.id !== "not_cedar000000001")}\n</known_participants>\n<excerpt>Summary SECRETSUMMARY</excerpt>\n</meeting>`)
+          .join("\n")}\n</meetings>`,
+      );
+    }
+    if (m.params?.name === "get_meetings") {
+      const ids = (a.meeting_ids as string[]) ?? [];
+      const hit = meetings.filter((n) => ids.includes(n.id));
+      if (!hit.length) return out("Meeting not found.", true);
+      const body = hit.map((n) => `<meeting id="${n.id}" title="${xmlEsc(n.title)}" meeting_at="${iso(n.at)}" meeting_end="${iso(n.at + n.minutes * 60_000)}">\n<known_participants>\n${people(n)}\n</known_participants>\n<summary>Summary SECRETSUMMARY</summary>\n<private_notes>Private SECRETPRIVATE</private_notes>\n</meeting>`).join("\n");
+      // An event stream this time, as Streamable HTTP allows.
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      return res.end(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: `<meetings>\n${body}\n</meetings>` }] } })}\n\n`);
+    }
+    if (m.params?.name === "get_meeting_transcript") {
+      const n = meetings.find((x) => x.id === a.meeting_id);
+      if (!n) return out("Meeting not found.", true);
+      if (n.id === UUID_MEET) return out(JSON.stringify({ meeting_id: n.id, transcript: null, transcript_unavailable: { reason: "transcript_pending" } }));
+      const all = mcpTranscript(n);
+      const at = Number(a.offset ?? 0);
+      const size = Math.min(Number(a.max_chars ?? 40000), 5000);
+      const page = all.slice(at, at + size);
+      const more = at + size < all.length;
+      return out(JSON.stringify({ meeting_id: n.id, transcript: page, total_chars: all.length, truncated: more, next_offset: more ? at + size : null }));
+    }
+    if (m.params?.name === "search_transcripts") return out("<results></results>");
+    return json(200, { jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "unknown tool" } });
+  }
+  return json(404, { error: "not_found" });
+});
+await new Promise<void>((r) => fakeOauth.listen(0, "127.0.0.1", () => r()));
+const OBASE = `http://127.0.0.1:${(fakeOauth.address() as AddressInfo).port}`;
 
 Object.assign(process.env, {
   RN_DATA_DIR: dir,
@@ -520,6 +697,233 @@ async function main() {
   const md = readFileSync(new URL("../docs/data-flows.md", import.meta.url), "utf8");
   check("the data page names Granola, reading on demand, nothing kept, how to disconnect", /who: "Granola"/.test(df) && /Only when the member picks a call does Merlin read its transcript/.test(df) && /no note, title, summary or transcript/.test(df) && /Granola: Integrations, Disconnect/.test(df) && /Granola: off unless turned on/.test(df));
   check("the doc has the host, the switch and what is kept", md.includes("public-api.granola.ai") && md.includes("`RN_GRANOLA=1`") && md.includes("`State.granola[memberId]`") && /Granola webhooks are not used/.test(md));
+
+  /* ---------- 10. Connect Granola: the sign-in and Granola's MCP server ---------- */
+  console.log("\nConnect Granola: discovery and registration");
+  const OA = await import("../lib/granola/oauth.ts");
+  const RD = await import("../lib/granola/meetings.ts");
+  const SAM = "tok-sam-0001";
+  const sealedOf = (id: string) => (JSON.parse(stateFile()) as { granola?: Record<string, Record<string, string>> }).granola?.[id];
+  const appOf = () => (JSON.parse(stateFile()) as { granolaApp?: Record<string, string> }).granolaApp;
+  // Jordan is on a key from section 8: off it, to connect the main way.
+  await G.disconnectGranola(JORDAN);
+  process.env.RN_GRANOLA_MCP_URL = `${OBASE}/mcp`;
+  OA._oauth.reset();
+  const s10 = await G.granolaStatus(JORDAN);
+  check("not connected: Connect Granola is offered (Granola's sign-in found, Merlin registered)", s10?.on === true && s10.connected === false && s10.oauth === true, s10);
+  check("discovery: the protected resource metadata with the MCP path, then the authorization server's with its path (RFC 9728, RFC 8414)", oa.wellKnown.join() === "/.well-known/oauth-protected-resource/mcp,/.well-known/oauth-authorization-server/auth", oa.wellKnown);
+  const reg = oa.registered[0] ?? {};
+  check("registered once, as Merlin, for the callback address on RN_PUBLIC_URL, code and refresh grants", oa.registered.length === 1 && reg.client_name === "Merlin" && JSON.stringify(reg.redirect_uris) === JSON.stringify(["https://post.example.com/api/integrations/granola/callback"]) && JSON.stringify(reg.grant_types) === JSON.stringify(["authorization_code", "refresh_token"]), reg);
+  await flush();
+  const app1 = appOf();
+  check("Merlin's client kept in State.granolaApp, the secret sealed, never in plain text", app1?.clientId === "cl_1" && String(app1?.secret).startsWith("g1.") && !stateFile().includes("CLIENTSECRET"), app1);
+  const wk0 = oa.wellKnown.length;
+  await G.granolaStatus(JORDAN);
+  await G.granolaStatus(SAM);
+  check("cached: no second discovery, no second registration", oa.wellKnown.length === wk0 && oa.registered.length === 1);
+  check("Close members and Free alike see the button (connecting works on every plan)", (await G.granolaStatus(SAM))?.oauth === true);
+
+  console.log("\nConnect Granola: consent, state, tokens");
+  const sa1 = await G.startSignIn(JORDAN, "/?p=proposals&new=1");
+  if (!sa1.ok) throw new Error("start failed");
+  const au = new URL(sa1.url);
+  const aq = au.searchParams;
+  check(
+    "the consent URL: Granola's authorize endpoint, Merlin's client, the redirect address, S256 challenge, state, resource, scopes",
+    au.origin + au.pathname === `${OBASE}/auth/authorize` && aq.get("response_type") === "code" && aq.get("client_id") === "cl_1" && aq.get("redirect_uri") === "https://post.example.com/api/integrations/granola/callback" && aq.get("code_challenge_method") === "S256" && /^[A-Za-z0-9_-]{43}$/.test(aq.get("code_challenge") ?? "") && (aq.get("state") ?? "").length >= 40 && aq.get("resource") === `${OBASE}/mcp` && aq.get("scope") === "meetings:read offline_access",
+    sa1.url,
+  );
+  check("the state cookie is sealed: no state or verifier readable in it", sa1.cookie.startsWith("g1.") && !sa1.cookie.includes(aq.get("state")!));
+  const consent = async (url: string) => {
+    const r = await fetch(url, { redirect: "manual" });
+    const back = new URL(r.headers.get("location") ?? "");
+    return { code: back.searchParams.get("code"), state: back.searchParams.get("state") };
+  };
+  const ca1 = await consent(sa1.url);
+  const tk0 = oa.token.length;
+  const wrong = await G.finishSignIn(JORDAN, { state: "not-the-state", code: ca1.code, error: null }, sa1.cookie);
+  check("a wrong state is refused, with no call to Granola's token endpoint", wrong.outcome === "failed" && oa.token.length === tk0 && !(await G.granolaStatus(JORDAN))?.connected, wrong);
+  check("another member's session can't use Jordan's state", (await G.finishSignIn(SAM, { state: ca1.state, code: ca1.code, error: null }, sa1.cookie)).outcome === "failed" && oa.token.length === tk0);
+  // That try used the state up (once, either way): a fresh start for Jordan.
+  const st2 = await G.startSignIn(JORDAN, "/?p=proposals&new=1");
+  if (!st2.ok) throw new Error("start failed");
+  const c2 = await consent(st2.url);
+  check("no cookie: refused", (await G.finishSignIn(JORDAN, { state: c2.state, code: c2.code, error: null }, null)).outcome === "failed");
+  const st3 = await G.startSignIn(JORDAN, "/?p=proposals&new=1");
+  if (!st3.ok) throw new Error("start failed");
+  const c3 = await consent(st3.url);
+  const fin = await G.finishSignIn(JORDAN, { state: c3.state, code: c3.code, error: null }, st3.cookie);
+  check("the right state: the code swapped, back to the same place (the proposal start)", fin.outcome === "connected" && fin.back === "/?p=proposals&new=1", fin);
+  const tq = oa.token[oa.token.length - 1];
+  check("the token request: the code, the PKCE verifier (Granola checked it against the challenge), the redirect address, the resource, Merlin's client", tq.grant_type === "authorization_code" && oa.pkceOk[oa.pkceOk.length - 1] === true && tq.redirect_uri === "https://post.example.com/api/integrations/granola/callback" && tq.resource === `${OBASE}/mcp` && tq.client_id === "cl_1", tq);
+  check("a used state can't be used again", (await G.finishSignIn(JORDAN, { state: c3.state, code: c3.code, error: null }, st3.cookie)).outcome === "failed");
+  check("Granola's no (access_denied): nothing connected, said plainly", await (async () => {
+    const st = await G.startSignIn(SAM, "/?p=settings&sec=conn&open=granola");
+    if (!st.ok) return false;
+    const q = new URL(st.url).searchParams;
+    const r = await G.finishSignIn(SAM, { state: q.get("state"), code: null, error: "access_denied" }, st.cookie);
+    return r.outcome === "denied" && !(await G.granolaStatus(SAM))?.connected;
+  })());
+  await flush();
+  const lj = sealedOf("mem_jordan");
+  check("the access and refresh tokens kept sealed, never in plain text; no key on a sign-in link", !!lj && lj.via === "oauth" && lj.access.startsWith("g1.") && lj.refresh.startsWith("g1.") && !!lj.expiresAt && lj.client === "cl_1" && !("key" in lj) && !("last4" in lj) && !oa.issued.some((t) => stateFile().includes(t)), lj && Object.keys(lj));
+  const sj = await G.granolaStatus(JORDAN);
+  check("one status: connected with the Granola account, no key end shown, no token", sj?.connected === true && sj.via === "oauth" && !sj.last4 && !oa.issued.some((t) => JSON.stringify(sj).includes(t)), sj);
+  check("the top row: Connected, your Granola account", JSON.stringify(M.granolaPick(sj)) === JSON.stringify({ chip: "Connected", tone: "mint", line: "Your Granola account" }));
+
+  console.log("\nConnect Granola: calls over MCP");
+  const m0 = oa.mcp.length;
+  const oc = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW);
+  const mc = oa.mcp.slice(m0);
+  const oids = oc.calls.map((c) => c.noteId);
+  check("by company: today's, the workshop and the EU subdomain, newest first", JSON.stringify(oids) === JSON.stringify(["not_cedar000000001", "not_bigtr000000005", "not_cedar000000002"]), oids);
+  const sm = mc.find((x) => x.tool === "search_meetings");
+  check("MCP: initialize, initialized, then search_meetings with participant = the company's domain, the member's own meetings, the last 30 days", mc[0]?.method === "initialize" && mc[1]?.method === "notifications/initialized" && sm?.args?.participant === "cedarpine.example" && sm.args.attended_only === true && Math.abs(Date.parse(String(sm.args.from_date)) - (NOW - 30 * DAY)) < 60_000 && !!sm.session, mc.map((x) => x.tool ?? x.method));
+  check("a meeting the search listed without emails is read with get_meetings (an event-stream answer) for who was on it", mc.some((x) => x.tool === "get_meetings" && JSON.stringify(x.args?.meeting_ids) === JSON.stringify(["not_cedar000000001"])) && oc.calls[0].with.map((p) => p.email).join() === "dana@cedarpine.example" && oc.calls[0].with[0].name === "Dana Whitfield", oc.calls[0]);
+  check("each call: when, length from the meeting's end, who else (not the member, not the note's creator)", oc.calls[0].when === iso(today10) && oc.calls[0].minutes === 45 && oc.calls.every((c) => !c.with.some((p) => p.email === ownerJ.email)), oc.calls[0]);
+  check("no transcript read to list calls, no titles unless asked, no summary or private notes anywhere", !mc.some((x) => x.tool === "get_meeting_transcript") && oc.calls.every((c) => !("title" in c)) && leaks(JSON.stringify(oc)).length === 0);
+  check("titles=1: the member's own titles", (await G.granolaCalls(JORDAN, { companyId: cedar, titles: "1" }, NOW)).calls[0].title === SECRET_TITLE);
+  const om = await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
+  check("by email: participant = that address, only that person's calls", om.calls.map((c) => c.noteId).join() === "not_cedar000000002" && oa.mcp.some((x) => x.tool === "search_meetings" && x.args?.participant === "lee@eu.cedarpine.example"), om.calls);
+  const orc = await G.granolaCalls(JORDAN, { recent: "1" }, NOW);
+  check("any recent call: no participant, every past call of the last 30 days (a UUID id too), never an upcoming one", orc.calls.length === 5 && orc.calls.some((c) => c.noteId === UUID_MEET) && !orc.calls.some((c) => c.noteId.startsWith("evt_")) && !("participant" in (oa.mcp.filter((x) => x.tool === "search_meetings").pop()?.args ?? {})), orc.calls.map((c) => c.noteId));
+  const m1 = oa.mcp.length;
+  check("a locked company: refused, and nothing asked of Granola", (await problem(G.granolaCalls(JORDAN, { companyId: locked }, NOW)))?.code === "locked" && oa.mcp.length === m1);
+  oa.json = true;
+  const ojs = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW);
+  oa.json = false;
+  check("a JSON answer from search_meetings reads the same", JSON.stringify(ojs.calls.map((c) => c.noteId)) === JSON.stringify(oids) && ojs.calls[0].with[0]?.email === "dana@cedarpine.example", ojs.calls);
+
+  console.log("\nConnect Granola: one transcript");
+  const m2 = oa.mcp.length;
+  const ot = await G.transcriptForPicker(JORDAN, "not_cedar000000001");
+  check("the lines and who said them (Microphone is the member, System audio the one other person named)", ot.text === `Jordan Avery: Thanks for making the time, Dana.\nDana Whitfield: Happy to. The short version is ${SECRET_LINE}, and the team is new. We want a fixed-fee assessment first, then maybe two days a week.\nJordan Avery: That works. I'd scope a 45-day assessment at a fixed fee.`, ot.text);
+  check("the length from the transcript's own times: 42 minutes; who was on it from get_meetings", ot.minutes === 42 && ot.attendees.map((p) => p.email).join() === "dana@cedarpine.example", { m: ot.minutes, a: ot.attendees });
+  check("the reader in Proposals reads it", (await import("../lib/proposals/extract.ts")).parseTranscript(ot.text).map((u) => u.speaker).join() === "Jordan Avery,Dana Whitfield,Jordan Avery");
+  check("get_meeting_transcript asked for that meeting only", oa.mcp.slice(m2).filter((x) => x.tool === "get_meeting_transcript").every((x) => x.args?.meeting_id === "not_cedar000000001"));
+  const m3 = oa.mcp.length;
+  const obig = await G.granolaTranscript("mem_jordan", "not_bigtr000000005");
+  const offs = oa.mcp.slice(m3).filter((x) => x.tool === "get_meeting_transcript").map((x) => Number(x.args?.offset ?? 0));
+  check("a long transcript paged through next_offset, all of it", obig.text.split("\n").length === 230 && obig.text.includes("Workshop line 229") && offs.length >= 3 && offs[0] === 0 && offs.every((o, i) => i === 0 || o > offs[i - 1]), { lines: obig.text.split("\n").length, offs });
+  check("Merlin's size cap holds (a page past it isn't read)", RD.transcriptLines(Array.from({ length: 50 }, (_, i) => `[10:00:${String(i).padStart(2, "0")}] Dana Whitfield: line ${i} ${"x".repeat(40)}`).join("\n"), "Jordan Avery", "Them", 300).text.length <= 300);
+  const pend = await problem(G.transcriptForPicker(JORDAN, UUID_MEET));
+  check("a UUID meeting id is taken; a transcript Granola is still writing says so plainly", pend?.code === "pending" && pend.message === W.pending, pend);
+  check("a meeting Granola doesn't have: plain words", (await problem(G.granolaTranscript("mem_jordan", "not_zzzzz000000009")))?.message === W.notFound);
+  await flush();
+  check("nothing of the calls or the transcript kept in the state", leaks(stateFile(), [SECRET_TITLE, "SECRETWORDS", "SECRETSUMMARY", "SECRETPRIVATE", "Workshop line", "Dana Whitfield", "dana@cedarpine.example", "not_cedar000000001", UUID_MEET]).length === 0);
+  const tool10 = await MG.listGranolaCalls(ctxJ, { company_id: cedar });
+  check("the connector's list_granola_calls works over the sign-in too, never a title or summary", (tool10.calls as { granola_note_id: string }[])[0]?.granola_note_id === "not_cedar000000001" && leaks(JSON.stringify(tool10)).length === 0, tool10);
+
+  console.log("\nConnect Granola: refresh");
+  const t0 = oa.token.filter((x) => x.grant_type === "refresh_token").length;
+  const accessNow = unseal(sealedOf("mem_jordan")!.access)!;
+  oa.expired.add(accessNow);
+  const afterRefresh = await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
+  await flush();
+  const refreshes = oa.token.filter((x) => x.grant_type === "refresh_token");
+  check("a 401 from the MCP server: one refresh, then the call goes through", afterRefresh.calls.length === 1 && refreshes.length === t0 + 1 && refreshes[refreshes.length - 1].client_id === "cl_1", refreshes.length - t0);
+  const lr = sealedOf("mem_jordan")!;
+  check("the new access token and the rotated refresh token kept sealed", unseal(lr.access) !== accessNow && /^at_/.test(unseal(lr.access) ?? "") && /^rt_/.test(unseal(lr.refresh) ?? "") && oa.refresh.has(unseal(lr.refresh)!));
+  await T.tableInternals.mutate((s) => void (((s as unknown as { granola: Record<string, { expiresAt: string }> }).granola.mem_jordan.expiresAt = iso(Date.now() + 10_000))));
+  const n401 = oa.mcp.length;
+  await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
+  check("a token running out within a minute is refreshed before the call (no 401 needed)", oa.token.filter((x) => x.grant_type === "refresh_token").length === t0 + 2 && oa.mcp.length > n401);
+  await Promise.all([G.granolaCalls(JORDAN, { recent: "1" }, NOW), G.granolaCalls(JORDAN, { recent: "1" }, NOW)]);
+  check("two calls at once with a good token: no refresh at all", oa.token.filter((x) => x.grant_type === "refresh_token").length === t0 + 2);
+
+  console.log("\nConnect Granola: Disconnect revokes and deletes");
+  const lb = sealedOf("mem_jordan")!;
+  const [ra, rr] = [unseal(lb.access)!, unseal(lb.refresh)!];
+  const rv0 = oa.revoked.length;
+  const dc10 = await G.disconnectGranola(JORDAN);
+  await flush();
+  check("Disconnect: the refresh and access tokens revoked at Granola (RFC 7009)", oa.revoked.slice(rv0).includes(ra) && oa.revoked.slice(rv0).includes(rr), oa.revoked.length - rv0);
+  check("and deleted here; the status offers Connect Granola again", !sealedOf("mem_jordan") && !dc10.status.connected && dc10.status.oauth === true && /ended its access at Granola/.test(dc10.message), dc10);
+  check("disconnected: the calls ask to connect first, and nothing goes to Granola", (await problem(G.granolaCalls(JORDAN, { recent: "1" })))?.code === "not_connected");
+
+  console.log("\nConnect Granola: a refused refresh, a rejected client");
+  const connectOver = async (tok: string, back = "/?p=settings&sec=conn&open=granola") => {
+    const st = await G.startSignIn(tok, back);
+    if (!st.ok) return { outcome: `start:${st.why}` };
+    const c = await consent(st.url);
+    return G.finishSignIn(tok, { state: c.state, code: c.code, error: null }, st.cookie);
+  };
+  check("connected again", (await connectOver(JORDAN)).outcome === "connected");
+  oa.deadRefresh = true;
+  oa.expired.add(unseal(sealedOf("mem_jordan")!.access)!);
+  const refusedR = await problem(G.granolaCalls(JORDAN, { recent: "1" }, NOW));
+  await flush();
+  check("Granola refuses the refresh: plain words to connect again, and the status says so", refusedR?.code === "bad_key" && refusedR.message === W.signInRevoked && (await G.granolaStatus(JORDAN))?.broken === true && M.granolaPick((await G.granolaStatus(JORDAN))!)?.chip === "Needs connecting again", refusedR);
+  oa.deadRefresh = false;
+  // Granola forgets Merlin's client: the code exchange is refused, the client dropped, and the next start registers Merlin again.
+  oa.rejected.add("cl_1");
+  const rej = await connectOver(JORDAN);
+  await flush();
+  check("a client Granola rejects: that connect fails and Merlin forgets the client", rej.outcome === "failed" && !appOf(), rej);
+  check("the next look registers Merlin again, once", (await G.granolaStatus(SAM))?.oauth === true && oa.registered.length === 2, oa.registered.length);
+  const again = await connectOver(JORDAN);
+  await flush();
+  check("then Connect Granola works on the new client", again.outcome === "connected" && sealedOf("mem_jordan")?.client === "cl_2" && (await G.granolaStatus(JORDAN))?.broken !== true, again);
+
+  console.log("\nConnect Granola: a key replaces a sign-in; discovery down");
+  const lkey = sealedOf("mem_jordan")!;
+  const rk0 = oa.revoked.length;
+  await G.connectGranola(JORDAN, GOOD);
+  await new Promise((r) => setTimeout(r, 50));
+  const sk = await G.granolaStatus(JORDAN);
+  check("a pasted key replaces the sign-in (one connection, one status), and the sign-in's tokens are revoked", sk?.via === "key" && sk.last4 === "abcd" && oa.revoked.slice(rk0).includes(unseal(lkey.refresh)!), sk);
+  await G.disconnectGranola(JORDAN);
+  oa.down = true;
+  OA._oauth.reset();
+  const sd = await G.granolaStatus(JORDAN);
+  check("discovery fails: the button is hidden (oauth false), the key form is the way in", sd?.on === true && sd.connected === false && sd.oauth === false, sd);
+  const ds = await G.startSignIn(JORDAN, "/?p=proposals&new=1");
+  check("a start anyway goes back to the same place, unavailable", !ds.ok && ds.why === "unavailable" && ds.back === "/?p=proposals&new=1");
+  const apiBefore = requests.length;
+  const kc = await G.connectGranola(JORDAN, GOOD);
+  const kcalls = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW);
+  check("the key path still works: connected with the key, calls from Granola's API", kc.status.via === "key" && kcalls.calls.length === 3 && requests.length > apiBefore, kcalls.calls.length);
+  const secSrc = readFileSync(new URL("../app/post/GranolaSection.tsx", import.meta.url), "utf8");
+  const conSrc = readFileSync(new URL("../app/post/settings/Connections.tsx", import.meta.url), "utf8");
+  const pkSrc = readFileSync(new URL("../app/post/GranolaCallPicker.tsx", import.meta.url), "utf8");
+  check("the cards: Connect Granola while oauth, the key form behind Or paste a Granola API key, the key form alone without it", [secSrc, conSrc].every((x) => /status\.oauth \?/.test(x) && x.includes("startGranola()") && x.includes("<summary>Or paste a Granola API key</summary>")) && /status\.oauth \? \(\s*<button[^>]*onClick=\{\(\) => \(setGoing\(true\), startGranola\(\)\)\}/.test(pkSrc), "");
+  check("the words say what Merlin reads and never does, with no LinkedIn", /reads only the calls you pick/.test(secSrc) && /never stores a transcript, and never reads a call you didn.t pick/.test(secSrc) && ![secSrc, conSrc, pkSrc].some((x) => /linkedin/i.test(x.slice(x.indexOf("function GranolaDetail") >= 0 ? x.indexOf("function GranolaDetail") : 0))));
+  check("the way back's notice is read with the shell, before the address is rewritten (settings/at.ts loads granolaNotice.ts)", /import "\.\.\/granolaNotice";/.test(readFileSync(new URL("../app/post/settings/at.ts", import.meta.url), "utf8")) && /useGranolaNotice\(/.test(secSrc) && /useGranolaNotice\(/.test(conSrc) && /useGranolaNotice\(/.test(pkSrc));
+  await G.disconnectGranola(JORDAN);
+  oa.down = false;
+  OA._oauth.reset();
+
+  console.log("\nConnect Granola: the routes");
+  const routeAt = (op: string, q = "", cookie = `rn_table=${JORDAN}`) => new NextRequest(`https://post.example.com/api/integrations/granola/${op}${q}`, { headers: { cookie } });
+  const rget = (op: string, q = "", cookie?: string) => R.GET(routeAt(op, q, cookie) as never, { params: Promise.resolve({ op }) });
+  const rst = await rget("status");
+  const rstj = (await rst.json()) as { status: { oauth?: boolean } };
+  check("GET status: oauth true, no-store, nothing secret", rst.status === 200 && rstj.status.oauth === true && rst.headers.get("cache-control") === "no-store" && !/CLIENTSECRET|ACCESSTOKEN|REFRESHTOKEN/.test(JSON.stringify(rstj)));
+  const rs1 = await rget("start", `?back=${encodeURIComponent("/?p=settings&sec=conn&open=granola")}`);
+  const setc = rs1.headers.get("set-cookie") ?? "";
+  const ck = /rn_granola_oauth=([^;]+)/.exec(setc)?.[1] ?? "";
+  check("GET start: to Granola's consent page, with the sealed state cookie (httpOnly, on Granola's routes only, 10 minutes)", rs1.status === 302 && (rs1.headers.get("location") ?? "").startsWith(`${OBASE}/auth/authorize?`) && !!ck && /HttpOnly/i.test(setc) && /Path=\/api\/integrations\/granola/i.test(setc) && /Max-Age=600/i.test(setc) && /SameSite=lax/i.test(setc), setc);
+  const rc1 = await consent(rs1.headers.get("location")!);
+  const rcb = await rget("callback", `?code=${encodeURIComponent(rc1.code!)}&state=${encodeURIComponent(rc1.state!)}`, `rn_table=${JORDAN}; rn_granola_oauth=${ck}`);
+  check("GET callback: connected, back to Settings at the Granola row with granola=connected, the cookie cleared, no referrer", rcb.status === 303 && rcb.headers.get("location") === "https://post.example.com/?p=settings&sec=conn&open=granola&granola=connected" && /rn_granola_oauth=;/.test(rcb.headers.get("set-cookie") ?? "") && rcb.headers.get("referrer-policy") === "no-referrer", rcb.headers.get("location"));
+  const rbad2 = await rget("callback", `?code=x&state=nope`, `rn_table=${JORDAN}; rn_granola_oauth=${ck}`);
+  check("GET callback with a wrong state: failed, still back to where the member was", rbad2.status === 303 && rbad2.headers.get("location") === "https://post.example.com/?p=settings&sec=conn&open=granola&granola=failed", rbad2.headers.get("location"));
+  check("GET start signed out: to the front page", (await rget("start", "", "")).headers.get("location") === "https://post.example.com/");
+  check("back paths stay in the app: another site, a protocol-relative one or an API path go to Settings", ["https://evil.example/x", "//evil.example", "/\\evil.example", "/api/integrations/granola/start", "javascript:alert(1)"].every((b) => G.backPath(b) === "/?p=settings&sec=conn&open=granola") && G.backPath("/?p=proposals&new=1&granola=failed") === "/?p=proposals&new=1");
+
+  console.log("\nConnect Granola: closing an account");
+  check("Sam connects with Granola's sign-in", (await connectOver(SAM)).outcome === "connected");
+  await flush();
+  const ls = sealedOf("mem_sam")!;
+  const rs0 = oa.revoked.length;
+  await ACC.closeAccount(SAM, { nowMs: NOW });
+  await flush();
+  await new Promise((r) => setTimeout(r, 100));
+  check("closing an account deletes the sign-in at once and revokes its tokens at Granola", !sealedOf("mem_sam") && oa.revoked.slice(rs0).includes(unseal(ls.refresh)!), oa.revoked.length - rs0);
+  const exp10 = JSON.stringify(await T.exportState());
+  check("the admin export has no Granola tokens and no client secret", !exp10.includes('"granolaApp"') && !exp10.includes('"granola"') && !exp10.includes(appOf()?.secret ?? "none"));
+  check("no token, code, client secret or verifier in any log line", leaks(logged.join("\n"), [...oa.issued, "AUTHCODE", "CLIENTSECRET", "ACCESSTOKEN", "REFRESHTOKEN"]).length === 0, leaks(logged.join("\n"), ["AUTHCODE", "CLIENTSECRET", "ACCESSTOKEN"]));
+  check("the doc and the data page describe the sign-in and the sealed tokens", md.includes("mcp.granola.ai") && md.includes("`State.granolaApp`") && /RFC 7591/.test(md) && /access and refresh tokens/.test(md) && /Connect Granola/.test(df) && /access and refresh tokens, or the key, encrypted/.test(df));
 }
 
 try {
@@ -529,6 +933,7 @@ try {
   console.log("FAIL the run threw", e instanceof Error ? e.stack : e);
 }
 granola.close();
+fakeOauth.close();
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
