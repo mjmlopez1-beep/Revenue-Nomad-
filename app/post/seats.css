@@ -1243,3 +1243,24 @@ button.ys-yours:hover {
 .ys-co-name:has(> .locked-name) {
   overflow: visible;
 }
+
+/* Evidence Bank on a seat card (Close, the new look on phones): one line and Finish its evidence case. */
+.ys-evcase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -6px 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13.5px;
+  color: var(--body-ink);
+}
+.ys-evcase > span {
+  flex: 1 1 200px;
+}
+.ys-evcase .btn {
+  min-height: 44px;
+}

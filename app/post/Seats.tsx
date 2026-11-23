@@ -14,7 +14,7 @@
  * report it (the seat holder's report hides it for everyone until an admin looks).
  * A seat the member named themselves on, which nobody has confirmed yet, waits in its own list.
  */
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
@@ -32,6 +32,7 @@ import { PageHead } from "../ui/system";
 import { HideNameSwitch } from "./PartnersSwitch";
 import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
+import { SeatCaseLine, seatEvidenceOn, useSeatCases } from "./evidence/SeatEvidence";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
 export interface Saved {
@@ -957,6 +958,10 @@ export function Seats({
     ? ` We matched ${matched === list.length ? (matched === 1 ? "it" : "them") : `${matched} of them`} by name to the fractional work you published on Revenue Nomad.`
     : "";
   const waiting = useMemo(() => (infos ? waitingSeats(infos) : []), [infos]);
+  // Evidence Bank (Close, the new look only): each seat's case, and a seat added during the visit starts its draft.
+  const evOn = seatEvidenceOn(!!me.ui2, me.plan);
+  const seatIds = useMemo(() => list.map((s) => s.e.id), [list]);
+  const cases = useSeatCases(seatIds, evOn);
   // One seat is open to start, so one question is on screen: the seat the member came for, else the first with something missing.
   const [open, setOpen] = useState<Set<string>>(() => {
     const first = seats.find((s) => s.missing.length + s.coMissing.length > 0) ?? seats[0];
@@ -1124,8 +1129,8 @@ export function Seats({
             if (!s) return null;
             const fz = frozen.current.get(s.e.id)!;
             return (
+              <Fragment key={s.e.id}>
               <SeatCard
-                key={s.e.id}
                 s={s}
                 total={totalOf(s)}
                 left={leftOf(s)}
@@ -1148,6 +1153,8 @@ export function Seats({
                 focus={focus === s.e.id}
                 onGone={(gid, message) => setGone((g) => new Map(g).set(gid, message))}
               />
+              {evOn && <SeatCaseLine seatId={s.e.id} status={cases?.get(s.e.id)} openPage={(p) => ui.openPage(p as never)} name={s.i.c.hidden ? "this company" : s.i.c.name} />}
+              </Fragment>
             );
           })}
           {waitingList}
