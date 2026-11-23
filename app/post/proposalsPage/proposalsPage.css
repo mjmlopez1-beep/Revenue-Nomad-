@@ -2007,6 +2007,26 @@
   outline-offset: 2px;
 }
 
+/* The outline and the right panel stay in view while the document scrolls, each scrolling on its own. */
+@media (min-width: 1024px) {
+  .pz-ed-left,
+  .pz-ed-right {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100vh - 57px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .pz-aside {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100vh - 57px);
+    overflow-y: auto;
+  }
+}
+
 /* ---------- narrower screens ---------- */
 @media (max-width: 1279px) {
   .pz-ed-cols {
@@ -2070,7 +2090,7 @@
   .pz-table[data-tpl] {
     min-width: 0;
   }
-  .pz-th {
+  .pz-tr.pz-th {
     display: none;
   }
   .pz-tr {
@@ -2137,4 +2157,13 @@
   .pz-card-t > span:not(.pz-card-f) {
     display: none;
   }
+}
+/* In a column that scrolls on its own, nothing shrinks to fit: it scrolls instead. */
+.pz-ed-left > *,
+.pz-ed-right > *,
+.pz-aside > * {
+  flex: none;
+}
+.pz-ol-acts .tp-iconbtn {
+  color: var(--pz-body);
 }
