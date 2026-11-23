@@ -9,7 +9,7 @@
  */
 import { useState } from "react";
 import "./questions.css";
-import { FAQ_LEAD, faqItems } from "./faq";
+import { FAQ_LEAD, faqItems, type FaqLive } from "./faq";
 import { mailto } from "./contact";
 
 export { faqItems } from "./faq";
@@ -27,13 +27,15 @@ export interface QuestionsProps {
    * (the app's sheet), every question shows in faq.ts order.
    */
   first?: number;
+  /** Which switchable features are on (View.live, signed out). The app's sheet leaves it out. */
+  live?: FaqLive;
 }
 
 /** The questions as a list of open-and-close rows. */
-export function Questions({ starter, support, intro = false, first }: QuestionsProps) {
+export function Questions({ starter, support, intro = false, first, live }: QuestionsProps) {
   const href = support ? mailto(support, "Merlin question") : null;
   const [all, setAll] = useState(false);
-  const every = faqItems(starter, intro);
+  const every = faqItems(starter, intro, undefined, live);
   const light = first !== undefined;
   const ordered = light ? [...FAQ_LEAD.flatMap((q) => every.filter(([x]) => x === q)), ...every.filter(([x]) => !FAQ_LEAD.includes(x))] : every;
   const shown = light && !all ? ordered.slice(0, first) : ordered;

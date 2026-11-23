@@ -39,15 +39,21 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE, peersFree = FIELDS.PE
       role: scanRoleFree ? null : "Role of a seat with nobody named",
       end: "End month of a seat that ended",
     },
-    contact: { name: "Name and title", title: null },
+    // The landing page never names LinkedIn: a person's profile link is said as that.
+    contact: { name: "Name and title", title: null, linkedin: "Profile link" },
   };
+  /**
+   * Fields that open with the company's name (the 2-credit unlock, "Name and website"), so they
+   * are not on the free side: its website and its profile link.
+   */
+  const WITH_NAME: Partial<Record<Entity, string[]>> = { company: ["website", "linkedin"] };
   const rows: { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; lockedFirst?: string[]; price?: string; note?: string }[] = [
     {
       entity: "company",
       label: "The company",
       lockedFirst: ["Name and website"],
       price: "2 credits",
-      note: "Every company's name, website and LinkedIn are locked until you unlock it. Its logo and About show (the About without its name, web address or links). 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Who held its seats then shows free, and its people open after it. Type a company's full name or website in search to find one you already know. The preview on this page names a few hiring companies as a sample.",
+      note: "Every company's name, website and profile links are locked until you unlock it. Its logo and About show (the About without its name, web address or links). 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. Who held its seats then shows free, and its people open after it. Type a company's full name or website in search to find one you already know. The preview on this page names a few hiring companies as a sample.",
     },
     {
       entity: "engagement",
@@ -58,7 +64,7 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE, peersFree = FIELDS.PE
     {
       entity: "contact",
       label: "A hiring contact",
-      note: "A person at the company, like the hiring exec: their name and title are one unlock, 1 credit for both. Their LinkedIn, email and phone open after that, 1 credit each.",
+      note: "A person at the company, like the hiring exec: their name and title are one unlock, 1 credit for both. Their profile link, email and phone open after that, 1 credit each.",
     },
   ];
   return rows.map((row) => {
@@ -68,7 +74,7 @@ export function priceMatrix(scanRoleFree = SCAN_ROLE_FREE, peersFree = FIELDS.PE
     return {
       entity: row.entity,
       label: row.label,
-      free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated).map((f) => f.label), ...(row.freeLast ?? [])],
+      free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated && !(WITH_NAME[row.entity] ?? []).includes(f.key)).map((f) => f.label), ...(row.freeLast ?? [])],
       // Who held a seat first: it is the one most members come for.
       locked: [
         ...(row.lockedFirst ?? []),

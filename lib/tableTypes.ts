@@ -775,6 +775,11 @@ export interface Benchmarks {
 
 export interface View {
   demo: boolean;
+  /**
+   * Signed out only (app/api/table GET): which switchable features are on, so the landing page
+   * names only those. Workflows (RN_WORKFLOWS, Beta) and Google (RN_GOOGLE with a Google client).
+   */
+  live?: { workflows: boolean; google: boolean };
   /** The view is drawn in the new look (Me.ui2, lib/ui2.ts). Left out with the flag off. */
   ui2?: boolean;
   me: Me | null;

@@ -208,8 +208,8 @@ async function main() {
   check("no copy says a company shows again when its role closes", !/everyone sees the company again/.test(JSON.stringify(paid)) && !faqItems(5).some((q: unknown) => /everyone sees the company again|1 credit shows the company/.test(JSON.stringify(q))));
   const contact = row(paid, "contact");
   check(
-    "a contact's name and title are one chip, and the LinkedIn, email and phone open after it",
-    contact.locked[0] === "Name and title" && !contact.locked.includes("Title") && ["LinkedIn", "Email", "Phone"].every((x) => contact.locked.includes(x)) && /open after that, 1 credit each/.test(contact.note ?? ""),
+    "a contact's name and title are one chip, and the profile link, email and phone open after it (the landing page never names LinkedIn)",
+    contact.locked[0] === "Name and title" && !contact.locked.includes("Title") && ["Profile link", "Email", "Phone"].every((x) => contact.locked.includes(x)) && /open after that, 1 credit each/.test(contact.note ?? "") && !/linkedin/i.test(JSON.stringify(paid)),
     contact,
   );
   check("a locked company's seat holders show free after the company, its people open after it", /Who held its seats then shows free, and its people open after it/.test(row(paid, "company").note ?? ""));
@@ -227,13 +227,50 @@ async function main() {
   check("Questions: Fractionals never costs a credit", /It never costs a credit/.test(fq.get("What is Fractionals?") ?? "") && !/costs 1 credit to see who they are/.test(fq.get("What is Fractionals?") ?? ""));
   check("Questions: no outcome-based price anywhere", ![...fq.values()].some((a) => /succes{2} fee|% of|percent of|per placement|when you win/i.test(a)));
   check("Questions: a seat's end month is free while it is going", /end month while the seat is still going/.test(fq.get("What does a seat cost to see?") ?? ""));
-  check("Questions: contact details open after the name", /LinkedIn, email and phone open after that, 1 credit each/.test(fq.get("What does a hiring contact cost?") ?? ""));
+  check("Questions: contact details open after the name", /profile link, email and phone open after that, 1 credit each/.test(fq.get("What does a hiring contact cost?") ?? ""));
+  check("the company's website and profile link open with its name, never on the free side", !co.free.includes("Website") && !co.free.includes("LinkedIn") && co.locked[0] === "Name and website", co.free);
   check("Questions: people at a locked company open after the company", /open after the company/.test(fq.get("What does an open role cost?") ?? ""));
   check(
     "Questions: the role of a seat with nobody named follows SEAT_SCAN_ROLE_FREE both ways",
     /the role is 1 credit on its own/.test(fq.get("What does a seat cost to see?") ?? "") && /the role is free/.test(faq(true).get("What does a seat cost to see?") ?? ""),
   );
   check("no line says one credit shows one thing, or that most seat holders are members", ![...fq.values()].some((a) => /one thing|Most seat holders are/.test(a)));
+
+  console.log("\nThe landing page's use cases: alerts, workflows, Evidence Bank, Agent access, said as the rules gate them");
+  {
+    const R0 = await import("../lib/billing/rules");
+    const CP0 = await import("../lib/billing/compare");
+    const on = CP0.landingMoreRows(true);
+    const off = CP0.landingMoreRows(false);
+    const wfRow = on.find((r) => r[0] === "Workflows (Beta)");
+    const W = R0.WORKFLOW_PLAN;
+    check(
+      "Workflows row: Free 1 with free steps, Pro 10 with paid steps, Close 25 with proposal triggers and the Evidence Bank step",
+      !!wfRow && wfRow[1] === `${W.free.flows} workflow, free steps only` && W.free.flows === 1 && !W.free.paid && wfRow[2].startsWith(`Up to ${W.pro.flows},`) && W.pro.flows === 10 && W.pro.paid && /proposal triggers and the Evidence Bank step/.test(wfRow[3]) && W.close.flows === 25 && W.close.evidence && !W.pro.evidence,
+      wfRow,
+    );
+    check("Workflows are named only when the server has them on", !off.some((r) => /Workflow/.test(r[0])) && on.length === off.length + 1);
+    const ev = on.find((r) => r[0] === "Evidence Bank");
+    check("Evidence Bank is Close's: the trial only on Free and Pro", !!ev && ev[1] === "In your trial only" && ev[2] === "In your trial only" && /past results/.test(ev[3]));
+    const ag = on.find((r) => /Agent access/.test(r[0]));
+    check("Agent access follows FREE_MCP_PER_DAY, Pro and Close the app's Claude row", !!ag && ag[1] === `${R0.FREE_MCP_PER_DAY} requests a day` && JSON.stringify(ag.slice(1)) === JSON.stringify(CP0.PLAN_ROWS.find((r) => r[0] === "Claude")!.slice(1)));
+    const al = on.find((r) => r[0] === "Alerts on your lists");
+    check("alerts: Free one list by email and the bell, each morning or weekly; Pro as it happens with Slack", !!al && al[1].startsWith(`${R0.FREE_SAVED_VIEWS} list, by email and the bell`) && R0.FREE_ALERT_EVERY.join() === "daily,weekly" && /as it happens, in Slack too/.test(al[2]));
+    check("the rate row is the app's own", JSON.stringify(on.at(-1)) === JSON.stringify(CP0.PLAN_ROWS.find((r) => r[0] === "Rate benchmarks")));
+    check("no price, percentage, export or download in the added rows", !/\$|%|export|csv|download/i.test(JSON.stringify(on)));
+    const q = (live: { workflows?: boolean; google?: boolean }) => new Map(faqItems(25, true, false, live));
+    const qOff = q({});
+    const qOn = q({ workflows: true, google: true });
+    check("Questions: workflows and Google are asked only when on", !qOff.has("What are workflows?") && !qOff.has("What does Merlin do with my Google account?") && qOn.has("What are workflows?") && qOn.has("What does Merlin do with my Google account?"));
+    check("Questions: workflows say Beta, drafts only, and the plan gates", /in Beta/.test(qOn.get("What are workflows?")!) && /Nothing is ever sent for you/.test(qOn.get("What are workflows?")!) && /Free has 1 workflow with the free steps, Pro up to 10 with the steps that cost credits, and Close up to 25/.test(qOn.get("What are workflows?")!));
+    check("Questions: Google is private, never shown to another member, never an email's text", /never shown to another member or an admin/.test(qOn.get("What does Merlin do with my Google account?")!) && /never its subject or text/.test(qOn.get("What does Merlin do with my Google account?")!));
+    check("Questions: a warm way in names Google only when on", !/Google/.test(qOff.get("How does Merlin find a warm way in?")!) && /or Google/.test(qOn.get("How does Merlin find a warm way in?")!) && /connections file/.test(qOff.get("How does Merlin find a warm way in?")!));
+    check("Questions: alerts, lookalikes, Agent access and Evidence Bank are asked", ["How do alerts work?", "What are lookalikes?", "Can I use Merlin from my own AI assistant?", "What is the Evidence Bank?"].every((k) => qOff.has(k)));
+    check("Questions: Agent access asks before it spends and has no limit unless set", /asks before it spends one/.test(qOff.get("Can I use Merlin from my own AI assistant?")!) && /no daily spend limit unless you set one/.test(qOff.get("Can I use Merlin from my own AI assistant?")!));
+    check("Questions: Evidence Bank is Close's", /part of Close/.test(qOff.get("What is the Evidence Bank?")!));
+    const words = JSON.stringify([...qOn.entries()]);
+    check("Questions: no LinkedIn, no em dash, no export, Merlin never a data provider", !/linkedin|—|export|download|\bcsv\b|data provider/i.test(words), (words.match(/.{30}(linkedin|—|export|download|csv|data provider).{30}/i) ?? [])[0]);
+  }
 
   console.log("\nThe plans' names: Free, Pro and Close, and the Close trial");
   const R = await import("../lib/billing/rules");
