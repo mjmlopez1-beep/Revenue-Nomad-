@@ -15,7 +15,7 @@ import { useUi } from "./ui";
 
 const PICKABLE = FUNCTIONS.filter((f) => f !== "Other" && f !== "Executive");
 
-export function LeaderReport({ companyId, fn, leads, from }: { companyId: string; fn: string | null; leads?: CompanyLeads; from: "radar" | "record" }) {
+export function LeaderReport({ companyId, fn, leads, from, onDone }: { companyId: string; fn: string | null; leads?: CompanyLeads; from: "radar" | "record"; onDone?: () => void }) {
   const ui = useUi();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,8 +32,11 @@ export function LeaderReport({ companyId, fn, leads, from }: { companyId: string
     setErr(null);
     const r = await ui.act({ type: "leaderReport", companyId, fn: pick, role, from }, { silentError: true });
     setBusy(false);
-    if (r.ok) setOpen(false);
-    else setErr(r.message);
+    if (r.ok) {
+      setOpen(false);
+      // Crystal Ball's "Why not": the fact saved, the company also leaves the member's ball.
+      onDone?.();
+    } else setErr(r.message);
   };
   if (!open)
     return (

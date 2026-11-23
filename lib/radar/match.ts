@@ -55,6 +55,8 @@ import {
 import { LEADER_LEVELS, fullTimeWords, noLeaderWords, roleLabel, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
 import { hireMonth, monthsAgo } from "../hired";
 import type { Warmth } from "../google/types"; // [google network]
+import { cleanTune, tuneMultiplier, type RadarTune } from "./tune";
+import { isOut, wantsAnyway, type RadarOutEntry } from "./out";
 
 export interface RadarProfile {
   memberId: string;
@@ -69,6 +71,11 @@ export interface RadarProfile {
    * profile never switches Crystal Ball off. Left out (the morning run): no profile, nothing sent.
    */
   any?: boolean;
+  /**
+   * What the member leans their ball toward (Profile.radarTune, lib/radar/tune.ts): a multiplier per
+   * group of signal kinds. Absent or empty: every score exactly as it was.
+   */
+  tune?: RadarTune;
 }
 
 /** [ux ws3] The profile reads as any company: asked for (`any`) and nothing in it. */
@@ -105,6 +112,17 @@ export function inIcp(icp: Icp | null | undefined, co: CompanyFacts): boolean {
   const parts = icpParts(icp!, co);
   if (parts.includes(false)) return false;
   return parts.includes(true);
+}
+
+/** The parts of the profile the company's facts say no to, in words: "Size: 501–1,000 people", "Industry: Retail". Free facts only. */
+export function icpMisses(icp: Icp, co: CompanyFacts): string[] {
+  const key = (v: string) => v.trim().toLowerCase();
+  const out: string[] = [];
+  if (icp.industries.length && co.industry && !icp.industries.map(key).includes(key(co.industry))) out.push(`Industry: ${co.industry}`);
+  if (icp.employees.length && co.employees && !icp.employees.includes(co.employees)) out.push(`Size: ${co.employees} people`);
+  if (icp.revenue.length && co.revenue && !icp.revenue.includes(co.revenue)) out.push(`Revenue: ${co.revenue}`);
+  if (icp.countries.length && co.country && !icp.countries.some((x) => countryKey(x) === countryKey(co.country!))) out.push(`Country: ${co.country}`);
+  return out.length ? out : ["Not enough on file to match your ideal client"];
 }
 
 /** How well the company fits the profile, from FIT_BASE to 1. Only for a company inIcp. */
@@ -186,7 +204,15 @@ export interface Scored extends RawSignal {
   score: number;
   band: RadarBand;
   whyNow: string;
+  /** When a hire is likely, in months from now [from, to] (the page's "When"): the rule's window from where the company is in it. */
+  horizon: [number, number];
 }
+
+/** A rule's window [a, b] months after the event, `t` months after it: months from now. Past the window: soon, if at all. */
+export const aheadOf = (gap: readonly [number, number], t: number): [number, number] =>
+  t > gap[1] ? [0, 3] : [Math.max(0, gap[0] - t), Math.max(1, gap[1] - t)];
+/** "Now", "Within 3 months", "In 2 to 6 months". */
+export const horizonWords = (h: readonly [number, number]) => (h[1] <= 1 ? "Now" : h[0] <= 0 ? `Within ${h[1]} months` : `In ${h[0]} to ${h[1]} months`);
 
 export interface ScoreCtx {
   /** Merlin's observed transitions (signals.ts observedTransitions). None: the research's priors alone. */
@@ -226,14 +252,18 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   let openedMs: number | null = null;
   /** Adjacent, for a thin-prior function: its floor is lowered by its lift. */
   let floorLift = 1;
+  /** When a hire is likely, months from now. */
+  let ahead: [number, number] = [0, 12];
   switch (sig.kind) {
     case "role":
       score = ROLE_P * fit;
       whyNow = `Open now · a direct opening in ${p.fn}`;
+      ahead = [0, 1];
       break;
     case "seat": {
       const fullTime = sig.endReason === "Converted to full-time" || sig.endReason === "Replaced by full-time hire";
       score = SEAT_P * fit * (fullTime ? FT_PENALTY : 1);
+      ahead = [0, 3];
       whyNow = fullTime
         ? `Just ended ${sig.endReason === "Converted to full-time" ? "as a full-time role" : "with a full-time hire"} · less likely to open again`
         : "Just ended · the seat may be open again";
@@ -242,6 +272,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
     case "departure": {
       const pr = SIGNAL_PRIORS.departure["*"];
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       whyNow = `${leadWord(p.fn)} gone from its website · ${pr.why} ${gapWords(pr.gap)}`;
       break;
     }
@@ -252,6 +283,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       const p0 = pr ? pr.p : 0.02;
       const gap = pr ? pr.gap : ([3, 12] as const);
       score = p0 * timing(t, gap) * fit * (ftLed ? FT_PENALTY : 1);
+      ahead = aheadOf(gap, t);
       const posted = jump ? `${sig.build!.to} full-time sales roles posted` : "First full-time sales roles posted";
       whyNow = pr ? `${posted} · ${pr.why} ${gapWords(gap)}` : `${posted} · a sales build sometimes brings other seats`;
       break;
@@ -259,6 +291,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
     case "funding": {
       const pr = SIGNAL_PRIORS.funding[p.fn];
       score = (pr ? pr.p : 0.08) * timing(sinceMonths(sig.atMs, nowMs), pr ? pr.gap : [0, 6]) * fit;
+      ahead = aheadOf(pr ? pr.gap : [0, 6], sinceMonths(sig.atMs, nowMs));
       whyNow = pr ? `Raised money · ${pr.why} ${gapWords(pr.gap)}` : "Raised money · a round usually brings new seats";
       break;
     }
@@ -277,6 +310,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       const lift = thinLift(p.fn);
       floorLift = lift;
       score = (lift > 1 ? Math.min(raw * lift, Math.max(raw, UNKNOWN_CAP)) : raw) * fit;
+      ahead = aheadOf(l.gap, t);
       whyNow = hireWhyNow(x.fn, p.fn, t, l);
       if (sig.reopen) {
         // Re-surfaced once: this member's window opens in this run's window, after the hire came in (on the seat's own day of the month).
@@ -295,6 +329,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       if (!x) return null;
       const past = Math.max(0, monthsAgo(x.start, nowMs) - mark);
       score = pr.p * timing(past, pr.gap) * fit;
+      ahead = aheadOf(pr.gap, past);
       whyNow = `Fractional ${p.fn} seat started ${monthWords(x.start)}, ${agoWords(monthsAgo(x.start, nowMs))} · based on typical tenure: ${pr.words}, so the seat may come up again`;
       break;
     }
@@ -322,6 +357,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       const pr = sig.fn ? ARRIVAL_PRIORS[sig.fn]?.[p.fn] : undefined;
       if (!pr || !sig.fn) return null;
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       const role = sig.arrived ? roleLabel(sig.fn, (LEADER_LEVELS as readonly string[]).includes(sig.arrived.level) ? (sig.arrived.level as LeaderLevel) : "Head") : leadWord(sig.fn);
       whyNow = `New ${sig.arrived?.kind === "full-time" ? "full-time " : ""}${role} on their team page (${monthWords(sig.at.slice(0, 7))}) · ${pr.why} ${gapWords(pr.gap)}`;
       break;
@@ -330,6 +366,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       const pr = TEAM_PRIORS[p.fn];
       if (!pr || !sig.team) return null;
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       whyNow = `${sig.team.to} full-time ${teamWord(p.fn)} roles posted (${sig.team.from} before) · ${pr.why} ${gapWords(pr.gap)}`;
       break;
     }
@@ -337,6 +374,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       const pr = sig.size ? HEADCOUNT_PRIORS[sig.size.to]?.[p.fn] : undefined;
       if (!pr || !sig.size) return null;
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
+      ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       whyNow = `Grew from ${sig.size.from} to ${sig.size.to} people (on file ${monthWords(sig.at.slice(0, 7))}) · ${pr.why}`;
       break;
     }
@@ -354,23 +392,27 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   if (sig.standing) whyNow = `${STILL} ${whyNow}`;
   // Who leads the member's function there: a full-time leader known (website or members) keeps it on the page only;
   // nobody has read their team page: never High on "nobody leads it yet" alone.
+  /** The ceiling the caps put on this signal, which tuning keeps (lib/radar/tune.ts). */
+  let cap = sig.kind === "gap" ? UNKNOWN_CAP : Infinity;
   if (sig.kind === "tenure" || sig.kind === "rehire" || sig.kind === "arrival" || sig.kind === "team-build" || sig.kind === "headcount") {
-    if (ftLed) score = Math.min(score * FT_PENALTY, FT_CAP);
-    else if (know.s === "unknown") score = Math.min(score, UNKNOWN_CAP);
+    if (ftLed) (score = Math.min(score * FT_PENALTY, FT_CAP)), (cap = FT_CAP);
+    else if (know.s === "unknown") (score = Math.min(score, UNKNOWN_CAP)), (cap = UNKNOWN_CAP);
   }
   if (sig.kind === "adjacent" || sig.kind === "sales-build") {
-    if (ftLed) score = Math.min(score * (sig.kind === "adjacent" ? FT_PENALTY : 1), FT_CAP);
-    else if (know.s === "unknown") score = Math.min(score, UNKNOWN_CAP);
+    if (ftLed) (score = Math.min(score * (sig.kind === "adjacent" ? FT_PENALTY : 1), FT_CAP)), (cap = FT_CAP);
+    else if (know.s === "unknown") (score = Math.min(score, UNKNOWN_CAP)), (cap = UNKNOWN_CAP);
   }
   // A thin-prior function's adjacent hires keep a floor lowered by the same lift, so its members get them at all (Low, on the page).
   if (!(score >= SCORE_FLOOR / floorLift)) return null;
+  // A re-surfaced hire goes out only when it now reads Medium or High (Low never goes by email), on its untuned score.
+  if (openedMs !== null && bandOf(score) === "Low") return null;
+  // The member's tuning, after the floor (it never adds or drops a signal) and under the caps (a full-time leader stays under Medium).
+  const mult = tuneMultiplier(p.tune, sig.kind);
+  if (mult !== 1) score = Math.min(score * mult, cap);
   const band = bandOf(score);
-  // A re-surfaced hire goes out only when it now reads Medium or High (Low never goes by email).
-  if (openedMs !== null) {
-    if (band === "Low") return null;
-    return { ...sig, at: new Date(openedMs).toISOString(), atMs: openedMs, why, score, band, whyNow };
-  }
-  return { ...sig, why, score, band, whyNow };
+  const horizon = ahead;
+  if (openedMs !== null) return { ...sig, at: new Date(openedMs).toISOString(), atMs: openedMs, why, score, band, whyNow, horizon };
+  return { ...sig, why, score, band, whyNow, horizon };
 }
 
 /** The months-ago words, for lines that are not a hire's ("this month", "2 months ago"). */
@@ -394,6 +436,12 @@ export const deliverable = <X extends { band: RadarBand }>(xs: X[]) => xs.filter
 export interface DayMemory {
   sent: Record<string, string>;
   shown?: Record<string, string>;
+  /**
+   * "Why not" (lib/radar/out.ts), by internal company id: a company the member left out is skipped
+   * (one left out "Not now" only until something new happens there); one they asked to see anyway
+   * goes first, inside the day's limit.
+   */
+  out?: Record<string, RadarOutEntry>;
 }
 
 /**
@@ -413,6 +461,15 @@ export function pickDaily<X extends Scored>(fresh: X[], standing: X[], mem: DayM
     return Number.isFinite(at) && nowMs - at < RADAR_COMPANY_QUIET_DAYS * 24 * 60 * 60 * 1000;
   };
   const unsent = (x: X) => !mem.sent[x.key] && !(x.of && mem.sent[x.of]) && !(x.sameAs ?? []).some((k) => mem.sent[k]);
+  const out = mem.out;
+  // Left out by the member: none of its signals, unless it is "Not now" and this one is newer.
+  const leftOut = (x: X) => !!out && isOut(out[x.companyId], x.atMs);
+  // Asked for anyway: first, in the order they came. Nothing changes without one (stable).
+  if (out && Object.values(out).some((e) => e.r === "anyway")) {
+    const want = (x: X) => wantsAnyway(out[x.companyId], nowMs);
+    fresh = [...fresh.filter(want), ...fresh.filter((x) => !want(x))];
+  }
+  if (out) (fresh = fresh.filter((x) => !leftOut(x))), (standing = standing.filter((x) => !leftOut(x)));
   const send: X[] = [];
   const cos = new Set<string>();
   for (const x of fresh) {
@@ -493,5 +550,6 @@ export function profileOf(seed: Seed, s: State, memberId: string, fn: string | n
     icp: prof.icp ?? null,
     before: own.length ? own : fn && fn !== "Other" ? beforeSuggested(seed, s, fn) : [],
     beforeFromMember: own.length > 0,
+    ...((t) => (Object.keys(t).length ? { tune: t } : {}))(cleanTune((prof as { radarTune?: unknown }).radarTune)),
   };
 }

@@ -12,7 +12,7 @@
  * also carries its record (`place`, for Slack), and only one the member's table shows its logo: a
  * locked company's card never has a record id, a link to it or a logo.
  */
-import type { RadarBand, RadarCard, RadarDay, RadarKind } from "./types";
+import type { RadarBand, RadarCard, RadarDay, RadarKind, RadarSigView } from "./types";
 import type { RawSignal } from "./signals";
 import { monthWords } from "./predict";
 
@@ -283,19 +283,27 @@ const BAND_RANK: Record<RadarBand, number> = { High: 0, Medium: 1, Low: 2 };
  * likely first), its lines in order, each with its note (band and why-now), and the company's best band.
  */
 export function rowsOf(
-  sent: { c: string; kind: RadarKind; l: string; b?: RadarBand; w?: string }[],
+  sent: { c: string; kind: RadarKind; l: string; b?: RadarBand; w?: string; a?: string; h?: [number, number] }[],
   pub: (companyId: string) => string,
-): { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand }[] {
-  const by = new Map<string, { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand }>();
+): { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand; sigs: RadarSigView[]; h?: [number, number] }[] {
+  const by = new Map<string, { id: string; c: string; kinds: RadarKind[]; lines: string[]; notes: string[]; band?: RadarBand; sigs: RadarSigView[]; h?: [number, number] }>();
   for (const x of sent) {
     let r = by.get(x.c);
-    if (!r) by.set(x.c, (r = { id: pub(x.c), c: x.c, kinds: [], lines: [], notes: [] }));
+    if (!r) by.set(x.c, (r = { id: pub(x.c), c: x.c, kinds: [], lines: [], notes: [], sigs: [] }));
     if (!r.kinds.includes(x.kind)) r.kinds.push(x.kind);
     if (!r.lines.includes(x.l)) {
       r.lines.push(x.l);
       r.notes.push(noteOf({ band: x.b, whyNow: x.w }) ?? "");
+      r.sigs.push({ kind: x.kind, line: x.l, ...(x.b ? { band: x.b, weight: WEIGHT_OF[x.b] } : {}), ...(x.w ? { whyNow: x.w } : {}), ...(x.a ? { at: x.a } : {}), ...(x.h ? { h: x.h } : {}) });
+      // When a hire is likely: the soonest window of its signals.
+      if (x.h && (!r.h || x.h[0] < r.h[0] || (x.h[0] === r.h[0] && x.h[1] < r.h[1]))) r.h = x.h;
     }
     if (x.b && (!r.band || BAND_RANK[x.b] < BAND_RANK[r.band])) r.band = x.b;
   }
+  // The side panel reads each company's signals strongest first (the line's order stays as it came).
+  for (const r of by.values()) r.sigs.sort((a, b) => BAND_RANK[a.band ?? "Low"] - BAND_RANK[b.band ?? "Low"]);
   return [...by.values()];
 }
+
+/** A signal's weight in a word, from its band: never a number. */
+export const WEIGHT_OF: Record<RadarBand, "Strong" | "Some" | "Light"> = { High: "Strong", Medium: "Some", Low: "Light" };

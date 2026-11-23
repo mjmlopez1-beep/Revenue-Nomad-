@@ -33,6 +33,9 @@
  * Every link opens that day's companies in the app (radarPath), each one a click from unlocked.
  */
 
+import type { RadarOutEntry, RadarOutRow } from "./out";
+import type { RadarTune } from "./tune";
+
 /**
  * What members call the feature, everywhere they read it: the menu, the page, the email, Slack,
  * Your profile, the unsubscribe page and Pilot metrics. Renaming it is this one line. Code,
@@ -238,6 +241,26 @@ export interface RadarRow {
    * (Me.crystal "all"). Its people and seat holders keep their own unlocks.
    */
   name?: string;
+  /**
+   * Each signal at the company, strongest first, as the page's side panel explains it: its kind,
+   * line, band and why-now, when it happened (YYYY-MM-DD, or absent on rows kept before this was
+   * stored), when a hire is likely (months from now), and its weight in a word (never a number).
+   */
+  sigs?: RadarSigView[];
+  /** When a hire is likely, from the soonest of its signals: months from now [from, to]. */
+  h?: [number, number];
+}
+
+/** One signal at a company, as the page reads it. */
+export interface RadarSigView {
+  kind: RadarKind;
+  line: string;
+  band?: RadarBand;
+  whyNow?: string;
+  at?: string;
+  h?: [number, number];
+  /** Strong (High on its own), Some (Medium), Light (Low). */
+  weight?: "Strong" | "Some" | "Light";
 }
 
 /**
@@ -275,6 +298,10 @@ export interface RadarView {
   /** Email or Slack would carry it: what the page says about delivery. */
   email: boolean;
   slack: boolean;
+  /** With &range= only: the companies not in the ball, and why (lib/radar/out.ts): left out by the member, held back by Merlin. */
+  out?: RadarOutRow[];
+  /** With &range= only: the member's tuning (lib/radar/tune.ts), absent when every group is Normal. */
+  tune?: RadarTune;
 }
 
 /** A company in one delivery, kept for that day's view: the signal's key, the internal company id, its kind and line. */
@@ -286,6 +313,10 @@ export interface RadarSentRow {
   /** Band and why-now (rows kept before Crystal Ball scored have neither). */
   b?: RadarBand;
   w?: string;
+  /** When the signal happened (YYYY-MM-DD), when a hire is likely (months from now, as of `k`'s day), and its score (never shown). Rows kept before Crystal Ball's page explained them have none. */
+  a?: string;
+  h?: [number, number];
+  s?: number;
 }
 
 /** Per member: what was sent, so a signal never goes twice, and each day's companies. */
@@ -302,6 +333,8 @@ export interface RadarMember {
   shown?: Record<string, string>;
   /** The last Crystal Ball email (ISO): when a twice-a-week or weekly email is next due (radarEmailDue). */
   lastMailAt?: string;
+  /** "Why not" (lib/radar/out.ts): internal company id -> left out for a reason, or "show it anyway". Purged with the rest of this. */
+  out?: Record<string, RadarOutEntry>;
 }
 
 export interface RadarState {

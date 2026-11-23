@@ -207,6 +207,18 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-crystal">
+            <h2 className="df-h" id="df-crystal">
+              Inside Merlin: tuning your Crystal Ball
+            </h2>
+            <p className="cl-p">
+              In Crystal Ball you can say which kinds of signal count more or less for you, and take a company out of your ball with a reason. Merlin keeps the weights
+              you changed, and each company you took out with your reason and when. They change only your own Crystal Ball and its email. None of it goes to an outside
+              service or to another member. Reset your weights or bring a company back at any time. When you close your account they are deleted with your personal
+              data after the 30 days you can bring it back.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-readers">
             <h2 className="df-h" id="df-readers">
               Inside Merlin: proposal readers
@@ -262,6 +274,7 @@ export function DataFlows() {
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
+              <li>Crystal Ball: Reset in Tune puts every weight back, and Bring it back in Not in your ball returns a company you took out.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
               <li>Slack and webhooks: remove them in Integrations.</li>

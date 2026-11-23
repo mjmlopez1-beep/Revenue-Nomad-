@@ -110,6 +110,8 @@ import { aiPackReady, closeReady, surveyCode } from "./billing/stripe";
 import { trialSummary, valueCounts, valueLines } from "./billing/emails";
 import { CRYSTAL_USED_LINE, FEATURE_NAME, YOUR_FEATURE, radarPrefs, radarStats, type RadarEmail, type RadarState, type RadarStats } from "./radar/types";
 import { countTransitions, isStage, type SeatPoint } from "./radar/predict";
+import { applyOut, outMessage, type OutOp, type OutReason } from "./radar/out";
+import { cleanTune, tunedCount, type RadarTune } from "./radar/tune";
 import { ABOUT_BY, ABOUT_SOURCE, REFRESH_DAYS, RETRY_DAYS, aboutEnabled, aboutProgress, type AboutOutcome, type AboutRunSummary, type AboutState, type AboutStatus, type AboutTarget } from "./about/types";
 import { WEBSITE_FOUND_BY, WEBSITE_FOUND_SOURCE, type WebsitesState } from "./websites/types";
 // Own sites: emails fractionals publish on their own firm's website (lib/ownsites), shown only with RN_OWNSITES=1.
@@ -356,6 +358,8 @@ interface Profile {
   ui2?: boolean;
   /** The "what this page is for" strips they dismissed in the new look (page keys, lib/ui2.ts). */
   stripsOff?: string[];
+  /** Crystal Ball's "What counts most" (lib/radar/tune.ts): only the groups set off Normal. Absent: every score as it was. */
+  radarTune?: RadarTune;
 }
 /** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
 interface RoleTrack {
@@ -6503,6 +6507,29 @@ export async function perform(
             found: opened ? "new" : "again",
             findsLeft: Math.max(0, revealCap(s, me.id, nowMs) - revealsToday(s, me.id, nowMs)),
           };
+        }
+        case "radarTune": {
+          // Crystal Ball's "What counts most": only the groups off Normal are kept, so a member who resets has nothing stored.
+          const t = cleanTune(a.tune);
+          const p = { ...(s.profiles[me.id] ?? {}) };
+          if (Object.keys(t).length) p.radarTune = t;
+          else delete p.radarTune;
+          s.profiles[me.id] = p;
+          const n = tunedCount(t);
+          return { message: n ? `Crystal Ball re-ranked by your weights (${n} changed).` : "Every weight is back to Normal." };
+        }
+        case "radarOut": {
+          // Crystal Ball's "Why not": the member's own list, kept with their Crystal Ball (purged with it). Never earns.
+          const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
+          if (!c) throw new ActionError(gone("company"));
+          const r = (s.radar ??= { lastRunAt: null, lastRunDay: null, members: {}, stats: { runs: 0, sent: 0, emails: 0, slack: 0, instant: 0 } });
+          const mine = ((r.members ??= {})[me.id] ??= { sent: {} });
+          const next = applyOut(mine.out, c.id, a.op, a.reason, now);
+          if ("error" in next) throw new ActionError(next.error);
+          if (Object.keys(next.out).length) mine.out = next.out;
+          else delete mine.out;
+          const label = hiddenFor(c.id) ? "This company" : c.name;
+          return { message: outMessage(a.op as OutOp, a.op === "out" ? (a.reason as OutReason) : null, label) };
         }
         case "leaderReport": {
           // "They have a full-time Sales leader": a fact like any other (1 credit, the daily limits), at a company the member can see.

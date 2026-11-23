@@ -1069,6 +1069,16 @@ export type Action =
    */
   | { type: "leaderReport"; companyId: string; fn: string; role: string; from?: "radar" | "record" }
   /**
+   * Crystal Ball's "What counts most" (lib/radar/tune.ts): Less, Normal or More for each group of
+   * signal kinds. `tune` replaces what was set ({} puts everything back to Normal).
+   */
+  | { type: "radarTune"; tune: Record<string, number> }
+  /**
+   * Crystal Ball's "Why not" (lib/radar/out.ts): take a company out with a reason (`out`), bring it
+   * back (`back`), or ask for one Merlin held back to come first tomorrow (`anyway`). Earns nothing.
+   */
+  | { type: "radarOut"; companyId: string; op: "out" | "back" | "anyway"; reason?: string }
+  /**
    * Onboarding answers, and Your profile. `before`: up to BEFORE_MAX functions, `[]` for "Not
    * sure" (left out: unchanged). `firstView`: the id of the saved view onboarding made (null takes
    * it off). It marks the member onboarded and drops their onboarding draft.

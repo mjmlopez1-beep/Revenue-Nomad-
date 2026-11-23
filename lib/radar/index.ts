@@ -71,7 +71,11 @@ import { emailEnabled, sendEmail } from "../email";
 import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
 import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, standingSignals, type RawSignal } from "./signals";
-import { deliverable, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
+import { deliverable, icpMisses, inIcp, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
+import { isOut, type RadarOutRow } from "./out";
+import { isTuned } from "./tune";
+import { bandOf } from "./predict";
+import { isCalendar } from "./signals";
 import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
 import { EMAIL_FOLLOW_UPS, renderRadarEmail, type EmailFollowUp } from "./format";
@@ -79,7 +83,7 @@ import { followUpsOf } from "../pipelineActions";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
+  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
   type RadarDay, type RadarEmail, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
 import { NOTIFICATIONS_PATH, emailLinker, grantQuery, safePath } from "../emailIn";
@@ -222,7 +226,18 @@ function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> 
 }
 
 /** A signal as the day's view keeps it. */
-const sentRow = (x: MemberSignal): RadarSentRow => ({ k: x.key, c: x.companyId, kind: x.kind, l: viewLine(x), ...(x.band ? { b: x.band } : {}), ...(x.whyNow ? { w: x.whyNow } : {}) });
+const sentRow = (x: MemberSignal & { horizon?: [number, number]; score?: number }): RadarSentRow => ({
+  k: x.key,
+  c: x.companyId,
+  kind: x.kind,
+  l: viewLine(x),
+  ...(x.band ? { b: x.band } : {}),
+  ...(x.whyNow ? { w: x.whyNow } : {}),
+  // When it happened, when a hire is likely and its score: what the page's side panel and the member's tuning read.
+  ...(x.at ? { a: x.at.slice(0, 10) } : {}),
+  ...(x.horizon ? { h: x.horizon } : {}),
+  ...(typeof x.score === "number" && Number.isFinite(x.score) ? { s: Math.round(x.score * 1000) / 1000 } : {}),
+});
 
 /** The member's radar profile, or null when the radar can match nothing for them (no function, or no Ideal Fractional Profile). */
 function readyProfile(c: Ctx, m: Member): RadarProfile | null {
@@ -315,27 +330,36 @@ const keptDays = (nowMs: number) => Array.from({ length: RADAR_KEEP_VIEW_DAYS + 
  * went out lists exactly what went out (kept with the delivery); any other day lists the signals
  * that happened that day and never went out. Only companies still on file.
  */
-function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready: boolean; byDay: Map<string, RadarSentRow[]> } {
+function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready: boolean; byDay: Map<string, RadarSentRow[]>; raw: RawSignal[] } {
   const { seed, s, nowMs } = c;
   // [ux ws3] No Ideal Fractional Profile yet: the page reads it as any company (the morning run still needs one).
   const p: RadarProfile = { ...profileOf(seed, s, m.id, functionFor(s, m)), any: true };
   const ready = !!p.fn;
   const byDay = new Map<string, RadarSentRow[]>();
-  if (!ready || !wanted.length) return { p, ready, byDay };
+  if (!ready || !wanted.length) return { p, ready, byDay, raw: [] };
   const kept = s.radar?.members?.[m.id]?.days ?? {};
   const keptKeys = new Set(Object.values(kept).flatMap((rows) => rows.map((x) => x.k)));
   // Days nothing went out: the signals that happened that day (and never went out another day).
   const fromMs = Math.min(...wanted.map(dayStart));
+  const raw = detectSignals(seed, s, fromMs, nowMs);
   // [google network] the page ranks by who the member knows too (networkWarmth: nothing with RN_GOOGLE off).
-  const live = signalsFor(detectSignals(seed, s, fromMs, nowMs), p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) }).filter((x) => !keptKeys.has(x.key));
+  const scored = signalsFor(raw, p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) });
+  const live = scored.filter((x) => !keptKeys.has(x.key));
+  // A member who tuned their ball (lib/radar/tune.ts): a kept row reads as its signal scores for them now, where the signal is still
+  // in view (its band and why-now as the page shows them; its line, and what the email said, stay). Nobody else's rows change.
+  const now = isTuned(p.tune) ? new Map(scored.map((x) => [x.key, x])) : null;
+  const retuned = (x: RadarSentRow): RadarSentRow => {
+    const y = now?.get(x.k);
+    return y ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x;
+  };
   for (const d of wanted) {
-    const rows = kept[d]?.length ? kept[d] : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
+    const rows = kept[d]?.length ? (now ? kept[d].map(retuned) : kept[d]) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
     // A company merged away or taken out since is no row.
     const onFile = rows.filter((x) => c.g.companies.has(x.c));
     // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).
     byDay.set(d, icpIsEmpty(p.icp) ? firstCompanies(onFile, ANY_COMPANY_MAX) : onFile);
   }
-  return { p, ready, byDay };
+  return { p, ready, byDay, raw };
 }
 
 /**
@@ -420,7 +444,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   // A day asked for that is kept (an older email's link) is listed too.
   const inKeep = !!asked && keptDay(asked, nowMs);
   const kept = keptDays(nowMs);
-  const { p, ready, byDay } = dayRows(c, m, ranged ? kept : inKeep && !list.includes(asked!) ? [...list, asked!] : list);
+  const { p, ready, byDay, raw } = dayRows(c, m, ranged ? kept : inKeep && !list.includes(asked!) ? [...list, asked!] : list);
   const count = (d: string) => new Set((byDay.get(d) ?? []).map((x) => x.c)).size;
   const latest = list.find((d) => count(d) > 0) ?? today;
   const day = inKeep ? asked! : ranged ? today : latest;
@@ -429,7 +453,15 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const ranges = ranged ? RADAR_RANGES.map((r) => ({ range: r.range, companies: cut(r.days).dayOf.size })) : [];
   const range: RadarRange | null = !ranged || inKeep ? null : (radarRangeOf(rangeAsked) ?? ranges.find((r) => r.companies > 0)?.range ?? "30d");
   const shown = range ? cut(RADAR_RANGES.find((r) => r.range === range)!.days) : { rows: byDay.get(day) ?? [], dayOf: null };
-  const rows = rowsOf(shown.rows, T.pubId).map(({ id, c: co, kinds, lines, notes, band }) => ({
+  const proName = (co: string) => (pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {});
+  // "Why not" (lib/radar/out.ts): a range leaves out the companies the member left out (a day's link lists what it listed).
+  const outs = s.radar?.members?.[m.id]?.out ?? {};
+  const newest = new Map<string, number>();
+  if (range) for (const [d, rs] of byDay) for (const x of rs) newest.set(x.c, Math.max(newest.get(x.c) ?? 0, Date.parse(`${x.a ?? d}T12:00:00Z`) || 0));
+  const leftOut = (co: string) => !!range && isOut(outs[co], newest.get(co) ?? null);
+  const score = new Map<string, number>();
+  for (const x of shown.rows) score.set(x.c, Math.max(score.get(x.c) ?? 0, x.s ?? 0));
+  const rows = rowsOf(shown.rows.filter((x) => !leftOut(x.c)), T.pubId).map(({ id, c: co, kinds, lines, notes, band, sigs, h }) => ({
     id,
     ...(shown.dayOf ? { day: shown.dayOf.get(co) } : {}),
     kinds,
@@ -437,10 +469,15 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     ...(notes.some(Boolean) ? { notes } : {}),
     ...(band ? { band } : {}),
     // Trial and Pro see each company named here, free (the table still keeps it locked and theirs to unlock).
-    ...(pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {}),
+    ...proName(co),
+    ...(range ? { sigs, ...(h ? { h } : {}) } : {}),
+    co,
   }));
   // A range reads most likely first, then newest (rows come newest day first; the sort keeps that order within a band).
-  if (range) rows.sort((a, b) => bandOrder(a.band) - bandOrder(b.band));
+  // A member who tuned: most likely first by their own weights.
+  const tuned = isTuned(p.tune);
+  if (range) rows.sort((a, b) => bandOrder(a.band) - bandOrder(b.band) || (tuned ? (score.get(b.co) ?? 0) - (score.get(a.co) ?? 0) : 0));
+  const out = range ? outRows(c, m, p, byDay, raw, outs, kept, proName) : [];
   return {
     on: ((x) => x.email !== "off" || x.slack)(radarPrefs(s.profiles[m.id])),
     ready,
@@ -453,10 +490,81 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
     days: list.map((d) => ({ day: d, companies: count(d) })),
     ...(ranged ? { range, ranges } : {}),
-    rows,
+    rows: rows.map(({ co: _co, ...r }) => r), // eslint-disable-line @typescript-eslint/no-unused-vars
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),
+    ...(range ? { out } : {}),
+    ...(tuned ? { tune: p.tune } : {}),
   };
+}
+
+/** "Why not" lists at most this many held back by Merlin, and this many outside the ideal client. */
+const OUT_HELD_MAX = 10;
+const OUT_ICP_MAX = 3;
+
+/**
+ * "Why not" (lib/radar/out.ts): the companies the member left out, with their reasons; then those
+ * Merlin kept off the email (a High or Medium event in the ball's last RADAR_CARRY_DAYS days that no
+ * morning sent: the day's limit, or a company shown in the last 30 days with nothing new); then the
+ * strongest High events this week at companies outside the ideal client. A company is named only as
+ * the ball names it (the member's table, or Trial and Pro).
+ */
+function outRows(
+  c: Ctx,
+  m: Member,
+  p: RadarProfile,
+  byDay: Map<string, RadarSentRow[]>,
+  raw: RawSignal[],
+  outs: Record<string, { r: string; at: string }>,
+  kept: string[],
+  proName: (co: string) => { name?: string },
+): RadarOutRow[] {
+  const { s, nowMs } = c;
+  const known = (co: string) => (knownTo(c, m, co) ? {} : proName(co));
+  const rows: RadarOutRow[] = [];
+  for (const [co, e] of Object.entries(outs)) {
+    if (!c.g.companies.has(co)) continue;
+    if (e.r === "anyway") rows.push({ id: T.pubId(co), by: "merlin", r: "anyway", at: e.at, ...known(co) });
+    else rows.push({ id: T.pubId(co), by: "you", r: e.r as RadarOutRow["r"], at: e.at, ...known(co) });
+  }
+  rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const listed = new Set(Object.keys(outs));
+  const mem = s.radar?.members?.[m.id];
+  const sent = mem?.sent ?? {};
+  const keptDaysMap = mem?.days ?? {};
+  let held = 0;
+  // Kept off the email: a delivery's day, its High and Medium rows that were not sent, at a company with nothing sent that day.
+  for (const d of kept.slice(0, RADAR_CARRY_DAYS)) {
+    if (!keptDaysMap[d]?.length) continue;
+    const day = byDay.get(d) ?? [];
+    const sentCo = new Set(day.filter((x) => sent[x.k]).map((x) => x.c));
+    // A day that sent nothing (only standing states kept for the page, or no email at all) held nothing back.
+    if (!sentCo.size) continue;
+    for (const x of day) {
+      if (held >= OUT_HELD_MAX) break;
+      if (sent[x.k] || sentCo.has(x.c) || listed.has(x.c) || !x.b || x.b === "Low") continue;
+      listed.add(x.c);
+      held++;
+      const shownAt = Date.parse(mem?.shown?.[x.c] ?? "");
+      const quiet = Number.isFinite(shownAt) && isCalendar({ kind: x.kind }) && nowMs - shownAt < RADAR_COMPANY_QUIET_DAYS * DAY;
+      // The morning's limit only when that morning sent its full day; else a company shown lately with nothing new, else simply kept off.
+      rows.push({ id: T.pubId(x.c), by: "merlin", r: sentCo.size >= RADAR_DAY_MAX ? "limit" : quiet ? "quiet" : "held", at: `${d}T12:00:00.000Z`, band: x.b, line: x.l, ...known(x.c) } as RadarOutRow);
+    }
+  }
+  // Outside the ideal client: the strongest this week, each with the part that doesn't match.
+  if (!icpIsEmpty(p.icp) && p.fn) {
+    const anyP: RadarProfile = { ...p, icp: null, any: true };
+    const weekMs = nowMs - 7 * DAY;
+    const seen = new Set<string>();
+    for (const x of signalsFor(raw.filter((y) => y.atMs >= weekMs && !inIcp(p.icp, y.co)), anyP, { nowMs })) {
+      if (seen.size >= OUT_ICP_MAX) break;
+      if (x.band !== "High" || seen.has(x.companyId) || listed.has(x.companyId) || !c.g.companies.has(x.companyId)) continue;
+      seen.add(x.companyId);
+      const miss = icpMisses(p.icp!, x.co);
+      rows.push({ id: T.pubId(x.companyId), by: "merlin", r: "icp", at: x.at, band: bandOf(x.score), line: miss.join(", "), ...known(x.companyId) } as RadarOutRow);
+    }
+  }
+  return rows;
 }
 
 /* ---------- the morning run ---------- */
@@ -565,7 +673,7 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
       // The day (pickDaily): High and Medium events, at most RADAR_DAY_MAX companies (a roll-up email more, RADAR_ROLLUP_MAX),
       // filled with standing states to RADAR_DAY_MIN when fewer fresh events reach them; no company twice inside 30 days unless something new happened.
       const still = p ? signalsFor(standing, p, { counts, nowMs }) : [];
-      const picked = pickDaily(mine, still, { sent, shown: mem?.shown }, nowMs, RADAR_ROLLUP_MAX[email ? every : "daily"]);
+      const picked = pickDaily(mine, still, { sent, shown: mem?.shown, out: mem?.out }, nowMs, RADAR_ROLLUP_MAX[email ? every : "daily"]);
       // Nothing new for them (only companies that are still a good time): no post, and no email unless a follow-up came due.
       // The page still lists the companies today; an email about follow-ups alone lists no company.
       const upsOnly = !picked.fromEvents;
@@ -677,7 +785,9 @@ export async function radarInstant(nowIso?: string): Promise<number> {
     const p = readyProfile(c, m);
     if (!p) continue;
     const sent = sentKeys(s, m.id);
-    const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]));
+    const outs = s.radar?.members?.[m.id]?.out;
+    // A company the member left out ("Why not", lib/radar/out.ts) never posts; one left out "Not now" posts again once something new happens there.
+    const mine: Scored[] = signalsFor(all, p, { counts, nowMs }).filter((x) => !sent[x.key] && !(x.of && sent[x.of]) && !(outs && isOut(outs[x.companyId], x.atMs)));
     const out_ = deliverable(mine);
     const day = dayOf(out_, cardContext(c, m, now.slice(0, 10), await logosFor(c, m, out_)), "instant", now.slice(0, 10));
     if (!day) continue;
