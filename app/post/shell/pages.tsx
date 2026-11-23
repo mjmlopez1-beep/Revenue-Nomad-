@@ -51,7 +51,7 @@ import type { HomeProps } from "../Home";
 import { MyCredits } from "../Credits";
 import { MessagesPage } from "../Messages";
 import { RadarPage } from "../Radar";
-import { BillingPage, openPlans } from "../Billing";
+import { BillingPage } from "../Billing";
 import { Seats } from "../Seats";
 import { PipelinePage } from "../Pipeline";
 import { GetInPage, WayInPage } from "../network/Ways";
@@ -314,6 +314,7 @@ const loadCrystal = () => import("../crystal/CrystalBall");
 const loadHiring = () => import("../hiring/HiringNow");
 const loadWarm = () => import("../network/WarmPaths");
 const loadContracts = () => import("../contracts/ContractsPage");
+const loadEvidence = () => import("../evidence/Evidence");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -328,8 +329,10 @@ const HiringNowPage = dynamic(() => loadHiring().then((m) => m.HiringNow), { ssr
 const WarmPathsPage = dynamic(() => loadWarm().then((m) => m.WarmPaths), { ssr: false, loading: pageWait });
 // Contracts (contracts/ContractsPage.tsx): drop a PDF, the flow, the table and saved contracts.
 const ContractsPageL = dynamic(() => loadContracts().then((m) => m.ContractsPage), { ssr: false, loading: pageWait });
+// Evidence Bank (evidence/Evidence.tsx): the case library, the build panel, matching; the upgrade screen without Close.
+const EvidencePageL = dynamic(() => loadEvidence().then((m) => m.EvidencePage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -455,31 +458,6 @@ function NetworkP() {
   );
 }
 
-/**
- * Evidence Bank (Close): private case studies that fill the Proof part of a proposal. Its page comes
- * in Stage 5; until then this says so plainly. Without Close it offers the upgrade, as the rail does.
- */
-function EvidenceSoon() {
-  const c = useApp();
-  const close = !c.me.plan || c.me.plan.tier === "close";
-  return (
-    <div className="ws-soon">
-      <h1>Evidence Bank</h1>
-      <p>Your private case studies: the problem, what you did, and the numbers before and after. The client name stays hidden unless you show it. Each case fills the Proof part of the proposals you send.</p>
-      {close ? (
-        <p>Evidence Bank is being built. Your seats will each start a draft case here.</p>
-      ) : (
-        <>
-          <p>Evidence Bank is part of the Close plan, with proposals and contracts.</p>
-          <button type="button" className="btn btn-pine" onClick={() => openPlans("proposals")}>
-            See the Close plan
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
 /* ---------- the new look's own pages ---------- */
 
 /** A dismissed strip: on the member's profile (Profile.stripsOff), or dismissed in this visit. */
@@ -579,6 +557,11 @@ function ContractsP() {
   return <ContractsPageL />;
 }
 
+/** Evidence Bank (evidence/Evidence.tsx), page key "evidence" (Close): its own header (Home / Evidence Bank / Your case library) and strip; on Free and Pro, the upgrade screen. */
+function EvidenceP() {
+  return <EvidencePageL />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -606,7 +589,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   network: { title: "Your network", component: NetworkP },
   // The new look's pages (RN_UI2): each opens its home of today until its own exists.
   warm: { title: "Warm paths", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.shell.wayCo ? "" : "wp-main") },
-  evidence: { title: "Evidence Bank", component: EvidenceSoon },
+  evidence: { title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true, mainClass: (c) => (!c.me.plan || c.me.plan.canClose ? "wb-host ev-host" : "") },
   alerts: { title: "Alerts and workflows", component: NotificationsP },
   agent: { title: "Agent access", component: IntegrationsP },
   settings: { title: "Settings", component: IntegrationsP },
