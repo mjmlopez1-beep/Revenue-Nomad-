@@ -798,6 +798,7 @@ li.ct-exrow {
   flex-direction: column;
 }
 .ct-flowt-h {
+  margin: 0;
   font-size: 18px;
   line-height: 24px;
   font-weight: 800;

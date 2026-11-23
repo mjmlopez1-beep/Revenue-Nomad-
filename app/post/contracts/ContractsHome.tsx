@@ -459,7 +459,7 @@ export function ContractFlow({
           All contracts
         </button>
         <div className="ct-flowt">
-          <span className="ct-flowt-h">{title}</span>
+          <h1 className="ct-flowt-h">{title}</h1>
           <span className="ct-flowt-s">
             {doc.fileName} · {doc.pages.length} {doc.pages.length === 1 ? "page" : "pages"} · {savedFrom ? "a saved contract" : sentLine}
           </span>
