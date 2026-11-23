@@ -1094,7 +1094,10 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
         <span className="wp-sub">
           {first
             ? "Each person you know at a company that fits you becomes a warm path on the map. Only you see them. Each source works on its own."
-            : `Where your ${n(Object.values(v.bySource).reduce((a, b) => a + (b ?? 0), 0))} paths come from. Only you see what you bring in.`}
+            : `Where your ${(() => {
+                const k = Object.entries(v.bySource).reduce((a, [src, x]) => a + (src === "direct" ? 0 : (x ?? 0)), 0);
+                return k === 1 ? "1 way in through someone comes" : `${n(k)} ways in through someone come`;
+              })()} from. Only you see what you bring in.`}
         </span>
         {!first && (
           <span className="wp-src-links">

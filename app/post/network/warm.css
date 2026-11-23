@@ -942,6 +942,7 @@
 }
 .wp-tablewrap .wb-scroll {
   max-height: 760px;
+  overflow: auto;
 }
 .wp-td2 {
   display: flex;
