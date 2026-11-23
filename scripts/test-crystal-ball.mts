@@ -221,6 +221,7 @@ async function main() {
   check("Reset removes the stored tuning", (await t.loadState()).profiles.mem_jor.radarTune === undefined && ids(await view(JOR)).join() === ids(v0).join());
 
   console.log("\nWhy not through the action");
+  const latestBefore = ids(await view(JOR, null, null));
   const o1 = await t.perform(JOR, { type: "radarOut", companyId: P.c, op: "out", reason: "size" }, BASE);
   check("a reason takes the company out of the ranges", !ids(await view(JOR)).includes(P.c) && /left your Crystal Ball/.test(o1.message ?? ""), o1.message);
   const v2 = await view(JOR);
@@ -228,6 +229,14 @@ async function main() {
   check("and it is listed under Why not with the reason", mine?.id === P.c && mine.r === "size");
   check("the reason is kept server-side by internal id", (await t.loadState()).radar!.members.mem_jor.out?.c_c?.r === "size");
   check("a day's link still lists exactly what it listed", (await view(JOR, null, ago(1)))!.rows.some((r) => r.id === P.c));
+  {
+    // Home's Crystal Ball and the rail's count read the latest day (no day asked): a company left out is gone there too.
+    const top = latestBefore[0];
+    await t.perform(JOR, { type: "radarOut", companyId: top, op: "out", reason: "known" }, BASE);
+    check("the latest day Home and the rail read leaves a company out too", !!top && !ids(await view(JOR, null, null)).includes(top), latestBefore);
+    await t.perform(JOR, { type: "radarOut", companyId: top, op: "back" }, BASE);
+    check("...and brings it back", ids(await view(JOR, null, null)).includes(top));
+  }
   check("the company still opens free from the ball (the server's check is not cut)", radar.crystalCompanyIds(await t.loadSeed(), await t.loadState(), (await t.loadSeed()).members[0] as never, Date.now()).has("c_c"));
   check("a reason that isn't one is refused", (await refused(t.perform(JOR, { type: "radarOut", companyId: P.h, op: "out", reason: "meh" }, BASE))) === "Pick why it is not for you.");
   check("a company that isn't there is refused", !!(await refused(t.perform(JOR, { type: "radarOut", companyId: "c_nope", op: "out", reason: "size" }, BASE))));

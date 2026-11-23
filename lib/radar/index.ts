@@ -454,11 +454,13 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const range: RadarRange | null = !ranged || inKeep ? null : (radarRangeOf(rangeAsked) ?? ranges.find((r) => r.companies > 0)?.range ?? "30d");
   const shown = range ? cut(RADAR_RANGES.find((r) => r.range === range)!.days) : { rows: byDay.get(day) ?? [], dayOf: null };
   const proName = (co: string) => (pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {});
-  // "Why not" (lib/radar/out.ts): a range leaves out the companies the member left out (a day's link lists what it listed).
+  // "Why not" (lib/radar/out.ts): a range, and the latest day Home and the rail read, leave out the companies the member
+  // left out (a day's link from an email or Slack lists what it listed).
   const outs = s.radar?.members?.[m.id]?.out ?? {};
+  const outsOn = !!range || !asked;
   const newest = new Map<string, number>();
-  if (range) for (const [d, rs] of byDay) for (const x of rs) newest.set(x.c, Math.max(newest.get(x.c) ?? 0, Date.parse(`${x.a ?? d}T12:00:00Z`) || 0));
-  const leftOut = (co: string) => !!range && isOut(outs[co], newest.get(co) ?? null);
+  if (outsOn) for (const [d, rs] of byDay) for (const x of rs) newest.set(x.c, Math.max(newest.get(x.c) ?? 0, Date.parse(`${x.a ?? d}T12:00:00Z`) || 0));
+  const leftOut = (co: string) => outsOn && isOut(outs[co], newest.get(co) ?? null);
   const score = new Map<string, number>();
   for (const x of shown.rows) score.set(x.c, Math.max(score.get(x.c) ?? 0, x.s ?? 0));
   const rows = rowsOf(shown.rows.filter((x) => !leftOut(x.c)), T.pubId).map(({ id, c: co, kinds, lines, notes, band, sigs, h }) => ({
