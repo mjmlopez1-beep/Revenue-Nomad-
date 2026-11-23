@@ -36,7 +36,7 @@ import {
   type FilterValue, type FindKind,
 } from "./findModel";
 import { alertWords, kindOfList, listAct, listsOf } from "./lists";
-import { takeFindStart } from "./start";
+import { listenFindStart, takeFindStart, type FindStart } from "./start";
 import { appDeps, fetchQuote, quoteWords } from "../workbench/quote";
 import { runUnlock } from "../workbench/run";
 import { defaultSeeds, likeCriteria, profileOf, profileWords, rankLike, seedMatches, traitChips, withoutTrait, type LikeRow } from "./lookalikes";
@@ -102,13 +102,17 @@ export function Find(p: FindProps) {
   const [seeds, setSeeds] = useState<string[] | null>(null);
   const [traitsOff, setTraitsOff] = useState<LikeTrait[]>([]);
   // What another page sent: an Ask plan to set, or a company to look up.
-  useEffect(() => {
-    const s = takeFindStart();
-    if (!s) return;
+  const startWith = (s: FindStart) => {
     if ("plan" in s) applyPlan(s.plan, s.text);
     else if ("lookup" in s) (setLookText(s.lookup), setStep("lookup"));
     else if ("kind" in s) setKind(s.kind);
     else setStep(s.step);
+  };
+  useEffect(() => {
+    const s = takeFindStart();
+    if (s) startWith(s);
+    // Already on Find: "/" (or Ask from elsewhere on the page) opens the lookup here, focused by the shell.
+    return listenFindStart(startWith);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,7 +190,8 @@ export function Find(p: FindProps) {
       {p.first && p.stripOn && (
         <div role="note" className="fd-strip">
           <span>
-            <strong>Find is where you build a list.</strong> Describe who you want or pick filters, check the preview, then save it. Nothing is spent here, and opening a company is free on the trial, up to 15 a day.
+            <strong>Find is where you build a list.</strong> Describe who you want or pick filters, check the preview, then save it. Nothing is spent here
+            {me.proOpens ? `, and opening a company is free on your plan, up to ${me.proOpens.of} a day.` : `. Opening a company is ${COMPANY_PRICE} credits.`}
           </span>
           <button
             type="button"
@@ -971,10 +976,10 @@ function LikePanel({
     return (
       <div className="fd-like">
         <strong>Lookalikes start from your past clients.</strong>
-        <span className="fd-note">You have no seats on Merlin yet, so there is nothing to match against. Add a seat you have held, or pick companies you have won, and Merlin lists the companies most like them.</span>
+        <span className="fd-note">You have no seats on Merlin yet, so there is nothing to match against. Add a seat you held, or pick companies you have won, and Merlin lists the companies most like them. Each fact you add to a seat earns 1 credit.</span>
         <div className="fd-like-acts">
           <button type="button" className="fd-volt fd-sm" onClick={onAddSeat}>
-            Add a seat you&apos;ve held
+            Add a seat you held
           </button>
           <button type="button" className="fd-outline fd-sm" aria-expanded={picking} onClick={() => setPicking(!picking)}>
             Pick companies you&apos;ve won
