@@ -158,7 +158,7 @@ export function EditorFrame(x: EditorFrameProps) {
           <IconChevron dir="left" /> All proposals
         </button>
         <div className="pz-ed-title">
-          <input className="pz-title" aria-label="Proposal title" value={p.title} readOnly={x.readOnly} maxLength={160} onChange={(e) => x.onTitle(e.target.value.replace(/\s*\n\s*/g, " "))} />
+          <input className="pz-title" aria-label="Proposal title" title={p.title} value={p.title} readOnly={x.readOnly} maxLength={160} onChange={(e) => x.onTitle(e.target.value.replace(/\s*\n\s*/g, " "))} />
           <span className="pz-ed-meta">
             <ProposalStatus status={p.status} />
             {p.company.id && c ? (

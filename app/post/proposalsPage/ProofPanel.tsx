@@ -153,7 +153,8 @@ export function ProofPanel({
                 <span className="pz-note">{whyOf(x)}</span>
               </span>
               <strong className="pz-proof-t">{x.title}</strong>
-              {x.story && <span className="pz-proof-story">{x.story}</span>}
+              {/* The case's words already read in the section above (its line fills {{caseStudies}}): the card keeps to the title and the numbers then. */}
+              {x.story && !(x.text && (p.fields?.caseStudies ?? "").includes(x.text)) && <span className="pz-proof-story">{x.story}</span>}
               {x.outs.map((o, k) => (
                 <span key={k} className="pz-proof-out">
                   <span className="pz-note">{o.k}</span>
