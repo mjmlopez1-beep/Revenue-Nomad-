@@ -33,8 +33,8 @@ export interface WfScope {
 }
 
 export type WfStepKey = "open" | "dm" | "draft" | "pipe" | "way" | "evidence" | "remind" | "tell";
-/** The order steps run in, and the builder lists them in. Opening comes first: the steps after it need the company. */
-export const STEP_ORDER: WfStepKey[] = ["open", "dm", "draft", "pipe", "way", "evidence", "remind", "tell"];
+/** The order steps run in, and the builder lists them in. Opening comes first: the steps after it need the company. A note's credits (opening a locked company) are quoted with the other paid steps, before any step runs. */
+export const STEP_ORDER: WfStepKey[] = ["open", "dm", "pipe", "way", "draft", "evidence", "remind", "tell"];
 export interface WfStep {
   key: WfStepKey;
   /** Remind me in N days. */

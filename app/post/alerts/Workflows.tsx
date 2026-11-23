@@ -431,7 +431,23 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
           const on = has(k);
           const held = stepHeld(k);
           const per = ceil.per[k];
-          const price = held ? null : STEPS[k].paid ? (on ? (per ? `Up to ${creditWords(per)}` : "Free on your plan") : k === "draft" ? "Opens the company if locked" : k === "dm" ? `${creditWords(v.prices.person)}, plus the company if locked` : "Free on your plan, up to 15 a day") : "Free";
+          const companyFree = (b.scope.kind === "radar" && v.prices.ballFree) || v.prices.opensLeft > 0;
+          const companyWords = companyFree ? "the company opens free" : `${creditWords(v.prices.companyFull)} to open a locked company`;
+          const price = held
+            ? null
+            : !STEPS[k].paid
+              ? "Free"
+              : on && per !== undefined
+                ? per
+                  ? `Up to ${creditWords(per)} a run`
+                  : "Free on your plan"
+                : k === "dm"
+                  ? `${creditWords(v.prices.person)}, and ${companyWords}`
+                  : k === "draft"
+                    ? `No credits for the note; ${companyWords}`
+                    : companyFree
+                      ? "Free on your plan"
+                      : `${creditWords(v.prices.companyFull)} when locked`;
           return (
             <div key={k} className="wf-b-step">
               <button type="button" role="checkbox" aria-checked={on} className={`wf-check-row${on ? " on" : ""}`} onClick={() => flip(k)}>
@@ -445,8 +461,8 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
                 <span className="wf-b-step-t">
                   <span>{STEPS[k].name}</span>
                   <span className="al-sub wrap">{STEPS[k].sub}</span>
+                  <span className="wf-b-price">{held ? <span className="al-gate">{held}</span> : <span className={COST(STEPS[k].paid && !!per)}>{price}</span>}</span>
                 </span>
-                {held ? <span className="al-gate">{held}</span> : <span className={COST(STEPS[k].paid && !!per)}>{price}</span>}
               </button>
               {k === "remind" && on && (
                 <label className="wf-days">

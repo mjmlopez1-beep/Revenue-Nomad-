@@ -349,7 +349,7 @@ export function AlertsPage() {
           </nav>
         )}
 
-        {first && (
+        {first && tab === "alerts" && (
           <section className="al-gallery" aria-labelledby="al-gal-h">
             <div className="al-gallery-head">
               <h2 id="al-gal-h">Start with an alert</h2>
@@ -399,7 +399,7 @@ export function AlertsPage() {
           )}
         </div>
 
-        {destOpen && <Destinations integ={integ} email={c.view.email ? me.email : null} first={first} onOp={integOp} onTest={() => void act({ type: "alerts.test", alert: "bell" })} />}
+        {destOpen && (tab === "alerts" || dest === true) && <Destinations integ={integ} email={c.view.email ? me.email : null} first={first} onOp={integOp} onTest={() => void act({ type: "alerts.test", alert: "bell" })} />}
 
         {tab === "flows" && wf.view ? (
           <WorkflowsTab v={wf.view} act={wfAct} open={wfOpen} setOpen={setWfOpen} onBuild={openWb} openCompany={(id) => c.openCompany(id)} />

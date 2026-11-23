@@ -1388,3 +1388,13 @@
     padding: 12px 16px;
   }
 }
+.al-tile > .al-gate {
+  flex: 0 0 auto;
+}
+.wf-b-price {
+  display: flex;
+  margin-top: 3px;
+}
+.wf-b-price .wf-cost {
+  white-space: normal;
+}
