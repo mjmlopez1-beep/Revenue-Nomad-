@@ -165,7 +165,7 @@ export function matchWhy(sig: RawSignal, p: RadarProfile): string | null {
   // A fractional in their function there now: nothing for them in a signal that reads "no fractional in your function".
   const activeHere = (sig.activeFns ?? sig.hiredFns).includes(p.fn);
   // Any company (no profile yet): the reason says what happened, never "in your profile".
-  const where = any ? "" : ", at a company in your profile";
+  const where = any ? "" : ", at a company that fits your ideal client";
   switch (sig.kind) {
     case "role":
       return sig.fn === p.fn ? `An open ${p.fn} role${where}` : null;

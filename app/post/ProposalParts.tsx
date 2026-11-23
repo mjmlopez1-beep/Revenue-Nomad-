@@ -100,7 +100,7 @@ export function RatePanel({ advice, fn }: { advice: ReturnType<typeof adviceFrom
           {s.limited && <p className="pp-muted">Free shows the median for every size. Pro adds the range by client size.</p>}
         </>
       ) : (
-        <p className="pp-muted">{fn ? "No figure for your function yet." : "Set your function in your profile to see what fractionals in it were paid."}</p>
+        <p className="pp-muted">{fn ? "No figure for your function yet." : "Set your function in Settings to see what fractionals in it were paid."}</p>
       )}
       <h4>How to price it</h4>
       <ul className="pp-good">

@@ -229,7 +229,7 @@ export function firstViewLine(v: Pick<FirstView, "f" | "rows">, fn: string | nul
   const n = v.rows.length;
   const nfn = namedFn(fn);
   const gap = v.f.notMine && nfn ? ` and ${n === 1 ? "has" : "have"} no fractional ${nfn} yet` : "";
-  return `${plural(n, "company", "companies")}${v.f.icp ? " in your profile" : ""} hired ${fnLeader(v.f.hiredFn)} ${windowPhrase(v.f.hiredWithin)}${gap}.`;
+  return `${plural(n, "company", "companies")}${v.f.icp ? (n === 1 ? " that fits your ideal client" : " that fit your ideal client") : ""} hired ${fnLeader(v.f.hiredFn)} ${windowPhrase(v.f.hiredWithin)}${gap}.`;
 }
 
 /** What the first view widened, in one line ("Only 2 matched at first, so we looked back 24 months."). Null when it didn't. */

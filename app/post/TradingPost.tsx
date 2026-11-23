@@ -3931,7 +3931,7 @@ function Empty({
     } else {
       // Recently hired's own filters (the hire's function and window) aren't what keeps open roles out here.
       h = `No open ${hiring.fn} roles right now`;
-      p = "We check job boards every week. We'll email you when one opens in your profile.";
+      p = "We check job boards every week. We'll email you when one opens at a company that fits your ideal client.";
       const alert = hiring.onAlert ? [{ label: `Get alerts for new ${hiring.fn} roles`, go: hiring.onAlert }] : [];
       actions = others.length ? [{ ...others[0], kind: "pine" }, ...alert] : alert.length ? [{ ...alert[0], kind: "pine" }, { label: "See all companies", go: onBrowse }] : [{ label: "See all companies", go: onBrowse }];
     }

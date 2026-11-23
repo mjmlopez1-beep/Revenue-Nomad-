@@ -160,10 +160,10 @@ check("enough companies: no widening", fv1.widened.length === 0 && fv1.rows.leng
 check("its filters: the functions picked, 12 months, no fractional Sales yet, the profile pill", fv1.f.hiredFn.join() === "Marketing" && fv1.f.hiredWithin === FIRST_WINDOW && fv1.f.notMine && fv1.f.icp && !fv1.f.industry.length && !fv1.f.country.length, fv1.f);
 check(
   "its sentence, in the owner's words",
-  firstViewLine(fv1, "Sales") === "6 companies in your profile hired a fractional Marketing leader in the last 12 months and have no fractional Sales yet.",
+  firstViewLine(fv1, "Sales") === "6 companies that fit your ideal client hired a fractional Marketing leader in the last 12 months and have no fractional Sales yet.",
   firstViewLine(fv1, "Sales"),
 );
-check("one company reads as one", firstViewLine({ f: fv1.f, rows: fv1.rows.slice(0, 1) }, "Sales") === "1 company in your profile hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.");
+check("one company reads as one", firstViewLine({ f: fv1.f, rows: fv1.rows.slice(0, 1) }, "Sales") === "1 company that fits your ideal client hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.");
 check("no widening, no line about it", widenLine(fv1, "Sales") === null);
 const place1 = new URLSearchParams(fv1.place);
 check("its place: All companies with the recently hired keys, the pill and no fractional Sales yet (not the profile spelled out)", place1.get("v") === "all" && place1.get("t") === "companies" && place1.get("f") === "hiredFn:Marketing~hiredWithin:12~notMine~icp" && !place1.has("s"), fv1.place);
@@ -188,7 +188,7 @@ const fv2 = firstView(shortInfos, ME, { fn: "Sales", icp: US, before: ["Marketin
 check("short: it looks back 24 months, then adds companies with a fractional Sales, and stops at 5", fv2.widened.join() === "window,notMine" && fv2.rows.length === 5 && fv2.first === 2 && fv2.f.hiredWithin === WIDER_WINDOW && !fv2.f.notMine && fv2.f.icp, { w: fv2.widened, n: fv2.rows.length });
 check("the profile stays while the view has enough without dropping it", !fv2.rows.some((r) => r.i.c.name === "Overseas"));
 check("one line says what it widened", widenLine(fv2, "Sales") === "Only 2 matched at first, so we looked back 24 months and added companies with a fractional Sales already.", widenLine(fv2, "Sales"));
-check("the sentence follows what it shows", firstViewLine(fv2, "Sales") === "5 companies in your profile hired a fractional Marketing leader in the last 24 months.", firstViewLine(fv2, "Sales"));
+check("the sentence follows what it shows", firstViewLine(fv2, "Sales") === "5 companies that fit your ideal client hired a fractional Marketing leader in the last 24 months.", firstViewLine(fv2, "Sales"));
 // The profile goes last: only one company in it, four outside it.
 const outside = [co("In Profile", [hire("Marketing", 2)], { country: "United States" }), ...[0, 1, 2, 3].map((k) => co(`Abroad ${k}`, [hire("Marketing", 2)], { country: "Canada" }))];
 const fv3 = firstView(deriveAll(outside), ME, { fn: "Sales", icp: US, before: ["Marketing"], suggested: [] });
@@ -234,7 +234,7 @@ const fvJ = firstView(juniorInfos, ME, { fn: "Sales", icp: US, before: ["Marketi
 check("the first view counts leadership seats only: six Marketing Manager seats add no company", fvJ.first === 1 && fvJ.rows.length === 1 && fvJ.rows[0].i.c.name === "Marketing Leader", { first: fvJ.first, n: fvJ.rows.length });
 check("widening never brings them back: every step still counts leadership seats", fvJ.widened.length === 0, fvJ.widened);
 check("their seat holders are not counted as referral partners", fvJ.holders === 0, fvJ.holders);
-check("its sentence counts what it shows", firstViewLine(fvJ, "Sales") === "1 company in your profile hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.", firstViewLine(fvJ, "Sales"));
+check("its sentence counts what it shows", firstViewLine(fvJ, "Sales") === "1 company that fits your ideal client hired a fractional Marketing leader in the last 12 months and has no fractional Sales yet.", firstViewLine(fvJ, "Sales"));
 check("and the saved view reopens with the same row", keys(reopen(fvJ.place, juniorInfos, who2)) === keys(fvJ.rows));
 // Only seats below Lead in 12 months, and a leader 18 months back: it widens past them to the leader.
 const lateInfos = deriveAll([...juniors, co("Late Leader", [hire("Marketing", 18)], { country: "United States" })]);

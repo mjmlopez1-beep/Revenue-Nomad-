@@ -108,8 +108,8 @@ export interface CardContext {
   open?: (companyId: string) => string | null;
 }
 
-/** "a Software company", "an E-commerce company", or "a company in your profile". */
-const someCompany = (industry: string | null) => (industry ? `${an(industry)} ${industry} company` : "a company in your profile");
+/** "a Software company", "an E-commerce company", or "a company that fits your ideal client". */
+const someCompany = (industry: string | null) => (industry ? `${an(industry)} ${industry} company` : "a company that fits your ideal client");
 
 /** "raised a Series A ($12M)", or from a filing "raised about $5M (SAFE, SEC filing, Oct 2026)". */
 const raised = (sig: MemberSignal) =>

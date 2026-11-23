@@ -260,8 +260,8 @@ const FEATURES: Feature[] = [
 
 /** Everything else in Merlin, named in a line each, so the page still says what is there. */
 const ALSO = [
-  "Ideal Fractional Profile and best fit",
-  "Saved views with a weekly email",
+  "Your ideal client and best fit",
+  "Lists with alerts by email, Slack and the bell",
   "Fractionals who serve your kind of clients",
   "Merlin in Claude",
   "Search across companies and fractional seats",

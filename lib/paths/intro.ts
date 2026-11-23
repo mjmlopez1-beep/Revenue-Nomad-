@@ -184,7 +184,7 @@ export const askPerson = (f: IntroFacts) => (f.degree === 2 && f.other ? f.other
 export function whyLine(strength: string, count: number): string {
   // "47 meetings since Dec 2024, last Oct 23 · Strong" -> "47 meetings since Dec 2024": the card says the rest beside it.
   const counts = strength.replace(/ · [A-Za-z ]+$/, "").replace(/, last [^·]+$/, "");
-  return count > 0 ? `${counts} · can introduce you to ${count} ${count === 1 ? "company" : "companies"} in your profile` : counts;
+  return count > 0 ? `${counts} · can introduce you to ${count} ${count === 1 ? "company" : "companies"} that fit your ideal client` : counts;
 }
 
 /** When there is nothing specific: what the UI says beside the generic note. */

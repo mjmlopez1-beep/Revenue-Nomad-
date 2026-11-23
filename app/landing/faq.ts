@@ -38,8 +38,8 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
       "Yes, and you don't need an account. Open Remove my name, type your name and the company, and it comes off at once. Anyone who paid to see it gets the credit back. If we sent you a link about your seat, it has the same button.",
     ],
     [
-      "What is an Ideal Fractional Profile?",
-      "Your Ideal Fractional Profile is the companies you want as clients: their industry, size, revenue and country. Set it when you join, or any time in Your profile. The table then leads with companies that fit it, and Best fit for you puts the likeliest first.",
+      "What is your ideal client?",
+      "Your ideal client is the companies you want as clients: their industry, size, revenue and country. Set it when you join, or any time in Settings. The table then leads with companies that fit it, and Best fit for you puts the likeliest first.",
     ],
     [
       "Which functions does it cover?",

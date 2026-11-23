@@ -342,7 +342,7 @@ async function main() {
   check("who Dana worked with there is named once Ana sees the company (fellow fractionals are free), and the bridge she can't see is its kind", danaAcme.name === "Acme Robotics" && danaAcme.how === "Dana worked with Riley Stone at a SaaS company. Riley Stone holds Acme Robotics' fractional RevOps seat now.", danaAcme.how);
   const rae = await planOf("g:rae@northwind.example");
   check("how strong each relationship is, said plainly: Rae from Ana's own calendar, Dana from her LinkedIn file", !!rae && /^6 meetings since [A-Z][a-z]{2} \d{4}, last [A-Z][a-z]{2} \d+ · Strong$/.test(rae.strength) && /^LinkedIn connection since 2023 · Not met yet$/.test(dana!.strength), [rae?.strength, dana?.strength]);
-  check("\"Why Rae\": the counts and how many companies in her profile", /^6 meetings since [A-Z][a-z]{2} \d{4} · can introduce you to 2 companies in your profile$/.test(rae!.why) && rae!.count === 2, rae?.why);
+  check("\"Why Rae\": the counts and how many companies in her profile", /^6 meetings since [A-Z][a-z]{2} \d{4} · can introduce you to 2 companies that fit your ideal client$/.test(rae!.why) && rae!.count === 2, rae?.why);
   check("Rae works where Acme's past Sales lead holds a seat now, said as it is, named and whose seat they held", rae!.targets.some((x) => x.how === "Rae works at Northwind Labs, where Quinn Hart, who held Acme Robotics' fractional Sales seat, holds a seat now."), rae!.targets.map((x) => x.how));
   check("at a company Ana can't see yet, the seat holder stays unnamed", rae!.targets.some((x) => x.how === "Rae works at Northwind Labs, where the person who held this company's fractional Sales seat holds a seat now."), rae!.targets.map((x) => x.how));
   const pat = await planOf("l:pat-sample-fake");

@@ -219,7 +219,7 @@ export function Notifications({ view, onIntegrations }: { view: View; onIntegrat
                 desc={
                   proNow
                     ? `Each company as it shows${plan?.name === "trial" ? `, in your trial until ${planDay(plan.trialEndsAt)}` : ""}. Set apart from its email.`
-                    : `Each morning a company in your profile moves. Set apart from its email.`
+                    : `Each morning a company that fits your ideal client moves. Set apart from its email.`
                 }
               >
                 <Switch id="nt-radar-slack" on={radarSlack} onChange={(on) => void save("radarSlack", on)} />

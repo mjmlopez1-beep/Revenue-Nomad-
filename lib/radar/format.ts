@@ -110,7 +110,7 @@ export function radarEntry(c: RadarCard, base: string): AlertEntry {
   const [now, ...next] = (c.whyNow ?? "").split(" · ");
   const a = c.about;
   return {
-    title: named ? c.subject || c.company! : c.subject || "A company in your profile",
+    title: named ? c.subject || c.company! : c.subject || "A company that fits your ideal client",
     ...(record ? { link: record } : {}),
     text: c.signal || c.headline,
     fields: [
@@ -272,7 +272,7 @@ const placeIn = (hq: string | undefined) => {
 export function companyLine(c: RadarCard): string {
   if (!c.locked && c.company) return c.company;
   const a = c.about;
-  if (!a) return c.subject && c.subject !== "A company that's hiring now" ? c.subject : "A company in your profile";
+  if (!a) return c.subject && c.subject !== "A company that's hiring now" ? c.subject : "A company that fits your ideal client";
   const where = placeIn(a.hq);
   const what = a.industry ? `${an(a.industry)} ${a.industry} company` : "A company";
   return `${capFirst(what)}${where ? ` in ${where}` : ""}`;
@@ -356,7 +356,7 @@ export function renderRadarEmail(m: RadarMail): { subject: string; text: string;
   const label = (c: RadarCard) => openButton(c, c === todays);
   const href = (c: RadarCard) => c.open ?? c.url;
   const settingsUrl = m.settingsUrl ?? "";
-  const why = `You get this when a company in your Ideal Fractional Profile moves.${settingsUrl ? " Choose how often in Notifications, or turn it off with the link below." : " Turn it off with the link below."}`;
+  const why = `You get this when a company that fits your ideal client moves.${settingsUrl ? " Choose how often in Notifications, or turn it off with the link below." : " Turn it off with the link below."}`;
   const note = footerNote();
   const stillIntro = "Nothing new happened at these, and the timing still fits.";
   const lead = shown[0] ? `${companyLine(shown[0])}: ${lowerFirst(cardLines(shown[0]).fact)}` : ups[0] ? ups[0].title : "";

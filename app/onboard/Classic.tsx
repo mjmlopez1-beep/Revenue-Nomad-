@@ -1100,8 +1100,8 @@ function StepFirstView({
                 {!fv
                   ? "They get a view of their own."
                   : openRoles > 0
-                    ? `${openRoles === 1 ? "1 is" : `${openRoles} are`} open${icpEmpty(icp) ? "" : " in your profile"} now. They get a view of their own.`
-                    : `None open${icpEmpty(icp) ? "" : " in your profile"} right now. They get a view of their own for when one opens.`}
+                    ? `${openRoles === 1 ? "1 is" : `${openRoles} are`} open${icpEmpty(icp) ? "" : ` that fit${openRoles === 1 ? "s" : ""} your ideal client`} now. They get a view of their own.`
+                    : `None open${icpEmpty(icp) ? "" : " that fit your ideal client"} right now. They get a view of their own for when one opens.`}
               </span>
             </span>
           </button>

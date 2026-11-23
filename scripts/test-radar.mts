@@ -647,7 +647,7 @@ async function main() {
   check("the webhook still gets the lines, untouched", (nfmt.webhookBody(mixed, nowIso()) as { lines: string[] }).lines.length === 6 && !("entries" in (nfmt.webhookBody(mixed, nowIso()) as object)));
   // A card from before the new fields (kept in a batch over a deploy): its headline, its facts in one field.
   const oldBody = nfmt.slackBody(fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf([card(1)]) }], BASE_URL)!) as unknown as { text: string; blocks: B[] };
-  check("an older card still posts, valid, by its headline", blockKitProblems(oldBody).length === 0 && sectionsOf(oldBody)[0]?.text?.text === "*A company in your profile*\nA SaaS company just hired a fractional Marketing leader 1", sectionsOf(oldBody)[0]);
+  check("an older card still posts, valid, by its headline", blockKitProblems(oldBody).length === 0 && sectionsOf(oldBody)[0]?.text?.text === "*A company that fits your ideal client*\nA SaaS company just hired a fractional Marketing leader 1", sectionsOf(oldBody)[0]);
   // Escaping: nothing from a card can @channel or hide a link, and an image is https only.
   const evil = nfmt.slackBody(fmt.radarAlert([{ kind: "radar", at: nowIso(), day: dayOf([namedCard(1, { subject: "<!channel> Co", signal: "<https://evil.example|click>", logo: "javascript:alert(1)", place: "javascript:alert(1)" })]) }], BASE_URL)!) as unknown as { blocks: B[] };
   check("names and lines are escaped, a bad logo or link is dropped", !/<!channel>|<https:\/\/evil|javascript:/.test(JSON.stringify(evil.blocks)) && !sectionsOf(evil)[0]?.accessory, sectionsOf(evil)[0]);

@@ -227,7 +227,7 @@ await intro.scrollIntoViewIfNeeded();
 await page.waitForTimeout(600);
 const introText = await intro.innerText();
 console.log("intro card:", JSON.stringify(introText));
-check("Jake's card: how strong, and who he can introduce her to", /47 meetings since Dec 2024/.test(introText) && /Strong/.test(introText) && /Why Jake:/.test(introText) && /can introduce you to 3 companies in your profile/.test(introText) && /Acorn Ridge Logistics/.test(introText), introText);
+check("Jake's card: how strong, and who he can introduce her to", /47 meetings since Dec 2024/.test(introText) && /Strong/.test(introText) && /Why Jake:/.test(introText) && /can introduce you to 3 companies that fit your ideal client/.test(introText) && /Acorn Ridge Logistics/.test(introText), introText);
 await intro.screenshot({ path: path.join(OUT, "intro-card-phone.png") });
 // The toasts go first, so the pictures show the page.
 await page.evaluate(() => document.querySelector(".toasts")?.setAttribute("style", "display:none"));
@@ -238,7 +238,7 @@ const body = await page.locator("#mn-body").inputValue();
 const sheet = await page.locator(".mn-sheet").innerText();
 console.log("note:", JSON.stringify(body));
 check("the note names who and where, and asks for that introduction", /You worked with Dana Ruiz at Brightloom Labs\./.test(body) && /Acorn Ridge Logistics as their fractional CRO/.test(body) && /has no Sales leader yet/.test(body) && /introduce me to Dana Ruiz\?/.test(body) && !/You see a lot of teams/.test(body), body);
-check("the sheet says why Jake, and Merlin drafts, you send", /Why Jake: 47 meetings since Dec 2024 · can introduce you to 3 companies in your profile/.test(sheet) && /Merlin drafts, you send/.test(sheet), sheet.slice(0, 600));
+check("the sheet says why Jake, and Merlin drafts, you send", /Why Jake: 47 meetings since Dec 2024 · can introduce you to 3 companies that fit your ideal client/.test(sheet) && /Merlin drafts, you send/.test(sheet), sheet.slice(0, 600));
 check("no sideways scroll with the note open", !(await sideways()));
 await page.screenshot({ path: path.join(OUT, "intro-note-phone.png") });
 await page.locator("#mn-body").evaluate((el) => el.scrollIntoView({ block: "center" }));

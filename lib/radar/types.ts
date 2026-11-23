@@ -171,7 +171,7 @@ export type RadarEmail = RadarEvery | "off";
 export const RADAR_EVERY_WORDS: Record<RadarEmail, string> = { daily: "Every morning", twice: "Twice a week", weekly: "Once a week", off: "Off" };
 /** When each choice goes: twice a week on Monday and Thursday mornings, once a week on Monday's, with what is new since the last one. */
 export const RADAR_EVERY_WHEN: Record<RadarEvery, string> = {
-  daily: "On mornings when a company in your profile moves.",
+  daily: "On mornings when a company that fits your ideal client moves.",
   twice: "Monday and Thursday mornings, with what moved since the last one.",
   weekly: "Monday mornings, with what moved that week.",
 };

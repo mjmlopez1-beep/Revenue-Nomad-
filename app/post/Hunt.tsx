@@ -391,7 +391,7 @@ export function IcpSheet({
         <p className="hunt-lead">The companies you want as clients. The table leads with companies like these. Pick as many as fit, and leave a part empty for any.</p>
         {!icpEmpty(v) && (
           <button type="button" className="btn btn-sm" onClick={() => setV(EMPTY_ICP)}>
-            Clear your Ideal Fractional Profile
+            Clear your ideal client
           </button>
         )}
       </div>

@@ -125,5 +125,5 @@ export function draftWords(o: { ai: boolean; voiced: boolean }): string {
   if (o.ai) return "Merlin's AI wrote it from this conversation, in your voice. Merlin never reads your email.";
   return o.voiced
     ? "Drafted from a template in your voice. No AI allowance used. Merlin never reads your email."
-    : "Drafted from a template. Describe how you write in your profile and every draft follows it. Merlin never reads your email.";
+    : "Drafted from a template. Describe how you write in Settings, Voice, and every draft follows it. Merlin never reads your email.";
 }

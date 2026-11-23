@@ -258,7 +258,7 @@ export function RadarPage({
       {/* The ball at the head's far end. With nothing today, the empty state's picture is the page's one. */}
       <PageHead
         title={YOUR_FEATURE}
-        lead={<>Companies {view?.anyCompany || !view?.ready ? "" : "in your profile "}most likely to hire a fractional {fn ?? "leader like you"} next.</>}
+        lead={<>Companies {view?.anyCompany || !view?.ready ? "" : "that fit your ideal client "}most likely to hire a fractional {fn ?? "leader like you"} next.</>}
         art={view?.ready && !n ? undefined : <Prop name={glow ? "ballGlow" : "ballPlain"} height={glow ? 92 : 72} on="bg" />}
       />
       {/* [ux ws3] One line, then the rest behind "How it ranks". */}
@@ -374,7 +374,7 @@ export function RadarPage({
         <section className="tp-card rd-empty rd-empty-pic">
           <Spot name="ballEmpty" size={104} />
           <p className="rd-note">
-            Nothing moved at companies in your profile {when}. We never send a day with nothing in it.
+            Nothing moved at companies that fit your ideal client {when}. We never send a day with nothing in it.
           </p>
         </section>
       ) : phone ? (
