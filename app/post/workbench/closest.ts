@@ -27,5 +27,7 @@ export function putClosest(ids: readonly string[], got: Record<string, ClosestRo
 /** Forget every row (a case was saved, or the member's plan changed). */
 export const clearClosest = () => rows.clear();
 
-/** "Same", "Close" or "Different", as the column says it, with the case's title. */
-export const closestWords = (r: ClosestRow | null) => (r ? { label: r.label, title: r.title ?? "", why: r.same.slice(0, 2).join(" · ") || (r.diff[0] ?? "") } : null);
+/** The match word as a page says it: "Close match", so it never reads as the Close plan's name. */
+export const labelWords = (label: ClosestRow["label"]) => (label === "Close" ? "Close match" : label);
+/** The match word, the case's title and why, as the column says them. */
+export const closestWords = (r: ClosestRow | null) => (r ? { label: labelWords(r.label), title: r.title ?? "", why: r.same.slice(0, 2).join(" · ") || (r.diff[0] ?? "") } : null);

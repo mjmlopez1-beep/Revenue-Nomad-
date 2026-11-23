@@ -19,7 +19,7 @@ import { UnlockCompany } from "../company/sections/Unlock";
 import { bundleLead, isOpenRole, shown, type CoInfo, type Row } from "../model";
 import { fitOf, fnOf, listedOf, pastHires, rateOf, type Status, type WayIn } from "./hiringModel";
 import { useClosest } from "../useClosest";
-import { closestOf } from "../workbench/closest";
+import { closestOf, labelWords } from "../workbench/closest";
 import { useAppMaybe } from "../shell/pages";
 import { plural } from "../hooks";
 
@@ -53,7 +53,7 @@ function ClosestCase({ companyId }: { companyId: string }) {
         <>
           <strong>{r.title || "Your closest case"}</strong>
           <span className="hn-sub">
-            {r.label}
+            {labelWords(r.label)}
             {r.same.length ? `: ${r.same.slice(0, 2).join(", ")}` : ""}. It goes into your note and the Proof part of a proposal. {go("Open the case")}
           </span>
         </>

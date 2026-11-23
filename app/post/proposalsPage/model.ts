@@ -223,13 +223,10 @@ export function blockState(b: ProposalBlock, p: ProposalRec, fields: Record<stri
   if (o.editing) return { text: "Editing", tone: "work" };
   // Evidence Bank is a Close feature: without Close (a proposal kept read only) Proof reads as any section.
   // With it: how many of the member's cases Proof holds, or that it needs one (Merlin never writes a case).
-  if (b.blockId === "proof" && o.close !== false) {
-    const n = p.proofCases?.length ?? 0;
-    if (n && (fields.caseStudies ?? "").trim()) return { text: `${plural(n, "case")} from Evidence Bank`, tone: "ready" };
-    if (!(fields.caseStudies ?? "").trim()) return { text: "Needs a case", tone: "fix" };
-  }
+  if (b.blockId === "proof" && o.close !== false && !(fields.caseStudies ?? "").trim()) return { text: "Needs a case", tone: "fix" };
   const n = blanksOf([b], fields).length;
   if (n) return { text: plural(n, "blank"), tone: "fix" };
+  if (b.blockId === "proof" && o.close !== false && p.proofCases?.length) return { text: `${plural(p.proofCases.length, "case")} from Evidence Bank`, tone: "ready" };
   if (b.blockId === "investment" && p.pricing?.options.length) return { text: `${plural(p.pricing.options.length, "option")} · ${plural(p.pricing.addOns.length, "add-on")}`, tone: "ready" };
   if (b.blockId === "signature") return { text: p.memberSign === "now" ? "You sign as it goes" : p.memberSign === "after" ? "You countersign" : "No signature from you", tone: "ready" };
   return { text: "Ready", tone: "ready" };

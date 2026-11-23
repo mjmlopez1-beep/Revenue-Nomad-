@@ -230,7 +230,7 @@ async function main() {
   CL.putClosest([pub("c_cp"), pub("c_hf")], cv.rows);
   check("Close's column, free to show, counted as matched", col.plan === "close" && col.cost === "free" && C.fillWords(col, [row(pub("c_cp")), row(pub("c_hf"))]) === "50% matched");
   check("not in the usual columns (picked from Tools or the column list)", !C.defaultCols("companies").includes("evidence"));
-  check("the words: label and title", JSON.stringify(CL.closestWords(CL.closestOf(pub("c_cp")))) === JSON.stringify({ label: "Same", title: "A sales process in six months", why: "Same size · Founder-led" }));
+  check("the words: label and title", JSON.stringify(CL.closestWords(CL.closestOf(pub("c_cp")))) === JSON.stringify({ label: "Same", title: "A sales process in six months", why: "Same size · Founder-led" }) && CL.labelWords("Close") === "Close match");
 
   W.evidenceWireInternals.use(null);
   console.log(`\n${passes} passed, ${failures} failed`);

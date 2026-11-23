@@ -51,7 +51,7 @@ import { PageStrip } from "../shell/PageStrip";
 import { askGo, useApp } from "../shell/pages";
 import { SelectionBar } from "../workbench/SelectionBar";
 import { Workbench } from "../workbench/Workbench";
-import { closestOf } from "../workbench/closest";
+import { closestOf, labelWords } from "../workbench/closest";
 import { useClosest } from "../useClosest";
 import { AlertPanel } from "./AlertPanel";
 import { RoleDrawer, roleTitle } from "./RoleDrawer";
@@ -340,7 +340,7 @@ export function HiringNow() {
           <span className="hn-two">
             <span>{ev.title || "Your case"}</span>
             <span className="hn-sub">
-              {ev.label}
+              {labelWords(ev.label)}
               {ev.same[0] ? ` · ${ev.same[0]}` : ""}
             </span>
           </span>

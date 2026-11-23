@@ -12,7 +12,7 @@ import { CompanyName, engCell, Fit, FunctionsCell, HeldBy, NameAndTitle, None, P
 import { RoleDate, datesAreStatus, statusText } from "../RoleDate";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { deciderOf } from "./columns";
-import { closestOf } from "./closest";
+import { closestOf, labelWords } from "./closest";
 import { useUi } from "../ui";
 import { openPlans } from "../Billing";
 
@@ -35,7 +35,7 @@ export function ClosestCell({ id }: { id: string }) {
     <span className="wb-ev" data-label={r.label}>
       <span className="wb-ev-t">{r.title || "Your case"}</span>
       <span className="wb-ev-why">
-        <strong>{r.label}</strong>
+        <strong>{labelWords(r.label)}</strong>
         {why ? ` · ${why}` : ""}
       </span>
     </span>

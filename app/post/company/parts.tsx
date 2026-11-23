@@ -8,7 +8,7 @@
  * cell does in a list: one purchase per click, and a lock another purchase opens is quiet.
  */
 import { useClosest } from "../useClosest";
-import { closestOf } from "../workbench/closest";
+import { closestOf, labelWords } from "../workbench/closest";
 import { useRef, useState, type ReactNode } from "react";
 import type { EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { KnownPersonView } from "@/lib/paths/types";
@@ -814,7 +814,7 @@ export function EvidenceCard({ companyId, onOpen }: { companyId: string; onOpen:
         <>
           <h2 id="co-ev-h">{r.title || "Your closest case"}</h2>
           <span className="co-ev-match">
-            <strong>{r.label}</strong>
+            <strong>{labelWords(r.label)}</strong>
             {r.same.slice(0, 3).map((w) => (
               <span key={w} className="co-ev-chip">
                 {w}
