@@ -40,6 +40,7 @@ import { useNetwork } from "./useNetwork";
 import { usePaths } from "./usePaths";
 import { openWay, suggestPost, useSuggest, useWarm, useWayIn, wayPost } from "./useWays";
 import { EXAMPLE_ROWS, exampleRoute } from "./warmExamples";
+import { KnownMoves } from "./KnownMoves";
 import "../workbench/workbench.css";
 import "./warm.css";
 
@@ -350,6 +351,8 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
       )}
 
       {!first && sources}
+      {/* Someone you know changed jobs: a person in the member's LinkedIn file or CSV who is a new leader elsewhere (never Google). */}
+      {!first && !ex && <KnownMoves where="warm" enabled={v.own.linkedin || v.own.csv} openCompany={(id) => c.openCompany(id)} />}
       {!first && <Suggestions linkedin={v.own.linkedin} csv={v.own.csv} />}
 
       <div className="wp-foot" role="status">

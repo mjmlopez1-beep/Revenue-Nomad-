@@ -115,7 +115,7 @@ export function DataFlows() {
               Merlin&apos;s tools as that member, and gets only what those tools return to that member: what they would see in the app, with the same locks and credits. That
               happens under the member&apos;s own account with their assistant.
             </p>
-            <p className="cl-p">A member can see every assistant they connected, and disconnect it, in Your credits under Connected apps.</p>
+            <p className="cl-p">A member can see every assistant they connected, and disconnect it, in Your credits under Connected apps, or on Agent access.</p>
           </section>
 
           <section className="df-sec" aria-labelledby="df-train">
@@ -244,6 +244,39 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-alerts">
+            <h2 className="df-h" id="df-alerts">
+              Inside Merlin: your alerts and the bell
+            </h2>
+            <p className="cl-p">
+              An alert watches one of your lists, or the companies you follow, or the people you know. When something changes, a new role, a seat that ended, a
+              new leader on a company&apos;s website, a fact, or a raise as its SEC filing says it, Merlin tells you by email, in Slack or in the bell, as you
+              set it. The bell keeps your newest 200 lines: what happened, when, and where it opens. A company you haven&apos;t opened is described, never
+              named. Someone you know changed jobs reads only your own contacts and matches a whole name and a new company, never a guess.
+            </p>
+            <p className="cl-p">
+              Merlin also counts the alerts it sends, by channel and number, for 90 days, so the page can say how many went since your last visit. The count
+              never holds what an alert said. Only you see your bell and your alerts, and none of it is in Revenue Nomad&apos;s copy for admins beyond those
+              counts. Every alert email has a link that turns that alert off in one click. When you close your account they are deleted with your personal data.
+            </p>
+          </section>
+
+          <section className="df-sec" aria-labelledby="df-agent">
+            <h2 className="df-h" id="df-agent">
+              Inside Merlin: your agents
+            </h2>
+            <p className="cl-p">
+              On Agent access you can switch off any of the tools your assistant uses, a whole group or one at a time, and set how many credits all your
+              assistants together may spend in a day. Spending credits and sending for signature always ask you first, whatever you switch. A tool you switched
+              off tells your assistant so, and does nothing.
+            </p>
+            <p className="cl-p">
+              Merlin keeps a log of what your assistants did for 90 days: which tool, when, which assistant, the credits it spent and what came of it. Never what
+              it asked for or what came back: no search, no company, no name. Only you see it. It is not in Revenue Nomad&apos;s copy for admins, and none of it goes
+              to an outside service. When you close your account it stays for the 30 days you can bring it back, then it is deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-crystal">
             <h2 className="df-h" id="df-crystal">
               Inside Merlin: tuning your Crystal Ball
@@ -309,7 +342,7 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Your connections file and your contacts file: People, Bring in who you know, or Your network. Each has its own Delete, and every way in found from it goes with it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
-              <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added.</li>
+              <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added. On Agent access: Revoke an assistant, switch off its tools, or set a daily spend limit for all of them.</li>
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
@@ -321,7 +354,7 @@ export function DataFlows() {
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, your alerts and the bell, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>

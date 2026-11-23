@@ -15,13 +15,15 @@ import { billingVisit, claudePerDay, touch } from "../table";
 import { upgradeUrl } from "../plan";
 import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
-import { LIST_KINDS } from "./alerts";
+import { ALERT_EVERY, ALERT_TRIGGERS, LIST_KINDS } from "./alerts";
 import * as T from "./tools";
 import { registerProposalTools } from "./proposals";
 import { registerEvidenceTools } from "./evidence";
 import { registerPeerTools } from "./peers";
 import { registerWayTools } from "./ways";
 import { registerGranolaTools } from "./granola";
+import { agentCall } from "./log";
+import { publicBase } from "../links";
 import { granolaOn } from "../granola/types";
 import { networkOn } from "../google/types"; // [google network]
 import { pathsOn } from "../paths";
@@ -96,6 +98,13 @@ const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: fals
 
 export function makeServer(ctx: T.Ctx): McpServer {
   const server = new McpServer({ name: "merlin", title: "Merlin", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: INSTRUCTIONS });
+  // Agent access (lib/mcp/log.ts): every tool, here and in the files below, goes through agentCall: a tool the member
+  // switched off refuses in plain words, unlock checks the daily spend limit, and each call leaves a row in the log
+  // (the tool, when, credits, outcome and app; never the arguments or what came back).
+  const page = `${(publicBase() ?? ctx.origin).replace(/\/$/, "")}/?p=agent`;
+  const register = server.registerTool.bind(server) as (name: string, config: unknown, cb: (...a: unknown[]) => Promise<CallToolResult>) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
+    register(name, config, (...a: unknown[]) => agentCall({ memberId: ctx.member.id, app: ctx.app, page }, name, a.length > 1 ? a[0] : undefined, () => cb(...a)));
 
   server.registerTool(
     "search_companies",
@@ -321,7 +330,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Saved searches",
       description:
-        'Save, list, update or delete saved searches for new open roles, like "fractional Marketing roles at SaaS companies $5M to $20M". New matches go in the member\'s weekly email after each scan (once email is set up). These are the same saved lists the member sees in the Merlin app. action save takes the criteria and an optional name (and optionally the list\'s kind, columns and alert), list shows each with how many roles match now and this week (and its kind, columns and alert when it has them), update takes the id and the kind, columns or alert to change, delete takes the id.',
+        'Save, list, update or delete saved searches for new open roles, like "fractional Marketing roles at SaaS companies $5M to $20M". New matches go in the member\'s weekly email after each scan (once email is set up). These are the same saved lists the member sees in the Merlin app. action save takes the criteria and an optional name (and optionally the list\'s kind, columns and alert), list shows each with how many roles match now and this week (and its kind, columns and alert when it has them), update takes the id and the kind, columns or alert to change (its triggers, how often and where it goes), delete takes the id.',
       inputSchema: {
         action: z.enum(["save", "list", "update", "delete"]),
         id: z.string().optional().describe("For update and delete."),
@@ -335,9 +344,20 @@ export function makeServer(ctx: T.Ctx): McpServer {
         kind: z.enum(LIST_KINDS).optional().describe("What the list holds in the app: companies, people, seats, roles (open roles) or fractionals."),
         columns: z.array(z.string().max(40)).max(30).optional().describe("The columns the list shows in the app's table, by column id (for companies: company, heldBy, seat, fns, industry, employees, revenue, hq, history, rate, decider, email)."),
         alert: z
-          .object({ on: z.boolean().optional(), email: z.boolean().optional(), slack: z.boolean().optional() })
+          .object({
+            on: z.boolean().optional(),
+            triggers: z
+              .array(z.enum(ALERT_TRIGGERS))
+              .max(ALERT_TRIGGERS.length)
+              .optional()
+              .describe("What sets it off: role (a new open role), hire (a new fractional hire), seat (a seat ended), leader (a new decision maker on the company's website, Pro), fact (a fact changed), funding (raised funding, as its SEC filing says)."),
+            every: z.enum(ALERT_EVERY).optional().describe("How often: instant (as it happens, Pro), daily (every morning) or weekly."),
+            email: z.boolean().optional(),
+            slack: z.boolean().optional(),
+            bell: z.boolean().optional().describe("In the bell at the top of every page in the app."),
+          })
           .optional()
-          .describe("The list's alert: on or off, by weekly email, and in Slack when roles open. The weekly email follows it."),
+          .describe("The list's alert, as the Alerts page in the app sets it: on or off, what sets it off, how often, and where (email, Slack, the bell). Given in part, the rest stays as it was. On Free, instant and the leader trigger are part of Pro and are refused in plain words."),
       },
       annotations: { title: "Saved searches", ...WRITE },
     },

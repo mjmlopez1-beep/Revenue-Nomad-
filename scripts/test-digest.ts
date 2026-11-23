@@ -268,6 +268,33 @@ async function main() {
   check("with a request origin the links use it", (await t.sendDigests(at(21), "https://origin.example.com/")) === 3 && outbox.every((x) => x.text.includes("https://origin.example.com/")), outbox.length);
   check("no request went anywhere but the mail provider", otherCalls === 0, otherCalls);
 
+  // The bell (lib/inbox.ts): each weekly email sent is a line in the member's inbox and a row in the alert log, counts only.
+  const sb = await t.loadState();
+  const boxes = Object.entries(sb.inbox ?? {}).filter(([, l]) => l.some((x) => x.alert === "digest"));
+  check("each weekly email sent is a line in that member's bell, linking to Hiring now", boxes.length >= 3 && boxes.every(([, l]) => l.some((x) => x.alert === "digest" && x.href === "/?v=hiring" && x.kind === "roles")), boxes.length);
+  check("and a row in the alert log, by email", Object.values(sb.alertLog ?? {}).filter((l) => l.some((r) => r.alert === "digest" && r.channel === "email")).length >= 3);
+
+  // A list alert's email (Stage 7a, renderAlertEmail): each alert its own group and its own one-click turn-off.
+  const { renderAlertEmail } = await import("../lib/digest");
+  const am = renderAlertEmail({
+    name: "Jordan Avery",
+    every: "daily",
+    groups: [
+      { name: "Health care, hiring", lines: [{ text: "A fractional Sales seat ended at Northwind Clinics", url: "https://post.example.com/?c=abc" }, { text: "A locked SaaS company with 11–50 employees raised about $6M (SAFE) · SEC filing, Nov 2026", url: "https://post.example.com/?c=def" }], offUrl: "https://post.example.com/api/table/unsubscribe?m=x&r=alert&a=list%3Aal_1&s=y" },
+      { name: "Companies you follow", lines: [{ text: "New at <b>Cedar</b>: the rate", url: "javascript:alert(1)" }], offUrl: "https://post.example.com/api/table/unsubscribe?m=x&r=alert&a=follows&s=z" },
+      { name: "Empty", lines: [], offUrl: "" },
+    ],
+    alertsUrl: "https://post.example.com/?p=alerts",
+    appUrl: "https://post.example.com",
+    unsubscribeUrl: "https://post.example.com/api/table/unsubscribe?m=x&r=alert&a=list%3Aal_1%2Cfollows&s=w",
+  });
+  check("an alert email: a subject that counts, an empty group left out", /^3 alerts this morning: Health care, hiring, Companies you follow$/.test(am.subject) && !/Empty/.test(am.text), am.subject);
+  check("each group has its own turn-off link", (am.text.match(/Turn this alert off: https:\/\/post\.example\.com\/api\/table\/unsubscribe/g) ?? []).length === 2 && (am.html.match(/Turn this alert off/g) ?? []).length === 2);
+  check("its words are escaped, and only web links are links", am.html.includes("&lt;b&gt;Cedar&lt;/b&gt;") && !am.html.includes("javascript:"));
+  check("it links to Alerts and workflows, and says why it came", /Alerts and workflows\nhttps:\/\/post\.example\.com\/\?p=alerts/.test(am.text) && /an alert of yours is on/.test(am.text));
+  const one = renderAlertEmail({ name: "Jordan", every: "instant", groups: [{ name: "A list", lines: [{ text: "A fractional Sales seat ended at Northwind Clinics", url: "" }], offUrl: "" }], alertsUrl: "", appUrl: "", unsubscribeUrl: "" });
+  check("one line: the subject is the line", one.subject === "A fractional Sales seat ended at Northwind Clinics");
+
   // "Email me my link" finds a member the way joining does: one Gmail inbox is one account.
   await t.joinMember("Gia Gmail", "gia.mail+post@gmail.com");
   const found = await Promise.all(["gia.mail+post@gmail.com", "GiaMail@googlemail.com", "g.i.a.mail+x@gmail.com"].map((e) => t.memberByEmail(e)));

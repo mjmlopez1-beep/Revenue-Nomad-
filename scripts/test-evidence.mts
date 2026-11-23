@@ -398,7 +398,7 @@ async function main() {
   console.log("\nThe words");
   const data = src("app/data/DataFlows.tsx");
   const doc = src("docs/data-flows.md");
-  check("the data page: Evidence Bank, the client hidden, only you, deleted with your data", /Inside Merlin: your Evidence Bank/.test(data) && /The client is hidden unless you choose to name it/.test(data) && /your Evidence Bank, the messages you wrote/.test(data));
+  check("the data page: Evidence Bank, the client hidden, only you, deleted with your data", /Inside Merlin: your Evidence Bank/.test(data) && /The client is hidden unless you choose to name it/.test(data) && /your Evidence Bank, (your alerts and the bell, )?the messages you wrote/.test(data));
   check("  and it never names LinkedIn", !/LinkedIn/.test(data));
   check("docs/data-flows.md: the store, purge and export", /### Evidence Bank/.test(doc) && /State\.evidence\[memberId\]/.test(doc) && /exportState/.test(doc) && /purgeMember/.test(doc) && /fit-tags\.enc/.test(doc));
   check("the closing words name it", /your Evidence Bank cases/.test(src("lib/account.ts")));

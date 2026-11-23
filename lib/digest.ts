@@ -331,3 +331,90 @@ ${h.rows
 
   return { subject: oneLine(subject), text, html };
 }
+
+/* ---------- a list alert's email (Stage 7a): a seat ended, a new leader, a fact changed, funding, someone you know ---------- */
+
+/** One alert's news in the email: its name (the list, or "Companies you follow"), its lines, its link off. */
+export interface AlertMailGroup {
+  name: string;
+  /** Each line as the member sees Merlin (a locked company described, never named), with its link (signed in). */
+  lines: { text: string; url: string }[];
+  /** One click turns this alert off (signed for the member and the alert). */
+  offUrl: string;
+}
+export interface AlertMailData {
+  name: string;
+  every: "instant" | "daily" | "weekly";
+  groups: AlertMailGroup[];
+  /** Alerts and workflows in the app, signed in. */
+  alertsUrl: string;
+  appUrl: string;
+  /** The link a mail app's own unsubscribe button posts to: every alert in this email off. */
+  unsubscribeUrl: string;
+}
+/** Lines an alert's group lists before "And N more". */
+export const ALERT_MAIL_LINES = 8;
+
+/** The email for one or more list alerts: what happened at the companies on the list, in free words, each line a link. */
+export function renderAlertEmail(d: AlertMailData): { subject: string; text: string; html: string } {
+  const first = oneLine(d.name).split(" ")[0].slice(0, 40) || "there";
+  const groups = (Array.isArray(d.groups) ? d.groups : [])
+    .map((g) => ({
+      name: oneLine(g?.name).slice(0, 120),
+      lines: (Array.isArray(g?.lines) ? g.lines : []).map((l) => ({ text: oneLine(l?.text).slice(0, 240), url: link(l?.url) })).filter((l) => l.text),
+      offUrl: link(g?.offUrl),
+    }))
+    .filter((g) => g.name && g.lines.length);
+  const n = groups.reduce((a, g) => a + g.lines.length, 0);
+  const when = d.every === "daily" ? "this morning" : d.every === "weekly" ? "this week" : "just now";
+  const subject = n === 1 ? groups[0].lines[0].text : `${n} alerts ${when}: ${groups.map((g) => g.name).slice(0, 2).join(", ")}${groups.length > 2 ? " and more" : ""}`;
+  const alertsUrl = link(d.alertsUrl);
+  const unsubscribeUrl = link(d.unsubscribeUrl);
+  const footerNote = footerLine();
+  const why = "You get this because an alert of yours is on. Each alert has its own link to turn it off, and every alert is in Alerts and workflows.";
+  const text = [
+    `Hi ${first},`,
+    "",
+    ...groups.flatMap((g) => [
+      g.name,
+      ...g.lines.slice(0, ALERT_MAIL_LINES).flatMap((l) => [`  ${l.text}`, ...(l.url ? [`  ${l.url}`] : [])]),
+      ...(g.lines.length > ALERT_MAIL_LINES ? [`  And ${g.lines.length - ALERT_MAIL_LINES} more in Merlin.`] : []),
+      ...(g.offUrl ? [`  Turn this alert off: ${g.offUrl}`] : []),
+      "",
+    ]),
+    "--",
+    why,
+    ...(alertsUrl ? ["Alerts and workflows", alertsUrl] : []),
+    ...(footerNote ? [footerNote] : []),
+  ].join("\n");
+  const blocks = groups
+    .map((g) => {
+      const rows = g.lines
+        .slice(0, ALERT_MAIL_LINES)
+        .map(
+          (l) =>
+            `<tr><td style="padding:12px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font};font-size:15px;line-height:22px">${
+              l.url ? `<a href="${esc(l.url)}" class="cb-ink" style="color:${MAIL.ink};font-weight:700;text-decoration:underline">${esc(l.text)}</a>` : `<span class="cb-ink" style="color:${MAIL.ink};font-weight:700">${esc(l.text)}</span>`
+            }</td></tr>`,
+        )
+        .join("\n");
+      const more = g.lines.length > ALERT_MAIL_LINES ? mailP(esc(`And ${g.lines.length - ALERT_MAIL_LINES} more in Merlin.`)) : "";
+      const off = g.offUrl ? `<p style="margin:0 0 24px;font-family:${MAIL.font};font-size:13px;line-height:20px;color:${MAIL.muted}"><a href="${esc(g.offUrl)}" style="color:${MAIL.muted};text-decoration:underline">Turn this alert off</a></p>` : "";
+      return `<p class="cb-muted" style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${esc(g.name)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;border-bottom:1px solid ${MAIL.line}">
+${rows}
+</table>
+${more}${off}`;
+    })
+    .join("\n");
+  const body = [mailP(`Hi ${esc(first)},`), blocks, alertsUrl ? mailButton(alertsUrl, "Open your alerts", "margin:8px 0 0", "outline") : ""].filter(Boolean).join("\n");
+  const html = mailShell({
+    title: subject,
+    art: "week",
+    link: d.appUrl || alertsUrl,
+    preheader: oneLine(groups.map((g) => `${g.name}: ${g.lines[0]?.text ?? ""}`).join(" · ")).slice(0, 180),
+    body,
+    footer: [esc(why), [alertsUrl ? mailFootLink(alertsUrl, "Alerts and workflows") : "", unsubscribeUrl ? mailFootLink(unsubscribeUrl, "Unsubscribe") : ""].filter(Boolean).join(" · "), footerNote ? esc(footerNote) : ""],
+  });
+  return { subject: oneLine(subject).slice(0, 160), text, html };
+}

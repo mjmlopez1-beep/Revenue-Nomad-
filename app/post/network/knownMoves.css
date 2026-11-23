@@ -1,0 +1,64 @@
+/* Someone you know changed jobs (KnownMoves.tsx): on Home's Today and on Warm paths. */
+.kn-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.kn-sub,
+.kn-meta {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink, #4a5a54);
+}
+.kn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line, #e3e8e5);
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.kn-list li + li {
+  border-top: 1px solid #eef1ef;
+}
+.kn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ink, #10201b);
+  cursor: pointer;
+}
+.kn-row:hover {
+  background: #fafaf7;
+}
+.kn-row:focus-visible {
+  outline: 2px solid var(--pine, #073f2f);
+  outline-offset: -2px;
+}
+.kn-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.kn-line {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.kn-go {
+  flex: none;
+  font-size: 20px;
+  color: var(--pine, #073f2f);
+}

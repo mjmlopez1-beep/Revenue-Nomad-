@@ -273,6 +273,12 @@ async function main() {
   check("it reads as an opportunity, by function and title", /A fractional VP Sales unlocked .+ on your seat at Acme Robotics/.test(seatText) && /may want to talk, or partner/.test(seatText), seatText);
   check("it never names the member who unlocked", !/\bSal\b|Starter|sal\.starter/.test(seatText), seatText);
   check("it links to the seat's company", seatText.includes(`?c=${encodeURIComponent(pub("c_acme"))}`), seatText);
+  // The bell (lib/inbox.ts): the same line in the holder's inbox, and the post in the alert log, counts only.
+  const sb = await t.loadState();
+  const hanaBox = sb.inbox?.mem_hana ?? [];
+  check("the bell: the seat line in the holder's inbox, never the unlocker's name", hanaBox.some((x) => x.kind === "engaged" && /A fractional VP Sales unlocked .+ on your seat at Acme Robotics/.test(x.line) && x.href === "/?p=seats") && !/\bSal\b|Starter/.test(JSON.stringify(hanaBox)), hanaBox);
+  check("the alert log counts the Slack post and the bell line, nothing they said", (sb.alertLog?.mem_hana ?? []).some((r) => r.alert === "seat" && r.channel === "slack") && (sb.alertLog?.mem_hana ?? []).some((r) => r.alert === "seat" && r.channel === "bell") && !JSON.stringify(sb.alertLog).includes("Acme"));
+  check("the unlocker's bell stays quiet", !(sb.inbox?.mem_sal ?? []).some((x) => x.kind === "engaged"));
   clear();
   await act(HANA, { type: "unlock", entity: "engagement", id: seat, field: "rate" }).catch(() => null);
   await settle();

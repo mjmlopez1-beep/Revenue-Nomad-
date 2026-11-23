@@ -68,23 +68,91 @@ export type ListKind = (typeof LIST_KINDS)[number];
 export const LIST_KIND_LABEL: Record<ListKind, string> = { companies: "Companies", people: "People", seats: "Seats", roles: "Open roles", fractionals: "Fractionals" };
 
 /**
- * The alert on a list, Stage 1: the weekly email and Slack for the roles that open (the two that
- * exist today: lib/table.ts digestList and lib/notify/events.ts). `every` is weekly only for now;
- * instant and the other triggers (a seat ended, a new leader, a fact changed) come with Alerts.
+ * What sets a list's alert off (F5, Stage 7a). Each reads the list's companies, matched the way the
+ * table shows the list (lib/hireAlerts.ts listCompanies), and never names a company the member has
+ * not opened (lib/digest.ts LOCKED_HIRER):
+ *   role     a company on the list posts a fractional role (the weekly scan: email, Slack, bell)
+ *   hire     a company newly matches a view that follows hires ("Recently hired", lib/hireAlerts.ts)
+ *   seat     a fractional leadership seat ended at a company on the list (Crystal Ball's "seat" signal)
+ *   leader   a new leader shows on the company's own website (Crystal Ball's "arrival" signal)
+ *   fact     a fact changed at a company on the list (a seat, a role, a leader, a figure)
+ *   funding  the company raised money, as an SEC Form D filing says it (lib/funding, RN_FUNDING=1)
+ */
+export const ALERT_TRIGGERS = ["role", "hire", "seat", "leader", "fact", "funding"] as const;
+export type AlertTrigger = (typeof ALERT_TRIGGERS)[number];
+/** The trigger in the alerts table's words. */
+export const TRIGGER_WORDS: Record<AlertTrigger, string> = {
+  role: "New open role",
+  hire: "New fractional hire",
+  seat: "A seat ended",
+  leader: "New decision maker",
+  fact: "A fact changed",
+  funding: "Raised funding",
+};
+/** The trigger's detail line under it in the table. */
+export const TRIGGER_DETAIL: Record<AlertTrigger, string> = {
+  role: "a company on the list posts a fractional role",
+  hire: "a company newly matches",
+  seat: "a fractional seat ended, or its end date passed",
+  leader: "a new leader on the company's own website",
+  fact: "a seat, a role or a leader changed",
+  funding: "as the SEC filing says it",
+};
+/**
+ * How often a list's alert comes: as it happens (Pro: Slack within 15 minutes, email at most
+ * hourly), a daily summary each morning, or weekly (the weekly email, as every view had before).
+ * The bell gets each one as it happens whatever this says.
+ */
+export const ALERT_EVERY = ["instant", "daily", "weekly"] as const;
+export type AlertEvery = (typeof ALERT_EVERY)[number];
+export const EVERY_WORDS: Record<AlertEvery, string> = { instant: "As it happens", daily: "Every morning", weekly: "Weekly" };
+
+/**
+ * The alert on a list: on or off, what sets it off, how often, and where it goes (email, Slack,
+ * the bell). A view saved before lists had alerts reads as its weekly email (alertOf).
  */
 export interface ListAlert {
   on: boolean;
-  every: "weekly";
+  /** What sets it off. Left out on an alert saved in Stage 1: the list's default (defaultTriggers). */
+  triggers?: AlertTrigger[];
+  every: AlertEvery;
   email: boolean;
   slack: boolean;
+  /** In the bell, at the top of every page. Left out: on. */
+  bell?: boolean;
 }
 
-/** The alert a list carries: its own, or, for a view saved before lists had one, its weekly email. */
-export function alertOf(a: Pick<SavedSearch, "alert" | "email">): ListAlert {
-  if (a.alert) return { on: !!a.alert.on, every: "weekly", email: a.alert.email !== false, slack: a.alert.slack !== false };
-  const on = a.email !== false;
-  return { on, every: "weekly", email: on, slack: on };
+/** A list's triggers when it names none: a view that follows hires watches its hires, anything else new open roles. */
+export const defaultTriggers = (a: Partial<Pick<SavedSearch, "hiredFn" | "hiredWithin">>): AlertTrigger[] => (followsHires(a) ? ["hire"] : ["role"]);
+
+/** Triggers from loose input, in their order, each once; empty reads as the default. */
+export function cleanTriggers(raw: unknown): AlertTrigger[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = ALERT_TRIGGERS.filter((t) => raw.includes(t));
+  return out.length ? out : undefined;
 }
+const cleanEvery = (raw: unknown): AlertEvery | undefined => ((ALERT_EVERY as readonly unknown[]).includes(raw) ? (raw as AlertEvery) : undefined);
+
+/** The alert a list carries, every field filled in: its own, or, for a view saved before lists had one, its weekly email. */
+export function alertOf(a: Pick<SavedSearch, "alert" | "email"> & Partial<Pick<SavedSearch, "hiredFn" | "hiredWithin">>): Required<ListAlert> {
+  if (a.alert)
+    return {
+      on: !!a.alert.on,
+      triggers: cleanTriggers(a.alert.triggers) ?? defaultTriggers(a),
+      every: cleanEvery(a.alert.every) ?? "weekly",
+      email: a.alert.email !== false,
+      slack: a.alert.slack !== false,
+      bell: a.alert.bell !== false,
+    };
+  const on = a.email !== false;
+  return { on, triggers: defaultTriggers(a), every: "weekly", email: on, slack: on, bell: true };
+}
+
+/** The list's alert is on and watches this trigger. */
+export const watches = (a: Pick<SavedSearch, "alert" | "email"> & Partial<Pick<SavedSearch, "hiredFn" | "hiredWithin">>, t: AlertTrigger) => {
+  const x = alertOf(a);
+  return x.on && x.triggers.includes(t);
+};
 
 /**
  * Whether this list's news goes to Slack (lib/notify/events.ts: its new roles and its new hires).
@@ -92,13 +160,15 @@ export function alertOf(a: Pick<SavedSearch, "alert" | "email">): ListAlert {
  * always did, which is every saved view in the post, whatever its weekly email says.
  */
 export const slackOn = (a: Pick<SavedSearch, "alert">) => (a.alert ? !!a.alert.on && a.alert.slack !== false : true);
+/** Whether this list's news goes to the bell: a list with an alert follows its bell switch; an older view's weekly email stands for it. */
+export const bellOn = (a: Pick<SavedSearch, "alert" | "email">) => (a.alert ? !!a.alert.on && a.alert.bell !== false : a.email !== false);
 
 /** Column ids: letters, digits, dots, dashes and underscores, at most 40 characters, at most 30 of them. */
 const COL_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
 
 /**
  * A saved list's own fields from loose input (the app's save and list ops), anything unreadable
- * dropped. `alert` is cleaned to the Stage 1 shape. Only the keys given come back.
+ * dropped. `alert` is cleaned to its shape (an unknown trigger or frequency is dropped). Only the keys given come back.
  */
 export function cleanListFields(raw: { kind?: unknown; cols?: unknown; starter?: unknown; alert?: unknown } | undefined): Partial<Pick<SavedSearch, "kind" | "cols" | "starter" | "alert">> {
   const out: Partial<Pick<SavedSearch, "kind" | "cols" | "starter" | "alert">> = {};
@@ -108,7 +178,15 @@ export function cleanListFields(raw: { kind?: unknown; cols?: unknown; starter?:
   if (raw.starter === true) out.starter = true;
   if (raw.alert && typeof raw.alert === "object") {
     const a = raw.alert as Record<string, unknown>;
-    out.alert = { on: a.on === true, every: "weekly", email: a.email !== false, slack: a.slack !== false };
+    const triggers = cleanTriggers(a.triggers);
+    out.alert = {
+      on: a.on === true,
+      ...(triggers ? { triggers } : {}),
+      every: cleanEvery(a.every) ?? "weekly",
+      email: a.email !== false,
+      slack: a.slack !== false,
+      ...(a.bell === false ? { bell: false } : {}),
+    };
   }
   return out;
 }

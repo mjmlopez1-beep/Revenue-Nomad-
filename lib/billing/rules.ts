@@ -55,6 +55,21 @@ export const EXTEND_WINDOW_DAYS = 4;
 export const ENDING_DAYS = 3;
 /** Free keeps one saved view (with the weekly email). */
 export const FREE_SAVED_VIEWS = 1;
+/**
+ * Alerts on Free (Stage 7a, BUILD_PLAN F5): the one saved list's alert by email and in the bell,
+ * every morning or weekly, and the weekly roles post in Slack as before. As it happens, and Slack
+ * for every other trigger (a seat ended, a new leader, a fact changed, funding, someone you know),
+ * are Pro's (and Close's, and the trial's). Kept as the member set them: an upgrade brings them back.
+ */
+export const FREE_ALERT_EVERY = ["daily", "weekly"] as const;
+/** What a list's alert does on the member's plan right now: on Free, as it happens comes each morning and Slack carries the weekly roles and hires only. */
+export function alertOnPlan<A extends { every: string; slack: boolean }>(a: A, free: boolean, trigger?: string): A {
+  if (!free) return a;
+  const slackFree = a.every !== "instant" && (trigger === undefined || trigger === "role" || trigger === "hire");
+  return { ...a, every: a.every === "instant" ? "daily" : a.every, slack: a.slack && slackFree };
+}
+/** The words a Free member sees on what their plan holds back. */
+export const ALERT_PRO_WORDS = "As it happens and Slack for every alert are part of Pro. On Free your alert comes by email and in the bell, every morning or weekly.";
 /** Free gets this many Claude connector requests a day (Pro: the normal limits, 2,000 a day). */
 export const FREE_MCP_PER_DAY = 20;
 /** A pause is one month. */

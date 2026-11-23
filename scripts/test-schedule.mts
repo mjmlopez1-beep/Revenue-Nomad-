@@ -227,7 +227,27 @@ async function main() {
   await new Promise((r) => setTimeout(r, 200));
   const s0 = await t.loadState();
   check("  and nothing ran", !s0.scan.lastRunAt && !s0.radar?.lastRunAt && !s0.about?.lastRun && !s0.funding?.lastRunAt && !s0.leadersDaily, { scan: s0.scan.lastRunAt, radar: s0.radar?.lastRunAt });
+  check("  the alerts' watch, with nobody watching, reads nothing and writes nothing", !s0.alertWatch?.at);
   delete process.env.RN_RADAR;
+
+  // The alerts' watch (lib/notify/events.ts afterWatch) rides the scheduler's tick: at most every 15 minutes, never twice at once.
+  console.log("\nThe alerts' watch");
+  await t.tableInternals.mutate((d) => {
+    d.connector ??= { clients: [], grants: [], alerts: {} } as never;
+    d.connector!.alerts ??= {};
+    d.connector!.alerts.m_sal = [{ id: "al_sched001", name: "Every company", createdAt: new Date(real - 86_400_000).toISOString(), place: "v=all&t=companies", alert: { on: true, triggers: ["fact"], every: "weekly", email: false, slack: false, bell: true } }];
+    d.seen.m_sal = new Date(real - 86_400_000).toISOString();
+    d.values["c_two.revenue"] = { value: "$5M–$20M", by: "m_ada", at: new Date(real - 60_000).toISOString(), status: "live" } as never;
+    d.alertWatch = { at: new Date(real - 16 * 60_000).toISOString(), members: {} };
+  });
+  await jobs.runDueJobs("https://post.example.com", real);
+  await new Promise((r) => setTimeout(r, 100));
+  const w1 = await t.loadState();
+  check("  a tick runs the watch: the fact that changed is a line in the member's bell", (w1.inbox?.m_sal ?? []).some((x) => /^New at a locked .+: the revenue range$/.test(x.line)), w1.inbox?.m_sal);
+  check("  its keys are kept, and the weekly email waits for Monday's morning", Date.parse(w1.alertWatch?.at ?? "") === real && (w1.alertWatch?.members.m_sal?.keys.length ?? 0) === 1);
+  await jobs.runDueJobs("https://post.example.com", real + 5 * 60_000);
+  const w2 = await t.loadState();
+  check("  the next tick inside 15 minutes leaves it", w2.alertWatch?.at === w1.alertWatch?.at && (w2.inbox?.m_sal ?? []).length === (w1.inbox?.m_sal ?? []).length);
 
   // About texts: on, every homepage read replaced, slow, so the run is still going when the next check comes.
   process.env.RN_ABOUT = "1";

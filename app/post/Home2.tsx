@@ -39,6 +39,7 @@ import { CloseOnHome } from "./Activity";
 import { CountersignDue } from "./MySignature";
 import { FromYourPeers } from "./HomePeers";
 import { RouteMove } from "./network/Ways";
+import { KnownMoves } from "./network/KnownMoves";
 import { ProWelcome, TrialSummaryCard } from "./Billing";
 import { Scene } from "../ui/fractions/lazy";
 import { crystalLine, sinceWords, showMeDue } from "./todayModel";
@@ -207,6 +208,8 @@ export function Home2(p: Home2Props) {
             {rest && <FollowUps me={me} byId={byId} openCompany={p.openCompany} />}
             {rest && <CloseOnHome />}
             {rest && <RouteMove />}
+            {/* Someone you know changed jobs: from the member's own LinkedIn file and contacts CSV (never Google). */}
+            {rest && <KnownMoves where="home" openCompany={p.openCompany} />}
             <MovesSection
               me={me}
               byId={byId}
