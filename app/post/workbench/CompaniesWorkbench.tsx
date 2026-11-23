@@ -107,14 +107,14 @@ const storedCols = (memberId: string, t: RecordType): string[] | null => {
   }
 };
 /**
- * The columns a list opens with: for companies, the address's `k=` (place.ts colsOf, so a reload or
+ * The columns a list opens with: for companies, the address's `cols=` (place.ts colsOf, so a reload or
  * a shared link keeps them), then the saved list's own; then this browser's; then the defaults.
  */
 const readCols = (memberId: string, t: RecordType, listCols?: string[] | null): string[] => {
   const fromAddress = t === "companies" && typeof window !== "undefined" ? colsOf(window.location.search) : null;
   return fromAddress ?? (t === "companies" && listCols?.length ? listCols : null) ?? storedCols(memberId, t) ?? defaultCols(t);
 };
-/** The companies' columns in the address (`k=`), none while they are the defaults. */
+/** The companies' columns in the address (`cols=`), none while they are the defaults. */
 const writeColsAddress = (cols: string[]) => {
   try {
     const def = defaultCols("companies");

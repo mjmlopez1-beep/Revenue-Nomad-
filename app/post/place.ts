@@ -46,11 +46,12 @@ export const UI2_FROM_OLD: Partial<Record<string, Ui2Page>> = { getin: "warm", i
 export const ui2PageOf = <T extends string>(p: T): T | Ui2Page => UI2_FROM_OLD[p] ?? p;
 
 /**
- * The Companies workbench's columns in the address (`k=heldBy,seat,industry`, new look only): a
+ * The Companies workbench's columns in the address (`cols=heldBy,seat,industry`, new look only): a
  * reload or a shared link opens the same columns. Not a place on its own (it isn't in PLACE_KEYS):
- * it rides along with the table's place, and the browser's own copy is the fallback.
+ * it rides along with the table's place, and the browser's own copy is the fallback. BUILD_PLAN F2
+ * named it `k=`, but `?k=` is the sign-in code (app/Root.tsx, app/table/page.tsx), so it is `cols=`.
  */
-export const COLS_PARAM = "k";
+export const COLS_PARAM = "cols";
 const COL_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
 /** The columns an address names, cleaned (at most 30, each a column id once), or null for none. */
 export function colsOf(search: string): string[] | null {
@@ -59,7 +60,7 @@ export function colsOf(search: string): string[] | null {
   const cols = [...new Set(raw.split(",").map((c) => c.trim()).filter((c) => COL_ID.test(c)))].slice(0, 30);
   return cols.length ? cols : null;
 }
-/** The address query with these columns (null or none: without `k=`), "?..." or "". */
+/** The address query with these columns (null or none: without `cols=`), "?..." or "". */
 export function withCols(search: string, cols: readonly string[] | null): string {
   const q = new URLSearchParams(search);
   const clean = (cols ?? []).filter((c) => COL_ID.test(c)).slice(0, 30);

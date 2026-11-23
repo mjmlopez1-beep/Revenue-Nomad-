@@ -405,7 +405,10 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
   const body = reg.slice(reg.indexOf("export const PAGES"));
   const missing = [...nm.APP_PAGES2.filter((p) => p !== "today" && p !== "table" && p !== "find"), "home2", "companies2", "find2"].filter((k) => !new RegExp(`\\n  ${k}: \\{`).test(body));
   check("every page has its registry entry, and the three mount points", missing.length === 0, missing);
-  check("the mount points start as placeholders that draw today's pages", /home2: \{[^}]*placeholder: "home"/.test(body) && /companies2: \{[^}]*placeholder: "table"/.test(body) && /find2: \{[^}]*placeholder: "table"/.test(body));
+  check("the mount points draw the new look's pages: Home2, the workbench and Find, each with its own strip", /home2: \{[^}]*component: Home2P[^}]*ownHeader: true[^}]*ownStrip: true/.test(body) && /companies2: \{[^}]*component: Companies2P[^}]*ownStrip: true/.test(body) && /find2: \{[^}]*component: FindP[^}]*ownStrip: true/.test(body) && !/placeholder: "/.test(body));
+  // The workbench's columns ride in the address as cols= (never k=, the sign-in code), and alone they name no place.
+  const { colsOf, withCols, isHome: homeQ } = await import("../app/post/place");
+  check("the workbench's columns: cols= in the address, cleaned, and no place on their own", JSON.stringify(colsOf("?p=table&cols=heldBy,seat,bad%20id,seat")) === JSON.stringify(["heldBy", "seat"]) && colsOf("?k=tok-abc") === null && homeQ("?cols=heldBy") && withCols("?v=all&cols=a", null) === "?v=all" && withCols("", ["heldBy", "seat"]) === "?cols=heldBy,seat");
 
   // The flag, through the settings action (lib/table.ts, lib/ui2.ts).
   const was = process.env.RN_UI2;
