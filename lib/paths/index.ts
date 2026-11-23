@@ -66,9 +66,21 @@ const importsToday = (p: MemberPaths | undefined, nowMs: number) => (p?.imports 
 
 /* ---------- the import ---------- */
 
+/** The older file's company, title, email and day for each profile link also in the new file (by link only, never by name). */
+function carryOver(next: LinkedInRow[], old: LinkedInRow[]): LinkedInRow[] {
+  const was = new Map<string, LinkedInRow>();
+  for (const o of old) if (o.u && (o.c || o.e || o.p)) was.set(o.u, o);
+  return next.map((x) => {
+    const o = x.u ? was.get(x.u) : undefined;
+    if (!o) return x;
+    return { ...x, ...(o.c && !x.c ? { c: o.c } : {}), ...(o.p && !x.p ? { p: o.p } : {}), ...(o.e && !x.e ? { e: o.e } : {}), ...(o.d && !x.d ? { d: o.d } : {}) };
+  });
+}
+
 /**
  * The member's own Connections.csv: read, cleaned (lib/paths/csv.ts) and kept for them alone. A
- * new file replaces the last one. IMPORTS_DAILY uploads in any rolling 24 hours.
+ * new file replaces the last one; a names-only file keeps what the last one said about the same profile
+ * links (carryOver). IMPORTS_DAILY uploads in any rolling 24 hours.
  */
 export async function importConnections(token: string | null, text: unknown, nowMs = Date.now()): Promise<{ answer: PathsAnswer; message: string }> {
   if (!pathsOn()) throw new ActionError(OFF);
@@ -85,7 +97,11 @@ export async function importConnections(token: string | null, text: unknown, now
     const p = (all[w.m.id] ??= {});
     if (importsToday(p, nowMs) >= IMPORTS_DAILY) throw new ActionError(`That's ${IMPORTS_DAILY} uploads today, the most in a day. Try again tomorrow.`);
     p.imports = [...(p.imports ?? []).filter((x) => nowMs - Date.parse(x) < DAY), at];
-    p.linkedin = { at, rows: r.rows, skipped: r.skipped, ...(r.namesOnly ? { namesOnly: true as const } : {}) };
+    // A names-only file (LinkedIn's from December 2026) over an older file: keep what the older file said about
+    // the same profile (company, title, email, connected on), so a new upload never loses what Merlin already had.
+    const rows = r.namesOnly && p.linkedin?.rows.length ? carryOver(r.rows, p.linkedin.rows) : r.rows;
+    const keptNames = !!r.namesOnly && rows.every((x) => !x.c && !x.e);
+    p.linkedin = { at, rows, skipped: r.skipped, ...(keptNames ? { namesOnly: true as const } : {}) };
   });
   const answer = (await pathsView(token, nowMs))!;
   const n = r.rows.length;

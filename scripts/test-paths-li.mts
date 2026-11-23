@@ -258,6 +258,14 @@ async function main() {
   check("an older file's message is as before", im2.message === "Added 2 connections. Only you see them.", im2.message);
   const v2 = await view();
   check("and the page says it is not names-only, its companies matched by name as before", v2.linkedin?.namesOnly === false && v2.linkedin.byLink === 0 && v2.linkedin.matched === 2, v2.linkedin);
+  // A names-only file over the older one keeps what the older one said, by profile link only.
+  const im3 = await P.importConnections(JORDAN, NAMES_ONLY);
+  const kept = ((await t.loadState()) as unknown as { paths: Record<string, { linkedin?: { rows: { f: string; u?: string; c?: string; p?: string }[]; namesOnly?: boolean } }> }).paths;
+  const rows3 = Object.values(kept).flatMap((x) => x.linkedin?.rows ?? []);
+  const dana = rows3.find((x) => x.u && /dana-reyes-nw/i.test(x.u));
+  const patNoLink = rows3.filter((x) => x.f === "Pat" && !x.u);
+  check("a names-only file over an older one keeps the older company and title for the same profile link", !!im3 && dana?.c === "Northwind Clinics" && dana?.p === "CEO", dana);
+  check("  never by name: a row with no link keeps nothing from the older file", patNoLink.every((x) => !x.c && !x.p), patNoLink);
   await P.deleteConnections(JORDAN);
   check("delete takes the file and its matches", (await view()).linkedin === null && !(await knownV()).people.some((p) => p.src.includes("linkedin")));
 }

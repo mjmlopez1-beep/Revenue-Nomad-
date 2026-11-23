@@ -257,7 +257,7 @@ export function NamesOnlyNote({ li, google }: { li: LinkedInInfo | null; google:
         {namesOnlyWords(li.byLink ?? 0, google)}
       </p>
     );
-  if (li) return <p className="cp-note cp-names">Your file has companies and titles. LinkedIn&apos;s files from December 2026 have names and profile links only, and a newer file replaces this one.</p>;
+  if (li) return <p className="cp-note cp-names">Your file has companies and titles. LinkedIn&apos;s files from December 2026 have names and profile links only. Bring in a newer one and Merlin keeps these companies and titles for the same people.</p>;
   return <p className="cp-note cp-names">{namesOnlyShort(google)}</p>;
 }
 
