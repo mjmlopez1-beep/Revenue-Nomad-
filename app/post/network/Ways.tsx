@@ -484,7 +484,13 @@ export function WayInBody({
           title="No way in yet"
           action={{ label: v.following ? "Following" : `Follow ${name} for new routes`, onClick: () => void ui.act({ type: "follow", companyId: v.id, on: true } as never) }}
         >
-          Nobody you know leads there yet. Add your contacts on Your network, or ask a peer who serves companies like this one.
+          Nobody you know leads there yet.{" "}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openPage("network")}>
+            Bring in who you know
+          </button>{" "}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openPage("peers")}>
+            Ask a fellow fractional
+          </button>
         </EmptyState>
       </div>
     );
@@ -864,6 +870,7 @@ function Panel({ r, info, open, openCompany }: { r: GetInRow; info: CoInfo | und
 
 /** Where you can get in, for a view in hand (the page fetches it; the checks pass one). */
 export function GetInBody({ view, infos, phone, openCompany }: { view: GetInView; infos: CoInfo[]; phone: boolean; openCompany: (id: string) => void }) {
+  const ui = useUi();
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
   const [filter, setFilter] = useState<"all" | "ball" | string>("all");
   const [listView, setListView] = useState(false);
@@ -894,7 +901,13 @@ export function GetInBody({ view, infos, phone, openCompany }: { view: GetInView
       )}
       {!view.rows.length ? (
         <EmptyState spot="noResults" title="No companies fit yet">
-          Add companies to your Crystal Ball, save a view, or fill in Your profile. They show here, by your best way in.
+          They show here, by your best way in, once Merlin knows what fits you.{" "}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openPage("radar" as never)}>
+            Open your Crystal Ball
+          </button>{" "}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openPage("network")}>
+            Bring in who you know
+          </button>
         </EmptyState>
       ) : (
         <>
@@ -902,7 +915,9 @@ export function GetInBody({ view, infos, phone, openCompany }: { view: GetInView
             {ZONES.map((z) => (
               <div key={z} className="gi-stat">
                 <span className="gi-stat-t">{ZONE_WORDS[z].title}</span>
+                {/* The dots on the map, and how many fit in all when the map shows fewer. */}
                 <span className="gi-stat-n num">{view.counts[z]}</span>
+                {view.countsAll && view.countsAll[z] > view.counts[z] ? <span className="gi-stat-h">of {view.countsAll[z]} that fit</span> : null}
                 <span className="gi-stat-h">{ZONE_WORDS[z].hint}</span>
               </div>
             ))}

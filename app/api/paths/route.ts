@@ -9,6 +9,10 @@
  * POST { op: "importCsv", csv }   the member's own contacts CSV, only the columns they picked (lib/paths/csv.ts pickColumns)
  * POST { op: "deleteCsv" }   delete the contacts CSV and everything worked out from it
  * POST { op: "away", key, on }    "Not a relationship" on someone they know (on: false is Undo)
+ * GET ?warm=1                WarmView: Warm paths (the new look), every company that fits placed by fit and by way in (lib/paths/ways.ts warmOf)
+ * GET ?suggest=1             SuggestView: Suggested additions from your connections (RN_SUGGEST only; lib/paths/suggest.ts)
+ * POST { op: "suggestAdd", keys }  add the ticked people (name, title and relationship only), 1 credit each within the day's cap
+ * POST { op: "suggestSkip", keys } never suggest these again
  * GET ?map=1                 GetInView: Where you can get in, every company that fits the member, placed (lib/paths/ways.ts)
  * GET ?way=<public id>       WayInView: Your way into that company, its routes with Est. success, and the member's plan
  * GET ?plans=1               { plans: PlanLine[] }: the member's plans, for Home's move and the pipeline's route line
@@ -26,7 +30,8 @@ import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
 import { companyPaths, deleteConnections, deleteContacts, importConnections, importContacts, knownView, pathsView, setAway } from "@/lib/paths";
 import { FILE_MAX_BYTES } from "@/lib/paths/types";
-import { getInView, planLines, wayAct, wayIn, type WayOp } from "@/lib/paths/ways";
+import { getInView, planLines, warmView, wayAct, wayIn, type WayOp } from "@/lib/paths/ways";
+import { suggestAdd, suggestSkip, suggestView } from "@/lib/paths/suggest";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "rn_table";
@@ -41,6 +46,16 @@ export const GET = guarded(async (req: NextRequest) => {
     const v = await getInView(token);
     if (!v) return fail(SIGNED_OUT, 401);
     return NextResponse.json({ map: v }, { headers: noStore });
+  }
+  if (sp.get("warm") !== null) {
+    const v = await warmView(token);
+    if (!v) return fail(SIGNED_OUT, 401);
+    return NextResponse.json({ warm: v }, { headers: noStore });
+  }
+  if (sp.get("suggest") !== null) {
+    const v = await suggestView(token);
+    if (!v) return fail(SIGNED_OUT, 401);
+    return NextResponse.json({ suggest: v }, { headers: noStore });
   }
   if (sp.get("known") !== null) {
     const v = await knownView(token);
@@ -78,7 +93,7 @@ export const POST = guarded(async (req: NextRequest) => {
   if (size > FILE_MAX_BYTES + 4096) return fail("That file is too large. Pick one under 8 MB.", 413);
   const raw = await req.text();
   if (raw.length > FILE_MAX_BYTES + 4096) return fail("That file is too large. Pick one under 8 MB.", 413);
-  type Body = { op?: unknown; csv?: unknown; company?: unknown; do?: unknown; route?: unknown; step?: unknown; answer?: unknown; key?: unknown; on?: unknown };
+  type Body = { op?: unknown; csv?: unknown; company?: unknown; do?: unknown; route?: unknown; step?: unknown; answer?: unknown; key?: unknown; on?: unknown; keys?: unknown };
   let body: Body | null = null;
   try {
     body = JSON.parse(raw) as Body;
@@ -113,6 +128,15 @@ export const POST = guarded(async (req: NextRequest) => {
         if (!op) return fail("That didn't go through. Refresh the page and try again.");
         const r = await wayAct(token, body.company, op);
         return NextResponse.json({ way: r.view, message: r.message }, { headers: noStore });
+      }
+      case "suggestAdd": {
+        if (limited(`paths-suggest:${key}`, 30, 60 * 60_000)) return fail("That's a lot at once. Give it a few minutes.", 429);
+        const r = await suggestAdd(token, body.keys);
+        return NextResponse.json({ suggest: r.view, message: r.message, added: r.added, earned: r.earned }, { headers: noStore });
+      }
+      case "suggestSkip": {
+        if (limited(`paths-suggest:${key}`, 30, 60 * 60_000)) return fail("That's a lot at once. Give it a few minutes.", 429);
+        return NextResponse.json({ suggest: await suggestSkip(token, body.keys), message: "Merlin won't suggest them again." }, { headers: noStore });
       }
       case "delete":
         return NextResponse.json({ view: await deleteConnections(token), message: "Deleted your LinkedIn connections and every way in found from them." }, { headers: noStore });

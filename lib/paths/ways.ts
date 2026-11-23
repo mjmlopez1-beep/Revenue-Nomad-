@@ -33,14 +33,15 @@ import { PATH_RAW, personOfContact, type Contact, type WLeader, type WSeat, type
 import { factsOf, foundFor, pathsOn, shownName, who, type Found } from "./index";
 import { worldOf } from "./world";
 import {
-  HOW_ESTIMATED, betweenWords, compareRoutes, estRaw, estWords, evidenceWords, fitLevel, initialsOf, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, roundEst, spread, strongestOf, timeWords, zoneOf, companyScore,
-  type Evidence, type OddsBand, type PathBand, type Zone,
+  EST, HOW_ESTIMATED, betweenWords, compareRoutes, estRaw, estWords, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, timeWords, companyScore,
+  type Evidence, type OddsBand, type PathBand, type Split, type Zone,
 } from "./rank";
+import { networkOn } from "../google/types";
 import * as Plan from "./plan";
 import { lockedMatchesHidden } from "./types";
 import {
-  GETIN_MAX, ROUTES_MAX,
-  type GetInRow, type GetInView, type PathView, type PlanLine, type PlanView, type RouteAct, type RouteLink, type RouteNode, type RouteNote, type RouteStepView, type RouteView, type WayInView,
+  GETIN_MAX, ROUTES_MAX, WAY_SOURCE_WORDS,
+  type GetInRow, type GetInView, type WarmLine, type WarmRow, type WarmView, type WaySource, type PathView, type PlanLine, type PlanView, type RouteAct, type RouteLink, type RouteNode, type RouteNote, type RouteStepView, type RouteView, type WayInView,
 } from "./types";
 
 type G = ReturnType<typeof T.graph>;
@@ -306,6 +307,8 @@ export interface Built {
   srcs: ("google" | "linkedin" | "csv" | "merlin")[][];
   /** The first person is a member (or in the directory). */
   firstMember: boolean;
+  /** Where its first link comes from. */
+  src: WaySource;
   /** Act for the ask and the person's email, from the member's own list. */
   act: RouteAct;
   email: string | null;
@@ -333,6 +336,10 @@ interface Draft {
   tie: number;
   /** What the decider hired before, for the why line. */
   hired: number;
+  /** Where the first link comes from. */
+  src: WaySource;
+  /** The member the first person is, if one (internal id). */
+  member?: string | null;
 }
 
 /** One way in the finder found, as a route. */
@@ -446,7 +453,20 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
   let act: RouteAct = { kind: "note", first: f1 };
   if (memberId && (conversation || cx.directory.has(memberId))) act = { kind: "message", member: T.pubId(memberId), first: f1, conversation };
   else if (parts.kind === "seat" && parts.ownSeat && !memberId) act = { kind: "invite", seat: T.pubId(parts.ownSeat), first: f1 };
-  return { kind: kindWords(c, y.ev, cx.nowMs, p.kind), nodes, links, tops, decides, firsts, targetFirst, keys, srcs, act, email: p.via.email, note: p.note, tie: p.score / 100, hired };
+  const src: WaySource = !c
+    ? "fellow"
+    : c.src.includes("google")
+      ? "google"
+      : c.msgCount
+        ? "messages"
+        : c.src.includes("linkedin")
+          ? "linkedin"
+          : c.src.includes("csv")
+            ? "csv"
+            : c.member
+              ? "messages"
+              : "seat";
+  return { kind: kindWords(c, y.ev, cx.nowMs, p.kind), nodes, links, tops, decides, firsts, targetFirst, keys, srcs, act, email: p.via.email, note: p.note, tie: p.score / 100, hired, src, member: memberId };
 }
 
 /** Write to who decides yourself: a note out of the blue. Only when someone who decides is on file. */
@@ -470,7 +490,70 @@ function directDraft(cx: Cx, companyId: string): Draft | null {
     note: null,
     tie: 0,
     hired: d.hired,
+    src: "direct",
   };
+}
+
+/**
+ * Through a fellow fractional who holds or held a seat there and is in the Fractionals directory
+ * (free to every member), whom the member hasn't met: what Merlin sees before the member brings in
+ * anyone they know. One route a person (their latest seat there), never the member themself, never
+ * someone already on another route here, never a fractional who hides their name on their seats. At
+ * a company the member can't see, the person is unnamed (its routes open with the company).
+ */
+function fellowDrafts(cx: Cx, companyId: string, taken: Set<string>): Draft[] {
+  const out: Draft[] = [];
+  const bestOf = new Map<string, WSeat>();
+  for (const x of cx.w.seatsAt.get(companyId) ?? []) {
+    const p = cx.w.persons.get(x.person);
+    if (!p?.member || !p.shown || p.member === cx.m.id || x.person === cx.f.me.person || taken.has(p.member)) continue;
+    const was = bestOf.get(p.key);
+    if (!was || (x.active && !was.active) || (x.active === was.active && (x.to ?? 0) > (was.to ?? 0))) bestOf.set(p.key, x);
+  }
+  const visible = cx.f.me.visible(companyId);
+  const coName = companyLabel(cx, companyId);
+  const sign = firstOf(cx.m.name);
+  const as = cx.f.me.words.as || "a fractional leader";
+  for (const [key, x] of bestOf) {
+    const p = cx.w.persons.get(key)!;
+    const e = cx.g.engagements.get(x.id);
+    if (e && T.holderNameHidden(cx.s, e)) continue;
+    const h = visible ? holderOf(cx, x.id) : { name: null, role: null };
+    if (visible && !h.name) continue;
+    const name = h.name;
+    const fnW = fnSeat(x.fn);
+    const you: RouteNode = { role: "you", label: "You", sub: null, initials: "You" };
+    const via: RouteNode = { role: "person", label: name ?? "A fellow fractional", sub: `${x.active ? "Holds" : "Held"} their ${fnW} seat`, initials: name ? initialsOf(name) : "?", ...(name ? {} : { locked: true }) };
+    const first = name ? firstOf(name) : "the fellow fractional";
+    const d = deciderOfSeat(cx, x.id);
+    const t = targetNode(cx, companyId, d);
+    const l1: Link = { ev: [{ kind: "peer" }], at: null };
+    const l2: Link = { ev: [d ? reportedEv(x) : seatEv(x)], at: null };
+    const links = [linkOf(cx, l1), linkOf(cx, l2)];
+    const co = coName ?? "the company";
+    out.push({
+      kind: "A fellow fractional on Merlin",
+      nodes: [you, via, t.node],
+      links,
+      tops: [l1, l2].map((l) => ({ e: strongestOf(l.ev, cx.nowMs), at: l.at })),
+      decides: !!d,
+      firsts: [first],
+      targetFirst: t.first,
+      keys: [`d:${key}`, d ? `l:${d.id}` : `co:${companyId}`],
+      srcs: [["merlin"], ["merlin"]],
+      act: { kind: "message", member: T.pubId(p.member!), first, conversation: cx.convWith.get(p.member!) ?? null },
+      email: null,
+      note: {
+        subject: `${co}: a question from a fellow fractional`,
+        body: `Hi ${first},\n\nI saw on Merlin that you ${x.active ? "hold" : "held"} the ${fnW} seat at ${co}. I'm ${as}, and ${co} looks like a company I could help. Would you be open to 15 minutes on how they work${d ? `, or an intro to ${t.first} if it fits` : ""}?\n\nThanks either way,\n${sign}`,
+      },
+      tie: 0,
+      hired: d?.hired ?? 0,
+      src: "fellow",
+      member: p.member,
+    });
+  }
+  return out;
 }
 
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
@@ -554,7 +637,7 @@ function stepsOfDraft(cx: Cx, d: Draft, companyName: string | null, sig: Signals
     const body = direct
       ? `Hi ${t.startsWith("their") || t.startsWith("whoever") ? "there" : t}, I saw ${co} ${sig.openRole ? `is hiring for a ${lc(sig.openRole).replace(/^open /, "")}` : "has worked with fractional leaders before"}. I'm ${voice.as || "a fractional leader"}${voice.clients ? ` and I help ${voice.clients}` : ""}. Worth 20 minutes to see if I can help?\n\n${sign}`
       : d.note?.body ?? "";
-    const note: RouteNote = { to: T0, subject: direct ? `A fractional ${cx.fn ?? "leader"} for ${co}` : (d.note?.subject ?? `About ${co}`), body, email: direct ? null : d.email };
+    const note: RouteNote = { to: T0, subject: direct ? `A fractional ${cx.fn ? `${cx.fn} leader` : "leader"} for ${co}` : (d.note?.subject ?? `About ${co}`), body, email: direct ? null : d.email };
     out.push({
       n: 1, kind: "ask", who: "Your move", title: `Send ${t} a short note`, detail: direct ? "Built around why now. Sent from your own email." : "You know each other. Keep it short and specific.",
       note, nudge: null, act: d.act.kind === "message" ? d.act : { kind: "note", first: T0 }, primary: d.act.kind === "message" ? `Send to ${T0} on Merlin` : "Open in Gmail with the note", alt: "Edit the note", cant: null,
@@ -593,6 +676,14 @@ function howOf(d: Draft): string[] {
   return out;
 }
 
+/** Where a link after the first rests: Merlin's seats, or the people on file. */
+function linkFrom(e: Evidence | null): string {
+  if (!e) return WAY_SOURCE_WORDS.direct;
+  if (e.kind === "seat" || e.kind === "reported" || e.kind === "together" || e.kind === "client") return WAY_SOURCE_WORDS.seat;
+  if (e.kind === "none") return "No link yet";
+  return WAY_SOURCE_WORDS.direct;
+}
+
 function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
   const between = d.nodes.length - 2;
   const raw = estRaw({ links: d.links.map((l) => l.strength), handoffs: between, decides: d.decides, openRole: !!sig.openRole, recentHire: sig.recentHire, fit: sig.fit });
@@ -603,13 +694,14 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
   const id = `r${hash(`${cx.m.id}|${companyId}|${hops.join(",")}`)}`;
   const src = [...new Set(d.srcs.flat().filter((x): x is "google" | "linkedin" | "csv" => x === "google" || x === "linkedin" || x === "csv"))];
   const short = between === 0 ? `Write to ${d.targetFirst}` : `${cap(d.firsts[0])}'s route`;
+  const links = d.links.map((l, k) => ({ ...l, from: k === 0 ? WAY_SOURCE_WORDS[d.src] : linkFrom(d.tops[k]?.e ?? null) }));
   const view: RouteView = {
     id,
     short,
     title: between === 0 ? `Write to ${tNode.locked ? d.targetFirst : tNode.label} yourself` : `Go through ${d.nodes[1].label}`,
     kind: d.kind,
     nodes: d.nodes,
-    links: d.links,
+    links,
     chain: d.nodes.map((n, k) => (k === d.nodes.length - 1 && n.sub && !n.company && !n.locked ? `${n.label}, ${n.sub.replace(/ · decides$/, "").replace(/^decides$/, "")}`.replace(/, $/, "") : n.label)).join(" → "),
     between,
     decides: d.decides,
@@ -619,6 +711,8 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
     how: howOf(d),
     steps: stepsOfDraft(cx, d, name, sig),
     because: "",
+    fresh: freshOf(d.tops.map((t) => t.e), cx.nowMs),
+    src: d.src,
   };
   return {
     view,
@@ -627,6 +721,7 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
     tie: d.tie,
     srcs: d.srcs,
     firstMember: d.act.kind === "message",
+    src: d.src,
     act: d.act,
     email: d.email,
     note: d.note,
@@ -661,6 +756,9 @@ export function routesAt(cx: Cx, companyId: string, fit: number): { all: Built[]
     const d = draftOf(cx, p, companyId);
     if (d) drafts.push(d);
   }
+  // Fellow fractionals who held a seat there, whom the member hasn't met (not already on a route here).
+  const taken = new Set<string>(drafts.map((d) => d.member).filter((x): x is string => !!x));
+  drafts.push(...fellowDrafts(cx, companyId, taken));
   // The direct note, unless the member already knows who decides (a route straight to them is there).
   const direct = directDraft(cx, companyId);
   if (direct) drafts.push(direct);
@@ -887,18 +985,21 @@ const viaWords = (v: RouteView | undefined): string | null => {
   return `Through ${people[0].label}, then ${people[1].locked ? lc(people[1].label) : people[1].label}`;
 };
 
-const memo = new WeakMap<State, Map<string, GetInView>>();
+/** One company that fits the member, with its routes and odds: what Where you can get in and Warm paths are both built from. */
+interface Core {
+  id: string;
+  name: string | null;
+  fit: { ball: boolean; view: string | null; profile: boolean };
+  lvl: 1 | 2 | 3;
+  odds: OddsX;
+  sig: Signals;
+  routes: Built[];
+  top: Built | undefined;
+}
 
-/** Where you can get in: every company that fits the member, estimated and placed. Their own clients never show. */
-export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): GetInView {
-  let per = memo.get(s);
-  if (!per) memo.set(s, (per = new Map()));
-  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${lockedMatchesHidden() ? "h" : "s"}`;
-  const hit = per.get(k);
-  if (hit) return hit;
-  const cx = cxOf(seed, s, m, nowMs);
-  const L = listsOf(cx);
-  const own = ownSeatTest(seed, s, m);
+/** Every company that fits the member (their Crystal Ball, a saved view, their profile), never their own clients. */
+function coresOf(cx: Cx, L: Lists): Core[] {
+  const own = ownSeatTest(cx.seed, cx.s, cx.m);
   const held = new Set([...cx.g.engagements.values()].filter(own).map((e) => e.companyId));
   const fits = new Map<string, { ball: boolean; view: string | null; profile: boolean }>();
   for (const id of cx.g.companies.keys()) {
@@ -907,59 +1008,285 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
     if (fit.ball || fit.view || fit.profile) fits.set(id, fit);
   }
   const odds = oddsOf(cx, L, [...fits.keys()]);
+  const out: Core[] = [];
+  for (const [id, fit] of fits) {
+    const { all: routes, sig } = routesAt(cx, id, fitNum(fit));
+    out.push({ id, name: companyLabel(cx, id), fit, lvl: fitLevel({ ball: fit.ball, view: !!fit.view, profile: fit.profile }), odds: odds.get(id)!, sig, routes, top: routes[0] });
+  }
+  return out;
+}
+
+/** A way in's fine value along the map: its unrounded estimate (5 to 85), or -1 with no route. */
+const wayFine = (b: Built | undefined) => (b ? Math.max(EST.min, Math.min(EST.max, b.raw * 100)) : -1);
+/** The zone of a company from the two lines: fits (or likely hires) above, a warmer way in to the right. */
+const zoneBy = (high: boolean, warm: boolean): Zone => (high ? (warm ? "go" : "find") : warm ? "warm" : "watch");
+/**
+ * The companies the map draws: the best of each quadrant first (so no quadrant is empty because the
+ * others ranked higher), then the best of the rest, up to `max`. The member's plans always show.
+ */
+function balanced<T extends { zone: Zone; plan: boolean }>(ranked: T[], max: number): Set<T> {
+  const per = Math.floor(max / 4);
+  const on = new Set<T>(ranked.filter((r) => r.plan).slice(0, max));
+  const n: Record<Zone, number> = { go: 0, find: 0, warm: 0, watch: 0 };
+  for (const r of on) n[r.zone]++;
+  for (const r of ranked) if (on.size < max && !on.has(r) && n[r.zone] < per) on.add(r), n[r.zone]++;
+  for (const r of ranked) if (on.size < max && !on.has(r)) on.add(r);
+  return on;
+}
+const zeros = (): Record<Zone, number> => ({ go: 0, find: 0, warm: 0, watch: 0 });
+
+const memo = new WeakMap<State, Map<string, GetInView>>();
+
+/**
+ * Where you can get in (the old look): every company that fits the member, estimated and placed by
+ * their best way in (across) and how likely they hire (up). The middle line across is placed from
+ * the data (rank.ts splitLine), not fixed at 35%, and the map draws the best of each quadrant first,
+ * so a member without contacts of their own still sees all four. Their own clients never show.
+ */
+export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): GetInView {
+  let per = memo.get(s);
+  if (!per) memo.set(s, (per = new Map()));
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${lockedMatchesHidden() ? "h" : "s"}`;
+  const hit = per.get(k);
+  if (hit) return hit;
+  const cx = cxOf(seed, s, m, nowMs);
+  const L = listsOf(cx);
+  const cores = coresOf(cx, L);
+  const sp = splitLine(cores.map((c) => c.top?.view.est ?? null), cores.map((c) => wayFine(c.top)));
+  const xs = placeAxis(cores.map((c) => c.top?.view.est ?? null), cores.map((c) => wayFine(c.top)), sp, { lo0: 8, none: 6 });
   const all: (GetInRow & { r: number; ty: number })[] = [];
-  const counts: Record<Zone, number> = { go: 0, find: 0, warm: 0, watch: 0 };
+  const countsAll = zeros();
   const viewN = new Map<string, number>();
   let ball = 0;
   let profile = 0;
   const mine = (s as WithRoutes).routes?.[m.id] ?? {};
-  for (const [id, fit] of fits) {
-    const o = odds.get(id)!;
-    const name = companyLabel(cx, id);
-    const { all: routes, sig } = routesAt(cx, id, fitNum(fit));
-    const top = routes[0];
-    const best = top ? top.view.est : null;
-    const zone = zoneOf(best, o.band);
-    counts[zone]++;
-    if (fit.ball) ball++;
-    if (fit.profile) profile++;
-    if (fit.view) viewN.set(fit.view, (viewN.get(fit.view) ?? 0) + 1);
-    const lvl = fitLevel({ ball: fit.ball, view: !!fit.view, profile: fit.profile });
+  cores.forEach((c, i) => {
+    const best = c.top ? c.top.view.est : null;
+    const warm = isHigh(sp, best, wayFine(c.top));
+    const zone = zoneBy(c.odds.band !== "Low", warm);
+    countsAll[zone]++;
+    if (c.fit.ball) ball++;
+    if (c.fit.profile) profile++;
+    if (c.fit.view) viewN.set(c.fit.view, (viewN.get(c.fit.view) ?? 0) + 1);
+    const ty = Math.min(1, c.odds.score / 0.6);
     all.push({
-      id: T.pubId(id),
-      name,
-      facts: factsOf(seed, s, id),
-      tags: tagsOf(fit),
-      fit: lvl,
-      odds: o.band,
-      hiringNow: !!sig.openRole,
+      id: T.pubId(c.id),
+      name: c.name,
+      facts: factsOf(seed, s, c.id),
+      tags: tagsOf(c.fit),
+      fit: c.lvl,
+      odds: c.odds.band,
+      hiringNow: !!c.sig.openRole,
       zone,
       best,
-      via: name ? viaWords(top?.view) : null,
-      band: top ? top.view.links[0].band : null,
-      x: 0,
-      y: 0,
-      why: whyNow(o),
-      plan: !!mine[id],
-      locked: !name,
-      r: companyScore(best, o.band, lvl, top?.tie ?? 0),
-      ty: Math.min(1, o.score / 0.6),
+      via: c.name ? viaWords(c.top?.view) : null,
+      band: c.top ? c.top.view.links[0].band : null,
+      x: xs[i],
+      y: mapPoint(best, c.odds.band, ty).y,
+      why: whyNow(c.odds),
+      plan: !!mine[c.id],
+      locked: !c.name,
+      r: companyScore(best, c.odds.band, c.lvl, c.top?.tie ?? 0),
+      ty,
     });
-  }
+  });
   all.sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
-  const shown = all.slice(0, GETIN_MAX);
-  const placed = spread(shown.map((x) => ({ ...mapPoint(x.best, x.odds, x.ty), id: x.id })));
+  const on = balanced(all, GETIN_MAX);
+  const shown = all.filter((x) => on.has(x));
+  const counts = zeros();
+  for (const x of shown) counts[x.zone]++;
+  const boxOf = (x: { x: number; y: number; best: number | null }): [number, number, number, number] => [x.best === null ? 3 : x.x >= 50 ? 54 : 12, x.best === null ? 9 : x.x >= 50 ? 94 : 46, x.y >= 50 ? 54 : 6, x.y >= 50 ? 94 : 46];
+  const placed = spreadBox(shown.map((x) => ({ id: x.id, x: x.x, y: x.y, box: boxOf(x) })));
   const at = new Map(placed.map((p) => [p.id, p]));
   const view: GetInView = {
     on: true,
     fn: cx.fn,
     rows: shown.map(({ r: _r, ty: _y, ...x }) => ({ ...x, x: at.get(x.id)!.x, y: at.get(x.id)!.y })), // eslint-disable-line @typescript-eslint/no-unused-vars
     counts,
-    total: fits.size,
+    countsAll,
+    total: cores.length,
     ball,
     views: [...viewN].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)),
     profile,
     lockedWays: cx.f.lockedWays.size,
+  };
+  if (per.size > 500) per.clear();
+  per.set(k, view);
+  return view;
+}
+
+/* ---------- Warm paths ---------- */
+
+/** Companies the map draws, and the most the list holds. */
+export const WARM_MAP_MAX = 36;
+export const WARM_MAX = 300;
+const FIT_TRAITS = ["function", "industry", "size", "revenue", "a hiring signal"] as const;
+
+/**
+ * How well a company fits the member, from five traits Merlin can check: it hired fractionals in
+ * the member's function (or has a role open in it), its industry, size and revenue are in their
+ * ideal client, and a hiring signal (a role open now, a fractional hired in the last 18 months, or
+ * high odds in their Crystal Ball). A trait the member's profile doesn't ask about never counts.
+ */
+function fitTraits(cx: Cx, L: Lists, id: string, sig: Signals, odds: OddsX): string[] {
+  const out: string[] = [];
+  if (cx.fn) {
+    const engs = (cx.engsAt.get(id) ?? []).map((x) => cx.g.engagements.get(x)!).filter(Boolean);
+    if (engs.some((e) => T.fnOf(e, cx.s) === cx.fn)) out.push(FIT_TRAITS[0]);
+  }
+  const cf = L.icp ? companyFacts(cx.g, cx.s, id) : null;
+  if (L.icp && cf) {
+    const key = (v: string) => v.trim().toLowerCase();
+    if (cf.industry && L.icp.industries.map(key).includes(key(cf.industry))) out.push(FIT_TRAITS[1]);
+    if (cf.employees && L.icp.employees.includes(cf.employees)) out.push(FIT_TRAITS[2]);
+    if (cf.revenue && L.icp.revenue.includes(cf.revenue)) out.push(FIT_TRAITS[3]);
+  }
+  if (sig.openRole || sig.recentHire || odds.band === "High") out.push(FIT_TRAITS[4]);
+  return out;
+}
+
+const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+/** The member's ideal client in a line: "Sales, in Software and Fintech, with 51-200 people". */
+function icpWords(cx: Cx, L: Lists): string | null {
+  const parts: string[] = [];
+  if (cx.fn) parts.push(cx.fn);
+  if (L.icp?.industries.length) parts.push(`in ${listWords(L.icp.industries.slice(0, 5))}`);
+  if (L.icp?.employees.length) parts.push(`with ${listWords(L.icp.employees.slice(0, 4))} people`);
+  if (L.icp?.revenue.length) parts.push(`at ${listWords(L.icp.revenue.slice(0, 3))} revenue`);
+  return parts.length ? parts.join(", ") : null;
+}
+
+/** The words for where a line sits. */
+const fitLineWords = (sp: Split): WarmLine => ({ at: sp.at, words: sp.at !== null ? `Fit ${sp.at} of 5 or more` : sp.fineAt === Infinity ? "Every company here fits about the same" : "The better fitting half" });
+const wayLineWords = (sp: Split): WarmLine => ({ at: sp.at, words: sp.at !== null ? `Est. success ${sp.at}% or more` : sp.fineAt === Infinity ? "No way in yet" : "Your warmer half of these ways in" });
+
+const warmMemo = new WeakMap<State, Map<string, WarmView>>();
+
+/**
+ * Warm paths (the new look): every company that fits the member, placed by how well it fits them
+ * (up, fit of 5 with its odds as the tie-break) and how strong their best way in is (across, by Est.
+ * success). Both middle lines are placed from these companies (rank.ts splitLine), and the map
+ * draws the best few of each quadrant, so the marks spread across all four; the list holds them
+ * all, best first. Names follow the same rules as Your way in; a locked company is its facts.
+ */
+export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): WarmView {
+  let per = warmMemo.get(s);
+  if (!per) warmMemo.set(s, (per = new Map()));
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${lockedMatchesHidden() ? "h" : "s"}:${networkOn() ? "g" : "-"}`;
+  const hit = per.get(k);
+  if (hit) return hit;
+  const cx = cxOf(seed, s, m, nowMs);
+  const L = listsOf(cx);
+  const cores = coresOf(cx, L);
+  const traits = cores.map((c) => fitTraits(cx, L, c.id, c.sig, c.odds));
+  const fitC = traits.map((t) => t.length);
+  const fitF = cores.map((c, i) => fitC[i] + Math.min(1, c.odds.score / 0.6) * 0.9);
+  // The best route, as Your way in recommends it. A cold note to who decides (Write to them yourself) is the weakest way in, and says so.
+  const tops = cores.map((c) => c.top);
+  const wayC = tops.map((t) => t?.view.est ?? null);
+  const wayF = tops.map((t) => wayFine(t));
+  const spFit = splitLine(fitC, fitF);
+  const spWay = splitLine(wayC, wayF);
+  // The quadrants' names sit in the corners: the marks keep clear of them (up 16 to 84).
+  const xs = placeAxis(wayC, wayF, spWay, { lo: [16, 44], hi: [57, 93], none: 6 });
+  const ys = placeAxis(fitC, fitF, spFit, { lo: [20, 43], hi: [57, 80] });
+  const mine = (s as WithRoutes).routes?.[m.id] ?? {};
+  const countsAll = zeros();
+  const bySource: WarmView["bySource"] = {};
+  const listN = new Map<string, number>();
+  let ball = 0;
+  const rows: (WarmRow & { score: number })[] = cores.map((c, i) => {
+    const top = tops[i];
+    const high = isHigh(spFit, fitC[i], fitF[i]);
+    const warm = isHigh(spWay, wayC[i], wayF[i]);
+    const zone = zoneBy(high, warm);
+    countsAll[zone]++;
+    if (top) bySource[top.src] = (bySource[top.src] ?? 0) + 1;
+    if (c.fit.ball) ball++;
+    if (c.fit.view) listN.set(c.fit.view, (listN.get(c.fit.view) ?? 0) + 1);
+    const visible = !!c.name;
+    const p1 = top?.view.nodes[1];
+    const via = !top
+      ? null
+      : !visible
+        ? top.src === "fellow"
+          ? "Through a fellow fractional"
+          : top.src === "direct"
+            ? "A cold note to who decides"
+            : "A way in. Open it to see who"
+        : top.view.between === 0
+          ? top.src === "direct"
+            ? `A cold note to ${p1!.locked ? lc(p1!.label) : p1!.label}`
+            : `You know ${p1!.label}`
+          : `Through ${p1!.locked ? lc(p1!.label) : p1!.label}`;
+    const people = visible
+      ? c.routes
+          .slice(0, ROUTES_MAX)
+          .filter((r) => r.view.nodes[1] && !r.view.nodes[1].locked && !r.view.nodes[1].company && r.src !== "direct")
+          .map((r) => ({ key: `p${hash(`${m.id}|${r.shape.hops[0]}`)}`, name: r.view.nodes[1].label, sub: r.view.nodes[1].sub, band: r.view.links[0].band }))
+      : [];
+    const fresh = top?.view.fresh ?? null;
+    return {
+      id: T.pubId(c.id),
+      name: c.name,
+      facts: factsOf(seed, s, c.id),
+      locked: !visible,
+      fit: fitC[i],
+      fitWords: traits[i],
+      odds: c.odds.band,
+      hiringNow: !!c.sig.openRole,
+      ball: c.fit.ball,
+      list: c.fit.view,
+      best: top ? top.view.est : null,
+      band: top ? top.view.links[0].band : null,
+      src: top ? top.src : null,
+      via,
+      person: top && top.src !== "direct" && people[0] ? people[0] : null,
+      people,
+      fresh,
+      zone,
+      x: xs[i],
+      y: ys[i],
+      onMap: false,
+      plan: !!mine[c.id],
+      rank: 0,
+      score: (top ? top.raw * 100 : 0) + (high ? 30 : 0) + fitF[i] * 4 + oddsIdx(c.odds.band) * 3 + (c.sig.openRole ? 4 : 0),
+    };
+  });
+  rows.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  const kept = rows.slice(0, WARM_MAX);
+  kept.forEach((r, k2) => (r.rank = k2 + 1));
+  const on = balanced(kept, WARM_MAP_MAX);
+  const counts = zeros();
+  const boxOf = (r: WarmRow): [number, number, number, number] => [r.best === null ? 3 : r.x >= 50 ? 55 : 14, r.best === null ? 9 : r.x >= 50 ? 95 : 46, r.y >= 50 ? 55 : 19, r.y >= 50 ? 81 : 45];
+  const placed = spreadBox(kept.filter((r) => on.has(r)).map((r) => ({ id: r.id, x: r.x, y: r.y, box: boxOf(r) })), 7.5);
+  const at = new Map(placed.map((p) => [p.id, p]));
+  for (const r of kept)
+    if (on.has(r)) {
+      r.onMap = true;
+      counts[r.zone]++;
+      r.x = at.get(r.id)!.x;
+      r.y = at.get(r.id)!.y;
+    }
+  const ways = wayC.filter((x): x is number => x !== null);
+  const paths = (s as State & { paths?: Record<string, { linkedin?: unknown; csv?: unknown }> }).paths?.[m.id];
+  const view: WarmView = {
+    on: true,
+    fn: cx.fn,
+    rows: kept.map(({ score: _s, ...r }) => r), // eslint-disable-line @typescript-eslint/no-unused-vars
+    counts,
+    countsAll,
+    total: cores.length,
+    lines: { fit: fitLineWords(spFit), way: wayLineWords(spWay) },
+    warmest: ways.length ? Math.max(...ways) : null,
+    bySource,
+    own: { google: networkOn() && !!s.network?.[m.id]?.google, linkedin: !!paths?.linkedin, csv: !!paths?.csv },
+    conversations: cx.convWith.size,
+    directory: cx.directory.size,
+    lockedWays: cx.f.lockedWays.size,
+    icp: icpWords(cx, L),
+    ball,
+    lists: [...listN].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)),
   };
   if (per.size > 500) per.clear();
   per.set(k, view);
@@ -1152,6 +1479,14 @@ export async function getInView(token: string | null, nowMs = Date.now()): Promi
   const w = await who(token);
   if (!w) return null;
   return getInOf(w.seed, w.s, w.m, nowMs);
+}
+
+/** GET /api/paths?warm=1. */
+export async function warmView(token: string | null, nowMs = Date.now()): Promise<WarmView | { on: false } | null> {
+  if (!pathsOn()) return { on: false };
+  const w = await who(token);
+  if (!w) return null;
+  return warmOf(w.seed, w.s, w.m, nowMs);
 }
 
 /** GET /api/paths?plans=1. */

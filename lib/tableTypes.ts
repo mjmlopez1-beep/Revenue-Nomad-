@@ -1060,6 +1060,8 @@ export type Action =
   | { type: "find"; text: string }
   /** Add a person at a company, optionally tied to one engagement. */
   | { type: "addPerson"; companyId: string; engagementId?: string | null; person: Record<string, string> }
+  /** Suggested additions from the member's own connections file or CSV (lib/paths/suggest.ts, RN_SUGGEST): the keys they ticked. */
+  | { type: "suggestAdd"; keys: string[] }
   | { type: "follow"; companyId: string; on: boolean }
   /**
    * "They have a full-time Sales leader": a member's fact about who leads a function at a company

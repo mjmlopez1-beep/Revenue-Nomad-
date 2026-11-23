@@ -10,7 +10,7 @@
  *   - everyone else is named only as the app names them (a member on Merlin, a seat holder or a
  *     person the member can see), which already keeps public-profile names to United States seats
  *     outside California.
- * Only with Your network on (RN_GOOGLE=1), like the paths it is built from.
+ * With ways in on (RN_PATHS, on unless "off"), with or without Google: the sources are independent.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";

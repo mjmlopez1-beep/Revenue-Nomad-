@@ -5316,6 +5316,8 @@ export async function perform(
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   // A move is at a company in the member's own Crystal Ball: read the same way.
   const movesMod = a?.type === "move" ? await import("./radar") : null;
+  // Suggested additions from the member's own files (lib/paths/suggest.ts): worked out again inside the change, never from the page.
+  const suggestMod = a?.type === "suggestAdd" ? await import("./paths/suggest") : null;
   const out = await mutate((s, seed): ActionResult & { refused?: string; connected?: string; connectedAll?: string[] } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
@@ -6486,6 +6488,49 @@ export async function perform(
             id: pubId(put.node.id),
             capped,
           };
+        }
+        case "suggestAdd": {
+          // Suggested additions from the member's own LinkedIn file or CSV (lib/paths/suggest.ts): only the
+          // people they ticked, worked out again here from their files (a key from the page is all that
+          // is trusted). Each is a member add: the name, the title and the relationship only, 1 credit
+          // for the person (the name's), inside the day's earning cap; the title and the relationship earn nothing.
+          if (!suggestMod?.suggestOn()) throw new ActionError("Suggested additions aren't on for Merlin yet.");
+          const want = new Set((Array.isArray(a.keys) ? a.keys : []).filter((k): k is string => typeof k === "string").slice(0, suggestMod.SUGGEST_ADD_MAX));
+          const cands = suggestMod.candidatesIn(seed, s, me).rows.filter((x) => want.has(x.key));
+          if (!cands.length) throw new ActionError("Those people aren't suggested any more. Here is the list as it is now.");
+          const files = ((s as State & { paths?: Record<string, { suggest?: { skip: string[]; added: string[] } }> }).paths ??= {});
+          const sg = ((files[me.id] ??= {}).suggest ??= { skip: [], added: [] });
+          let added = 0;
+          let earned = 0;
+          let full = false;
+          for (const x of cands) {
+            const c = g.companies.get(x.internal);
+            if (!c || hiddenFor(c.id)) continue;
+            if (fillsToday(s, me.id, nowMs).length >= FILL_DAILY_MAX) {
+              full = true;
+              break;
+            }
+            const name = cleanValue(fieldOf("contact", "name"), x.name);
+            const title = cleanValue(fieldOf("contact", "title"), x.title);
+            if (name.error || !name.value) continue;
+            const put = putPerson(c.id, null, [["name", name.value]]);
+            if (put.merged) continue;
+            const pid = put.node.id;
+            if (title.value && !title.error) s.values[fkey(pid, "title")] = { value: title.value, by: me.id, at: now, status: "live" };
+            s.values[fkey(pid, "relationship")] = { value: suggestMod.SUGGEST_REL, by: me.id, at: now, status: "live" };
+            const rec = s.contacts.find((p) => p.id === pid) as ({ via?: string } & (typeof s.contacts)[number]) | undefined;
+            if (rec) rec.via = "suggest";
+            sg.added = [...sg.added, x.key].slice(-suggestMod.SUGGEST_KEEP_MAX);
+            added++;
+            earned += put.earned;
+          }
+          if (!added) throw new ActionError(full ? `You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow.` : "Nobody new to add. They may be on file already.");
+          return {
+            message: `Added ${added === 1 ? "1 person" : `${added} people`} with their name, title and relationship.${credits(earned)}${capNote(earned > 0)}${full ? ` The rest wait until tomorrow: ${FILL_DAILY_MAX} facts a day is the limit.` : ""}`,
+            added,
+            earned,
+            capped,
+          } as ActionResult;
         }
         case "find": {
           // A company's exact name or website names it in this answer (State.found); anything else opens nothing and says nothing more.
@@ -7952,6 +7997,8 @@ export const tableInternals = {
   memberIndexReset: () => void (memberIndexCache = null),
   // "Hide my name on my seats": who held a seat is never named where it applies.
   holderNameHidden,
+  // Suggested additions (lib/paths/suggest.ts): Remove my name's mark at a company, and what the member earned today.
+  leaderOff: (s: State, companyId: string, name: string) => leaderOff(s, companyId, name), earning,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
@@ -8254,8 +8301,34 @@ export async function nameOffByName(nameRaw: unknown, companyRaw: unknown): Prom
       n++;
     }
     for (const cid of at) n += leaderNameOff(s, g, cid, name, now);
+    n += suggestedOff(s, at, name, now);
     return n;
   });
+}
+
+/**
+ * Remove my name for someone a member added from their own connections file or CSV (Suggested
+ * additions, lib/paths/suggest.ts): the record goes with every fact on it, and whoever paid to see
+ * it gets the credit back. Remove my name's mark (leaderNameOff) keeps them from being suggested again.
+ */
+function suggestedOff(s: State, at: Set<string>, name: string, now: string): number {
+  let n = 0;
+  const gone = new Set<string>();
+  for (const p of s.contacts) {
+    if ((p as { via?: string }).via !== "suggest" || !p.companyId || !at.has(p.companyId)) continue;
+    const v = s.values[fkey(p.id, "name")];
+    if (!v || !sameName(v.value, name)) continue;
+    for (const f of ["name", "title", "relationship"]) {
+      const k = fkey(p.id, f);
+      if (f !== "relationship") refundPaid(s, k, now, "name");
+      delete s.values[k];
+      delete s.verifications[k];
+    }
+    gone.add(p.id);
+    n++;
+  }
+  if (gone.size) s.contacts = s.contacts.filter((p) => !gone.has(p.id));
+  return n;
 }
 
 /**

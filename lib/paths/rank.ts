@@ -34,9 +34,9 @@ export const isBand = (x: unknown): x is PathBand => typeof x === "string" && (B
 
 export const ZONES: readonly Zone[] = ["go", "find", "warm", "watch"];
 export const ZONE_WORDS: Record<Zone, { title: string; hint: string }> = {
-  go: { title: "Go now", hint: "Likely to hire, and you have a warm way in. Ask for the intro." },
-  find: { title: "Find a way in", hint: "Likely to hire, but your routes are cold. Ask a peer or add your contacts." },
-  warm: { title: "Keep warm", hint: "A warm way in, not hiring yet. Follow them and stay in touch." },
+  go: { title: "Go now", hint: "Likely to hire, and one of your warmer ways in. Ask for the intro." },
+  find: { title: "Find a way in", hint: "Likely to hire, but your routes there are colder. Ask a fellow fractional or bring in who you know." },
+  warm: { title: "Keep warm", hint: "One of your warmer ways in, not hiring yet. Follow them and stay in touch." },
   watch: { title: "Watch", hint: "Neither yet. Merlin tells you when that changes." },
 };
 
@@ -367,6 +367,172 @@ export function spread<T extends { x: number; y: number }>(points: T[], gap = 7,
     p.y = Math.round(p.y * 10) / 10;
   }
   return out;
+}
+
+/* ---------- lines placed from the data ---------- */
+
+/**
+ * The fixed middle line (WARM_EST, 35%) leaves a member with no contacts of their own on one side:
+ * routes through fellow fractionals they haven't met top out near 15%, so every mark sat in the
+ * "no route" corner. Warm paths places each middle line from the companies on the page instead:
+ * where they split about evenly, on a whole value when one splits them well enough (fit 3 of 5,
+ * Est. success 20%), else by rank (the better half). The words say which, so the quadrants never
+ * claim more than they mean.
+ */
+export interface Split {
+  /** The value a row needs (>=) to be on the high side; null when the split is by rank. */
+  at: number | null;
+  /** For a split by rank: the fine value a row needs (>=). Infinity: every row is low. */
+  fineAt: number;
+}
+
+/** The least share of rows a whole-value line must leave on each side, or the line goes by rank. */
+export const SPLIT_MIN_SHARE = 0.2;
+
+/**
+ * Where a middle line goes. `coarse` is each row's whole value (null: always low, a company with no
+ * route), `fine` the same with its tie-breaks (the unrounded estimate, the hiring odds), same order.
+ */
+export function splitLine(coarse: readonly (number | null)[], fine: readonly number[]): Split {
+  const n = coarse.length;
+  const vals = coarse.filter((v): v is number => v !== null && Number.isFinite(v));
+  if (!vals.length) return { at: null, fineAt: Infinity };
+  const distinct = [...new Set(vals)].sort((a, b) => a - b);
+  // A whole value: the one that leaves the larger side smallest. Rows without a value are low.
+  let best: { at: number; low: number } | null = null;
+  for (const at of distinct) {
+    const high = vals.filter((v) => v >= at).length;
+    const low = n - high;
+    if (!high || !low) continue;
+    const small = Math.min(high, low);
+    if (!best || small > best.low) best = { at, low: small };
+  }
+  if (best && best.low >= Math.max(1, Math.ceil(n * SPLIT_MIN_SHARE))) return { at: best.at, fineAt: -Infinity };
+  // By rank: the top half of the rows that have a value at all (rows without one stay low).
+  const withVal = fine.filter((_, k) => coarse[k] !== null && Number.isFinite(coarse[k] as number)).sort((a, b) => b - a);
+  if (withVal.length === 1) return { at: null, fineAt: n > 1 ? withVal[0] : Infinity };
+  const take = Math.max(1, Math.min(withVal.length, Math.floor(n / 2)));
+  return { at: null, fineAt: withVal[take - 1] };
+}
+
+/** A row is on the high side of a split. */
+export const isHigh = (sp: Split, coarse: number | null, fine: number) => (coarse === null ? false : sp.at !== null ? coarse >= sp.at : fine >= sp.fineAt);
+
+/**
+ * Where each row goes along one axis, 0 to 100: the low side in `lo` (default [lo0 + 4, 44]), the
+ * high side in `hi` (default [56, 92]). Within its side a row is placed half by its fine value and
+ * half by its rank there, so many companies with the same estimate spread out instead of standing in
+ * a column (the axis reads Colder to Warmer, never a number). Rows with no value at all sit at
+ * `none` (the map's "No route" strip).
+ */
+export function placeAxis(coarse: readonly (number | null)[], fine: readonly number[], sp: Split, opts: { lo0?: number; none?: number; lo?: [number, number]; hi?: [number, number] } = {}): number[] {
+  const lo0 = opts.lo0 ?? 8;
+  const [loA, loB] = opts.lo ?? [lo0 + 4, 44];
+  const [hiA, hiB] = opts.hi ?? [56, 92];
+  const high = coarse.map((c, k) => isHigh(sp, c, fine[k]));
+  const side = (on: boolean) => {
+    const ks = coarse.map((_, k) => k).filter((k) => high[k] === on && coarse[k] !== null);
+    ks.sort((a, b) => fine[a] - fine[b] || a - b);
+    const rank = new Map(ks.map((k, i) => [k, ks.length > 1 ? i / (ks.length - 1) : 0.5]));
+    const v = ks.map((k) => fine[k]);
+    return { rank, min: v.length ? Math.min(...v) : 0, max: v.length ? Math.max(...v) : 0 };
+  };
+  const L = side(false);
+  const H = side(true);
+  return coarse.map((c, k) => {
+    if (c === null) return opts.none ?? lo0;
+    const s = high[k] ? H : L;
+    const [a, b] = high[k] ? [hiA, hiB] : [loA, loB];
+    const byValue = s.max > s.min ? (fine[k] - s.min) / (s.max - s.min) : 0.5;
+    const t = 0.5 * byValue + 0.5 * (s.rank.get(k) ?? 0.5);
+    return Math.round((a + t * (b - a)) * 10) / 10;
+  });
+}
+
+/**
+ * Nudge marks apart, each inside its own box [x0, x1, y0, y1] (its quadrant, or the "No route"
+ * strip), so a mark never crosses a line and its quadrant stays what it is. Deterministic.
+ */
+export function spreadBox<T extends { x: number; y: number; box: [number, number, number, number] }>(points: T[], gap = 6.5, rounds = 80): T[] {
+  const out = points.map((p) => ({ ...p, x: Math.min(p.box[1], Math.max(p.box[0], p.x)), y: Math.min(p.box[3], Math.max(p.box[2], p.y)) }));
+  for (let r = 0; r < rounds; r++) {
+    let moved = false;
+    for (let i = 0; i < out.length; i++)
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i];
+        const b = out[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        const d = Math.hypot(dx, dy);
+        if (d >= gap) continue;
+        if (d < 0.01) {
+          dx = ((j * 7) % 5) - 2 || 1;
+          dy = ((j * 3) % 5) - 2 || 1;
+        }
+        const n = Math.hypot(dx, dy) || 1;
+        const push = (gap - d) / 2;
+        const ux = (dx / n) * push;
+        const uy = (dy / n) * push;
+        a.x = Math.min(a.box[1], Math.max(a.box[0], a.x - ux));
+        a.y = Math.min(a.box[3], Math.max(a.box[2], a.y - uy));
+        b.x = Math.min(b.box[1], Math.max(b.box[0], b.x + ux));
+        b.y = Math.min(b.box[3], Math.max(b.box[2], b.y + uy));
+        moved = true;
+      }
+    if (!moved) break;
+  }
+  for (const p of out) {
+    p.x = Math.round(p.x * 10) / 10;
+    p.y = Math.round(p.y * 10) / 10;
+  }
+  return out;
+}
+
+/** How fresh a way in is, by the days since its newest dated signal: 30 or less Fresh, 90 or less Ageing, else Stale. */
+export const freshWord = (days: number | null): "Fresh" | "Ageing" | "Stale" | null => (days === null ? null : days <= 30 ? "Fresh" : days <= 90 ? "Ageing" : "Stale");
+
+/** The newest dated thing a piece of evidence rests on, as days ago, and what it is. Null: nothing dated. */
+export function evidenceAge(e: Evidence, nowMs: number): { days: number; what: string } | null {
+  const yearEnd = (y: number | null) => (y === null ? null : daysSince(`${y}-12-31`, nowMs));
+  switch (e.kind) {
+    case "met": {
+      const d = daysSince(e.last, nowMs);
+      return d === null ? null : { days: Math.round(d), what: e.meetings ? "a meeting" : "an email" };
+    }
+    case "messages": {
+      const d = daysSince(e.last, nowMs);
+      return d === null ? null : { days: Math.round(d), what: "a message on Merlin" };
+    }
+    case "client":
+    case "together":
+    case "reported":
+    case "seat": {
+      if (e.active) return { days: 0, what: e.kind === "client" ? "your seat there, going now" : "a seat going now" };
+      const d = yearEnd(e.endYear);
+      return d === null ? null : { days: Math.round(d), what: `a seat that ended in ${e.endYear}` };
+    }
+    case "linkedin": {
+      const d = daysSince(e.since, nowMs);
+      return d === null ? null : { days: Math.round(d), what: "the day you connected" };
+    }
+    default:
+      return null;
+  }
+}
+
+/** A route's freshness from what its links rest on: the newest dated one. */
+export function freshOf(evidence: readonly (Evidence | null)[], nowMs: number): { word: "Fresh" | "Ageing" | "Stale" | null; days: number | null; line: string } {
+  let best: { days: number; what: string } | null = null;
+  for (const e of evidence) {
+    if (!e) continue;
+    const a = evidenceAge(e, nowMs);
+    if (a && (!best || a.days < best.days)) best = a;
+  }
+  if (!best) return { word: null, days: null, line: "Nothing on this path is dated yet, so Merlin can't say how fresh it is." };
+  const ago = best.days === 0 ? "today" : best.days === 1 ? "1 day ago" : best.days < 60 ? `${best.days} days ago` : best.days < 730 ? `${Math.round(best.days / 30)} months ago` : `${Math.round(best.days / 365)} years ago`;
+  const word = freshWord(best.days);
+  const tail = word === "Ageing" ? " Say hello before you ask." : word === "Stale" ? " Reconnect first: an old link is a weaker one." : "";
+  return { word, days: best.days, line: /going now$/.test(best.what) ? `Newest signal: ${best.what}.${tail}` : `Newest signal: ${best.what}, ${ago}.${tail}` };
 }
 
 /* ---------- words ---------- */

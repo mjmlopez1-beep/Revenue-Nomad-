@@ -77,6 +77,8 @@ export interface MemberPaths {
   away?: string[];
   /** When the member uploaded a file (ISO), the last IMPORTS_DAILY: the daily limit. Not derived from any file. */
   imports?: string[];
+  /** Suggested additions (lib/paths/suggest.ts, RN_SUGGEST): the member's "no" and "added" keys, one-way hashes, never a name. */
+  suggest?: { skip: string[]; added: string[] };
 }
 
 /** State.paths: member id -> what they uploaded. Nobody else's answer ever reads another member's entry. */
@@ -303,6 +305,31 @@ export interface RouteLink {
   band: PathBand;
   strength: number;
   words: string;
+  /** Where Merlin knows it from, in a few words: "Your Google contacts and calendar", "Seats on Merlin". */
+  from?: string;
+}
+
+/** Where a way in comes from (its first link): the member's own sources, or what Merlin already holds. */
+export type WaySource = "google" | "linkedin" | "csv" | "messages" | "fellow" | "seat" | "direct";
+/** The words for each, as the Sources panel and a link's tag say them. */
+export const WAY_SOURCE_WORDS: Record<WaySource, string> = {
+  google: "Your Google contacts and calendar",
+  linkedin: "Your LinkedIn connections file",
+  csv: "Your CSV",
+  messages: "Merlin messages",
+  fellow: "Fellow fractionals on Merlin",
+  seat: "Seats on Merlin",
+  direct: "People on Merlin",
+};
+
+/** How fresh a way in is: the newest dated thing it rests on. */
+export interface Freshness {
+  /** Fresh (30 days or less), Ageing (90 or less), Stale (older); null with nothing dated on file. */
+  word: "Fresh" | "Ageing" | "Stale" | null;
+  /** Days since the newest dated signal, or null. */
+  days: number | null;
+  /** "Newest signal: a meeting 12 days ago." */
+  line: string;
 }
 
 /** A step's primary action, by what Merlin already has. Nothing is sent without the member's click. */
@@ -370,6 +397,10 @@ export interface RouteView {
   steps: RouteStepView[];
   /** The decision card's line. */
   because: string;
+  /** How fresh it is (the newest dated signal it rests on). */
+  fresh?: Freshness;
+  /** Where its first link comes from. */
+  src?: WaySource;
 }
 
 /** The member's plan at a company, as the page shows it. */
@@ -457,6 +488,108 @@ export interface GetInView {
   profile: number;
   /** Locked companies whose ways in from the member's own files wait until they open them (fromFile): a count only. */
   lockedWays?: number;
+  /** The zones over every company that fits (counts above are the dots on the map). */
+  countsAll?: Record<Zone, number>;
+}
+
+/* ---------- Warm paths (the new look's map) ---------- */
+
+/** One company on Warm paths: placed by how well it fits the member (up) and how strong their way in is (across). */
+export interface WarmRow {
+  id: string;
+  /** Null while the company is locked for the member: said by its facts. */
+  name: string | null;
+  facts: string;
+  locked: boolean;
+  /** How many of the five fit traits it has (function, industry, size, revenue, a hiring signal), and which. */
+  fit: number;
+  fitWords: string[];
+  odds: OddsBand;
+  hiringNow: boolean;
+  ball: boolean;
+  /** The saved list it matches, if any. */
+  list: string | null;
+  /** The best route's Est. success, null with no route. */
+  best: number | null;
+  /** The best route's first link and where it comes from. */
+  band: PathBand | null;
+  src: WaySource | null;
+  /** "Through Casey Morgan", "You know Rita Vance", "Through a fellow fractional" (locked). Null with no route. */
+  via: string | null;
+  /** The person on the best route, for the People tab (null while locked or with no route). */
+  person: { key: string; name: string; sub: string | null } | null;
+  /** Every person on a route there the member can see, for the People tab. */
+  people: { key: string; name: string; sub: string | null; band: PathBand }[];
+  /** How fresh the best route is. */
+  fresh: Freshness | null;
+  zone: Zone;
+  /** Where its mark goes, 0 to 100 each way (50 is the line). */
+  x: number;
+  y: number;
+  /** On the map (the map shows a balanced few; the list shows them all). */
+  onMap: boolean;
+  plan: boolean;
+  /** The order of the ranked list (1 is best). */
+  rank: number;
+}
+
+/** Where a quadrant line sits, from the companies on the page, and the words for it. */
+export interface WarmLine {
+  /** The value a company needs to be on the high side (fit of 5, or Est. success), or null when it is the better half by rank. */
+  at: number | null;
+  /** "Fit 3 of 5 or more", "Est. success 20% or more", "The better fitting half". */
+  words: string;
+}
+
+/** GET /api/paths?warm=1: Warm paths. */
+export interface WarmView {
+  on: true;
+  fn: string | null;
+  rows: WarmRow[];
+  /** Companies in each quadrant: on the map, and in all. */
+  counts: Record<Zone, number>;
+  countsAll: Record<Zone, number>;
+  total: number;
+  lines: { fit: WarmLine; way: WarmLine };
+  /** The warmest best route among them (Est. success), or null with no route at all. */
+  warmest: number | null;
+  /** Ways in by where the best route comes from (a company counts once). */
+  bySource: Partial<Record<WaySource, number>>;
+  /** The member's own sources that are in: Google, the LinkedIn file, a CSV. */
+  own: { google: boolean; linkedin: boolean; csv: boolean };
+  /** Conversations on Merlin the member is in, and fellow fractionals in the directory: counts only. */
+  conversations: number;
+  directory: number;
+  /** Locked companies whose ways in from the member's own files wait until opened: a count only. */
+  lockedWays: number;
+  /** The ideal client in words, for the first visit's line, or null. */
+  icp: string | null;
+  /** The saved lists and Crystal Ball, for the filters: how many companies each. */
+  ball: number;
+  lists: { name: string; n: number }[];
+}
+
+/* ---------- Suggested additions from your connections (RN_SUGGEST) ---------- */
+
+/** One person from the member's own LinkedIn file or CSV who looks like a leader at a company with nobody like that on file. */
+export interface SuggestRow {
+  /** A one-way key of the row (never the name): what the member ticks. */
+  key: string;
+  name: string;
+  title: string;
+  /** The relationship it would be added with. */
+  rel: "Decision maker";
+  company: string;
+  companyId: string;
+  from: "linkedin" | "csv";
+}
+export interface SuggestView {
+  on: boolean;
+  rows: SuggestRow[];
+  /** More that match at companies still locked for the member: a count only. */
+  locked: number;
+  /** Credits the member can still earn today (of EARN_CAP). */
+  earnLeft: number;
 }
 
 /** One plan, for Home's move and the pipeline's route line (GET /api/paths?plans=1). */
