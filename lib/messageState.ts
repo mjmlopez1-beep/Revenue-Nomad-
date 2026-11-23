@@ -89,6 +89,11 @@ export interface MessagingState {
   tokens?: Record<string, string>;
   /** Email links already used to sign in (lib/emailIn.ts): the link's hash, and when it would have expired. */
   emailGrants?: Record<string, string>;
+  /**
+   * Member id -> when they agreed that Merlin's AI may draft a reply from a conversation (lib/messagesAi.ts).
+   * Only the time: never a word of a draft or a conversation. Theirs alone: deleted with the account.
+   */
+  messageAi?: Record<string, string>;
 }
 
 /** The viewer's side of a conversation. */

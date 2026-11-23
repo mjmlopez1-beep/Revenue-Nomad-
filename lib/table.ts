@@ -7797,7 +7797,7 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
   // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well, and so is their Evidence Bank (lib/evidence) and its AI agreement.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, messageAi: _messageAi, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7886,6 +7886,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   // Their Evidence Bank (lib/evidence): every case, and their agreement for Merlin's AI to write them.
   forgetMemberEvidence(s.evidence, id);
   del(s.evidenceAi);
+  // Their agreement for Merlin's AI to draft a reply in Messages (lib/messagesAi.ts).
+  del(s.messageAi);
   del(s.aiUsage);
   // Their proposals' reading activity, notifications and alert switches (lib/close).
   if (s.close) {
