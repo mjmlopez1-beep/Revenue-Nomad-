@@ -148,12 +148,19 @@ export const SORTS: { key: SortKey; label: string }[] = [
 /** In order: next move due (the latest first, then the soonest, then none), value (highest first), or company (A to Z, locked last). */
 export function sortDeals(list: readonly PipelineRec[], k: SortKey): PipelineRec[] {
   const out = [...list];
-  if (k === "value") return out.sort((a, b) => b.monthly - a.monthly || b.updatedAt.localeCompare(a.updatedAt));
+  if (k === "value") return out.sort((a, b) => shownMonthly(b) - shownMonthly(a) || b.updatedAt.localeCompare(a.updatedAt));
   if (k === "company") return out.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? "").localeCompare(b.name ?? "") || a.id.localeCompare(b.id));
   return out.sort((a, b) => (a.due ?? "9999") .localeCompare(b.due ?? "9999") || b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /* ---------- totals (the member's own deals only) ---------- */
+
+/**
+ * What a deal shows and totals a month on the board: its `monthly`, except a Won deal without terms,
+ * which shows no value (the Won figure is the terms', as Home and the pipeline's numbers count it,
+ * lib/pipelineActions.ts wonMonthly), never the value typed before it was won.
+ */
+export const shownMonthly = (r: Pick<PipelineRec, "stage" | "won" | "monthly">): number => (r.stage === "won" && !r.won ? 0 : r.monthly);
 
 export interface ColTotal {
   n: number;
@@ -163,7 +170,7 @@ export interface ColTotal {
 }
 export function colTotal(k: ColKey, list: readonly PipelineRec[]): ColTotal {
   const mine = list.filter((r) => colOf(r.stage) === k);
-  const monthly = mine.reduce((n, r) => n + r.monthly, 0);
+  const monthly = mine.reduce((n, r) => n + shownMonthly(r), 0);
   const words = k === "closed" ? "" : monthly > 0 ? `${money(monthly)} a month${k === "won" ? " won" : ""}` : mine.length ? "No value yet" : "";
   return { n: mine.length, monthly, words };
 }
