@@ -157,6 +157,14 @@ async function main() {
   check("  the other signer from the contract's notices and the Merlin record, with their title and email", withRecord.signers[0].name === "Dana Whitfield" && withRecord.signers[0].title === "CEO" && withRecord.signers[0].email === "dana@cedarpine.example" && withRecord.signers[0].found === "Found on page 2 and in your Merlin record", withRecord.signers[0]);
   check('  8 fields placed, a title prefilled for each to check, with its one line', withRecord.count === 8 && withRecord.fields.filter((f) => f.kind === "text" && f.label === "Title").map((f) => f.prefill).join() === "CEO,Principal" && withRecord.summary === 'A signature, name, title and date for each of you, next to "By", "Name", "Title" and "Date" on page 2. Names and titles are filled in for Dana to check.', [withRecord.count, withRecord.summary]);
   check("  the title from the file name and the parties", withRecord.title === "Cedar and Pine · Statement of Work", withRecord.title);
+  {
+    // Two other parties that both carry the same address: the second is left for the member to type, never sent to twice.
+    const other = two.parties.filter((x) => !SM.isMine(x, me));
+    const twice = SM.planFrom([...two.parties, ...other.map((x) => ({ ...x, name: "Sam Iverson", org: "Northwind Clinics", email: "dana@cedarpine.example" }))], two.pages, ctx(null));
+    const emails = twice.signers.filter((x) => !x.me && x.email).map((x) => x.email.toLowerCase());
+    check("  one address, one signer: no two signers get the same email", emails.length === new Set(emails).size, twice.signers.map((x) => `${x.name}<${x.email}>`));
+  }
+
   check("  the message is short, in plain words, to the signer", withRecord.message === "Hi Dana, here's the statement of work we discussed. Happy to walk through anything before you sign.", withRecord.message);
   const voiced = SM.contractMessage({ greeting: "Hey {first},", signoff: "Cheers,", name: "first", length: "short", formality: "casual", contractions: false, exclamations: "never", emoji: false, opener: "direct", phrases: [] }, "Dana Whitfield", "consulting agreement", "Jordan Avery");
   check("  in the member's saved voice when there is one", voiced === "Hey Dana, here is the consulting agreement we discussed. Happy to walk through anything before you sign. Cheers, Jordan", voiced);

@@ -216,6 +216,8 @@ export function planFrom(parties: FoundParty[], pages: PageText[], ctx: PlanCont
       if (hit) (email = hit), where.length || where.push(`on ${pg}`);
     }
     if (!name && !email && docEmails.length === 1 && docEmails[0] !== ctx.me.email.toLowerCase()) email = docEmails[0];
+    // One address, one signer: an address an earlier signer already has is left for the member to type, never sent to twice.
+    if (email && signers.some((x) => x.email && x.email.toLowerCase() === email.toLowerCase())) email = "";
     const found = fromRecord
       ? `Found on ${pg} and in your Merlin record`
       : where.length
