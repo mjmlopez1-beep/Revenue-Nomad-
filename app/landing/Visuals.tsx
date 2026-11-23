@@ -152,7 +152,7 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
     <figure className="lp-visual">
       <div className="lp-rec">
         <div className="lp-rec-head">
-          <CompanyLogo name={co.name} domain={co.logo} size="lg" />
+          <CompanyLogo name={co.name} domain={co.logo} seed={co.logoId ?? undefined} size="lg" />
           <div className="lp-rec-id">
             <div className={`lp-rec-name${open ? " lp-rec-name-chip" : ""}`}>{co.name}</div>
             {co.domain ? <span className="mono lp-rec-site">{co.domain}</span> : null}

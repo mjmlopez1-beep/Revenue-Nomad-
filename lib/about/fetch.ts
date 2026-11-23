@@ -516,6 +516,37 @@ export async function fetchXmlAt(address: string, opts: FetchOpts = {}): Promise
   }
 }
 
+/**
+ * A small JSON file by its full address (a site's web app manifest, lib/logo.ts), under the same
+ * rules as fetchXmlAt: robots.txt first (or the caller's robotsCheck), every hop checked, the
+ * timeout, at most `maxBytes` (64 KB unless given). JSON, a manifest or plain text only; the body
+ * is parsed here and anything that isn't JSON is a skip.
+ */
+export async function fetchJsonAt(address: string, opts: FetchOpts = {}): Promise<{ ok: true; url: string; json: unknown } | { ok: false; kind: "skipped" | "failed"; reason: string }> {
+  const o: FetchOpts = { ...opts, allow: opts.allow ?? testAllowance() };
+  let start: URL;
+  try {
+    start = new URL(address);
+  } catch {
+    return { ok: false, kind: "skipped", reason: "bad address" };
+  }
+  start.hash = "";
+  try {
+    if (!(await (o.robotsCheck ? o.robotsCheck(start) : robotsAllows(start, o)))) return { ok: false, kind: "skipped", reason: "robots.txt disallows" };
+    const { raw, url } = await follow(start, o, o.maxBytes ?? ROBOTS_MAX, "robots");
+    if (raw.status < 200 || raw.status >= 300) return { ok: false, kind: "failed", reason: `http ${raw.status}` };
+    if (!/json|text\/plain/.test(raw.type) || raw.truncated) return { ok: false, kind: "skipped", reason: "not json" };
+    try {
+      return { ok: true, url: url.href, json: JSON.parse(raw.body.replace(/^﻿/, "")) };
+    } catch {
+      return { ok: false, kind: "skipped", reason: "not json" };
+    }
+  } catch (e) {
+    if (e instanceof Refused) return { ok: false, kind: "skipped", reason: e.message };
+    return { ok: false, kind: "failed", reason: netReason(e) };
+  }
+}
+
 /** Raster image types fetchImageAt reads. No SVG: it can carry script. */
 const IMAGE_TYPE = /^\s*image\/(png|x-icon|vnd\.microsoft\.icon|ico|gif|jpeg|webp)\s*(;|$)/;
 

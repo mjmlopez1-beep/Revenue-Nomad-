@@ -4,7 +4,7 @@
  * show real companies (name, domain, logo, industry, size, revenue, country), role titles and
  * dates, and never a person: no seat holder, hiring contact or member name, no email, no phone,
  * no person's LinkedIn, no job posting link and no rate, for every function, industry and
- * country it offers. No public id either. Each answer names at most 10 companies: the rows after
+ * country it offers. No public id either: a named company's logo id is "lp_" and its row's seed. Each answer names at most 10 companies: the rows after
  * the 10th carry no company at all (`company: null`, `blur: true`) and no company's name in their
  * title, so the page can only blur a made-up one. Of the companies with an open role (hidden in
  * the app until a member unlocks one), the preview names at most 3 IN ALL, rows and example record
@@ -181,8 +181,8 @@ async function main() {
   let openNamedMost = 0;
   let openKept = 0;
   const ROWS_MAX = 25;
-  const CO_KEYS = new Set(["name", "domain", "logo"]);
-  const EX_KEYS = { top: new Set(["company", "open", "seat"]), company: new Set(["name", "domain", "logo", "industry", "employees", "revenue", "country"]), open: new Set(["title", "function", "when"]), seat: new Set(["function", "start", "rnMember"]) };
+  const CO_KEYS = new Set(["name", "domain", "logo", "logoId"]);
+  const EX_KEYS = { top: new Set(["company", "open", "seat"]), company: new Set(["name", "domain", "logo", "logoId", "industry", "employees", "revenue", "country"]), open: new Set(["title", "function", "when"]), seat: new Set(["function", "start", "rnMember"]) };
   const TOP_KEYS = new Set(["fn", "view", "total", "industry", "country", "counts", "inCountry", "rows", "example", "openRoleCompanies", "options"]);
   /** Every open-role company any answer named: the preview's one set, at most OPEN_NAMED_MAX. */
   const openNamedUnion = new Set();
@@ -270,6 +270,8 @@ async function main() {
         for (const k of Object.keys(r.company)) if (!CO_KEYS.has(k)) shape.push(`${label}: company key ${k}`);
         if (typeof r.company.name !== "string" || !r.company.name) shape.push(`${label}: a company with no name`);
         for (const d of [r.company.domain, r.company.logo]) if (d !== null && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(d))) shape.push(`${label}: a domain that is not a bare domain`);
+        // The logo id is "lp_" and the row's own seed: nothing new, and never a public id.
+        if (r.company.logoId != null && r.company.logoId !== `lp_${r.seed}`) shape.push(`${label}: row ${n + 1} logo id is not lp_<its seed>`);
       }
       if (a.view !== (r.kind === "notyet" ? "notyet" : a.view === "hiring" ? "hiring" : "all") || (a.view === "hiring" && r.kind !== "open")) shape.push(`${label}: a ${r.kind} row in the ${a.view} tab`);
       if (r.kind === "notyet") notYetRows++;

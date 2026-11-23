@@ -45,6 +45,8 @@ export interface PreviewCompany {
   name: string;
   domain: string | null;
   logo: string | null;
+  /** The icon's id for GET /api/logo/<id> ("lp_" and the row's seed). Older servers leave it out. */
+  logoId?: string | null;
 }
 interface PreviewRow {
   seed: string;
@@ -233,7 +235,7 @@ function CompanyCell({ r }: { r: PreviewRow }) {
     );
   return (
     <span className="lp-rw-co">
-      <CompanyLogo name={r.company.name} domain={r.company.logo} />
+      <CompanyLogo name={r.company.name} domain={r.company.logo} seed={r.company.logoId ?? undefined} />
       <span className="lp-rw-cotext">
         <span className="lp-rw-name" title={r.company.name}>
           {r.company.name}

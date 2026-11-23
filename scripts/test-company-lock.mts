@@ -22,7 +22,11 @@
  * server on 127.0.0.1 for every company's host: its <link rel="icon">, else /favicon.ico, robots.txt
  * first, never a link to another site, never Google, DuckDuckGo or Clearbit) and sends image bytes,
  * never a redirect or the site's headers, 204 with no body (no logo, so no console error) for an unknown id, a seat's id, no website or no icon
- * (an SVG included), from memory and then from the data volume without asking again, nothing
+ * (an SVG included), from memory and then from the data volume without asking again; the web app
+ * manifest (linked, else /site.webmanifest and /manifest.json), the JSON-LD Organization logo (a
+ * wide wordmark passed over), /apple-touch-icon.png and /favicon.ico always, the largest icon of
+ * 64px or more first; the landing page's logo ids (lp_<row seed>) for the companies it names
+ * only, never a kept-back open-role company's or a blurred row's; nothing
  * fetched with RN_LOGO_LOOKUP=off, 429 past its per-address limit; every logo the page draws is our
  * own /api/logo/<public id>, a named company with no id gets its letters; the page's markup for a locked company points at /api/logo/<public id> and holds no icon
  * service address, domain or name; the plain tile has no letters. A locked company's About (GET
@@ -74,6 +78,7 @@ const CO = {
   gran: { id: "c_granite", name: "Granitepeak Outfitters", site: "granitepeak.example", linkedin: "linkedin.com/company/granitepeak", about: "Granitepeak sells gear." },
   holl: { id: "c_hollowell", name: "Hollowell Partners", site: "hollowell-partners.example", linkedin: "linkedin.com/company/hollowell-partners", about: "Hollowell advises family offices." },
   iris: { id: "c_irisdale", name: "Irisdale Media", site: "irisdale.example", linkedin: "linkedin.com/company/irisdale", about: "Irisdale publishes trade magazines." },
+  halc: { id: "c_halcyon", name: "Halcyon Freight", site: "halcyon-freight.example", linkedin: "linkedin.com/company/halcyon-freight", about: "Halcyon Freight moves parcels." },
 };
 /** What a locked company's About reads before the unlock (lib/scan/clean.ts aboutWithout): no name, no domain, no link or email. */
 const SCRUBBED = {
@@ -111,6 +116,7 @@ const seed = {
     { id: CO.gran.id, fields: coFields(CO.gran, { hq: "Portland, OR" }) },
     { id: CO.holl.id, fields: coFields(CO.holl, { hq: "New York, NY" }) },
     { id: CO.iris.id, fields: coFields(CO.iris, { hq: "Seattle, WA" }) },
+    { id: CO.halc.id, fields: coFields(CO.halc, { hq: "Tulsa, OK", industry: "Logistics", revenue: "$5M–$20M", employees: "51–200" }) },
     { id: NOSITE.id, fields: { name: NOSITE.name, hq: "Reno, NV", industry: "Manufacturing" } },
   ],
   engagements: [
@@ -125,6 +131,8 @@ const seed = {
     seat("e_fox_open", CO.fox.id, { source: "Demand scan", function: "Sales", role: "Fractional CRO", status: "Open role", posting: "https://foxglovia.example/careers/cro" }),
     seat("e_gran", CO.gran.id, { source: "Seat scan", function: "RevOps", role: "Fractional RevOps Lead", type: "Fractional", status: "Active", start: "2025-05", end: "Ongoing" }),
     seat("e_holl", CO.holl.id, { source: "Seat scan", function: "Sales", role: "Fractional VP Sales", type: "Fractional", status: "Active", start: "2025-07", end: "Ongoing" }),
+    // An open role at a company the landing page lists (industry and revenue on file): named there while open-role companies are, kept back otherwise.
+    seat("e_halc_open", CO.halc.id, { source: "Demand scan", function: "Marketing", role: "Head of Marketing", status: "Open role" }),
     seat("e_iris", CO.iris.id, { source: "Seat scan", function: "Marketing", role: "Fractional CMO", type: "Fractional", status: "Active", start: "2025-08", end: "Ongoing" }),
   ],
   contacts: [{ id: "p_gran_ceo", companyId: CO.gran.id, fields: { name: "Gwen Granitehead", title: "CEO", relationship: "Decision maker", email: "gwen@granitepeak.example" } }],
@@ -216,6 +224,65 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
  * Each image carries headers that name the domain, which must never reach the page.
  */
 const ICON_PORT = 6781;
+/** A PNG header that says width and height apart (a wide wordmark). */
+const pngWH = (w: number, h: number) => {
+  const b = png(w);
+  new DataView(b.buffer).setUint32(20, h);
+  return b;
+};
+/** An .ico holding 16, 32 and 48px images: its width is the largest. */
+const ico3 = Uint8Array.from([0, 0, 1, 0, 3, 0, 16, 16, 0, 0, 1, 0, 32, 0, 1, 1, 1, 1, 54, 0, 0, 0, 32, 32, 0, 0, 1, 0, 32, 0, 1, 1, 1, 1, 54, 0, 0, 0, 48, 48, 0, 0, 1, 0, 32, 0, 1, 1, 1, 1, 54, 0, 0, 0, 9, 9]);
+/**
+ * More made-up sites, for where else an icon is looked for (lib/logo.ts), by host then path:
+ *  - guessed-manifest: no links, no manifest link; /site.webmanifest is missing and /manifest.json lists a 256px PNG;
+ *  - ld-square: JSON-LD Organization logo (an ImageObject) on its own site, beside one on another site;
+ *  - ld-wide: its only JSON-LD logo is a wide wordmark (passed over) and /favicon.ico is 32px;
+ *  - touch-guess: links a 16px and a 32px icon and a mask-icon (SVG); /apple-touch-icon.png is 180px, /favicon.ico an .ico of 16, 32 and 48;
+ *  - many-links: four icon links that all 404, and a 32px /favicon.ico (always tried);
+ *  - sized: a 32px icon link and a 192px one: the 192px, and no manifest is read;
+ *  - small-only: only a 32px /favicon.ico and a 48px icon link: the largest of them, the 48px.
+ */
+const MORE_SITES: Record<string, Record<string, [string, string | Uint8Array]>> = {
+  "guessed-manifest.example": {
+    "/": ["text/html", "<html><head><title>x</title></head></html>"],
+    "/manifest.json": ["application/json", JSON.stringify({ name: "x", icons: [{ src: "/i/256.png", sizes: "256x256", type: "image/png" }] })],
+    "/i/256.png": ["image/png", png(256)],
+  },
+  "ld-square.example": {
+    "/": [
+      "text/html",
+      `<html><head><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"x"},{"@type":"Organization","logo":"https://cdn.elsewhere.example/logo.png"},{"@type":["Corporation"],"logo":{"@type":"ImageObject","url":"/brand/logo-200.png"}}]}</script></head></html>`,
+    ],
+    "/brand/logo-200.png": ["image/png", png(200)],
+  },
+  "ld-wide.example": {
+    "/": ["text/html", `<html><head><script type="application/ld+json">{"@type":"Organization","logo":"/wordmark.png"}</script></head></html>`],
+    "/wordmark.png": ["image/png", pngWH(600, 100)],
+    "/favicon.ico": ["image/x-icon", ico(32)],
+  },
+  "touch-guess.example": {
+    "/": ["text/html", `<html><head><link rel="icon" href="/f16.png" sizes="16x16"><link rel="icon" href="/f32.png" sizes="32x32"><link rel="mask-icon" href="/mask.svg" color="#000"></head></html>`],
+    "/f16.png": ["image/png", png(16)],
+    "/f32.png": ["image/png", png(32)],
+    "/apple-touch-icon.png": ["image/png", png(180)],
+    "/favicon.ico": ["image/x-icon", ico3],
+  },
+  "many-links.example": {
+    "/": ["text/html", `<html><head><link rel="icon" href="/a.png"><link rel="icon" href="/b.png"><link rel="icon" href="/c.png"><link rel="icon" href="/d.png"></head></html>`],
+    "/favicon.ico": ["image/x-icon", ico(32)],
+  },
+  "sized.example": {
+    "/": ["text/html", `<html><head><link rel="icon" href="/s32.png" sizes="32x32"><link rel="icon" href="/s192.png" sizes="192x192"><link rel="manifest" href="/m.json"></head></html>`],
+    "/s32.png": ["image/png", png(32)],
+    "/s192.png": ["image/png", png(192)],
+    "/m.json": ["application/json", JSON.stringify({ icons: [{ src: "/m512.png", sizes: "512x512" }] })],
+  },
+  "small-only.example": {
+    "/": ["text/html", `<html><head><link rel="icon" href="/s48.png" sizes="48x48"></head></html>`],
+    "/s48.png": ["image/png", png(48)],
+    "/favicon.ico": ["image/x-icon", ico(32)],
+  },
+};
 const siteAsked: { host: string; path: string }[] = [];
 const sites = http.createServer((req, res) => {
   const host = String(req.headers.host ?? "").replace(/:\d+$/, "");
@@ -251,6 +318,17 @@ const sites = http.createServer((req, res) => {
     return send(200, "image/svg+xml", "<svg xmlns='http://www.w3.org/2000/svg'/>", leaky);
   }
   if (host === CO.gran.site && p === "/") return send(302, "text/plain", "", { location: "http://other-brand.example/" });
+  // Halcyon: no icon link, only its web app manifest, which lists an SVG, a monochrome mask, one on another site and a 192px PNG.
+  if (host === CO.halc.site) {
+    if (p === "/") return send(200, "text/html", `<html><head><link rel="manifest" href="/app/site.webmanifest"></head></html>`);
+    if (p === "/app/site.webmanifest")
+      return send(200, "application/manifest+json", JSON.stringify({ icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml" }, { src: "mono-512.png", sizes: "512x512", purpose: "monochrome" }, { src: "https://cdn.elsewhere.example/h512.png", sizes: "512x512" }, { src: "/img/h192.png", sizes: "192x192", type: "image/png" }] }));
+    if (p === "/img/h192.png") return send(200, "image/png", png(192), leaky);
+    return send(404, "text/plain", "no");
+  }
+  const more = MORE_SITES[host]?.[p];
+  if (more) return send(200, more[0], more[1]);
+  if (host in MORE_SITES) return send(404, "text/plain", "no");
   return send(404, "text/plain", "not found");
 });
 
@@ -680,6 +758,99 @@ async function main() {
   for (let k = 0; k <= Lg.LOGO_PER_MINUTE; k++) burst.push((await ask("c_madeupmadeup2", "198.51.100.99")).status);
   const other = await ask(pub(CO.acme.id), "198.51.100.100");
   check("past LOGO_PER_MINUTE a minute from one address: 429, other addresses unaffected", burst.at(-1) === 429 && burst.slice(0, -1).every((s) => s === 204) && other.status === 200, { last: burst.at(-1), other: other.status });
+
+  // Where else an icon is looked for, on the company's own site only.
+  const sizeOf = (img: Awaited<ReturnType<typeof Lg.fetchSiteIcon>>) => (img ? Lg.imageWidth(new Uint8Array(img.body)) : null);
+  const askedAt = (host: string, since: number) => siteAsked.slice(since).filter((x) => x.host === host).map((x) => x.path);
+  const iconAt = async (host: string) => {
+    const at = siteAsked.length;
+    const img = await Lg.fetchSiteIcon(host);
+    return { w: sizeOf(img), type: img?.type ?? null, asked: askedAt(host, at), others: siteAsked.slice(at).filter((x) => x.host !== host) };
+  };
+  process.env.RN_LOGO_LOOKUP = "on";
+  Lg.forgetIcons();
+  from = siteAsked.length;
+  const halc = await ask(pub(CO.halc.id));
+  const halcAsked = siteAsked.slice(from);
+  check(
+    "the web app manifest the homepage links: its 192px PNG, never its SVG, its monochrome mask or the one on another site",
+    halc.status === 200 && Lg.imageWidth(new Uint8Array(await halc.arrayBuffer())) === 192 && halcAsked.some((x) => x.path === "/app/site.webmanifest") && halcAsked.every((x) => x.host === CO.halc.site && !/svg|mono|h512/.test(x.path)),
+    { status: halc.status, asked: halcAsked },
+  );
+  const guessed = await iconAt("guessed-manifest.example");
+  check("no manifest link: /site.webmanifest, then /manifest.json, and its 256px icon", guessed.w === 256 && guessed.asked.includes("/site.webmanifest") && guessed.asked.includes("/manifest.json") && !guessed.others.length, guessed);
+  const ldSq = await iconAt("ld-square.example");
+  check("the schema.org Organization logo in JSON-LD, on the company's own site (the one on another site passed over)", ldSq.w === 200 && ldSq.asked.includes("/brand/logo-200.png") && !ldSq.others.length, ldSq);
+  const ldWide = await iconAt("ld-wide.example");
+  check("a JSON-LD logo that is a wide wordmark is passed over: /favicon.ico", ldWide.w === 32 && ldWide.type === "image/x-icon" && ldWide.asked.includes("/wordmark.png"), ldWide);
+  const touch = await iconAt("touch-guess.example");
+  check(
+    "small icon links only: /apple-touch-icon.png (180px) is asked for and wins; the mask-icon (SVG) is never read",
+    touch.w === 180 && touch.asked.includes("/apple-touch-icon.png") && !touch.asked.includes("/mask.svg"),
+    touch,
+  );
+  const many = await iconAt("many-links.example");
+  check("four icon links that all fail: /favicon.ico is still tried, within ICON_TRIES images", many.w === 32 && many.asked.includes("/favicon.ico") && many.asked.filter((x) => /\.(png|ico)$/.test(x)).length <= Lg.ICON_TRIES, many);
+  const sized = await iconAt("sized.example");
+  check("the largest declared icon of 64px or more is read first, and then no manifest", sized.w === 192 && sized.asked.includes("/s192.png") && !sized.asked.includes("/s32.png") && !sized.asked.includes("/m.json"), sized);
+  const small = await iconAt("small-only.example");
+  check("nothing of 64px: the largest found (48px over a 32px favicon)", small.w === 48 && small.asked.includes("/favicon.ico"), small);
+  check("an .ico's width is its largest image", Lg.imageWidth(ico3) === 48, Lg.imageSize(ico3));
+  const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xc0, 0, 17, 8, 0, 120, 0, 96, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]);
+  const webp = Uint8Array.from([...Buffer.from("RIFF"), 0, 0, 0, 0, ...Buffer.from("WEBPVP8X"), 10, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 63, 0, 0]);
+  check("JPEG and WebP sizes are read from their headers", JSON.stringify(Lg.imageSize(jpeg)) === '{"w":96,"h":120}' && JSON.stringify(Lg.imageSize(webp)) === '{"w":128,"h":64}', { jpeg: Lg.imageSize(jpeg), webp: Lg.imageSize(webp) });
+  const mIcons = Lg.manifestIcons({ icons: [{ src: "a.svg" }, { src: "data:image/png;base64,AA", sizes: "64x64" }, { src: "m.png", sizes: "96x96", purpose: "monochrome" }, { src: "k.png", sizes: "96x96", purpose: "maskable" }, { src: "ok.png", sizes: "48x48 144x144" }] }, "https://x.example/static/m.json");
+  check("manifest icons: no SVG, no inline data, no monochrome mask; sizes read, a maskable one counted smaller", mIcons.map((c) => `${c.url}@${c.size}`).join() === "https://x.example/static/k.png@76,https://x.example/static/ok.png@144", mIcons);
+  check("a page with no JSON-LD, or a broken block, has no logo", Lg.ldLogos(`<script type="application/ld+json">{oops</script>`, "https://x.example/").length === 0);
+  check(
+    "no request in these went anywhere but each company's own site",
+    siteAsked.slice(from).every((x) => x.host === CO.halc.site || x.host in MORE_SITES) && fetched.length === fetchedBefore,
+    [...new Set(siteAsked.slice(from).map((x) => x.host))],
+  );
+
+  /* ---------- the landing page's logos (GET /api/logo/lp_<seed>, lib/preview.ts previewLogoDomain) ---------- */
+  console.log("\nThe landing page's logos");
+  const lpAnswer = await preview({ fn: "Marketing" });
+  const lpNamed = [...lpAnswer.rows.map((r) => r.company), lpAnswer.example?.company].filter((c): c is NonNullable<typeof c> => !!c);
+  const lpOf = (name: string) => lpNamed.find((c) => c.name === name)?.logoId ?? null;
+  const acmeLp = lpOf(CO.acme.name);
+  const halcLp = lpOf(CO.halc.name);
+  check(
+    "every named company on the landing page carries a logo id: \"lp_\" and its row's seed, never its public id",
+    lpNamed.length > 0 && lpNamed.every((c) => c.logoId && /^lp_[\w-]{14}$/.test(c.logoId)) && !JSON.stringify(lpAnswer).includes(pub(CO.acme.id)) && lpAnswer.rows.some((r) => r.company && `lp_${r.seed}` === r.company.logoId),
+    lpNamed,
+  );
+  from = siteAsked.length;
+  const lpAcme = acmeLp ? await ask(acmeLp) : null;
+  const lpHalc = halcLp ? await ask(halcLp) : null;
+  check("the hero's and the rows' logo ids give the company's own icon, as image bytes", lpAcme?.status === 200 && lpAcme.headers.get("content-type") === "image/png" && lpHalc?.status === 200, { acme: lpAcme?.status, halc: lpHalc?.status, acmeLp, halcLp });
+  const lpOdd = await Promise.all(["lp_madeupmadeup12", `lp_${pub(CO.acme.id)}`, "lp_", "lp_../../etc/pass", `lp_${acmeLp?.slice(3, 10)}`].map((id) => ask(id)));
+  check("a made-up, short or public-id logo id: 204 with no body, nothing fetched", lpOdd.every((r) => r.status === 204) && siteAsked.length === from, lpOdd.map((r) => r.status));
+  // Open-role companies kept back (RN_PREVIEW_OPEN_ROLE_COMPANIES=0 on a test server): Halcyon's logo id from before names nothing now.
+  Object.assign(process.env, { RN_SCAN_TEST: "1", RN_PREVIEW_OPEN_ROLE_COMPANIES: "0" });
+  const keptAnswer = await preview({ fn: "Marketing" });
+  const keptRow = keptAnswer.rows.find((r) => r.kind === "open" && !r.company);
+  const halcKept = halcLp ? await ask(halcLp) : null;
+  const acmeStill = acmeLp ? await ask(acmeLp) : null;
+  check(
+    "a kept-back open-role company has no logo id, and its old one answers 204 (its row keeps its lock tile); a company the page names still shows",
+    !!keptRow && !keptAnswer.rows.some((r) => r.company?.name === CO.halc.name) && halcKept?.status === 204 && acmeStill?.status === 200,
+    { kept: !!keptRow, halc: halcKept?.status, acme: acmeStill?.status },
+  );
+  delete process.env.RN_PREVIEW_OPEN_ROLE_COMPANIES;
+  delete process.env.RN_SCAN_TEST;
+  await preview({ fn: "Marketing" });
+  process.env.RN_LOGO_LOOKUP = "off";
+  // The landing page draws them from our own route by that id, and the blurred rows draw a plain tile with no request.
+  {
+    const React = await import("react");
+    (globalThis as { React?: unknown }).React = React;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const S = await import("../app/ui/shared");
+    const hero = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: CO.acme.name, domain: CO.acme.site, seed: acmeLp ?? undefined, size: "lg" }));
+    const blur = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: "", domain: null, hidden: true, noLogo: true, seed: acmeLp?.slice(3) }));
+    check("the page asks /api/logo/lp_<seed> for a named company, and nothing for a blurred row", hero.includes(`src="/api/logo/${acmeLp}"`) && !hero.includes(CO.acme.site) && !blur.includes("/api/logo"), { hero, blur });
+  }
   await new Promise<void>((done) => sites.close(() => done()));
   const linkOrder = Lg.iconLinks(`<link rel="icon" href="/a.png" sizes="16x16"><link rel="apple-touch-icon" href="/t.png"><link rel="icon" href="/b.png" sizes="32x32"><link rel="icon" href="/c.svg"><link rel="icon" href="data:image/png;base64,AA">`, "https://x.example/");
   check("icon links best first: apple-touch-icon, then the largest, never SVG or data", linkOrder.join() === "https://x.example/t.png,https://x.example/b.png,https://x.example/a.png", linkOrder);

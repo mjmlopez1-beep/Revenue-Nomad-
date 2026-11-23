@@ -9,9 +9,9 @@
  * PREVIEW_NAMED names a company. `total` says how many rows the tab has in all.
  *
  * What leaves here is a closed list of fields (PreviewRow, PreviewExample): company facts
- * (name, domain, logo domain, industry, size, revenue band, country), role titles, functions and
- * dates. Never a person (seat holder, hiring contact or member), an email, a phone, a LinkedIn
- * profile, a job posting link or a seat's rate. A seat says only that its holder is on file, and
+ * (name, domain, logo domain, a logo id made from the row's seed, industry, size, revenue band,
+ * country), role titles, functions and dates. Never a person (seat holder, hiring contact or
+ * member), an email, a phone, a LinkedIn profile, a job posting link or a seat's rate. A seat says only that its holder is on file, and
  * whether they are a Revenue Nomad member. A role title with a link or an address in it is
  * replaced by a plain "Fractional <function> role".
  *
@@ -33,7 +33,7 @@
  */
 import { createHash, randomBytes } from "crypto";
 import { previewCompanies, type PreviewCompany } from "./table";
-import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES } from "./tableFields";
+import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, siteKey } from "./tableFields";
 import { titleWithout } from "./scan/clean";
 import { isBelowLead, isDirectorPlus, isGtmFunction, keepsNonGtm } from "./seniority";
 import { countryName, countryOf, deriveAll, fractionalLeadFns, fullTimeLead, isFirm, isHire, isOpenRole, known, repeatHirer, shown, type CoInfo } from "@/app/post/model";
@@ -79,6 +79,12 @@ export interface PreviewCompanyOut {
   domain: string | null;
   /** The domain the table draws the logo from (CompanyRec.iconDomain), else `domain`. */
   logo: string | null;
+  /**
+   * The page asks GET /api/logo/<logoId> for the icon (lib/logo.ts, previewLogoDomain): "lp_" and
+   * the row's own stable seed, never the company's public id (which the app shows on a locked
+   * company, so it would match the two up). Null when the company has no website of its own.
+   */
+  logoId: string | null;
 }
 
 export interface PreviewRow {
@@ -182,6 +188,11 @@ interface Source {
    */
   namedOpen: Set<string>;
   cap: number;
+  /**
+   * The icon's domain by row seed, for the companies the preview may name: every listed company
+   * with no open role, and the named open-role ones. Never a kept-back open-role company.
+   */
+  logos: Map<string, string>;
 }
 let source: Source | null = null;
 const answers = new Map<string, { at: number; a: PreviewAnswer }>();
@@ -194,7 +205,19 @@ const countryOfInfo = (i: CoInfo) => {
   const c = countryOf(i.c);
   return c ? countryName(c) : null;
 };
-const companyOut = (i: CoInfo): PreviewCompanyOut => ({ name: i.c.name, domain: i.domain ?? null, logo: i.c.iconDomain ?? i.domain ?? null });
+/** The prefix of a preview logo id (PreviewCompanyOut.logoId). */
+export const PREVIEW_LOGO_PREFIX = "lp_";
+/** The domain an icon is read from: the website's host, as the app's logoDomain has it (a shared host such as a job board has none). */
+const logoSite = (p: PreviewCompany) => {
+  const k = siteKey(p.site);
+  return k && !k.includes("/") ? k : null;
+};
+const companyOut = (i: CoInfo, p: PreviewCompany): PreviewCompanyOut => ({
+  name: i.c.name,
+  domain: i.domain ?? null,
+  logo: i.c.iconDomain ?? i.domain ?? null,
+  logoId: logoSite(p) ? `${PREVIEW_LOGO_PREFIX}${p.seed}` : null,
+});
 /** The raw title of an open role, when one is on file (never a system placeholder). */
 const rawRole = (e: EngagementRec) => (e.cells.role?.s === "value" && !e.cells.role.system ? e.cells.role.v : null);
 /** An open role the homepage leads with: a GTM function and a leadership title (a CMO, VP Sales, Head of Growth or Sales Leader; never a Manager or Staff title). A Controller never leads. */
@@ -273,7 +296,7 @@ function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample
     best = {
       score,
       x: {
-        company: { ...companyOut(i), industry: shown(i.c.cells.industry), employees, revenue: shown(i.c.cells.revenue), country: countryOfInfo(i) },
+        company: { ...companyOut(i, p), industry: shown(i.c.cells.industry), employees, revenue: shown(i.c.cells.revenue), country: countryOfInfo(i) },
         open: role && roleFn && roleT ? { title: roleT, function: roleFn, when: role.posted ?? role.opened ?? null } : null,
         seat: { function: fnOf(seat)!, start: monthOf(shown(seat.cells.start)), rnMember: p.rnHolders.has(seat.id) },
       },
@@ -323,9 +346,27 @@ async function sourceNow(): Promise<Source> {
     if (namedOpen.size >= cap) break;
     namedOpen.add(x.seed);
   }
-  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: ex?.x ?? null, namedOpen, cap };
+  const logos = new Map<string, string>();
+  for (const { i, p } of infos) {
+    const site = logoSite(p);
+    if (site && listedCo(i) && (!i.engs.some(isOpenRole) || namedOpen.has(p.seed))) logos.set(p.seed, site);
+  }
+  source = { version, infos, options: { functions: PREVIEW_FUNCTIONS, industries, countries }, example: ex?.x ?? null, namedOpen, cap, logos };
   answers.clear();
   return source;
+}
+
+/**
+ * The domain behind a preview logo id (PreviewCompanyOut.logoId), for GET /api/logo/<id>
+ * (lib/logo.ts). Only a company this landing may name: a kept-back open-role company, a blurred
+ * row (its seed is made per answer) or a made-up id gives null, so its tile stays as it is.
+ */
+export async function previewLogoDomain(logoId: string): Promise<string | null> {
+  const id = String(logoId ?? "");
+  if (!id.startsWith(PREVIEW_LOGO_PREFIX)) return null;
+  const seed = id.slice(PREVIEW_LOGO_PREFIX.length);
+  if (!/^[\w-]{14}$/.test(seed)) return null;
+  return (await sourceNow()).logos.get(seed) ?? null;
 }
 
 /** Try it lists only companies with their industry and revenue on file (the owner's rule): a row with those blank tells a visitor too little. */
@@ -393,7 +434,7 @@ export async function preview(q: { fn?: string | null; industry?: string | null;
     const base = {
       seed: p.seed,
       function: fn,
-      company: named ? companyOut(i) : null,
+      company: named ? companyOut(i, p) : null,
       industry: shown(i.c.cells.industry),
       employees: shown(i.c.cells.employees),
       revenue: shown(i.c.cells.revenue),

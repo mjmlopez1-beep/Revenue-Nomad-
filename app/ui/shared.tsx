@@ -489,8 +489,11 @@ export function LockedSite({ seed, className }: { seed: string; className?: stri
 
 /* ---------- company logo ---------- */
 
-/** A company's public id (lib/table.ts pubId), the only thing GET /api/logo/<id> takes. */
-const COMPANY_ID = /^c_[\w-]{6,40}$/;
+/**
+ * What GET /api/logo/<id> takes: a company's public id (lib/table.ts pubId), or a landing page logo
+ * id ("lp_" and a preview row's seed, lib/preview.ts PreviewCompanyOut.logoId).
+ */
+const COMPANY_ID = /^(c_[\w-]{6,40}|lp_[\w-]{14})$/;
 /**
  * The logo addresses that answered with no logo (a 204, which the browser reports as a load error
  * without a word in the console) or a blank icon, on this page: never asked for again while it is
@@ -505,11 +508,12 @@ const noLogoAt = (src: string | undefined) => {
  * Every logo comes from our own GET /api/logo/<public id> (lib/logo.ts): the server reads the
  * icon from the company's own website and sends only its bytes. The browser never asks an icon
  * service, so no outside service learns which companies a member looks at. `seed` is the
- * company's public id; without one, a known company's id is found by its domain (rememberLogo).
+ * company's public id (or, on the landing page, the preview's logo id); without one, a known
+ * company's id is found by its domain (rememberLogo).
  *
  * `hidden`: a locked company's logo. With no logo (a 204, or a blank icon) it is a plain soft tile
  * in a color from the id, with a quiet building in it: never letters, which would read as a real
- * mark. `noLogo`: the tile only (the landing page's rows have no company id). A company the member
+ * mark. `noLogo`: the tile only (the landing page's blurred rows, which have no company). A company the member
  * can name with no logo (no id, no website, or a 204) gets its lettered tile.
  */
 export function CompanyLogo({
