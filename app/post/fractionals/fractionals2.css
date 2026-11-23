@@ -1,0 +1,987 @@
+/*
+ * Fractionals in the new look (Fractionals.dc.html): the workbench frame (workbench.css: wb, wb-strip,
+ * wb-ask, wb-selbar, wb-body, wb-table, wb-bottom) with the leads strip, the views, the chips, the
+ * card panel and your own card. Pine for actions and the open row, mint for "open" and "on Merlin",
+ * volt only for credits earned, ember only for the count of new leads (one mark).
+ */
+.fy-host {
+  padding: 0 !important;
+  max-width: none !important;
+}
+.fy {
+  height: auto;
+  min-height: calc(100vh - 56px);
+}
+.fy .btn {
+  height: 40px;
+}
+.fy .btn-sm {
+  height: 36px;
+}
+.fy-big {
+  height: 44px !important;
+  font-size: 15px;
+  font-weight: 700;
+  justify-content: center;
+  flex: none;
+}
+.fy-card-acts > .fy-big {
+  flex: 1 1 110px;
+}
+.fy-pine {
+  background: var(--pine) !important;
+  border-color: var(--pine) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.fy-pine:hover {
+  background: var(--pine-hover, #0a4d3a) !important;
+}
+.fy-btn-line {
+  border-color: var(--pine) !important;
+  color: var(--pine) !important;
+  font-weight: 700;
+  background: #fff;
+}
+.fy-btn-line:disabled {
+  opacity: 0.5;
+}
+.fy-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.fy-muted {
+  color: var(--muted);
+}
+.fy-strong {
+  color: var(--pine);
+  font-weight: 700;
+}
+.fy-grow {
+  flex: 1;
+  min-width: 0;
+}
+.fy-k {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.fy-note {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+.fy-link {
+  min-height: 36px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.fy-link:hover {
+  text-decoration: underline;
+}
+.fy-under {
+  color: var(--body-ink);
+  font-weight: 400;
+  text-decoration: underline;
+}
+.fy-pill {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+  background: #f1f3f2;
+  color: #28322d;
+  border: 1px solid #f1f3f2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fy-pill-mint {
+  background: #e8f3ee;
+  color: var(--pine);
+  border-color: #b9d9ca;
+  font-weight: 700;
+}
+.fy-pill-volt {
+  background: var(--volt, #2ee59d);
+  color: var(--pine);
+  border-color: var(--volt, #2ee59d);
+  font-weight: 700;
+}
+.fy-hot {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ff5a1f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.fy-av {
+  border-radius: 50%;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a1a13;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+.fy-av-me {
+  background: var(--pine);
+  color: #fff;
+  font-size: 14px;
+}
+.fy-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.fy-who-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.fy-two {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fy-two > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fy-two > span:first-child {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* ----- the leads strip ----- */
+.fy-leads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: 10px;
+  padding: 10px 18px;
+  background: #f7f8f7;
+  border-bottom: 1px solid var(--line);
+}
+.fy-leadcol {
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fy-leadcol-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 28px;
+}
+.fy-leadcol-h h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.fy-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding-top: 6px;
+  border-top: 1px solid #eef1ef;
+}
+.fy-lead-focus {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.fy-lead-t {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fy-lead-t strong {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--ink);
+}
+.fy-lead-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.fy-leadempty {
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid #eef1ef;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* ----- views, layout, your card ----- */
+.fy-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 4px 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.fy-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-right: auto;
+}
+.fy-tab {
+  height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  font-size: 14px;
+  color: #28322d;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fy-tab.on {
+  color: var(--ink);
+  font-weight: 800;
+  border-bottom-color: var(--pine);
+}
+.fy-tab-n {
+  font-weight: 500;
+  color: var(--muted);
+}
+.fy-seg {
+  display: inline-flex;
+  margin-bottom: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.fy-seg button {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: #fff;
+  color: #28322d;
+  font-size: 14px;
+  cursor: pointer;
+}
+.fy-seg button.on {
+  background: var(--pine);
+  color: #fff;
+  font-weight: 700;
+}
+.fy-views .wb-tb {
+  margin-bottom: 4px;
+}
+.fy-you {
+  height: 36px;
+  margin-bottom: 4px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--pine);
+  background: #fff;
+  color: var(--pine);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fy-you.on {
+  background: var(--pine);
+  color: #fff;
+}
+.fy-viewpick {
+  margin: 4px auto 8px 0;
+}
+.fy-viewpick select {
+  height: 40px;
+  max-width: 260px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ----- Ask Merlin and the chips ----- */
+.fy-askbox {
+  flex: 1 1 300px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  color: var(--pine);
+}
+.fy-askbox input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  background: transparent;
+}
+.fy-headline {
+  margin-left: auto;
+  font-size: 13px;
+  color: #28322d;
+}
+.fy-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.fy-chip {
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 13px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: #28322d;
+  cursor: pointer;
+}
+.fy-chip.on {
+  border-color: var(--pine);
+  background: #e8f3ee;
+  color: var(--pine);
+  font-weight: 700;
+}
+.fy-chip-n {
+  font-weight: 500;
+}
+.fy-picker select {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: #28322d;
+  font: inherit;
+  font-size: 13px;
+  max-width: 170px;
+}
+.fy-picker.on select {
+  border-color: var(--pine);
+  background: #e8f3ee;
+  color: var(--pine);
+  font-weight: 700;
+}
+.fy-clear {
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ----- above the list ----- */
+.fy-ideal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.fy-ichip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f1f3f2;
+  color: var(--ink);
+  font-weight: 600;
+}
+.fy-net {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 18px;
+}
+.fy-net-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.fy-net-h strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.fy-net-h span {
+  flex: 1 1 280px;
+}
+.fy-net-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.fy-src {
+  padding: 4px 10px;
+  border: 1px solid #b9d9ca;
+  border-radius: 999px;
+  background: #e8f3ee;
+  color: var(--ink);
+  font-weight: 600;
+}
+.fy-three {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.fy-three-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+.fy-three-h h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.fy-three-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+}
+.fy-three-card {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fy-three-card strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+.fy-why {
+  font-size: 13px;
+  line-height: 18px;
+}
+.fy-three-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fy-three-acts > * {
+  flex: 1 1 90px;
+  justify-content: center;
+}
+.fy-selnote {
+  font-size: 13px;
+}
+
+/* ----- the table ----- */
+.fy-table {
+  min-width: 860px;
+}
+.fy-table tbody td {
+  height: 56px;
+}
+.fy-td-name {
+  min-width: 226px;
+  max-width: 320px !important;
+}
+.fy-namecell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fy-namebtn {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.fy-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fy-name.fy-muted {
+  color: var(--muted);
+}
+.fy-namebtn .fy-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fy-msg {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid var(--pine);
+  border-radius: 999px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* A speech bubble, drawn in CSS so the icon needs no asset. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23073F2F' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 5h14v11H10l-5 4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  padding: 0;
+}
+.fy-invite {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--pine);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fy-wide {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+}
+.fy-more {
+  align-self: center;
+  margin: 12px auto;
+}
+
+/* ----- cards ----- */
+.fy-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--ground, #fafaf7);
+}
+.fy-card {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+}
+.fy-card.on {
+  border: 2px solid var(--pine);
+}
+.fy-card-t {
+  font-size: 14px;
+  color: var(--ink);
+}
+.fy-card-line {
+  font-size: 13px;
+  line-height: 18px;
+}
+.fy-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+.fy-card-acts > .btn {
+  flex: 1 1 100px;
+  justify-content: center;
+}
+.fy-col {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* ----- the panel ----- */
+.fy-body {
+  min-height: 0;
+}
+.fy-main {
+  overflow: auto;
+}
+.fy-panel {
+  flex: 1 1 320px;
+  max-width: 400px;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.fy-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+.fy-panel-bar strong {
+  color: var(--ink);
+}
+.fy-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.fy-card-name {
+  margin: 0;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.fy-card-name:focus {
+  outline: none;
+}
+.fy-card-title {
+  font-size: 14px;
+  color: var(--ink);
+}
+.fy-headline-own {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.fy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.fy-card-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+.fy-hidden-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f3f5f4;
+  font-size: 14px;
+  line-height: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fy-hidden-box strong {
+  color: var(--ink);
+}
+.fy-cardtabs {
+  margin-top: 2px;
+}
+.fy-tabbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fy-serve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.fy-schip {
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: #28322d;
+  font-size: 12px;
+}
+.fy-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fy-case {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.fy-case strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+.fy-conn-h {
+  font-size: 14px;
+  color: var(--ink);
+}
+.fy-conn {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 8px;
+  border-top: 1px solid #eef1ef;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.fy-conn .fy-link {
+  align-self: flex-start;
+}
+
+/* ----- your card ----- */
+.fy-mine {
+  padding: 12px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 13px;
+}
+.fy-mine-first {
+  border: 2px solid var(--pine);
+  background: #e8f3ee;
+}
+.fy-own {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fy-own .input {
+  height: 40px;
+}
+.fy-own-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+.fy-sws {
+  display: flex;
+  flex-direction: column;
+}
+.fy-sw {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+  border-top: 1px solid #eef1ef;
+}
+.fy-sw-b {
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.fy-sw-static {
+  cursor: default;
+}
+.fy-track {
+  width: 34px;
+  height: 20px;
+  flex: 0 0 34px;
+  border-radius: 999px;
+  padding: 2px;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: flex-start;
+  background: #808a85;
+}
+.fy-track.on {
+  background: #0b6b45;
+  justify-content: flex-end;
+}
+.fy-track > span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+}
+.fy-mynet {
+  padding-top: 6px;
+  border-top: 1px solid #eef1ef;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 18px;
+}
+.fy-mynet .fy-link {
+  align-self: flex-start;
+  font-weight: 700;
+}
+
+/* ----- teams, circle, muted ----- */
+.fy-extra {
+  max-width: 780px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fy-extra h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.fy-extra .pe-sec {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fy-xrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+/* ----- phones ----- */
+.fy-phone .fy-leads,
+.fy-phone .fy-views,
+.fy-phone .fy-chips,
+.fy-phone .wb-ask,
+.fy-phone .fy-ideal,
+.fy-phone .fy-net,
+.fy-phone .fy-three,
+.fy-phone .fy-cards {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.fy-phone .fy-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.fy-phone .fy-chip,
+.fy-phone .fy-picker {
+  flex: 0 0 auto;
+}
+.fy-phone .wb-bottom {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.fy-phone .wb-bottom-tabs {
+  flex-wrap: nowrap;
+}
+.fy-phone .wb-btab {
+  white-space: nowrap;
+}
+.fy-phone .wb-status {
+  display: none;
+}
+.fy-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #fff;
+  overflow: auto;
+  display: flex;
+}
+.fy-sheet .fy-panel {
+  flex: 1;
+  max-width: none;
+  border-left: 0;
+}
+@media (max-width: 860px) {
+  .fy-panel {
+    flex: 1 1 100%;
+    max-width: none;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (min-width: 861px) {
+  .fy:not(.fy-phone) .fy-panel {
+    align-self: flex-start;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 56px);
+  }
+}

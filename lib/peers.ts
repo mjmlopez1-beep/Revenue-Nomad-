@@ -17,7 +17,9 @@
  *  - Your circle (or the one Merlin proposes), and the leads and teams between the member and peers.
  *
  * Privacy, every answer: only members who have signed in, never one who is out of the directory
- * (unless the two already talk), never a block either way, never an email address. A peer's seats
+ * (said no, or hides their name on their seats: the directory's own rule; unless the two already
+ * talk), never a block either way, never an email address. A member with Open to leads off is never
+ * offered for a lead, and a pass to them is refused. A peer's seats
  * are the seats the directory already shows the member (lib/fractionals.ts, with its locks), and a
  * company is named only where the member can see its name. A member's Google or LinkedIn contacts
  * are never read for anyone else. The one thing a peer can open for another is the lead they pass:
@@ -81,8 +83,14 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
     const icp = prof(id).icp;
     return icp && (icp.industries.length || icp.employees.length) ? { industries: icp.industries, employees: icp.employees } : null;
   };
-  /** Out of the directory: they said no, or turned Referral partners off before choosing. */
-  const hidden = (id: string) => prof(id).fractionals === false || (prof(id).fractionals === undefined && !!prof(id).partnersOff);
+  /**
+   * Out of the directory, by the directory's own rule (lib/fractionals.ts hiddenMember): they said no,
+   * turned Referral partners off before choosing, hide their name on their seats, or closed their account.
+   */
+  const hidden = (id: string) =>
+    !!s.closures?.[id] || !!prof(id).nameHidden || prof(id).fractionals === false || (prof(id).fractionals === undefined && !!prof(id).partnersOff);
+  /** Turned Open to leads off on their card: nobody can pass them a company. */
+  const leadsOff = (id: string) => !!prof(id).leadsOff;
   // The conversations between the viewer and each member, newest last message first.
   const convWith = new Map<string, StoredConversation>();
   const lastAt = (c: StoredConversation) => c.messages[c.messages.length - 1]?.at ?? c.createdAt;
@@ -133,7 +141,7 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
   const pubSeat = new Map<string, string>();
   for (const id of g.engagements.keys()) pubSeat.set(T.pubId(id), id);
   const memberByPub = new Map(idx.all.map((m) => [T.pubId(m.id), m] as const));
-  return { seed, s, me, nowMs, g, idx, tracks, p, hiddenCo, blocked, mutedBy, prof, fnOfMember, titleOf, shapeOf, hidden, convWith, related, workedWith, peerOk, nameOf, companyKind, companyName, pubCompany, pubSeat, memberByPub, lastAt };
+  return { seed, s, me, nowMs, g, idx, tracks, p, hiddenCo, blocked, mutedBy, prof, fnOfMember, titleOf, shapeOf, hidden, leadsOff, convWith, related, workedWith, peerOk, nameOf, companyKind, companyName, pubCompany, pubSeat, memberByPub, lastAt };
 }
 
 const initialsOf = (name: string) =>
@@ -366,7 +374,8 @@ function offerFor(x: Ctx): CircleOffer {
     return {
       id: best.c.id,
       name: best.c.name,
-      members: live.map((m) => ({ first: firstOf(x.idx.byId.get(m.id)!.name), fn: x.fnOfMember(m.id) })),
+      // A member out of the directory is counted, never named, to someone not in the circle yet.
+      members: live.filter((m) => !x.hidden(m.id)).map((m) => ({ first: firstOf(x.idx.byId.get(m.id)!.name), fn: x.fnOfMember(m.id) })),
       size: live.length,
       why: `${live.length} ${live.length === 1 ? "fractional" : "fractionals"} in ${fns.length ? [...new Set(fns)].slice(0, 3).join(", ") : "other functions"}, serving clients like yours.`,
     };
@@ -521,6 +530,8 @@ function picksOf(seed: Seed, s: State, me: Member, companyPub: string, rolePub: 
   const picks: (PeerPick & { score: number })[] = [];
   for (const m of x.idx.all) {
     if (!x.peerOk(m.id) || x.mutedBy(m.id, me.id)) continue;
+    // Open to leads off: never offered for a lead (a team-up is still theirs to answer).
+    if (!forTeam && x.leadsOff(m.id)) continue;
     const fn = x.fnOfMember(m.id);
     const icp = x.prof(m.id).icp;
     const fits = (!!industry && !!icp?.industries.includes(industry)) || (!!employees && !!icp?.employees.includes(employees));
@@ -670,7 +681,7 @@ export async function performPeer(token: string | null, raw: Action, origin?: st
         const first = firstOf(them.name);
         if (x.hiddenCo(coId)) throw new ActionError("Open the company first. Then you can pass it to someone great.");
         if (!x.peerOk(them.id)) throw new ActionError(`${first} isn't in Peers right now.`);
-        if (x.mutedBy(them.id, me.id)) throw new ActionError(NOT_TAKING);
+        if (x.mutedBy(them.id, me.id) || x.leadsOff(them.id)) throw new ActionError(NOT_TAKING);
         if (p.passes.some((q) => q.by === me.id && q.to === them.id && q.companyId === coId && q.status === "new")) throw new ActionError(`You passed this one to ${first} already.`);
         if (p.passes.filter((q) => q.by === me.id && nowMs - Date.parse(q.at) < DAY).length >= PASS_DAILY) throw new ActionError(`You can pass ${PASS_DAILY} leads a day. Pass more tomorrow.`);
         const roleId = a.roleId ? x.pubSeat.get(String(a.roleId)) : undefined;

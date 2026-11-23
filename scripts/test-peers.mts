@@ -228,6 +228,19 @@ async function main() {
     check("Cara's current seat is what she's working on, its company unnamed while locked for Ana", serve("Cara")?.working[0]?.name === null && serve("Cara")?.working[0]?.kind === "SaaS company of 51–200 people", serve("Cara")?.working);
     check("no one in the same function (Kai), nobody out of the directory (Rae), nobody who never signed in (Ned)", !serve("Kai") && !serve("Rae") && !serve("Ned") && !know("Rae") && !know("Ned"));
     check("someone in Already know isn't listed twice", !serve("Theo") && !serve("Finn"));
+    {
+      // Hide my name on my seats takes a member out of Peers as it takes them out of the directory (the earlier gap: Peers read only the switch).
+      await act("mem_cara", { type: "settings", nameHidden: true });
+      const h = await view("mem_ana");
+      const ctxH = { member: (await t.memberForToken(tok("mem_ana")))!, origin: "https://post.example.com" };
+      const picksH = (await peers.peerPicks(tok("mem_ana"), pub("c_acme"), null, false))!;
+      check("Hide my name: Cara is out of Peers for Ana, in every part", !h.serve.some((r) => r.name.startsWith("Cara")) && !h.know.some((r) => r.name.startsWith("Cara")) && !picksH.picks.some((p) => p.first === "Cara") && !JSON.stringify(await mcp.listPeers(ctxH)).includes("Cara"), h.serve.map((r) => r.name));
+      const fr = await import("../lib/fractionals");
+      const dirA = (await fr.fractionalsView(tok("mem_ana")))!;
+      check("and a hidden row in the directory, never named", !JSON.stringify(dirA).includes("Cara Diaz") && dirA.records.some((r) => r.keepsOut && r.fn === "Marketing"));
+      await act("mem_cara", { type: "settings", nameHidden: false });
+      check("off again: Cara is back", (await view("mem_ana")).serve.some((r) => r.name.startsWith("Cara")));
+    }
     check("no email address anywhere in the view", !JSON.stringify(v).includes("@example.com"));
     const theo = await view("mem_theo");
     const cara = await view("mem_cara");
