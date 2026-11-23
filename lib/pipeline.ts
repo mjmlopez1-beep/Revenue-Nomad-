@@ -155,6 +155,20 @@ export interface WonTerms {
   at: string;
 }
 
+/**
+ * A deal's value as the member typed it: dollars a month. Only ever what they typed (Add a deal, or
+ * the deal's card); the benchmark range is a hint beside the box, never filled in for them. A Won
+ * deal with terms counts its terms' month (monthlyValue) in place of this.
+ */
+export interface DealValue {
+  amount: number;
+  per: "month";
+}
+/** The most a month a deal may be said to be worth (as the Won terms' monthly cap). */
+export const DEAL_VALUE_MAX = 500_000;
+/** The seat pitched, at most this long. */
+export const PITCH_MAX = 60;
+
 /** The signals already used (or set aside by a correction): only newer ones move the entry again. ISO times, or days for meetings. */
 export interface SeenSignals {
   out?: string;
@@ -197,6 +211,10 @@ export interface PipelineEntry {
   lead?: { passId: string; by: string };
   /** The member went with a route in (lib/paths/plan.ts, Your way in): when. The plan itself is State.routes. */
   route?: { at: string };
+  /** What the member says the deal is worth a month, as they typed it (Add a deal, or the deal's card). Never a guess of Merlin's. */
+  value?: DealValue;
+  /** The seat the member is pitching there, in their words ("Fractional VP Sales"). */
+  pitch?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -702,6 +720,121 @@ export function wonSeatFields(w: Pick<WonTerms, "pricing" | "rate" | "hours" | "
   out.rate = w.pricing === "hourly" ? `$${w.rate}/hr` : w.rate >= 1000 && w.rate % 100 === 0 ? `$${w.rate / 1000}k/mo` : `$${w.rate}/mo`;
   if (w.hours) out.hours = String(w.hours);
   return out;
+}
+
+/* ---------- what a deal is worth, and the seat pitched ---------- */
+
+/**
+ * A deal's value from what the member sent: dollars a month ("9000", "$9,000", "9k"), or null to
+ * take it off ("" or null). A problem in words otherwise. Never a guess: only what they typed.
+ */
+export function cleanValue(raw: unknown): { value?: DealValue | null; error?: string } {
+  if (raw === null || raw === undefined || (typeof raw === "string" && !raw.trim())) return { value: null };
+  const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>).amount : raw;
+  const n = Number(String(x ?? "").replace(/[$,\s]/g, "").replace(/a\s*month$|\/mo(nth)?$|per\s*month$/i, "").replace(/k$/i, "000"));
+  if (!Number.isFinite(n) || n <= 0) return { error: "Type what it is worth a month in dollars, like 9000." };
+  if (n > DEAL_VALUE_MAX) return { error: "That looks too high for a month. Check it and try again." };
+  return { value: { amount: Math.round(n), per: "month" } };
+}
+
+/** The seat pitched as the member typed it, on one line and within PITCH_MAX, or null for none. */
+export function cleanPitch(raw: unknown): string | null {
+  const t = flat(raw, PITCH_MAX);
+  return t.length >= 2 ? t : null;
+}
+
+/**
+ * Set what a deal is worth and the seat pitched (either may be left as it is: undefined). A null
+ * takes it off. Logged in the deal's own words. Returns whether anything changed.
+ */
+export function setDeal(e: PipelineEntry, o: { value?: DealValue | null; pitch?: string | null }, nowMs: number): boolean {
+  let changed = false;
+  if (o.value !== undefined) {
+    const was = e.value?.amount ?? null;
+    const now = o.value?.amount ?? null;
+    if (was !== now) {
+      if (o.value) e.value = o.value;
+      else delete e.value;
+      logLine(e, now === null ? "Value taken off" : `Value: ${monthWords(now)}`, nowMs);
+      changed = true;
+    }
+  }
+  if (o.pitch !== undefined && (o.pitch ?? null) !== (e.pitch ?? null)) {
+    if (o.pitch) e.pitch = o.pitch;
+    else delete e.pitch;
+    logLine(e, o.pitch ? `Seat pitched: ${o.pitch}` : "Seat pitched taken off", nowMs);
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * What a deal is worth a month, as the totals count it: a Won deal's terms when it has them, else
+ * the value the member typed, else 0 (no value yet). Never more than one figure per deal.
+ */
+export function dealMonthly(e: Pick<PipelineEntry, "stage" | "won" | "value">): number {
+  if (e.stage === "won" && e.won) return monthlyValue(e.won);
+  return e.value?.amount ?? 0;
+}
+
+/**
+ * Add a deal by hand (Add a deal): the company waits at To reach out, as one added from a list does
+ * (addEntry), then moves to the stage the member picked (moveEntry, as "You marked it"), with the
+ * value and the seat pitched they typed. A company with an open deal keeps it as it is (`created`
+ * false): nothing is moved or changed there.
+ */
+export function addDeal(
+  log: PipelineLog,
+  o: { id: string; companyId: string; nowMs: number; stage?: MoveStage; value?: DealValue | null; pitch?: string | null },
+): { entry: PipelineEntry; created: boolean } {
+  const r = addEntry(log, { id: o.id, companyId: o.companyId, nowMs: o.nowMs, source: "record" });
+  if (!r.created) return r;
+  r.entry.log[r.entry.log.length - 1].text = "To reach out: you added the deal";
+  if (o.value) r.entry.value = o.value;
+  if (o.pitch) r.entry.pitch = o.pitch;
+  if (o.stage && o.stage !== "reach" && isMoveStage(o.stage)) moveEntry(r.entry, o.stage, o.nowMs);
+  return r;
+}
+
+/**
+ * The seats a member in this function might pitch, for Add a deal's choices (the member can type
+ * any other). Plain titles, the way clients write them.
+ */
+export function pitchesFor(fn: string | null | undefined): string[] {
+  switch (fn) {
+    case "Sales":
+      return ["Fractional VP Sales", "Fractional CRO", "Sales advisor"];
+    case "Marketing":
+      return ["Fractional CMO", "Fractional VP Marketing", "Marketing advisor"];
+    case "RevOps":
+      return ["Fractional head of RevOps", "Fractional VP RevOps", "RevOps advisor"];
+    case "Customer Success":
+      return ["Fractional VP Customer Success", "Fractional head of CS", "Customer Success advisor"];
+    case "Finance":
+      return ["Fractional CFO", "Fractional controller", "Finance advisor"];
+    case "Technology":
+      return ["Fractional CTO", "Fractional VP Engineering", "Technology advisor"];
+    case "Operations":
+      return ["Fractional COO", "Fractional head of Operations", "Operations advisor"];
+    case "People":
+      return ["Fractional CPO (People)", "Fractional head of People", "People advisor"];
+    case "Product":
+      return ["Fractional CPO", "Fractional head of Product", "Product advisor"];
+    default:
+      return fn && fn !== "Other" && fn !== "Executive" ? [`Fractional ${fn} lead`, `${fn} advisor`] : ["Fractional executive", "Advisor"];
+  }
+}
+
+/** The actions Add a deal and a deal's card send (lib/pipelineActions.ts takes them with the rest of "pipeline.*"). */
+export type PipelineDealAction =
+  /** Add a deal by hand at a company the member can see (its public id): its stage, value and the seat pitched. */
+  | { type: "pipeline.deal"; companyId: string; stage?: MoveStage; value?: number | string | null; pitch?: string | null }
+  /** Change what a deal is worth a month, or the seat pitched (null takes it off; left out keeps it). */
+  | { type: "pipeline.value"; id: string; value?: number | string | null; pitch?: string | null };
+
+/** "$71,500 a month in play" for Home's funnel and the board's line, or null with no value typed on an open deal. */
+export function openValueWords(v: Pick<PipelineView, "openMonthly">): string | null {
+  return v.openMonthly > 0 ? `${monthWords(v.openMonthly)} in play` : null;
 }
 
 /* ---------- what Merlin sees, and moving entries by it ---------- */
@@ -1347,8 +1480,33 @@ export interface PipelineRec {
   team?: { id: string; with: string };
   /** The member went with a route in here (Your way in): the card draws the route line (app/post/network/Ways.tsx RouteLine). */
   route?: boolean;
+  /** What the member typed it is worth a month (dollars), or null: no value yet. */
+  value: number | null;
+  /** The seat they pitch there, in their words, or null. */
+  pitch: string | null;
+  /** What it counts in the totals a month: a Won deal's terms, else the value typed, else 0 (dealMonthly). */
+  monthly: number;
+  /** The member's own proposal or contract at this company, the one most in play (lib/pipelineActions.ts papersFor). */
+  paper?: PaperRec;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The member's proposal or contract at a deal's company, as their own pipeline shows it: where it
+ * stands in a few words and what happened to it, newest first. From their own proposals and
+ * documents only; the client's name is the one the member typed as the signer.
+ */
+export interface PaperRec {
+  kind: "proposal" | "contract";
+  id: string;
+  title: string;
+  /** "Draft", "Sent", "Opened 3 times", "Signed by Dana. You sign next", "Signed by both", "Declined", "Link ended". */
+  state: string;
+  /** live: out with the client; you: waiting on the member; done: signed; closed: declined, void or ended; draft. */
+  tone: "draft" | "live" | "you" | "done" | "closed";
+  /** What happened, newest first (at most 8). */
+  log: PipelineNote[];
 }
 
 /** One intro as a member sees it: one they asked for ("asked"), or one another member asked of them ("of-you"). */
@@ -1395,6 +1553,9 @@ export interface PipelineView {
   counts: Record<Stage, number>;
   /** The month's value of Won deals with terms (dollars). */
   wonMonthly: number;
+  /** The month's value of open deals with a value typed (dollars), and how many open deals have one. */
+  openMonthly: number;
+  valued: number;
   /** What Merlin can see by itself for this member: their calendar, their Gmail, and whether Gmail is offered to them. */
   sees: { calendar: boolean; gmail: boolean; gmailOffered: boolean; google: boolean };
   /** The server's UTC day, for "overdue" and "today". */
@@ -1407,6 +1568,8 @@ export const emptyPipelineView = (nowMs = Date.now()): PipelineView => ({
   intros: [],
   counts: Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>,
   wonMonthly: 0,
+  openMonthly: 0,
+  valued: 0,
   sees: { calendar: false, gmail: false, gmailOffered: false, google: false },
   today: dayOf(nowMs),
 });

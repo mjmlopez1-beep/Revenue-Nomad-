@@ -20,6 +20,8 @@ import { randomBytes } from "crypto";
 import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import * as P from "./pipeline";
 import type { Action, ActionResult } from "./tableTypes";
+import type { StoredProposal } from "./proposals/types";
+import type { StoredDocument } from "./documents/types";
 import { networkOn } from "./google/types";
 import { gmailTester } from "./google/config";
 
@@ -154,6 +156,90 @@ function nameFor(seed: Seed, s: State, me: Member) {
   };
 }
 
+/* ---------- the member's own proposals and contracts, by company ---------- */
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const firstName = (name: string | undefined | null) => String(name ?? "").trim().split(/\s+/)[0] || "They";
+
+/** One proposal as its deal shows it: the current send's state and what happened, newest first. Read from the stored proposal only. */
+function proposalPaper(p: StoredProposal, nowMs: number): P.PaperRec {
+  const x = [...p.sends].reverse().find((y) => y.version === p.version) ?? null;
+  const log: P.PipelineNote[] = [];
+  let state = "Draft";
+  let tone: P.PaperRec["tone"] = "draft";
+  if (!x) log.push({ at: p.createdAt, text: "Draft started" });
+  for (const y of x ? p.sends.filter((z) => z.id === x.id || z.version <= x.version) : []) {
+    log.push({ at: y.sentAt, text: `Sent to ${firstName(y.signer?.name)}${y.expiresAt ? `. The signing link ends ${P.shortDay(y.expiresAt)}` : ""}` });
+    const views = y.events.filter((ev) => ev.kind === "viewed");
+    if (views.length) log.push({ at: views[views.length - 1].at, text: `${firstName(y.signer?.name)} opened it ${views.length === 1 ? "once" : `${views.length} times`}` });
+    if (y.signed) log.push({ at: y.signed.at, text: `Signed by ${y.signed.name || firstName(y.signer?.name)}` });
+    if (y.member) log.push({ at: y.member.at, text: "You countersigned" });
+    if (y.declined) log.push({ at: y.declined.at, text: "Declined" });
+    if (y.voided) log.push({ at: y.voided.at, text: "Taken back" });
+  }
+  if (x) {
+    const views = x.events.filter((ev) => ev.kind === "viewed").length;
+    const who = firstName(x.signer?.name);
+    if (x.signed) {
+      const waiting = x.memberMode === "after" && !x.member;
+      state = waiting ? `Signed by ${who}. You sign next` : "Signed by both";
+      tone = waiting ? "you" : "done";
+    } else if (x.declined) (state = "Declined"), (tone = "closed");
+    else if (x.voided) (state = "Taken back"), (tone = "closed");
+    else if (x.expiresAt && nowMs > Date.parse(x.expiresAt)) (state = "The link ended"), (tone = "closed");
+    else (state = views ? `Opened ${views === 1 ? "once" : plural(views, "time")}` : "Sent, not opened yet"), (tone = "live");
+  }
+  log.sort((a, b) => b.at.localeCompare(a.at));
+  return { kind: "proposal", id: p.id, title: p.title, state, tone, log: log.slice(0, 8) };
+}
+
+/** One contract (an uploaded document sent for signature) as its deal shows it. */
+function contractPaper(d: StoredDocument, nowMs: number): P.PaperRec {
+  const log: P.PipelineNote[] = [];
+  const others = d.signers.filter((x) => !x.sender);
+  const me = d.signers.find((x) => x.sender);
+  if (d.sentAt) log.push({ at: d.sentAt, text: `Sent for signature to ${others.map((x) => firstName(x.name)).join(", ") || "the client"}` });
+  else log.push({ at: d.createdAt, text: "Draft started" });
+  for (const x of d.signers) {
+    if (x.viewedAt && !x.sender) log.push({ at: x.viewedAt, text: `${firstName(x.name)} opened it` });
+    if (x.signed) log.push({ at: x.signed.at, text: x.sender ? "You signed" : `Signed by ${x.signed.name || firstName(x.name)}` });
+    if (x.declined) log.push({ at: x.declined.at, text: `${firstName(x.name)} declined` });
+  }
+  let state = "Draft";
+  let tone: P.PaperRec["tone"] = "draft";
+  if (d.completed) (state = "Signed by everyone"), (tone = "done");
+  else if (d.voided) (state = "Taken back"), (tone = "closed");
+  else if (d.signers.some((x) => x.declined)) (state = "Declined"), (tone = "closed");
+  else if (d.sentAt && d.expiresAt && nowMs > Date.parse(d.expiresAt)) (state = "The link ended"), (tone = "closed");
+  else if (d.sentAt) {
+    const left = others.filter((x) => !x.signed);
+    if (!left.length && me && !me.signed) (state = "Signed by the client. You sign next"), (tone = "you");
+    else (state = left.length < others.length ? `Signed by ${others.length - left.length} of ${others.length}` : others.some((x) => x.viewedAt) ? "Opened" : "Sent, not opened yet"), (tone = "live");
+  }
+  log.sort((a, b) => b.at.localeCompare(a.at));
+  return { kind: "contract", id: d.id, title: d.title, state, tone, log: log.slice(0, 8) };
+}
+
+/**
+ * The member's own proposal or contract at each company in their pipeline (internal id): the one
+ * most in play (waiting on them, then out with the client, then signed, then a draft, then closed),
+ * the newest of those. Their own records only, never another member's.
+ */
+export function papersFor(s: State, memberId: string, nowMs: number): Map<string, P.PaperRec> {
+  const out = new Map<string, { rec: P.PaperRec; at: string }>();
+  const at = new Set((s.pipeline?.[memberId]?.entries ?? []).map((e) => e.companyId));
+  if (!at.size) return new Map();
+  const RANK: Record<P.PaperRec["tone"], number> = { you: 4, live: 3, done: 2, draft: 1, closed: 0 };
+  const put = (companyId: string | null, rec: P.PaperRec, when: string) => {
+    if (!companyId || !at.has(companyId)) return;
+    const had = out.get(companyId);
+    if (!had || RANK[rec.tone] > RANK[had.rec.tone] || (RANK[rec.tone] === RANK[had.rec.tone] && when > had.at)) out.set(companyId, { rec, at: when });
+  };
+  for (const p of s.proposals ?? []) if (p.memberId === memberId) put(p.companyId, proposalPaper(p, nowMs), p.updatedAt);
+  for (const d of s.documents ?? []) if (d.memberId === memberId) put(d.companyId, contractPaper(d, nowMs), d.updatedAt);
+  return new Map([...out].map(([k, v]) => [k, v.rec]));
+}
+
 /** The member's pipeline as they see it. Public ids only; another member's entries never. */
 export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.now()): P.PipelineView {
   const g = T.graph(seed, s);
@@ -169,6 +255,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
     teamAt.set(t.companyId, { id: t.id, with: T.firstName(idx.byId.get(t.by === me.id ? t.with : t.by)?.name ?? "a peer") });
   }
   const gmail = gmailSees(s, me);
+  const papers = papersFor(s, me.id, nowMs);
   const introWho = (i: P.IntroRecord) => (i.introducer.memberId ? idx.byId.get(i.introducer.memberId)?.name ?? "A former member" : i.introducer.name || (i.introducer.role ? `the ${i.introducer.role}` : "Someone you know"));
   for (const e of log.entries) {
     if (!g.companies.has(e.companyId)) continue;
@@ -208,11 +295,16 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       ...(e.lead ? { lead: { id: e.lead.passId, by: idx.byId.get(e.lead.by)?.name ?? "A former member" } } : {}),
       ...(teamAt.has(e.companyId) ? { team: teamAt.get(e.companyId)! } : {}),
       ...(e.route ? { route: true } : {}),
+      value: e.value?.amount ?? null,
+      pitch: e.pitch ?? null,
+      monthly: P.dealMonthly(e),
+      ...(papers.has(e.companyId) ? { paper: papers.get(e.companyId)! } : {}),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     });
     view.counts[e.stage]++;
     if (e.stage === "won") view.wonMonthly += P.monthlyValue(e.won);
+    if (P.isOpen(e.stage) && e.value) (view.openMonthly += e.value.amount), view.valued++;
   }
   view.entries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   for (const f of P.dueFollowUps(s, me.id, nowMs)) {
@@ -334,7 +426,8 @@ export async function recordPipelineEvent(memberId: string, companyId: string, k
 
 /* ---------- the actions ---------- */
 
-type PipelineAction = Extract<Action, { type: `pipeline.${string}` }>;
+/** Every "pipeline.*" action: the shared ones (lib/tableTypes.ts) and Add a deal's own (lib/pipeline.ts PipelineDealAction). */
+type PipelineAction = Extract<Action, { type: `pipeline.${string}` }> | P.PipelineDealAction;
 
 export async function performPipeline(token: string | null, raw: Action): Promise<ActionResult> {
   const a = raw as PipelineAction;
@@ -409,6 +502,27 @@ export async function performPipeline(token: string | null, raw: Action): Promis
         ].filter(Boolean);
         if (!added && !had) throw new ActionError(parts.join(" ") || "Nothing to add.");
         return parts.join(" ");
+      }
+      case "pipeline.deal": {
+        // Add a deal by hand (the Pipeline page's Add a deal): any company the member can see, at the stage they pick, with what they typed.
+        const cid = companyOf(a.companyId);
+        if (!cid) throw new ActionError("That company isn't on Merlin anymore. Add it from its website.");
+        if (T.identityHidden(g, s, idx, tracks, me, cid)) throw new ActionError("Open the company first. Then add the deal.");
+        const v = P.cleanValue(a.value);
+        if (v.error) throw new ActionError(v.error);
+        if (a.stage !== undefined && !P.isMoveStage(a.stage)) throw new ActionError("Pick a stage: To reach out, Sent, Replied, Meeting, Proposal, Won, Lost or Not now.");
+        const { entry: e, created } = P.addDeal(log, { id: newId(), companyId: cid, nowMs, stage: a.stage, value: v.value ?? null, pitch: P.cleanPitch(a.pitch) });
+        if (!created) return `It's in your pipeline already, at ${P.STAGE_WORDS[e.stage]}.`;
+        return `Added at ${P.STAGE_WORDS[e.stage]}. Adding a deal never spends a credit.`;
+      }
+      case "pipeline.value": {
+        // What the deal is worth a month, and the seat pitched: the member's own words, changed on the card.
+        const e = entry(a.id);
+        const v = a.value === undefined ? { value: undefined } : P.cleanValue(a.value);
+        if (v.error) throw new ActionError(v.error);
+        const changed = P.setDeal(e, { value: v.value, pitch: a.pitch === undefined ? undefined : P.cleanPitch(a.pitch) }, nowMs);
+        if (!changed) return "Nothing to change.";
+        return v.value ? `Saved: ${P.monthWords(v.value.amount)}.` : v.value === null ? "Value taken off." : "Saved.";
       }
       case "pipeline.followed": {
         const e = entry(a.id);
