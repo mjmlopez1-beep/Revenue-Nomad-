@@ -831,7 +831,7 @@ function Record({
         {(r.cases?.length || (r.you && closeOn)) && (
           <section className="fr-rsec" aria-labelledby="fr-cases-h">
             <h3 id="fr-cases-h">
-              Case studies{r.cases?.length ? <span className="num fr-cnt">{r.cases.length}</span> : null}
+              Case studies{r.cases?.length ? <> <span className="num fr-cnt">{r.cases.length}</span></> : null}
               <span className="fr-rsec-sub">from {r.you ? "your" : "their"} Evidence Bank</span>
             </h3>
             {r.cases?.length ? (
