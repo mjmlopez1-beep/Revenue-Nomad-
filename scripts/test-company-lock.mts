@@ -39,8 +39,15 @@
  */
 import http from "node:http";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import Module, { register } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+// The company page imports its stylesheets: in this process a stylesheet is nothing.
+(Module as unknown as { _extensions: Record<string, (m: { exports: unknown }) => void> })._extensions[".css"] = (m) => {
+  m.exports = {};
+};
+register(`data:text/javascript,${encodeURIComponent('export async function load(url, ctx, next) { return /\\.css(\\?|$)/.test(url) ? { format: "module", source: "", shortCircuit: true } : next(url, ctx); }')}`);
 
 const dir = mkdtempSync(path.join(tmpdir(), "rn-lock-"));
 const BASE = "https://post.example.com";
@@ -712,6 +719,34 @@ async function main() {
   // Nora added a company of her own called "Irisdale" (Add by name, above): that one is hers to see.
   const lockedIds = ALL.filter((x) => !coOf(vLock, x) || coOf(vLock, x)!.hidden);
   check("nor does the view the page is built from", !/google\.com\/s2|duckduckgo|favicon/i.test(JSON.stringify(vLock)) && leaks(vLock, lockedIds).filter((x) => x.toLowerCase() !== "irisdale").length === 0, { ids: lockedIds, leaks: leaks(vLock, lockedIds), icon: JSON.stringify(vLock).match(/.{40}(favicon|duckduckgo).{40}/i)?.[0] });
+  // The company page (company/CompanyPage.tsx, the new look's record): every tab of every locked company, first visit and not.
+  const { CompanyRecord } = await import("../app/post/company/CompanyPage");
+  const { TABS } = await import("../app/post/company/companyModel");
+  const { UiCtx, CellUiCtx } = await import("../app/post/ui");
+  const noop = () => {};
+  const uiFor = (me: unknown) => ({ me, act: async () => ({ ok: true, message: "" }), layout: "desktop", busy: new Set(), flash: new Set(), pulse: null, unlock: noop, unlockMany: async () => true, edit: noop, fill: async () => true, openCompany: noop, openAdd: noop, isHidden: (id: string) => locked.some((c) => c.id === id), holdsSeat: () => false, addable: () => [], seats: { n: 0, missing: 0 }, openSeats: noop, openPage: noop, contact: null });
+  const pageOf = (vw: typeof vLock, i: ReturnType<typeof M.deriveAll>[number], tab: (typeof TABS)[number], first: boolean) =>
+    renderToStaticMarkup(
+      React.createElement(
+        UiCtx.Provider,
+        { value: uiFor(vw.me) as never },
+        React.createElement(CellUiCtx.Provider, { value: uiFor(vw.me) as never }, React.createElement(CompanyRecord, { i, focus: null, pos: { n: 1, of: 2 }, onClose: noop, onStep: noop, crumbs: [{ label: "Companies" }], first, startTab: tab })),
+      ),
+    );
+  const lockedInfos = M.deriveAll(vLock.companies).filter((i) => i.c.hidden);
+  const pages = lockedInfos.flatMap((i) => TABS.flatMap((t) => [pageOf(vLock, i, t, true), pageOf(vLock, i, t, false)]));
+  const pageLeaks = leaks(pages.join("\n"), lockedIds).filter((x) => x.toLowerCase() !== "irisdale");
+  check("the company page never shows a locked company's name, website, LinkedIn or About, on any tab, first visit or not", lockedInfos.length > 3 && pages.length === lockedInfos.length * TABS.length * 2 && pageLeaks.length === 0, pageLeaks);
+  const lockedHrefs = pages.join("\n").match(/href="[^"]*"/g) ?? [];
+  check("and it links to no company's site: no website, public company page or job posting while it is locked", lockedHrefs.every((h) => !lockedIds.some((id) => { const c = Object.values(CO).find((x) => x.id === id); return !!c && h.toLowerCase().includes(c.site.split(".")[0]); }) && !/linkedin\.com\/company|\/jobs\/|\/careers\//.test(h)), lockedHrefs.slice(0, 10));
+  // The same page at a company the member paid for names it (so the check above is not empty by accident).
+  const vOlga = await view("tok-olga-lock");
+  const elm = M.deriveAll(vOlga.companies).find((i) => i.c.id === pub(CO.elm.id))!;
+  const elmPage = pageOf(vOlga, elm, "overview", false);
+  check("and at a company the member opened, the page names it and links its website", !!elm && !elm.c.hidden && elmPage.includes(CO.elm.name) && elmPage.includes(CO.elm.site) && !/Free, showing now/.test(elmPage));
+  const lockedPage = pages[0];
+  check("a locked company's page says Locked company, what is free, what opening costs and has one button to open it", /<h1[^>]*>Locked company<\/h1>/.test(lockedPage) && /Free, showing now/.test(lockedPage) && /Opens with the company/.test(lockedPage) && /Still locked after that/.test(lockedPage) && (lockedPage.match(/Unlock company/g) ?? []).length >= 1 && !/Unlock all/.test(lockedPage));
+  check("its tabs are a tab list, and the title takes focus (tabindex -1)", /role="tablist"/.test(lockedPage) && (lockedPage.match(/role="tab"/g) ?? []).length === TABS.length && /role="tabpanel"/.test(lockedPage) && /<h1 class="co-name-h" tabindex="-1">/.test(lockedPage));
   const tile = renderToStaticMarkup(React.createElement(S.CompanyLogo, { name: "", domain: null, hidden: true, seed: "Zq3-preview-seed", noLogo: true }));
   check("with no logo, a plain soft tile: a building, never made-up letters", /class="logo logo-locked"/.test(tile) && /<svg/.test(tile) && !/>[A-Z?]{1,2}</.test(tile) && !tile.includes("/api/logo"), tile);
   const noService = (h: string) => !/google|duckduckgo|clearbit|favicon|https?:\/\//i.test(h);

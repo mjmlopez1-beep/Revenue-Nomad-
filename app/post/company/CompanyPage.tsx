@@ -74,6 +74,8 @@ export interface CompanyRecordProps {
   actions?: ReactNode;
   /** The person bubble (app/post/PersonBubble.tsx, once it exists); PersonPeek stands in. */
   bubble?: (o: BubbleProps) => ReactNode;
+  /** The tab to open at, in place of the one `focus` picks. */
+  startTab?: TabKey;
   /** The "what this page is for" strip is dismissed, and dismissing it. */
   stripOff?: boolean;
   onStripOff?: () => void;
@@ -90,14 +92,14 @@ function whyFits(i: CoInfo, mine: string | null): string {
 }
 
 export function CompanyRecord(props: CompanyRecordProps) {
-  const { i, focus, pos, onClose, onStep, crystal, crumbs, first = false, benchmarks, mySeats, contact, actions, bubble, stripOff, onStripOff } = props;
+  const { i, focus, pos, onClose, onStep, crystal, crumbs, first = false, benchmarks, mySeats, contact, actions, bubble, startTab, stripOff, onStripOff } = props;
   const ui = useUi();
   const app = useAppMaybe();
   const c = i.c;
   const coarse = useMedia("(hover: none) and (pointer: coarse)");
   const env = recordEnv(i, { touch: coarse, phone: false, contact: contact ?? ui.contact ?? null });
   const fromBall = !!crystal && (ui.me.crystal === "all" || ui.me.crystal === "one");
-  const [tab, setTab] = useState<TabKey>(() => tabFor(i, focus));
+  const [tab, setTab] = useState<TabKey>(() => startTab ?? tabFor(i, focus));
   const [peek, setPeek] = useState<{ p: PersonRec; e: EngagementRec | null; el: HTMLElement } | null>(null);
   const [details, setDetails] = useState<string | null>(null);
   const [cardOf, setCardOf] = useState<string | null>(null);
