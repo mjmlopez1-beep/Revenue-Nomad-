@@ -274,7 +274,11 @@ export function savedViewAction(
     const id = keep ? (v.id as string) : newId();
     const made = typeof v.createdAt === "string" && Number.isFinite(Date.parse(v.createdAt)) && Date.parse(v.createdAt) <= Date.parse(now) ? new Date(v.createdAt).toISOString() : now;
     const name = cleanName(v.name) || describeAlert(criteria);
-    const fields = cleanListFields({ kind: v.kind, cols: v.cols, starter: v.starter, alert: v.alert });
+    // The alert as Me.savedViews read it for a view saved before lists had one (alertOf) is no alert of its own: it stays out, so the view comes back as it was.
+    const a0 = v.alert as Partial<ListAlert> | undefined;
+    const d0 = alertOf({ email: v.email === false ? false : undefined });
+    const ownAlert = a0 && typeof a0 === "object" && !(a0.on === d0.on && a0.email === d0.email && a0.slack === d0.slack) ? a0 : undefined;
+    const fields = cleanListFields({ kind: v.kind, cols: v.cols, starter: v.starter, alert: ownAlert });
     const back: SavedSearch = { id, name, ...criteria, createdAt: made, ...(place !== undefined ? { place } : {}), ...(v.email === false ? { email: false } : {}), ...fields };
     if (back.alert) back.email = back.alert.on && back.alert.email;
     const at = Math.max(0, Math.min(list.length, Number.isInteger(a.at) ? (a.at as number) : list.length));

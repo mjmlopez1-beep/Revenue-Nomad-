@@ -35,7 +35,7 @@ import { LEADERS_SOURCE, LEADERS_SOURCE_SAY, checkedWords, leadItems, ledFullTim
 import { likelyWords } from "../leaders/likely";
 import { OWNSITE_SAY } from "../ownsites/types";
 import { cleanWindow } from "../hired";
-import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
+import { ALERT_MAX, alertMatches, alertOf, cleanCriteria, cleanListFields, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
 import { sameView } from "../hunt";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
@@ -1153,7 +1153,7 @@ export async function followCompany(ctx: Ctx, a: { company: string; on?: boolean
 /* ---------- alerts ---------- */
 
 export interface AlertArgs {
-  action: "save" | "list" | "delete";
+  action: "save" | "list" | "delete" | "update";
   id?: string;
   name?: string;
   function?: string;
@@ -1162,6 +1162,10 @@ export interface AlertArgs {
   revenue?: string[];
   hq?: string;
   fractional_friendly?: boolean;
+  /** A saved list's own fields (the app's lists, lib/mcp/alerts.ts): what it holds, its columns, its alert. */
+  kind?: string;
+  columns?: string[];
+  alert?: { on?: boolean; email?: boolean; slack?: boolean };
 }
 
 export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
@@ -1176,7 +1180,9 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   };
   const show = (x: SavedSearch) => {
     const { all, week } = counts(x);
-    const { id, name, createdAt, place, email, ...criteria } = x;
+    // The list fields are not criteria: they show on their own, and only on a list that has them (older searches read as before).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, name, createdAt, place, email, kind, cols, starter, openedAt: _opened, alert, ...criteria } = x;
     return {
       id,
       name,
@@ -1184,6 +1190,10 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
       saved: dayOfIso(createdAt),
       ...(place !== undefined ? { saved_in: "the Merlin app" } : {}),
       weekly_email: email !== false,
+      ...(kind ? { kind } : {}),
+      ...(cols?.length ? { columns: cols } : {}),
+      ...(starter ? { made_for_you: true } : {}),
+      ...(alert ? { alert: { on: alert.on, email: alert.email, slack: alert.slack } } : {}),
       open_now: all.roles.length,
       new_this_week: week,
     };
@@ -1199,7 +1209,26 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
     if (!gone) throw new ToolProblem("No saved search with that id. Use alerts with action list to see them.");
     return { message: "Deleted that saved search." };
   }
-  if (a.action !== "save") throw new ToolProblem('action is "save", "list" or "delete".');
+  if (a.action === "update") {
+    // A saved search's list fields: what it holds, its columns, its alert. Its criteria stay as saved.
+    const fields = cleanListFields({ kind: a.kind, cols: a.columns, alert: a.alert });
+    if (!Object.keys(fields).length) throw new ToolProblem("Say what to change: kind, columns or alert.");
+    const after = await updateConnector((c) => {
+      const list = c.alerts[ctx.member.id] ?? [];
+      const at = list.findIndex((x) => x.id === a.id);
+      if (at < 0) return null;
+      const cur = list[at];
+      // An alert given in part keeps the rest as it was; the weekly email follows the alert.
+      const alert = fields.alert ? { ...alertOf(cur), ...Object.fromEntries(Object.entries(a.alert ?? {}).filter(([, v]) => typeof v === "boolean")) } : cur.alert;
+      const next: SavedSearch = { ...cur, ...fields, ...(alert ? { alert: { on: !!alert.on, every: "weekly" as const, email: alert.email !== false, slack: alert.slack !== false } } : {}) };
+      if (next.alert) next.email = next.alert.on && next.alert.email;
+      c.alerts[ctx.member.id] = list.map((x, k) => (k === at ? next : x));
+      return next;
+    });
+    if (!after) throw new ToolProblem("No saved search with that id. Use alerts with action list to see them.");
+    return { message: `Updated "${after.name}".`, saved_search: show(after) };
+  }
+  if (a.action !== "save") throw new ToolProblem('action is "save", "list", "update" or "delete".');
   const { criteria, problems } = cleanCriteria(a);
   if (problems.length) throw new ToolProblem(problems.join(". "));
   if (!Object.keys(criteria).length) throw new ToolProblem("Say what to look for: a function, an industry, a size, a revenue band or a place.");
@@ -1215,7 +1244,10 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
     name: String(a.name ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100) || describeAlert(criteria),
     ...criteria,
     createdAt: new Date().toISOString(),
+    // The list fields, when given: a list saved here reads in the app as one saved there.
+    ...cleanListFields({ kind: a.kind, cols: a.columns, alert: a.alert }),
   };
+  if (saved.alert) saved.email = saved.alert.on && saved.alert.email;
   await updateConnector((c) => {
     c.alerts[ctx.member.id] = [...(c.alerts[ctx.member.id] ?? []), saved].slice(-ALERT_MAX);
   });

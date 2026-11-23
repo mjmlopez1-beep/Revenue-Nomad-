@@ -199,6 +199,26 @@ async function main() {
   check("and the list has each one once", all.saved_searches.length === (await viewsOf(VI)).length && all.saved_searches.length === 4, all.saved_searches.length);
   const cdel = (await tools.alerts(ctx, { action: "delete", id: c1.saved_search.id })) as { message: string };
   check("the connector still deletes", /Deleted/.test(cdel.message) && (await viewsOf(VI)).length === 3);
+
+  console.log("\nThe connector reads and writes a list's own fields");
+  type Out = { message: string; saved_search: { id: string; criteria: Record<string, unknown>; kind?: string; columns?: string[]; alert?: { on: boolean; email: boolean; slack: boolean }; weekly_email: boolean } };
+  const before = (await tools.alerts(ctx, { action: "list" })) as { saved_searches: Out["saved_search"][] };
+  check("a search saved before lists says nothing new: no kind, columns or alert, and they are never criteria", before.saved_searches.every((x) => !("kind" in x) && !("columns" in x) && !("alert" in x) && !("alert" in x.criteria) && !("cols" in x.criteria)), before.saved_searches);
+  const l1 = (await tools.alerts(ctx, { action: "save", name: "Marketing at clinics", function: "Marketing", kind: "companies", columns: ["company", "heldBy", "decider", "bad id!"], alert: { on: true, email: false, slack: true } })) as Out;
+  check("save keeps the kind, the clean columns and the alert, and the weekly email follows the alert", l1.saved_search.kind === "companies" && JSON.stringify(l1.saved_search.columns) === JSON.stringify(["company", "heldBy", "decider"]) && l1.saved_search.alert?.slack === true && l1.saved_search.weekly_email === false, l1.saved_search);
+  const inApp = (await viewsOf(VI)).find((v) => v.id === l1.saved_search.id) as { kind?: string; cols?: string[]; alert?: { on: boolean } } | undefined;
+  check("the app reads the same list fields", inApp?.kind === "companies" && inApp.cols?.length === 3 && inApp.alert?.on === true, inApp);
+  const l2 = (await tools.alerts(ctx, { action: "update", id: l1.saved_search.id, alert: { email: true } })) as Out;
+  check("update changes part of the alert and keeps the rest", l2.saved_search.alert?.on === true && l2.saved_search.alert.email === true && l2.saved_search.alert.slack === true && l2.saved_search.weekly_email === true, l2.saved_search);
+  const l3 = (await tools.alerts(ctx, { action: "update", id: l1.saved_search.id, columns: ["company", "rate"] })) as Out;
+  check("update changes the columns and keeps the criteria", JSON.stringify(l3.saved_search.columns) === JSON.stringify(["company", "rate"]) && l3.saved_search.criteria.function === "Marketing", l3.saved_search);
+  let refused = "";
+  try {
+    await tools.alerts(ctx, { action: "update", id: "al_nothere000" , kind: "people" });
+  } catch (e) {
+    refused = (e as Error).message;
+  }
+  check("update on a search that is gone says so", /No saved search with that id/.test(refused), refused);
 }
 
 try {

@@ -86,11 +86,12 @@ export function alertOf(a: Pick<SavedSearch, "alert" | "email">): ListAlert {
   return { on, every: "weekly", email: on, slack: on };
 }
 
-/** Whether new open roles on this list go to Slack (lib/notify/events.ts reads every saved list today; the merge adds this check there). */
-export const slackOn = (a: Pick<SavedSearch, "alert" | "email">) => {
-  const x = alertOf(a);
-  return x.on && x.slack;
-};
+/**
+ * Whether this list's news goes to Slack (lib/notify/events.ts: its new roles and its new hires).
+ * A list with an alert follows its Slack switch; a view saved before lists had alerts keeps what it
+ * always did, which is every saved view in the post, whatever its weekly email says.
+ */
+export const slackOn = (a: Pick<SavedSearch, "alert">) => (a.alert ? !!a.alert.on && a.alert.slack !== false : true);
 
 /** Column ids: letters, digits, dots, dashes and underscores, at most 40 characters, at most 30 of them. */
 const COL_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;

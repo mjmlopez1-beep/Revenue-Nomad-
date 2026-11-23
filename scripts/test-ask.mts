@@ -189,7 +189,9 @@ check("part of a name in a sentence is never a company", ask("hiring companies l
   const id = () => `al_test000${n++}`;
   const legacy: SavedSearch = { id: "al_legacy01", name: "Old view", function: "Sales", createdAt: now, place: "v=all&t=companies&f=fn:Sales" };
   const off: SavedSearch = { ...legacy, id: "al_legacy02", name: "Quiet view", email: false, place: "v=all&t=companies&f=fn:Finance" };
-  check("an old view reads its alert from its weekly email", same(alertOf(legacy), { on: true, every: "weekly", email: true, slack: true }) && alertOf(off).on === false && !slackOn(off));
+  check("an old view reads its alert from its weekly email", same(alertOf(legacy), { on: true, every: "weekly", email: true, slack: true }) && alertOf(off).on === false);
+  check("an old view keeps going to Slack, as every saved view did (its weekly email aside)", slackOn(legacy) && slackOn(off));
+  check("a list with its alert off, or its Slack off, stays out of Slack", !slackOn({ alert: { on: false, every: "weekly", email: true, slack: true } }) && !slackOn({ alert: { on: true, every: "weekly", email: true, slack: false } }));
   const out = savedViewsOut([legacy, off]);
   check("Me.savedViews keeps every old field and adds the list fields", out[0].email === true && out[1].email === false && out[0].kind === null && same(out[0].cols, []) && out[0].starter === false && out[0].alert.on === true, out[0]);
   check("listOf reads a view from an older server", listOf({ id: "x", name: "x", place: null, criteria: {}, email: false, createdAt: now }).alert.on === false);

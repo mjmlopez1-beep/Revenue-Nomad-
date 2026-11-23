@@ -15,6 +15,7 @@ import { billingVisit, claudePerDay, touch } from "../table";
 import { upgradeUrl } from "../plan";
 import { BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
 import { COUNTRIES_FIRST } from "../geo";
+import { LIST_KINDS } from "./alerts";
 import * as T from "./tools";
 import { registerProposalTools } from "./proposals";
 import { registerPeerTools } from "./peers";
@@ -317,10 +318,10 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Saved searches",
       description:
-        'Save, list or delete saved searches for new open roles, like "fractional Marketing roles at SaaS companies $5M to $20M". New matches go in the member\'s weekly email after each scan (once email is set up). action save takes the criteria and an optional name, list shows each with how many roles match now and this week, delete takes the id.',
+        'Save, list, update or delete saved searches for new open roles, like "fractional Marketing roles at SaaS companies $5M to $20M". New matches go in the member\'s weekly email after each scan (once email is set up). These are the same saved lists the member sees in the Merlin app. action save takes the criteria and an optional name (and optionally the list\'s kind, columns and alert), list shows each with how many roles match now and this week (and its kind, columns and alert when it has them), update takes the id and the kind, columns or alert to change, delete takes the id.',
       inputSchema: {
-        action: z.enum(["save", "list", "delete"]),
-        id: z.string().optional().describe("For delete."),
+        action: z.enum(["save", "list", "update", "delete"]),
+        id: z.string().optional().describe("For update and delete."),
         name: z.string().optional(),
         function: fn.optional(),
         industry: many("Industries", RN_INDUSTRIES).optional(),
@@ -328,6 +329,12 @@ export function makeServer(ctx: T.Ctx): McpServer {
         revenue: many("Yearly revenue bands", RN_REVENUE).optional(),
         hq: z.string().optional(),
         fractional_friendly: z.boolean().optional().describe("Only companies that hired fractionals before."),
+        kind: z.enum(LIST_KINDS).optional().describe("What the list holds in the app: companies, people, seats, roles (open roles) or fractionals."),
+        columns: z.array(z.string().max(40)).max(30).optional().describe("The columns the list shows in the app's table, by column id (for companies: company, heldBy, seat, fns, industry, employees, revenue, hq, history, rate, decider, email)."),
+        alert: z
+          .object({ on: z.boolean().optional(), email: z.boolean().optional(), slack: z.boolean().optional() })
+          .optional()
+          .describe("The list's alert: on or off, by weekly email, and in Slack when roles open. The weekly email follows it."),
       },
       annotations: { title: "Saved searches", ...WRITE },
     },
