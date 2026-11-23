@@ -21,7 +21,7 @@
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
 import { randomBytes } from "crypto";
-import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
+import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, loadState, onFreePlan, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import { TRIAL_NAME, planName } from "../billing/rules";
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
@@ -36,7 +36,7 @@ import { likelyWords } from "../leaders/likely";
 import { OWNSITE_SAY } from "../ownsites/types";
 import { cleanWindow } from "../hired";
 import { ALERT_MAX, alertMatches, alertOf, cleanCriteria, cleanListFields, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
-import { sameView } from "../hunt";
+import { HuntError, alertPlanProblem, sameView, savedViewAction } from "../hunt";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 import { spendGate } from "./log";
@@ -1170,6 +1170,9 @@ export async function followCompany(ctx: Ctx, a: { company: string; on?: boolean
 
 /* ---------- alerts ---------- */
 
+/** A plan gate's words for the agent, with where the member can see Pro. */
+const planWords = (said: string, origin: string) => (/part of Pro/.test(said) ? `${said} See Pro: ${upgradeUrl(origin, "claude_alerts")}` : said);
+
 export interface AlertArgs {
   action: "save" | "list" | "delete" | "update";
   id?: string;
@@ -1183,7 +1186,12 @@ export interface AlertArgs {
   /** A saved list's own fields (the app's lists, lib/mcp/alerts.ts): what it holds, its columns, its alert. */
   kind?: string;
   columns?: string[];
-  alert?: { on?: boolean; email?: boolean; slack?: boolean };
+  /**
+   * The list's alert, as the Alerts page sets it: on, what sets it off (triggers), how often (every),
+   * and where (email, Slack, the bell). Given in part, the rest stays as it was. The same plan gate as
+   * the app (lib/hunt.ts alertPlanProblem): on Free, as it happens and New decision maker are Pro's.
+   */
+  alert?: { on?: boolean; email?: boolean; slack?: boolean; bell?: boolean; triggers?: string[]; every?: string };
 }
 
 export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
@@ -1211,7 +1219,7 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
       ...(kind ? { kind } : {}),
       ...(cols?.length ? { columns: cols } : {}),
       ...(starter ? { made_for_you: true } : {}),
-      ...(alert ? { alert: { on: alert.on, email: alert.email, slack: alert.slack } } : {}),
+      ...(alert ? { alert: (({ on, triggers, every, email: byEmail, slack, bell }) => ({ on, triggers, every, email: byEmail, slack, bell }))(alertOf(x)) } : {}),
       open_now: all.roles.length,
       new_this_week: week,
     };
@@ -1231,20 +1239,29 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
     // A saved search's list fields: what it holds, its columns, its alert. Its criteria stay as saved.
     const fields = cleanListFields({ kind: a.kind, cols: a.columns, alert: a.alert });
     if (!Object.keys(fields).length) throw new ToolProblem("Say what to change: kind, columns or alert.");
-    const after = await updateConnector((c) => {
-      const list = c.alerts[ctx.member.id] ?? [];
-      const at = list.findIndex((x) => x.id === a.id);
-      if (at < 0) return null;
-      const cur = list[at];
-      // An alert given in part keeps the rest as it was; the weekly email follows the alert.
-      const alert = fields.alert ? { ...alertOf(cur), ...Object.fromEntries(Object.entries(a.alert ?? {}).filter(([, v]) => typeof v === "boolean")) } : cur.alert;
-      const next: SavedSearch = { ...cur, ...fields, ...(alert ? { alert: { on: !!alert.on, every: "weekly" as const, email: alert.email !== false, slack: alert.slack !== false } } : {}) };
-      if (next.alert) next.email = next.alert.on && next.alert.email;
-      c.alerts[ctx.member.id] = list.map((x, k) => (k === at ? next : x));
-      return next;
+    // The app's own ops (lib/hunt.ts savedViewAction): "list" for the kind and columns, "alert" for the alert, with the
+    // Alerts page's merge (given in part, the rest stays) and its plan gate. Both or neither are written.
+    const after = await updateConnector((c, s) => {
+      let list = c.alerts[ctx.member.id] ?? [];
+      if (!list.some((x) => x.id === a.id)) return null;
+      const now = new Date().toISOString();
+      const noId = () => "";
+      const { alert: _alert, ...rest } = fields; // eslint-disable-line @typescript-eslint/no-unused-vars
+      if (Object.keys(rest).length) list = savedViewAction(list, { op: "list", id: a.id, list: { kind: a.kind, cols: a.columns } }, noId, now).list;
+      let said = "";
+      if (fields.alert) {
+        const r = savedViewAction(list, { op: "alert", id: a.id, list: { alert: a.alert } }, noId, now, { free: onFreePlan(s, ctx.member.id) });
+        list = r.list;
+        said = r.message;
+      }
+      c.alerts[ctx.member.id] = list;
+      return { view: list.find((x) => x.id === a.id)!, said };
+    }).catch((e) => {
+      if (e instanceof HuntError) throw new ToolProblem(planWords(e.message, ctx.origin));
+      throw e;
     });
     if (!after) throw new ToolProblem("No saved search with that id. Use alerts with action list to see them.");
-    return { message: `Updated "${after.name}".`, saved_search: show(after) };
+    return { message: after.said || `Updated "${after.view.name}".`, saved_search: show(after.view) };
   }
   if (a.action !== "save") throw new ToolProblem('action is "save", "list", "update" or "delete".');
   const { criteria, problems } = cleanCriteria(a);
@@ -1257,6 +1274,12 @@ export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
   // Free keeps one saved view (lib/billing). Pro watches as many as they want.
   if (await savedViewsFull(ctx.member.id, mine.length))
     throw new ToolProblem(`On Merlin's Free plan you keep 1 saved search, and you have it. Pro watches as many markets as you want: ${upgradeUrl(ctx.origin, "claude_views")}`);
+  // Saved with its alert: the app's plan gate (as it happens and New decision maker are Pro's on Free).
+  const asked = cleanListFields({ alert: a.alert }).alert;
+  if (asked) {
+    const gate = alertPlanProblem(alertOf({ alert: asked, ...criteria }), null, onFreePlan(await loadState(), ctx.member.id));
+    if (gate) throw new ToolProblem(planWords(gate, ctx.origin));
+  }
   const saved: SavedSearch = {
     id: `al_${randomBytes(6).toString("base64url")}`,
     name: String(a.name ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100) || describeAlert(criteria),

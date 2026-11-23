@@ -43,6 +43,23 @@ function criteriaOfView(a: SavedSearch): SavedViewCriteria {
   return criteria;
 }
 
+/** What Free can't pick for an alert (lib/billing/rules.ts, the Alerts page's Pro marks): as it happens, and New decision maker. */
+export const ALERT_INSTANT_PRO = "As it happens is part of Pro. On Free an alert comes every morning or weekly.";
+export const ALERT_LEADER_PRO = "New decision maker is part of Pro: it reads company websites. On Free an alert watches new open roles, new hires, seats that ended, facts and funding.";
+
+/**
+ * The plan's gate on an alert as the member sets it, the same for the Alerts page, a list saved with
+ * its alert and the connector (lib/mcp/tools.ts alerts): on Free, as it happens and New decision maker
+ * are Pro's. What the alert had already stays as it was (an upgrade set it, a downgrade keeps it).
+ * The words to refuse with, or null when the plan allows it.
+ */
+export function alertPlanProblem(next: Pick<Required<ListAlert>, "every" | "triggers">, cur: Pick<Required<ListAlert>, "every" | "triggers"> | null, free: boolean): string | null {
+  if (!free) return null;
+  if (next.every === "instant" && cur?.every !== "instant") return ALERT_INSTANT_PRO;
+  if (next.triggers.includes("leader") && !cur?.triggers.includes("leader")) return ALERT_LEADER_PRO;
+  return null;
+}
+
 /** Where a list's alert goes, in words: "by email each week, in Slack, in the bell". */
 function howWords(alert: Required<ListAlert>): string {
   const often = alert.every === "instant" ? "as it happens" : alert.every === "daily" ? "every morning" : "each week";
@@ -240,8 +257,6 @@ export function savedViewAction(
     const cur = alertOf(list[at]);
     const raw = (a.list?.alert ?? {}) as Record<string, unknown>;
     const every = (ALERT_EVERY as readonly unknown[]).includes(raw.every) ? (raw.every as AlertEvery) : cur.every;
-    // As it happens is Pro's: a Free member is told so, and nothing changes.
-    if (opts.free && every === "instant" && cur.every !== "instant") throw new HuntError("As it happens is part of Pro. On Free an alert comes every morning or weekly.");
     const alert: Required<ListAlert> = {
       on: typeof raw.on === "boolean" ? raw.on : a.on !== undefined ? a.on !== false : cur.on,
       triggers: cleanTriggers(raw.triggers) ?? cur.triggers,
@@ -250,6 +265,9 @@ export function savedViewAction(
       slack: typeof raw.slack === "boolean" ? raw.slack : cur.slack,
       bell: typeof raw.bell === "boolean" ? raw.bell : cur.bell,
     };
+    // As it happens and New decision maker are Pro's: a Free member is told so, and nothing changes.
+    const gate = alertPlanProblem(alert, cur, !!opts.free);
+    if (gate) throw new HuntError(gate);
     // An alert on with no channel would say nothing: on means by email at least.
     if (alert.on && !alert.email && !alert.slack && !alert.bell) alert.email = true;
     const next = [...list];
@@ -313,6 +331,11 @@ export function savedViewAction(
   const name = cleanName(a.name) || describeAlert(criteria);
   const id = newId();
   const fields = cleanListFields(a.list);
+  // A list saved with its alert passes the same plan gate as an alert changed later.
+  if (fields.alert) {
+    const gate = alertPlanProblem(alertOf({ alert: fields.alert, ...criteria }), null, !!opts.free);
+    if (gate) throw new HuntError(gate);
+  }
   const saved: SavedSearch = { id, name, ...criteria, createdAt: now, place, ...(a.email === false ? { email: false } : {}), ...fields };
   // A list saved with its alert: the weekly email is the alert's.
   if (saved.alert) saved.email = saved.alert.on && saved.alert.email;

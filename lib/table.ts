@@ -8971,6 +8971,8 @@ export async function savedViewsFull(memberId: string, have: number): Promise<bo
   const s = await loadState();
   return have >= FREE_SAVED_VIEWS && !!s.profiles[memberId]?.onboarded && freeNow(s, memberId);
 }
+/** The member is on Free now (billing live), in a state in hand: the connector's alerts pass the app's plan gate with it (lib/hunt.ts alertPlanProblem). */
+export const onFreePlan = (s: State, memberId: string, nowMs = Date.now()): boolean => freeNow(s, memberId, nowMs);
 /** The Claude connector's requests a day on this member's plan: FREE_MCP_PER_DAY on Free, null for no extra limit. */
 export async function claudePerDay(memberId: string): Promise<number | null> {
   return freeNow(await loadState(), memberId) ? FREE_MCP_PER_DAY : null;
