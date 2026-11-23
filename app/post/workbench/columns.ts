@@ -43,6 +43,8 @@ export interface ColumnDef {
   /** The grid track: "minmax(140px, 1fr)". */
   width: string;
   num?: boolean;
+  /** The words under the heading in the column's own terms ("13 roles", "5 this week"), in place of "N% word". Hiring now's columns use it. */
+  words?: (rows: readonly Row[]) => string;
 }
 
 const of = (c: Cell | undefined): Fill => (!c || c.s === "empty" ? "empty" : c.s === "locked" ? "locked" : "value");
