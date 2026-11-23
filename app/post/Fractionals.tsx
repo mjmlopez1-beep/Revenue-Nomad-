@@ -36,13 +36,13 @@ import { Prop } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
 
 /** A seat the record asks for: the company's info and the seat, from the member's own table. */
-type SeatAt = { i: CoInfo; e: EngagementRec };
+export type SeatAt = { i: CoInfo; e: EngagementRec };
 
 /** Rows a list draws before "Show more" (the directory can run to thousands). */
 const STEP = 60;
 
 
-function useFractionals(deps: unknown[]) {
+export function useFractionals(deps: unknown[]) {
   const [data, setData] = useState<FractionalsView | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -285,7 +285,7 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
 }
 
 /** "SaaS and Fintech · 51–200 · US", the member's Ideal Fractional Profile under its switch. */
-function icpWords(icp: Icp | null | undefined): string {
+export function icpWords(icp: Icp | null | undefined): string {
   if (!icp) return "";
   return [icp.industries.slice(0, 3).join(" and "), icp.employees.join(", "), icp.revenue.join(", "), icp.countries.map(countryShort).join(", ")].filter(Boolean).join(" · ");
 }
@@ -298,7 +298,7 @@ type Conv = { id: string; with: { first: string; title: string }; messages: { id
  * "Welcome to Merlin, Sam": the conversation with the first member who invited them, open (its
  * messages, and Write to them in Messages), and their own record a click away.
  */
-function Welcome({ m, mine, onRecord }: { m: string | null; mine: FractionalRec | null; onRecord: (id: string) => void }) {
+export function Welcome({ m, mine, onRecord }: { m: string | null; mine: FractionalRec | null; onRecord: (id: string) => void }) {
   const ui = useUi();
   const [conv, setConv] = useState<Conv | null>(null);
   useEffect(() => {
@@ -452,7 +452,7 @@ function FilterPanel({
 /* ---------- a fractional, in a row and on a card ---------- */
 
 /** A locked name: made-up letters, blurred, from the record's id (never the name). */
-function LockedPerson({ seed }: { seed: string }) {
+export function LockedPerson({ seed }: { seed: string }) {
   const a = lockedLook(`${seed}.first`).name.split(" ")[0];
   const b = lockedLook(`${seed}.last`).name.split(" ")[0];
   return (
@@ -465,7 +465,7 @@ function LockedPerson({ seed }: { seed: string }) {
   );
 }
 
-function Avatar({ r, size = "md" }: { r: FractionalRec; size?: "md" | "lg" }) {
+export function Avatar({ r, size = "md" }: { r: FractionalRec; size?: "md" | "lg" }) {
   if (r.locked)
     return (
       <span className={`fr-av fr-av-locked fr-av-${size}`} aria-hidden>
@@ -481,6 +481,7 @@ function Avatar({ r, size = "md" }: { r: FractionalRec; size?: "md" | "lg" }) {
 
 /** "On Merlin", "Not on Merlin yet", "You". */
 function Status({ r }: { r: FractionalRec }) {
+  if (r.keepsOut) return <span className="fr-status">Keeps out of the directory</span>;
   if (r.you) return <span className="fr-status fr-status-on">You{r.hidden ? ", hidden from others" : ""}</span>;
   return r.onMerlin ? <span className="fr-status fr-status-on">On Merlin</span> : <span className="fr-status">Not on Merlin yet</span>;
 }
@@ -490,7 +491,7 @@ function Who({ r }: { r: FractionalRec }) {
     <span className="fr-who">
       <Avatar r={r} />
       <span className="fr-who-t">
-        {r.locked ? <LockedPerson seed={r.id} /> : <span className="fr-name">{r.name}</span>}
+        {r.keepsOut ? <span className="fr-name fr-muted">Hidden fractional</span> : r.locked ? <LockedPerson seed={r.id} /> : <span className="fr-name">{r.name}</span>}
         <Status r={r} />
         <BallChip r={r} />
       </span>
@@ -499,14 +500,14 @@ function Who({ r }: { r: FractionalRec }) {
 }
 
 /** "Serves 2 companies in your Crystal Ball": counted from the seats the record lists, companies never named here. */
-function BallChip({ r }: { r: FractionalRec }) {
+export function BallChip({ r }: { r: FractionalRec }) {
   const words = ballChip(r);
   if (!words) return null;
   return <span className="fr-ball">{words}</span>;
 }
 
 /** What a first message says about the companies they serve in the member's Crystal Ball (names only where unlocked). */
-const sharedOf = (r: FractionalRec) => (r.ball ? { names: r.ball.names, now: r.ball.now } : null);
+export const sharedOf = (r: FractionalRec) => (r.ball ? { names: r.ball.names, now: r.ball.now } : null);
 
 function Clients({ r }: { r: FractionalRec }) {
   if (!r.clients?.line) return <span className="fr-muted">Not on file</span>;
@@ -615,7 +616,7 @@ function Action({ r, reload, wide }: { r: FractionalRec; reload: () => Promise<v
 /* ---------- Invite to connect ---------- */
 
 /** The sheet from Invite to connect: who and why, a note in the member's voice with their link, Copy, Mark as sent. */
-function InviteSheet({ r, onClose, restore, reload }: { r: FractionalRec; onClose: () => void; restore: () => HTMLElement | null; reload: () => Promise<void> }) {
+export function InviteSheet({ r, onClose, restore, reload }: { r: FractionalRec; onClose: () => void; restore: () => HTMLElement | null; reload: () => Promise<void> }) {
   const ui = useUi();
   const toast = useToast();
   const id = useId();
@@ -804,6 +805,9 @@ function Record({
         {r.locked && !r.onMerlin && (
           <p className="fr-rnote">Fellow fractionals are free to see. Open it to see who this is.</p>
         )}
+        {r.keepsOut && (
+          <p className="fr-rnote">This fractional keeps out of the directory. Their seats and roles still count, with the name hidden. They can&apos;t be messaged or passed a lead from here.</p>
+        )}
         {!r.locked && !r.onMerlin && !r.you && (
           <p className="fr-rnote">
             Merlin doesn&apos;t have {they === "they" ? "their" : `${they}'s`} email. You send the invite yourself, and when {they} joins you&apos;re connected and you both earn credits.
@@ -873,7 +877,7 @@ function Record({
   );
 }
 
-function ServeRow({ label, list }: { label: string; list: string[] }) {
+export function ServeRow({ label, list }: { label: string; list: string[] }) {
   return (
     <div className="fr-serve-row">
       <dt>{label}</dt>
@@ -898,7 +902,7 @@ function companyFacts(i: CoInfo): string {
 }
 
 /** One seat on the record, from the member's own table: a locked company shows only its free facts, and its own unlock. */
-function SeatCard({ at, now }: { at: SeatAt | null; now: boolean }) {
+export function SeatCard({ at, now }: { at: SeatAt | null; now: boolean }) {
   const ui = useUi();
   if (!at) return <div className="fr-seat fr-seat-gone">A seat that isn&apos;t on your table right now.</div>;
   const { i, e } = at;

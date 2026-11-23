@@ -562,7 +562,8 @@ function EvidenceP() {
   return <EvidencePageL />;
 }
 
-const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
+// The new look draws one Fractionals page (fractionals/FractionalsPage.tsx) with its own header and strip, full width.
+const peersMain = (c: AppCtx) => (c.ui2 ? "wb-host fy-host" : c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
  * Every page by key. Old keys keep their pages; the new look's keys open the page that is their
@@ -578,9 +579,9 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   messages: { title: "Messages", component: MessagesP },
   radar: { title: YOUR_FEATURE, component: RadarP, mainClass: (c) => (c.ui2 ? "wb-host cb-host" : "rd-main"), needsTable: true, ownStrip: true },
   billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan },
-  peers: { title: "Peers", component: PeersP, mainClass: peersMain },
-  fractionals: { title: "Peers", component: PeersP, mainClass: peersMain },
-  partners: { title: "Peers", component: PeersP, mainClass: peersMain },
+  peers: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
+  fractionals: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
+  partners: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
   seats: { title: "Your seats", component: SeatsP, mainClass: (c) => (c.ui2 && !c.phone ? "wb-host sp-host" : "ys-main"), ownStrip: true },
   // The new look draws the board full width (pipeline/Board.tsx) with its own first-visit strip.
   pipeline: { title: "Your pipeline", component: PipelineP, ownStrip: true, mainClass: (c) => (c.ui2 ? "wb-host pl2-host" : "") },

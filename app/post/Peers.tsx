@@ -17,6 +17,7 @@
  * empty-state spots, never by a data row.
  */
 import { useEffect, useId, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { KNOWN_WORDS, monthName, type CircleRec, type LeadRec, type PeerRec, type TeamRec } from "@/lib/peersCore";
 import { IconChevron, IconUsers, timeAgo, useToast } from "../ui/shared";
 import { useUi, SecondaryCtx, usePine } from "./ui";
@@ -27,9 +28,26 @@ import { Fractionals } from "./Fractionals";
 import type { CoInfo } from "./model";
 import { Prop } from "../ui/fractions/lazy";
 import { Chip, EmptyState, PageHead } from "../ui/system";
+import { useAppMaybe } from "./shell/pages";
 import "./peers.css";
 
-export function PeersPage({ infos, waiting, all, onAll, onProfile, openCompany }: { infos: CoInfo[]; waiting?: boolean; all: boolean; onAll: (on: boolean) => void; onProfile: () => void; openCompany: (id: string) => void }) {
+/** The new look's one Fractionals page (fractionals/FractionalsPage.tsx), loaded on its own so the old look carries none of it. */
+const FractionalsPage = dynamic(() => import("./fractionals/FractionalsPage").then((m) => m.FractionalsPage), {
+  ssr: false,
+  loading: () => (
+    <div className="tp-allwait" role="status" aria-busy>
+      <p className="tp-allwait-t">Loading…</p>
+    </div>
+  ),
+});
+
+export function PeersPage(props: { infos: CoInfo[]; waiting?: boolean; all: boolean; onAll: (on: boolean) => void; onProfile: () => void; openCompany: (id: string) => void }) {
+  // The new look: Peers and the directory are one page, Fractionals (?p=peers, ?p=fractionals and ?p=partners land there).
+  if (useAppMaybe()?.ui2) return <FractionalsPage />;
+  return <PeersOld {...props} />;
+}
+
+function PeersOld({ infos, waiting, all, onAll, onProfile, openCompany }: { infos: CoInfo[]; waiting?: boolean; all: boolean; onAll: (on: boolean) => void; onProfile: () => void; openCompany: (id: string) => void }) {
   const { view, failed } = usePeers();
   const [space, setSpace] = useState<string | null>(null);
   const [focusLead, setFocusLead] = useState<string | null>(null);
@@ -285,7 +303,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
 
 /* ---------- leads ---------- */
 
-function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; openCompany: (id: string) => void }) {
+export function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; openCompany: (id: string) => void }) {
   const pine = usePine();
   const ui = useUi();
   const toast = useToast();
@@ -350,7 +368,7 @@ function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolean; open
   );
 }
 
-function TeamAsk({ t, onOpen }: { t: TeamRec; onOpen: () => void }) {
+export function TeamAsk({ t, onOpen }: { t: TeamRec; onOpen: () => void }) {
   const pine = usePine();
   return (
     <li className="pe-lead pe-lead-new">
@@ -377,7 +395,7 @@ function TeamAsk({ t, onOpen }: { t: TeamRec; onOpen: () => void }) {
 
 /* ---------- the circle ---------- */
 
-function CircleSection({ circle, offer }: { circle: CircleRec | null; offer: import("@/lib/peersCore").CircleOffer | null }) {
+export function CircleSection({ circle, offer }: { circle: CircleRec | null; offer: import("@/lib/peersCore").CircleOffer | null }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
@@ -505,7 +523,7 @@ function CircleSection({ circle, offer }: { circle: CircleRec | null; offer: imp
   );
 }
 
-function Muted({ list }: { list: { id: string; name: string }[] }) {
+export function Muted({ list }: { list: { id: string; name: string }[] }) {
   const toast = useToast();
   return (
     <section className="pe-sec" aria-labelledby="pe-muted-h">

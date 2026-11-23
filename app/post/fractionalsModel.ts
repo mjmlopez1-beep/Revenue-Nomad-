@@ -464,3 +464,52 @@ export function askFx(text: string, industries: string[], fns: string[]): FxAsk 
   const unknown = [...new Set(t.split(" ").filter((w) => w && w.length > 1 && !SKIP.has(w) && !/^\d+$/.test(w)))];
   return { view, f, said, unknown };
 }
+
+/** A fellow fractional Peers knows of (a suggestion, someone you know, a lead or a team between you), as Peers names them. */
+export interface PeerLike {
+  memberId: string;
+  name: string;
+  first?: string;
+  initials?: string;
+  title?: string;
+  fn: string | null;
+  level?: string | null;
+  /** Peers says they serve the viewer's kind of client. */
+  fits?: boolean;
+  conversationId?: string;
+}
+
+/**
+ * The directory lists fractionals by their seats; a member on Merlin with no seat on file has no
+ * record there, though Peers suggests them, they are someone you know, or a lead or team is between
+ * you. Each such member joins the list as a record with no seats, named as Peers names them (its own
+ * privacy rules), so nobody Peers showed goes missing from the one page.
+ */
+export function withPeers(records: FractionalRec[], peers: PeerLike[]): FractionalRec[] {
+  const have = new Set(records.map((r) => r.memberId).filter(Boolean));
+  const out = [...records];
+  for (const p of peers) {
+    if (!p.memberId || have.has(p.memberId)) continue;
+    have.add(p.memberId);
+    const ini = p.initials ?? p.name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+    out.push({
+      id: `p_${p.memberId}`,
+      name: p.name,
+      first: p.first ?? p.name.split(/\s+/)[0],
+      initials: ini,
+      onMerlin: true,
+      memberId: p.memberId,
+      ...(p.title ? { title: p.title } : {}),
+      fn: p.fn,
+      level: p.level ?? null,
+      fns: p.fn ? [p.fn] : [],
+      seats: [],
+      now: 0,
+      past: 0,
+      clients: null,
+      fits: !!p.fits,
+      ...(p.conversationId ? { conversationId: p.conversationId } : {}),
+    });
+  }
+  return out;
+}
