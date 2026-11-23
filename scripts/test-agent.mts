@@ -223,11 +223,11 @@ async function main() {
     check("a limit that isn't one of 5, 10, 25 or 50 is refused", /Pick 5, 10, 25, 50 credits a day, or no limit/.test(badLimit ?? ""), badLimit);
     await L.setPrefs("mem_jordan", { key: "g:send", on: false });
     {
-      // The daily spend limit: 10 credits until the member picks; "No limit" is kept as no limit.
+      // The daily spend limit: none until the member picks one; a picked limit is kept.
       const fresh = { connector: { agent: {} } } as never;
-      check("a member who never picked has the 10-a-day default", L.DEFAULT_LIMIT === 10 && L.prefsIn(fresh, "mem_new").limit === 10);
-      const none = { connector: { agent: { mem_x: { off: [], limit: null } } } } as never;
-      check("a member who picked No limit keeps no limit", L.prefsIn(none, "mem_x").limit === null);
+      check("a member who never picked has no limit (the owner's default)", L.DEFAULT_LIMIT === null && L.prefsIn(fresh, "mem_new").limit === null);
+      const picked = { connector: { agent: { mem_x: { off: [], limit: 25 } } } } as never;
+      check("a member who picked a limit keeps it", L.prefsIn(picked, "mem_x").limit === 25);
     }
     check("a switch is kept for the member, sorted, with when", JSON.stringify(L.prefsIn(await state(), "mem_jordan").off) === '["g:send"]' && !!L.prefsIn(await state(), "mem_jordan").at);
   }

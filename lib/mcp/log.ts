@@ -54,8 +54,8 @@ export interface AgentPrefs {
   at?: string;
 }
 
-/** The daily spend limit until a member picks one (owner, 2026-11-23): 10 credits a day. Picking "No limit" stores null. */
-export const DEFAULT_LIMIT = 10;
+/** The daily spend limit until a member picks one: none (owner, 2026-11-23: agents should be free to use credits; members who want a cap set one). */
+export const DEFAULT_LIMIT: number | null = null;
 
 export const prefsIn = (s: State, memberId: string): AgentPrefs => {
   const p = s.connector?.agent?.[memberId];
