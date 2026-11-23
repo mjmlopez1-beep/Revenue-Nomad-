@@ -375,6 +375,7 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
   // An old /table?k= link is redirected to /?k= (app/table/page.tsx): Home, signed in, in both looks.
   check("old address /table?k=: Home in both looks", isHome("?k=tok-abc") && !P("?k=tok-abc", false).p && !P("?k=tok-abc", true).p && P("?k=tok-abc", true).home);
   check("old address ?p=proposals&ct=1 (Contracts): the Contracts page in the new look, Proposals (at its Contracts screen) in the old", P("?p=proposals&ct=1", true).p === "contracts" && P("?p=proposals&ct=1", false).p === "proposals");
+  check("old address ?p=proposals&dc=<id> (a contract, from an alert or an email): the Contracts page in the new look, Proposals in the old", P("?p=proposals&dc=dc_x1", true).p === "contracts" && P("?p=proposals&dc=dc_x1", false).p === "proposals" && P("?p=proposals&pr=pr_x1", true).p === "proposals");
   check("?p=contracts in the new look: the Contracts page", P("?p=contracts", true).p === "contracts");
   for (const k of UI2_PAGES) {
     const a = P(`?p=${k}`, false);

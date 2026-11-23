@@ -137,8 +137,9 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   // A day still to come, or one that is no date (?sig=2099-12-31, 2026-13-45), is no day of the radar: a future day reads as today.
   const sig = sigDayOf(q.get("sig"));
   const raw = q.get("p");
-  // Proposals' old Contracts screen (?p=proposals&ct=1) is the page Contracts in the new look.
-  const asked = ui2 && raw === "proposals" && q.get("ct") === "1" ? "contracts" : raw;
+  // Proposals' old Contracts screen (?p=proposals&ct=1) is the page Contracts in the new look, and so is a contract
+  // an old link names there (?p=proposals&dc=<id>, the alerts' and emails' links): Contracts opens it (contracts/ContractsPage.tsx).
+  const asked = ui2 && raw === "proposals" && (q.get("ct") === "1" || !!q.get("dc")) ? "contracts" : raw;
   const p0: PlacePage | Ui2Page | null = sig
     ? "radar"
     : raw === "claude"

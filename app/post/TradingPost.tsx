@@ -307,7 +307,8 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
   // Contracts keeps the contract open in the address (contracts/ContractsPage.tsx), so a reload reopens it.
   if (x.p === "contracts" && typeof window !== "undefined") {
     const cur = new URLSearchParams(window.location.search);
-    if (cur.get("p") === "contracts" && cur.get("dc")) q.set("dc", cur.get("dc")!);
+    // Also a contract an old Proposals address named (?p=proposals&dc=<id>, place.ts): it opens on Contracts, kept in the address.
+    if ((cur.get("p") === "contracts" || cur.get("p") === "proposals") && cur.get("dc")) q.set("dc", cur.get("dc")!);
   }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;

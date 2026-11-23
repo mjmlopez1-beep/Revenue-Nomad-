@@ -613,6 +613,7 @@ function Editor({
   const retryAt = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Changed in another tab or window: the latest is loaded, and what didn't save is offered to copy.
   const [conflict, setConflict] = useState<{ text: string } | null>(null);
+  const conflicts = useRef(0);
   /** A whole proposal from the server: shown, and its revision is the one the next save is made on. */
   const take = useCallback((r: ProposalRec) => {
     rev.current = r.rev;
@@ -681,6 +682,7 @@ function Editor({
         take(fresh);
         onSaved(fresh);
         setEditing(null);
+        conflicts.current++;
         setConflict({ text });
         return void setSave("saved");
       }
@@ -752,6 +754,17 @@ function Editor({
     // A change from Change it that wasn't accepted isn't kept: said before it goes.
     (!previewRef.current || window.confirm("The change Merlin suggested isn't saved. Leave without it?"));
   useLeaveGuard(okToLeave);
+  /** Before it is sent: the save on its way lands, then what is pending is saved. True when all of it reached the server. */
+  const settle = async (): Promise<boolean> => {
+    const was = conflicts.current;
+    const wait = async () => {
+      for (let i = 0; i < 80 && inflight.current; i++) await new Promise((r) => setTimeout(r, 100));
+    };
+    await wait();
+    await flush();
+    await wait();
+    return !inflight.current && !Object.keys(pending.current).length && conflicts.current === was;
+  };
   const change = (patch: Partial<ProposalRec>, send: Record<string, unknown>) => {
     if (readOnly) return;
     setP((cur) => ({ ...cur, ...patch }));
@@ -946,7 +959,8 @@ function Editor({
             flags={flags.map((f) => f.message)}
             onSigner={setSigner}
             onOnCall={setSignerOnCall}
-            onSent={(r, message) => (void flush(), take(r), onSaved(r), setChanging(false), toast(message))}
+            before={settle}
+            onSent={(r, message) => (take(r), onSaved(r), setChanging(false), toast(message))}
             alerts={<AlertGrid alertsHref="/?p=alerts" />}
           />
         }

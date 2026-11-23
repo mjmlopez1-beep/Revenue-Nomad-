@@ -83,8 +83,17 @@ export function DocSignView({ token }: { token: string }) {
     // A text field Merlin filled in for them to check (a title) starts with that text.
     void call({ token, op: "view" }).then((r) => (r.error ? setFatal(r.error) : (setV(r), setName(r.me.name), setSaved(r.saved ?? null), setValues(Object.fromEntries((r.fields ?? []).flatMap((f) => (f.prefill ? [[f.id, f.prefill]] : [])))))));
   }, [token]);
+  // Keyboard focus follows the step, as on a proposal's page: into the step's heading, and back to Start signing.
+  const stepped = useRef(false);
   useEffect(() => {
-    if (step !== "read") panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (step !== "read") {
+      panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      stepped.current = true;
+      panel.current?.querySelector<HTMLElement>("[data-step-head]")?.focus({ preventScroll: true });
+    } else if (stepped.current) {
+      stepped.current = false;
+      requestAnimationFrame(() => cardGo.current?.focus({ preventScroll: true }));
+    }
   }, [step]);
 
   const mine = useMemo(() => v?.fields ?? [], [v]);
@@ -240,7 +249,9 @@ export function DocSignView({ token }: { token: string }) {
                   if (r) setV(r);
                 }}
               >
-                <h2 className="sg-h2">Decline to sign</h2>
+                <h2 className="sg-h2" tabIndex={-1} data-step-head>
+                  Decline to sign
+                </h2>
                 <label className="sg-label" htmlFor="sg-reason">
                   Tell {v.from.name.split(" ")[0]} why (optional)
                 </label>
@@ -272,7 +283,9 @@ export function DocSignView({ token }: { token: string }) {
               </div>
             ) : (
               <div className="sg-steps">
-                <h2 className="sg-h2">Sign this document</h2>
+                <h2 className="sg-h2" tabIndex={-1} data-step-head>
+                  Sign this document
+                </h2>
                 <ol className="sg-ol">
                   <li className="sg-step" data-done={v.codeVerified}>
                     <span className="sg-num" aria-hidden>

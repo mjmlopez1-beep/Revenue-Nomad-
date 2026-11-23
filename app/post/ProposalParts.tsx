@@ -277,8 +277,8 @@ export function CallPanel({ memberName, readOnly, notes, onAccept, onNotes, onOn
  * who signs, the note, how the member signs, how long the link works and the reminders. The
  * reminders are saved first, then it is sent.
  */
-export function useSend(p: ProposalRec, o: { canSend: boolean; email: boolean; blanks: string[]; onSent: (p: ProposalRec, message: string) => void }) {
-  const { canSend, email, blanks, onSent } = o;
+export function useSend(p: ProposalRec, o: { canSend: boolean; email: boolean; blanks: string[]; onSent: (p: ProposalRec, message: string) => void; before?: () => Promise<boolean> }) {
+  const { canSend, email, blanks, onSent, before } = o;
   const [s, setS] = useState({ name: p.signer?.name ?? p.fields["client.signerName"] ?? "", email: p.signer?.email ?? p.fields["client.signerEmail"] ?? "", title: p.signer?.title ?? p.fields["client.signerTitle"] ?? "" });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -301,6 +301,8 @@ export function useSend(p: ProposalRec, o: { canSend: boolean; email: boolean; b
   const go = async () => {
     setBusy(true);
     setErr(null);
+    // The editor's edits still on their way are saved first, so what goes out is what is on screen (and no stale save follows the send).
+    if (before && !(await before())) return setBusy(false), setErr("Your last edit isn't saved yet. Check your connection, then send again.");
     const off = await saveReminders(p.id, rem);
     if (off) return setBusy(false), setErr(off);
     const r = await api<{ proposal: ProposalRec; message: string }>({ op: "send", id: p.id, signer: { name: s.name.trim(), email: s.email.trim(), title: s.title.trim() }, message: note, memberSign: mode, linkDays: days });
@@ -408,6 +410,7 @@ export function SendPanel({
   onSigner,
   onOnCall,
   alerts,
+  before,
 }: {
   p: ProposalRec;
   canSend: boolean;
@@ -420,8 +423,10 @@ export function SendPanel({
   onOnCall: (v: boolean | null) => void;
   /** Where each alert goes (the grid), placed by the editor. */
   alerts?: ReactNode;
+  /** Save the editor's pending edits before it goes; false: they didn't save (offline, or changed elsewhere). */
+  before?: () => Promise<boolean>;
 }) {
-  const f = useSend(p, { canSend, email, blanks, onSent });
+  const f = useSend(p, { canSend, email, blanks, onSent, before });
   const first = f.s.name.trim().split(/\s+/)[0] || "";
   const commit = () => {
     const ok = f.s.name.trim() && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(f.s.email.trim());
