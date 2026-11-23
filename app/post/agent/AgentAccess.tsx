@@ -198,7 +198,11 @@ export function AgentAccess() {
     if (view && first === null) setFirst(view.log.length === 0);
   }, [view, first]);
 
-  const connected = useMemo(() => (view?.apps ?? []).map((a) => ({ ...a, kind: kindOf(a.name) })), [view]);
+  // In the order Merlin lists the agents (Claude, ChatGPT, Claude Code, Cursor), any other app last.
+  const connected = useMemo(() => {
+    const rank = (k: Kind | null) => (k ? KINDS.findIndex((x) => x.id === k) : KINDS.length);
+    return (view?.apps ?? []).map((a) => ({ ...a, kind: kindOf(a.name) })).sort((a, b) => rank(a.kind) - rank(b.kind));
+  }, [view]);
   const kindOn = (k: Kind) => connected.some((a) => a.kind === k);
   const curKind: Kind = pick ?? KINDS.find((k) => !kindOn(k.id))?.id ?? "claude";
   const cur = KINDS.find((k) => k.id === curKind)!;
@@ -892,7 +896,7 @@ function Taught({ voice, network }: { voice: VoiceProfile | null; network: { at:
             </span>
           </span>
           <span>
-            Greeting {voice.greeting.replace("{first}", "[first name]")}. {voice.signoff && voice.signoff !== "none" ? `Sign-off ${voice.signoff}. ` : ""}
+            Greeting &ldquo;{voice.greeting.replace("{first}", "[first name]")}&rdquo;. {voice.signoff && voice.signoff !== "none" ? <>Sign-off &ldquo;{voice.signoff}&rdquo;. </> : ""}
             {voice.length[0].toUpperCase() + voice.length.slice(1)} notes, {voice.formality} tone{voice.phrases.length ? `, ${plural(voice.phrases.length, "stock phrase")}` : ""}.
           </span>
           <span className="ag-taught-acts">
