@@ -33,6 +33,7 @@ import { guessLine } from "../network/SeatGuesses";
 import { load as loadNetwork, monthYear, netAct, useNetwork } from "../network/useNetwork";
 import { stripGone, useApp } from "../shell/pages";
 import { earnedAt, onFileUnderName, stepWords, verificationOf, whenWords } from "./seatsModel";
+import { SeatCaseCell, seatCasesFill, seatEvidenceOn, useSeatCases } from "../evidence/SeatEvidence";
 
 /** A guess as a row: from the member's calendar, or a seat on file under their name. */
 type Guess =
@@ -79,6 +80,8 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
   const sl = useSeatList(seats);
   const { view: net } = useNetwork();
   const close = me.plan?.canClose ?? true;
+  // Evidence Bank (Close): each seat's case, and a seat added during the visit starts its draft.
+  const evOn = seatEvidenceOn(c.ui2, me.plan);
   // The first visit is read once, when the page opens: confirming a guess here moves the strip on to "Step 2 done".
   const [first] = useState(() => seats.length === 0);
   const [cur, setCur] = useState<string | null>(() => c.shell.seatFocus ?? null);
@@ -113,6 +116,8 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
   const waiting = useMemo(() => waitingSeats(c.infos), [c.infos]);
   const list = sl.list;
   const room = earnRoom(me);
+  const seatIds = useMemo(() => list.map((s) => s.e.id), [list]);
+  const cases = useSeatCases(seatIds, evOn);
 
   // What opens first: the seat the member came for, else the first guess on a first visit, else the first seat with something to fill in.
   const open = cur ?? (first ? guesses[0]?.id : list.find((s) => sl.leftOf(s) > 0)?.e.id) ?? null;
@@ -198,7 +203,7 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
     { name: "Verification", fill: list.length ? `${verN} of ${list.length} verified` : `${gSum} to confirm` },
     { name: "Earned", fill: `${plural(earnedAll, "credit")} so far` },
     { name: "Ways in it created", fill: plural(waysAll, "way") + " in" },
-    { name: "Evidence case", fill: close ? "One draft per seat" : "On the Close plan" },
+    { name: "Evidence case", fill: seatCasesFill(cases, seatIds, close) },
     { name: "Your rate", fill: "You choose who sees it" },
   ];
   const chev = (on: boolean, label: string, go: () => void) => (
@@ -206,7 +211,10 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
       <IconChevron size={16} dir={on ? "up" : "down"} />
     </button>
   );
-  const evidenceCell = close ? <Two t="Starts with Evidence Bank" sub="A draft case per seat, coming soon" tone="muted" /> : <Two t="On the Close plan" sub="Evidence Bank" tone="muted" />;
+  // A guess has no case until it is confirmed; a seat of theirs finishes its case in Evidence Bank.
+  const guessCase = close ? <Two t="Starts once you confirm" sub="A draft case for the seat" tone="muted" /> : <Two t="On the Close plan" sub="Evidence Bank" tone="muted" />;
+  const seatCase = (e: { id: string }, name: string) =>
+    close ? <SeatCaseCell seatId={e.id} status={cases?.get(e.id)} page={c.page} openPage={c.openPage} name={name} /> : <Two t="On the Close plan" sub="Evidence Bank" tone="muted" />;
 
   const guessRow = (x: Guess, n: number) => {
     const on = open === x.id;
@@ -253,7 +261,7 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
         <td>
           <Two t={x.kind === "cal" ? (x.g.with.length ? plural(x.g.with.length, "person", "people") + " you met" : "None on file yet") : plural(x.e.people.length, "person", "people") + " on file"} tone="muted" />
         </td>
-        <td>{evidenceCell}</td>
+        <td>{guessCase}</td>
         <td>
           <Two t="Yours to share or not" tone="muted" />
         </td>
@@ -360,7 +368,7 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
             <Two t="None yet" sub={v.ok ? "Add who hired you" : "Opens when confirmed"} tone="muted" />
           )}
         </td>
-        <td>{evidenceCell}</td>
+        <td>{seatCase(e, name)}</td>
         <td>
           {rate ? (
             <Two t={rate} sub="On the seat. 1 credit to others" />
