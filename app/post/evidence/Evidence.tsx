@@ -114,7 +114,8 @@ function Bank() {
   const [names, setNames] = useState<Set<string>>(() => new Set());
   const [allNames, setAllNames] = useState(false);
   const [filters, setFilters] = useState<EvFilters>(NO_FILTERS);
-  const [filtOpen, setFiltOpen] = useState(true);
+  // Phones keep the filters folded: the cases come first there.
+  const [filtOpen, setFiltOpen] = useState(!c.phone);
   const [sortPick, setSortPick] = useState<EvSort | null>(null);
   const [sel, setSel] = useState<Set<string>>(() => new Set());
 
@@ -156,11 +157,12 @@ function Bank() {
       const firstDraft = own.find((r) => !isReady(r));
       const target = at ?? (first ? firstDraft : own.find(isReady) ?? firstDraft) ?? null;
       setOpenKey(target?.key ?? null);
-      setMode(target ? (isReady(target) ? "case" : "build") : first ? "build" : null);
+      // A phone opens on its list (a ready case opens when tapped); the first visit and a seat asked for open the builder.
+      setMode(target ? (isReady(target) ? (c.phone && !at ? null : "case") : "build") : first ? "build" : null);
       setTab("case");
       setBuildAt(0);
     },
-    [cases, own, first],
+    [cases, own, first, c.phone],
   );
   const [landed, setLanded] = useState(false);
   useEffect(() => {
@@ -197,7 +199,7 @@ function Bank() {
   const selCases = own.filter((r): r is Extract<EvRow, { kind: "case" }> => r.kind === "case" && sel.has(r.c.id));
   const rankN = own.filter((r) => isReady(r) && (scope !== "sel" || (r.kind === "case" && sel.has(r.c.id)))).length;
   const nFilt = (filters.cat ? 1 : 0) + (filters.motion ? 1 : 0);
-  const heads = fillLine(rows, matching ? matching.co.name : null, matching ? matching.m.size : 0);
+  const heads = fillLine(rows, matching ? (matching.co.locked ? "a locked company" : matching.co.name) : null, matching ? matching.m.size : 0);
   const cards = phone || view === "cards";
   const isShown = (r: EvRow) => canReveal(r) && (allNames || names.has(r.key));
   const won = (r: EvRow) => (r.kind === "case" ? r.c.usedIn.filter((id) => proposals?.find((p) => p.id === id)?.status === "signed").length : 0);
@@ -207,8 +209,11 @@ function Bank() {
   const hero = !!first && !built && mode === "build";
 
   const put = (x: EvidenceCase) => setCases((cs) => (cs ? (cs.some((y) => y.id === x.id) ? cs.map((y) => (y.id === x.id ? x : y)) : [x, ...cs]) : [x]));
+  // On a phone the panel sits above the list: bring it into view when it opens.
+  const toPanel = () => phone && setTimeout(() => document.querySelector(".ev-aside")?.scrollIntoView({ block: "start" }), 60);
   const openRow = (r: EvRow) => {
     if (r.kind === "example") return;
+    toPanel();
     setOpenKey(r.key);
     setMode(isReady(r) ? "case" : "build");
     setTab("case");
@@ -222,6 +227,7 @@ function Bank() {
     setMode("build");
     setBuildAt(0);
     setFresh(null);
+    toPanel();
   };
   const flipName = (r: EvRow) =>
     setNames((s) => {
@@ -280,13 +286,14 @@ function Bank() {
   const stripKey = stage ? "evidence-done" : "evidence";
   const showStrip = !!first && stripOff !== stage && !stripGone(c, stripKey);
   const s0 = own.find((r) => r.seat)?.seat;
-  const s0Name = s0 ? (s0.hidden ? `${s0.industry || "first"}` : s0.company) : null;
+  // The client stays hidden here too: the seat is named by its industry and dates.
+  const s0Name = s0 ? `${s0.industry ? `${s0.industry} seat` : "first seat"}${s0.dates ? `, ${s0.dates.replace(/^Since /, "since ")},` : ""}` : null;
   const strip = showStrip && (
     <section aria-label="About this page" className={`wb-strip${stage ? " wb-strip-done" : ""}`}>
       {stage === 0 ? (
         <span className="wb-strip-t">
           <strong>What this page is for.</strong> Your private library of case studies. Write a case once, match it to any company, and Merlin puts the closest one in the Proof part of every proposal.{" "}
-          {s0Name ? `Start in the outlined panel: your ${s0Name} seat is already half a case.` : "Add a seat you held in Seats and it starts a draft here, or write one from scratch."}
+          {s0Name ? `Start in the outlined panel: your ${s0Name} is already half a case.` : "Add a seat you held in Seats and it starts a draft here, or write one from scratch."}
         </span>
       ) : (
         <>
@@ -318,7 +325,7 @@ function Bank() {
           ? { kicker: `Case · ${caseOpen.c.status === "ready" ? "ready" : "draft"} · private`, title: caseOpen.c.title, sub: subOf(caseOpen) }
           : null;
   const panel = mode && head && (
-    <aside className={`ev-aside${hero ? " ev-hero" : ""}`} aria-label={head.title}>
+    <aside key={`${mode}:${openKey ?? ""}`} className={`ev-aside${hero ? " ev-hero" : ""}`} aria-label={head.title}>
       <div className="ev-aside-head">
         <span className="ev-aside-t">
           <span className="ev-kicker">{head.kicker}</span>
@@ -554,7 +561,7 @@ function Bank() {
               #
             </th>
             {heads.map((h) => (
-              <th key={h.key} scope="col" className={h.key === "match" ? "wb-th-fresh" : undefined}>
+              <th key={h.key} scope="col" className={h.key === "match" ? "wb-th-fresh" : h.key === "client" ? "ev-td-client" : undefined}>
                 {h.name}
               </th>
             ))}
@@ -600,7 +607,7 @@ function Bank() {
                     </span>
                   </td>
                 )}
-                <td>{clientCell(r)}</td>
+                <td className="ev-td-client">{clientCell(r)}</td>
                 <td>
                   <span className="ev-two">
                     <span>{f.industry || "Not on file"}</span>
@@ -698,7 +705,7 @@ function Bank() {
   const cover = [
     { k: "Type of work you can prove", big: `${cov.n} of ${cov.of} categories`, sub: cov.line, link: "See your card in Fractionals", go: () => c.openPage("fractionals"), href: c.hrefOf("fractionals") },
     matching
-      ? { k: "Close to this company", big: `${[...matching.m.values()].filter((m) => m.label !== "Different").length} of ${matching.m.size} cases`, sub: `Your cases matched to ${matching.co.locked ? "a locked company, by its facts" : matching.co.name}. Matching never costs a credit.`, link: "See Companies", go: () => c.openPage("table"), href: c.hrefOf("table") }
+      ? { k: "Close to this company", big: `${[...matching.m.values()].filter((m) => m.label !== "Different").length} of ${matching.m.size} ${matching.m.size === 1 ? "case" : "cases"}`, sub: `Your cases matched to ${matching.co.locked ? "a locked company, by its facts" : matching.co.name}. Matching never costs a credit.`, link: "See Companies", go: () => c.openPage("table"), href: c.hrefOf("table") }
       : { k: "Companies with a close case", big: "Match a company", sub: "Pick any company, open or locked. Merlin says which of your cases is closest and why.", link: "See Companies", go: () => c.openPage("table"), href: c.hrefOf("table") },
     usedAll
       ? { k: "In your proposals", big: `${usedAll} ${usedAll === 1 ? "proposal" : "proposals"}${wonAll ? `, ${wonAll} won` : ""}`, sub: "Each proposal's Proof part carries the closest of your cases.", link: "See Proposals", go: () => c.openPage("proposals"), href: c.hrefOf("proposals") }
@@ -710,7 +717,6 @@ function Bank() {
       <h1 className="sr-only">Evidence Bank: your case library</h1>
       {strip}
       <div className="wb-toolbar" role="toolbar" aria-label="Your cases">
-        <span className="wb-tb wb-tb-strong ev-static">View: All cases</span>
         <span className="wb-tb wb-tb-quiet ev-static num">
           {vis.length} of {rows.length} rows{first && rows.some((r) => r.kind === "example") ? " · 2 are examples" : ""}
         </span>
@@ -770,7 +776,7 @@ function Bank() {
           <span className="sr-only">Search your cases</span>
           <input type="search" placeholder="Search your cases: a problem, a type of work, an industry, a number" value={filters.q} maxLength={120} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
         </label>
-        {cos[0] && readyN > 0 && (
+        {cos[0] && readyN > 0 && !phone && (
           <button type="button" className="wb-askchip" onClick={() => runMatchWith(cos[0])}>
             Closest case for {cos[0].locked ? "a locked company" : cos[0].name}
           </button>

@@ -276,7 +276,7 @@ export function matchCell(r: EvRow, m: EvidenceMatch | undefined, top: boolean):
   if (r.kind === "example") return { word: "Example, not ranked", why: "", strong: false };
   if (!isReady(r)) return { word: "Finish the case to rank it", why: "", strong: false };
   if (!m) return { word: "Not run", why: "", strong: false };
-  const why = m.same.length ? `Same: ${m.same.join(", ")}` : m.diff.length ? `Different: ${m.diff.join(", ")}` : "";
+  const why = m.same.length ? m.same.join(", ") : m.diff.length ? `Different: ${m.diff.join(", ")}` : "";
   return { word: matchWord(m, top), why, strong: m.label !== "Different" };
 }
 /** The key of the top-ranked case, or null. */

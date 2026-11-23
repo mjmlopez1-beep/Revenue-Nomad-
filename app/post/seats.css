@@ -1250,7 +1250,7 @@ button.ys-yours:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  margin: -6px 0 14px;
+  margin: 0 0 16px;
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;

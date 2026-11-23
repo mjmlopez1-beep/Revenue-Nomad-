@@ -209,7 +209,7 @@ async function main() {
   check("closest match first", M.sortRows(lib, "match", ms).map((r) => r.key).join(",") === "b,a,c" && M.topOf(ms) === "b");
   check("match words: Closest match, Close, Not close; never a percentage", M.matchWord(ms.get("b"), true) === "Closest match" && M.matchWord(ms.get("a"), false) === "Close" && M.matchWord({ caseId: "z", label: "Different", same: [], diff: [] }, false) === "Not close" && M.matchWord(undefined, false) === "Not run");
   check("a draft is never ranked, an example never", M.matchCell(lib[2], undefined, false).word === "Finish the case to rank it" && M.matchCell(firstRows[2], undefined, false).word === "Example, not ranked");
-  check("the match cell says what is the same", M.matchCell(lib[0], ms.get("a"), false).why === "Same: Same size");
+  check("the match cell says what is the same", M.matchCell(lib[0], ms.get("a"), false).why === "Same size");
   check("the status line while matching: free", M.statusLine(lib, false, "Cedar and Pine", 2) === "Match to Cedar and Pine · 2 of 3 ranked · free");
   check("the status line in use", M.statusLine(lib, false, null, 0) === "Private to you · 2 ready, 1 draft · used in 2 proposals");
   check("eight type of work categories, each tag filed once", T.workCats().length === 8 && new Set(T.tagGroups().flatMap((g) => g.tags)).size === T.tagGroups().flatMap((g) => g.tags).length && T.catOf("Sales playbook") === "Sales Enablement" && T.catOf("My own tag") === null);

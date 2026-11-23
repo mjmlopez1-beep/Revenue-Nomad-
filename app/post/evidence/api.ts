@@ -113,7 +113,7 @@ export async function save(input: EvidenceInput & { problemText?: string }): Pro
   const { text, problemText, outcomes, seatId: _s, companyId: _c, ...rest } = input;
   const answers: J = {};
   if (text !== undefined) answers.did = text;
-  if (problemText !== undefined || input.problems) answers.problem = problemText ?? (input.problems ?? []).join(". ");
+  if (problemText !== undefined || input.problems) answers.problem = problemText ?? (input.problems ?? []).map((x) => x.replace(/[.\s]+$/, "")).join(". ");
   if (outcomes) answers.numbers = numberWords(outcomes);
   const j = await post("save", { ...rest, ...(outcomes ? { outcomes } : {}), ...(Object.keys(answers).length ? { answers } : {}) });
   if (failed(j)) return j;

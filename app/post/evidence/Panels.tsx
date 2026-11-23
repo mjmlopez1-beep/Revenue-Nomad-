@@ -390,7 +390,7 @@ export function MatchPanel({
         <span className="ev-k">Run it on</span>
         {(
           [
-            ["all", `All ${counts.all} cases`],
+            ["all", counts.all === 1 ? "The 1 case" : `All ${counts.all} cases`],
             ["ready", `Ready cases only (${counts.ready})`],
             ["sel", `Selected cases (${counts.sel})`],
           ] as ["all" | "ready" | "sel", string][]

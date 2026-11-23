@@ -1034,3 +1034,14 @@ span.ev-tag {
 .ev-phone .wb-bottom {
   padding-bottom: 76px;
 }
+.ev-table .ev-td-client {
+  min-width: 200px;
+}
+.ev-table .wb-td-check,
+.ev-table .wb-th-check {
+  width: 40px;
+  min-width: 40px;
+}
+.ev-table .wb-td-check {
+  padding-top: 12px !important;
+}
