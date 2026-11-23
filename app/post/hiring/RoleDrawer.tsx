@@ -16,7 +16,6 @@ import { bestBuyer } from "@/lib/moves";
 import { IconX } from "../../ui/shared";
 import { NameAndTitle, engCell } from "../Tables";
 import { UnlockCompany } from "../company/sections/Unlock";
-import { openPlans } from "../Billing";
 import { bundleLead, isOpenRole, shown, type CoInfo, type Row } from "../model";
 import { fitOf, fnOf, listedOf, pastHires, rateOf, type Status, type WayIn } from "./hiringModel";
 
@@ -176,25 +175,14 @@ export function RoleDrawer({
           )}
         </section>
 
-        <section className="hn-sec" aria-label="Closest evidence case">
-          <h3 className="hn-k">Closest evidence case</h3>
-          {close ? (
-            <>
-              <strong>Evidence Bank is coming</strong>
-              <span className="hn-sub">Your seats will each start a draft case there, and the closest one shows here and goes into your note.</span>
-            </>
-          ) : (
-            <>
-              <strong>Part of the Close plan</strong>
-              <span className="hn-sub">
-                Evidence Bank keeps your case studies and finds the closest one for each role.{" "}
-                <button type="button" className="tp-flink" onClick={() => openPlans("proposals")}>
-                  See the Close plan
-                </button>
-              </span>
-            </>
-          )}
-        </section>
+        {/* Evidence Bank is a Close feature (BUILD_PLAN part 8): its place here shows only on Close, a placeholder until it ships. */}
+        {close && (
+          <section className="hn-sec" aria-label="Closest evidence case">
+            <h3 className="hn-k">Closest evidence case</h3>
+            <strong>Evidence Bank is coming</strong>
+            <span className="hn-sub">Your seats will each start a draft case there, and the closest one shows here and goes into your note.</span>
+          </section>
+        )}
 
         <section className="hn-sec" aria-label="Your way in">
           <h3 className="hn-k">Your way in</h3>

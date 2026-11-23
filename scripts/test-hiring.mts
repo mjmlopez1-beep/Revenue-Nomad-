@@ -237,6 +237,14 @@ async function main() {
   check("the foot with nothing matching the filters: Clear filters", H.footWords({ view: "all", shown: 0, total: 4, mine: 3, myFn: "Sales", filtered: true, pitched: 0 }).go?.to === "clear");
   check("plain words: no exclamation marks in what the page says", ![H.footWords({ view: "pitched", shown: 0, total: 4, mine: 3, myFn: "Sales", filtered: false, pitched: 0 }).text, H.alertTitle("mine", "Sales", f0), fCp.why, fLl.why].some((s) => s.includes("!")));
 
+  /* ----- Evidence Bank is Close only (BUILD_PLAN part 8) ----- */
+  const { readFileSync } = await import("node:fs");
+  const drawer = readFileSync(new URL("../app/post/hiring/RoleDrawer.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../app/post/hiring/HiringNow.tsx", import.meta.url), "utf8");
+  check("the drawer's Closest evidence case shows only on Close", /\{close && \(\s*<section className="hn-sec" aria-label="Closest evidence case">/.test(drawer) && !/Part of the Close plan/.test(drawer));
+  check("the Closest evidence column is added only on Close (else the plans)", /if \(id === "evidence" && !close\) return openPlans\("proposals"\);/.test(page));
+  check("no export anywhere on the page or the drawer", ![drawer, page].some((x) => />[^<]*\b(Export|Download)\b/.test(x)));
+
   console.log(`\n${passes} passed, ${failures} failed`);
   if (failures) process.exit(1);
 }
