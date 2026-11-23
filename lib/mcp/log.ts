@@ -49,14 +49,17 @@ const FLUSH_AT = 200;
 export interface AgentPrefs {
   /** Switch keys turned off: a tool's key, or a group's "g:<group>". */
   off: string[];
-  /** Credits all the member's agents may spend in a UTC day; null for no limit. */
+  /** Credits all the member's agents may spend in a UTC day; null for no limit (DEFAULT_LIMIT until they pick). */
   limit: number | null;
   at?: string;
 }
 
+/** The daily spend limit until a member picks one (owner, 2026-11-23): 10 credits a day. Picking "No limit" stores null. */
+export const DEFAULT_LIMIT = 10;
+
 export const prefsIn = (s: State, memberId: string): AgentPrefs => {
   const p = s.connector?.agent?.[memberId];
-  return { off: [...(p?.off ?? [])], limit: p?.limit ?? null, ...(p?.at ? { at: p.at } : {}) };
+  return { off: [...(p?.off ?? [])], limit: p?.limit === undefined ? DEFAULT_LIMIT : p.limit, ...(p?.at ? { at: p.at } : {}) };
 };
 
 /** The first switch that stops this call: its group's, else one of its keys. Null when it may run. */

@@ -222,6 +222,13 @@ async function main() {
     check("a switch that isn't a tool is refused", bad === "That isn't one of your agents' tools.", bad);
     check("a limit that isn't one of 5, 10, 25 or 50 is refused", /Pick 5, 10, 25, 50 credits a day, or no limit/.test(badLimit ?? ""), badLimit);
     await L.setPrefs("mem_jordan", { key: "g:send", on: false });
+    {
+      // The daily spend limit: 10 credits until the member picks; "No limit" is kept as no limit.
+      const fresh = { connector: { agent: {} } } as never;
+      check("a member who never picked has the 10-a-day default", L.DEFAULT_LIMIT === 10 && L.prefsIn(fresh, "mem_new").limit === 10);
+      const none = { connector: { agent: { mem_x: { off: [], limit: null } } } } as never;
+      check("a member who picked No limit keeps no limit", L.prefsIn(none, "mem_x").limit === null);
+    }
     check("a switch is kept for the member, sorted, with when", JSON.stringify(L.prefsIn(await state(), "mem_jordan").off) === '["g:send"]' && !!L.prefsIn(await state(), "mem_jordan").at);
   }
 
