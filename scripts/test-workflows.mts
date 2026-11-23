@@ -263,7 +263,7 @@ async function main() {
   check("nothing more was spent", cbal0 - T.balance(cs, "mem_casey") === 1);
   check("the warning is told once", warns().length === 1);
   const asks = (cs.inbox?.mem_casey ?? []).filter((x) => x.ask && !x.ask.answer);
-  check("the bell asks: say yes, with the credits", asks.length === 2 && asks.every((x) => x.ask!.credits === 1 && /say yes to spend 1 credit/.test(x.line)), asks);
+  check("the bell asks: say yes, with the credits", asks.length === 2 && asks.every((x) => x.ask!.credits === 1 && /waits for your yes · 1 credit$/.test(x.line)), asks);
   check("the ask names no locked company", asks.every((x) => !/Halcyon Freight|Larkspur Learning/.test(`${x.line} ${x.sub}`)));
   const [yesRun, noRun] = waiting;
   const yes = (await act(C, { type: "workflow.approve", run: yesRun.id, yes: true })) as { message: string };

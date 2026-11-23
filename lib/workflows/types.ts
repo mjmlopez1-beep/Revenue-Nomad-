@@ -141,8 +141,8 @@ export const TRIGGERS: Record<WfTrigger, TriggerInfo> = {
   fact: { name: "A fact changed", detail: "Another member added or changed a fact there: a seat, a role, a person, its size.", scopes: ["list", "radar", "follows"], company: true },
   funding: { name: "A company raised funding", detail: "From its SEC filing (Form D): the round and date as the filing gives them.", scopes: ["list", "radar", "follows"], funding: true, company: true },
   known: { name: "Someone you know changed jobs", detail: "A person in your own contacts shows as a new leader at another company. Matched by full name and the new company, never guessed.", scopes: ["contacts"], company: true },
-  opened: { name: "A client opens your proposal", detail: "The first time they open it.", scopes: ["proposals"], plan: "Close", company: false },
-  signed: { name: "A client signs", detail: "A proposal or a contract is fully signed.", scopes: ["proposals"], plan: "Close", company: false },
+  opened: { name: "Proposal opened", detail: "The first time they open it.", scopes: ["proposals"], plan: "Close", company: false },
+  signed: { name: "Proposal signed", detail: "A proposal or a contract is fully signed.", scopes: ["proposals"], plan: "Close", company: false },
 };
 
 export interface StepInfo {

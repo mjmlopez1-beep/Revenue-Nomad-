@@ -198,10 +198,10 @@ export function settleAsk(d: AlertStores, memberId: string, runId: string, answe
     if (answer) {
       x.ask = { ...x.ask, answer };
       x.read = true;
-      x.line = answer === "yes" ? x.line.replace(/: say yes to spend .*$/, ": you said yes") : x.line.replace(/: say yes to spend .*$/, ": you said no");
+      x.line = answer === "yes" ? "A workflow went on: you said yes" : "A workflow stopped there: you said no";
     } else if (credits !== undefined) {
       x.ask = { ...x.ask, credits };
-      x.line = x.line.replace(/say yes to spend .*$/, `say yes to spend ${credits === 1 ? "1 credit" : `${credits} credits`}`);
+      x.line = `A workflow waits for your yes · ${credits === 1 ? "1 credit" : `${credits} credits`}`;
     }
   }
 }

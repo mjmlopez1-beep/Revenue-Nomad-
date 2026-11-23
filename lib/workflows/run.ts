@@ -178,7 +178,7 @@ async function runOne(ev: WfEvent, wfId: string, origin: string | undefined, now
         // At the cap: nothing is spent; the paid steps wait for the member's yes.
         run.ask = { credits: q.total };
         for (const x of toBuy) put(x.key, "waiting", `Waits for your yes: ${creditWords(q.per[x.key] ?? 0)}. This workflow's limit is ${creditWords(f.cap)} a month.`, q.per[x.key] ?? 0);
-        bells.push({ id: `wf-ask:${run.id}`, at, kind: "workflow", line: `${f.name.replace(/[.\s]+$/, "")}: say yes to spend ${creditWords(q.total)}`, sub: `${oneLineWf(ev.lineOut ?? ev.line, 120)} · It reached its limit of ${creditWords(f.cap)} this month`, href: "/?p=alerts", alert: `wf:${f.id}`, ask: { run: run.id, credits: q.total } });
+        bells.push({ id: `wf-ask:${run.id}`, at, kind: "workflow", line: `A workflow waits for your yes · ${creditWords(q.total)}`, sub: `${oneLineWf(ev.lineOut ?? ev.line, 100)} · It reached its limit of ${creditWords(f.cap)} this month`, href: "/?p=alerts", alert: `wf:${f.id}`, ask: { run: run.id, credits: q.total } });
       } else {
         if (q.total > 0 && f.warn !== null && spentMo + q.total > f.warn && f.warned !== monthOf(at)) {
           warned = monthOf(at);
@@ -278,7 +278,7 @@ async function freeSteps(cx: Ctx, keys: WfStepKey[], status: Map<WfStepKey, RunS
 async function tell(cx: Ctx, run: WfRun, bells: Parameters<typeof pushInbox>[2]): Promise<void> {
   const { m, f, ev } = cx;
   const did = doneWords(run.steps);
-  bells.push({ id: `wf:${run.id}`, at: run.at, kind: "workflow", line: run.line, sub: `${f.name} · ${did}`, href: ev.href, alert: `wf:${f.id}` });
+  bells.push({ id: `wf:${run.id}`, at: run.at, kind: "workflow", line: run.line, sub: `${did} · ${f.name}`, href: ev.href, alert: `wf:${f.id}` });
   const out = oneLineWf(ev.lineOut ?? ev.line, WF_LIMITS.line);
   const s = await loadState();
   const n = await import("../notify/index");
