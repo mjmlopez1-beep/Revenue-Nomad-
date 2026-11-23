@@ -43,6 +43,12 @@ function criteriaOfView(a: SavedSearch): SavedViewCriteria {
   return criteria;
 }
 
+/** Where a list's alert goes, in words: "by email each week, in Slack, in the bell". */
+function howWords(alert: Required<ListAlert>): string {
+  const often = alert.every === "instant" ? "as it happens" : alert.every === "daily" ? "every morning" : "each week";
+  return [alert.email ? `by email ${often}` : "", alert.slack ? "in Slack" : "", alert.bell ? "in the bell" : ""].filter(Boolean).join(", ") || "by email";
+}
+
 /** A saved view as a list (F5): SavedViewRec's list fields, each with its default filled in. */
 export interface SavedListFields {
   kind: ListKind | null;
@@ -248,9 +254,7 @@ export function savedViewAction(
     if (alert.on && !alert.email && !alert.slack && !alert.bell) alert.email = true;
     const next = [...list];
     next[at] = { ...next[at], alert, email: alert.on && alert.email };
-    const often = alert.every === "instant" ? "as it happens" : alert.every === "daily" ? "every morning" : "each week";
-    const how = [alert.email ? `by email ${often}` : "", alert.slack ? "in Slack" : "", alert.bell ? "in the bell" : ""].filter(Boolean).join(", ");
-    return { list: next, id: a.id, message: alert.on ? `Alert on for "${next[at].name}": ${how}.` : `Alert off for "${next[at].name}". It stays saved.` };
+    return { list: next, id: a.id, message: alert.on ? `Alert on for "${next[at].name}": ${howWords(alert)}.` : `Alert off for "${next[at].name}". It stays saved.` };
   }
   if (a.op === "list") {
     // A list's columns, kind or starter flag changed (the alert has its own op).
@@ -313,5 +317,7 @@ export function savedViewAction(
   // A list saved with its alert: the weekly email is the alert's.
   if (saved.alert) saved.email = saved.alert.on && saved.alert.email;
   const mailed = saved.email !== false;
-  return { list: [...list, saved], id, message: !mailed ? (saved.alert?.on ? `Saved "${name}". New roles go to Slack.` : `Saved "${name}".`) : `Saved "${name}". New matches come in your weekly email.` };
+  // A list saved with its own alert says where that alert goes; a view without one keeps its weekly email's words.
+  if (saved.alert) return { list: [...list, saved], id, message: saved.alert.on ? `Saved "${name}". Its alert is on: ${howWords(alertOf(saved))}.` : `Saved "${name}".` };
+  return { list: [...list, saved], id, message: !mailed ? `Saved "${name}".` : `Saved "${name}". New matches come in your weekly email.` };
 }

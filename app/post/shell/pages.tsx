@@ -315,6 +315,7 @@ const loadHiring = () => import("../hiring/HiringNow");
 const loadWarm = () => import("../network/WarmPaths");
 const loadContracts = () => import("../contracts/ContractsPage");
 const loadEvidence = () => import("../evidence/Evidence");
+const loadAlerts = () => import("../alerts/Alerts");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -331,8 +332,10 @@ const WarmPathsPage = dynamic(() => loadWarm().then((m) => m.WarmPaths), { ssr: 
 const ContractsPageL = dynamic(() => loadContracts().then((m) => m.ContractsPage), { ssr: false, loading: pageWait });
 // Evidence Bank (evidence/Evidence.tsx): the case library, the build panel, matching; the upgrade screen without Close.
 const EvidencePageL = dynamic(() => loadEvidence().then((m) => m.EvidencePage), { ssr: false, loading: pageWait });
+// Alerts and workflows (alerts/Alerts.tsx): every alert in one table, where they go, the starter gallery. The old look keeps Notifications.
+const AlertsPageL = dynamic(() => loadAlerts().then((m) => m.AlertsPage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadAlerts];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -357,6 +360,12 @@ function IntegrationsP() {
 function NotificationsP() {
   const c = useApp();
   return <Notifications view={c.view} onIntegrations={() => c.openPage("integrations")} />;
+}
+/** Alerts and workflows: the new look's page (alerts/Alerts.tsx); the old look keeps Notifications at its own address. */
+function AlertsP() {
+  const c = useApp();
+  if (!c.ui2) return <NotificationsP />;
+  return <AlertsPageL />;
 }
 function RatesP() {
   const c = useApp();
@@ -590,7 +599,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   // The new look's pages (RN_UI2): each opens its home of today until its own exists.
   warm: { title: "Warm paths", component: GetInP, needsTable: true, ownStrip: true, mainClass: (c) => (c.shell.wayCo ? "" : "wp-main") },
   evidence: { title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true, mainClass: (c) => (!c.me.plan || c.me.plan.canClose ? "wb-host ev-host" : "") },
-  alerts: { title: "Alerts and workflows", component: NotificationsP },
+  alerts: { title: "Alerts and workflows", component: AlertsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "al-host" : "") },
   agent: { title: "Agent access", component: IntegrationsP },
   settings: { title: "Settings", component: IntegrationsP },
   contracts: { title: "Contracts", component: ContractsP, ownHeader: true, ownStrip: true, mainClass: "ct-main" },

@@ -457,6 +457,10 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
       who.push({ m, lists, follows: watchesFollows ? follows : { ...follows, on: false }, known: watchesKnown ? known : { ...known, on: false }, free: T.freeNow(s, m.id, nowMs) });
     }
 
+    // Nobody watches and nothing waits: no read of the table, and nothing written.
+    const waiting = Object.values(s.alertWatch?.members ?? {}).some((x) => x.daily?.length || x.weekly?.length || x.slack?.length);
+    if (!who.length && !waiting) return { ...out, looked: false };
+
     /* ---- what came in ---- */
     const wantSignals = who.some((w) => w.lists.some((v) => alertOf(v).triggers.some((t) => t === "seat" || t === "leader" || t === "funding")));
     const funding = wantSignals ? await fundingSource().events({ sinceMs, nowMs, companies: fundingCompanies(seed, s) }) : [];
@@ -538,7 +542,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
               ? `A fractional ${fn}seat ended at ${co}`
               : trig === "leader"
                 ? `A new ${fn}leader${x.arrived?.level ? ` (${x.arrived.level})` : ""} on the website of ${co}`
-                : `${capFirst(co)} raised ${x.amount ?? "money"}${x.round ? ` (${x.round})` : ""}, as its ${x.fundNote ?? "SEC filing"} says`;
+                : `${capFirst(co)} raised ${x.amount ?? "money"}${x.round ? ` (${x.round})` : ""} · ${x.fundNote ?? "SEC filing"}`;
           lines.push({ ...base, id: x.key, at: x.at, kind: trig, trigger: trig, line: capFirst(line), href: href(x.companyId) });
         }
         if (a.triggers.includes("fact"))
@@ -570,7 +574,10 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
           });
         }
       }
-      if (lines.length) linesOf.set(m.id, lines);
+      // One event once for the member: a list's line first, then Companies you follow's, then Someone you know's.
+      const ids = new Set<string>();
+      const uniq = lines.filter((l) => !ids.has(l.id) && !!ids.add(l.id));
+      if (uniq.length) linesOf.set(m.id, uniq);
     }
 
     /* ---- write the bell, the queues and the keys; take what is due ---- */

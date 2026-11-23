@@ -221,7 +221,7 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   return ids;
 }
 const patchless = (a: Action) =>
-  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || a.type.startsWith("inbox.") || a.type.startsWith("alerts.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
