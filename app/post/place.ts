@@ -123,7 +123,8 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   const ui2 = !!opts?.ui2;
   const d = placeDefaults(me, off);
   const q = new URLSearchParams(from ?? search);
-  const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? d.t;
+  // Under the new look an address that names Hiring now and no list (Slack's "?v=hiring") opens Hiring now's own page: its open roles.
+  const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? (ui2 && !from && q.get("v") === "hiring" ? "engagements" : d.t);
   // An old link's v=friendly opens Repeat hirers, the tab that replaced it.
   const v = tabOf(q.get("v")) ?? d.v;
   // Null: the member hasn't picked a sort, so the view's own default applies.

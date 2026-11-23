@@ -24,6 +24,10 @@
  *               Hiring now): its tabs All seats and Seats that ended lately. Its third tab, Your
  *               seats, is the page "seats" (today's Seats.tsx inside it), so ?p=seats lands there.
  *
+ *   hiring2     Hiring now (hiring/HiringNow.tsx), Signals / Hiring now, in place of the table while it
+ *               lists seats on the "hiring" view (every old Hiring now address). Its views (your
+ *               function, every function) are the table's (TableCtx allFns), so the address follows.
+ *
  *   company2    the company record (company/CompanyPage.tsx) while one is open (?c=<id>), in place of
  *               the list or page it was opened over, on wider screens (AppCtx.record). Phones keep
  *               the record drawer (Drawer.tsx).
@@ -90,6 +94,9 @@ export interface TableCtx {
   /** How many filters are on, and each as a chip that takes it off. */
   nFilters: number;
   chips: { id: string; label: string; clear: () => void }[];
+  /** Hiring now: every function's open roles (the address's af=1), not only the member's. Optional: a page without Hiring now ignores it. */
+  allFns?: boolean;
+  setAllFns?: (on: boolean) => void;
   /** The search typed (the list reads it deferred). */
   query: string;
   setQuery: (q: string) => void;
@@ -303,6 +310,7 @@ const loadPeople = () => import("../people/People");
 const loadSeatsPage = () => import("../seatsPage/SeatsPage");
 const loadCompany = () => import("../company/CompanyPage");
 const loadCrystal = () => import("../crystal/CrystalBall");
+const loadHiring = () => import("../hiring/HiringNow");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -312,8 +320,9 @@ const SeatsPage = dynamic(() => loadSeatsPage().then((m) => m.SeatsPage), { ssr:
 const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
 // Crystal Ball in the new look (crystal/CrystalBall.tsx); the old look keeps Radar.tsx.
 const CrystalBall = dynamic(() => loadCrystal().then((m) => m.CrystalBallPage), { ssr: false, loading: pageWait });
+const HiringNowPage = dynamic(() => loadHiring().then((m) => m.HiringNow), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -545,6 +554,11 @@ function People2P() {
   return <PeoplePage />;
 }
 
+/** Hiring now (hiring/HiringNow.tsx), in place of the table while it lists open roles. It draws its own header (Home / Hiring now / the view) and strip. */
+function Hiring2P() {
+  return <HiringNowPage />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -552,7 +566,7 @@ const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-m
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
  * Notifications, Agent access and Settings are Integrations).
  */
-export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2", PageDef>> = {
+export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2" | "hiring2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
@@ -583,6 +597,8 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   company2: { title: "Company", component: CompanyP, ownHeader: true, ownStrip: true },
   seats2: { title: "Seats", component: Seats2P, crumbs: ["today"], ownStrip: true },
   people2: { title: "People", component: People2P, crumbs: ["today"], ownStrip: true },
+  // Signals / Hiring now: the open roles, on the workbench, with the "role posted" list alert.
+  hiring2: { title: "Hiring now", component: Hiring2P, crumbs: ["today"], ownHeader: true, ownStrip: true },
 };
 
 /** The new look's page in the table's place for a list (shell/slots.ts). */

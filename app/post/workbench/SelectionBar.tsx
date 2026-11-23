@@ -9,51 +9,20 @@
  * run, nothing spent) and shows it in the bar, with the balance after and any limit that stops part
  * of it; only the quote's own button runs it (run.ts, in batches of 60).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { UnlockQuote } from "@/lib/tableTypes";
 import { COMPANY_PRICE } from "@/lib/tableFields";
 import { useToast } from "../../ui/shared";
-import type { FactRef, RecordType, Row } from "../model";
+import type { RecordType, Row } from "../model";
 import { useUi } from "../ui";
+import { companyItems, unlockItems } from "./pickItems";
 import { appDeps, creditWords, fetchQuote, quoteWords } from "./quote";
 import { runUnlock } from "./run";
 
-/** What Unlock buys for each picked row: a company's own unlock, a person's name and title, who held a seat. Rows with nothing to buy are left out. */
-export function unlockItems(type: RecordType, rows: Row[]): { items: FactRef[]; wait: number } {
-  const items: FactRef[] = [];
-  const seen = new Set<string>();
-  let wait = 0;
-  for (const r of rows) {
-    const i = r.i;
-    if (type === "companies") {
-      if (i.c.hidden && !seen.has(i.c.id)) (seen.add(i.c.id), items.push({ entity: "company", id: i.c.id, field: "identity" }));
-      continue;
-    }
-    if (i.c.hidden) {
-      wait++;
-      continue;
-    }
-    if (type === "people" && r.p) {
-      const lead = (["name", "title"] as const).find((f) => r.p!.cells[f]?.s === "locked");
-      if (lead) items.push({ entity: "contact", id: r.p.id, field: lead });
-    } else if (type === "engagements" && r.e) {
-      const lead = (["operator", "role"] as const).find((f) => r.e!.cells[f]?.s === "locked");
-      if (lead) items.push({ entity: "engagement", id: r.e.id, field: lead });
-    }
-  }
-  return { items, wait };
-}
+/** The pure halves (what Unlock and Open buy), kept where they were for every caller. */
+export { companyItems, unlockItems };
 
 const NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], people: ["person", "people"], engagements: ["seat", "seats"] };
-
-/** People and seats: the locked companies of the picked rows, so the ones waiting on their company can open it first (each company once). */
-export function companyItems(type: RecordType, rows: Row[]): FactRef[] {
-  if (type === "companies") return [];
-  const seen = new Set<string>();
-  const out: FactRef[] = [];
-  for (const r of rows) if (r.i.c.hidden && !seen.has(r.i.c.id)) (seen.add(r.i.c.id), out.push({ entity: "company", id: r.i.c.id, field: "identity" }));
-  return out;
-}
 
 export function SelectionBar({
   type,
@@ -63,6 +32,7 @@ export function SelectionBar({
   onNotes,
   onPass,
   onDone,
+  extra,
 }: {
   type: RecordType;
   rows: Row[];
@@ -72,6 +42,8 @@ export function SelectionBar({
   onPass: () => void;
   /** A run finished: what it opened and spent, for the status line. */
   onDone?: (x: { done: number; spent: number }) => void;
+  /** A page's own buttons after Pass as a lead (Hiring now's Mark as seen). */
+  extra?: ReactNode;
 }) {
   const ui = useUi();
   const toast = useToast();
@@ -161,6 +133,7 @@ export function SelectionBar({
           <button type="button" className="wb-sel-btn" onClick={onPass}>
             Pass as a lead
           </button>
+          {extra}
         </>
       )}
       {err && (

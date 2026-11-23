@@ -11,7 +11,7 @@
  * Covered:
  *   - the tabs: the page "seats" is Your seats; the table listing seats is All seats, or Seats that
  *     ended lately with its filter on; switching between the two data tabs changes only that filter;
- *     the table's place is the Seats page for seats but not for Hiring now (shell/slots.ts);
+ *     the table's place is the Seats page for seats, and Hiring now its own page (shell/slots.ts);
  *   - ended lately: when a seat ended (the month on show, else when Merlin recorded it), how long ago
  *     in the free words, never the month; the newest end first; model.ts endedTest agrees;
  *   - Your seats: Verified, Waiting for a member (with the credits that wait), With an admin;
@@ -65,7 +65,7 @@ async function main() {
   check("Seats that ended lately is the last 90 days (3 months), and only that filter changes", toEnded.endedWithin === S.ENDED_MONTHS && S.ENDED_MONTHS === 3 && JSON.stringify(toEnded.industry) === JSON.stringify(["Health Care"]));
   check("back to All seats takes only that filter off", back.endedWithin === 0 && JSON.stringify({ ...back }) === JSON.stringify({ ...f0 }));
   check("the table's place: Companies is the workbench, seats the Seats page", SL.tableSlotOf("companies", "all") === "companies2" && SL.tableSlotOf("engagements", "all") === "seats2" && SL.tableSlotOf("engagements", "repeat") === "seats2");
-  check("People is the People page; Hiring now stays the table", SL.tableSlotOf("people", "all") === "people2" && SL.tableSlotOf("engagements", "hiring") === null);
+  check("People is the People page; Hiring now is its own page", SL.tableSlotOf("people", "all") === "people2" && SL.tableSlotOf("engagements", "hiring") === "hiring2");
 
   /* ----- ended lately ----- */
   const endShown = seat("e1", { status: v("Ended"), end: v("2026-10") }, { updatedAt: iso(200) });

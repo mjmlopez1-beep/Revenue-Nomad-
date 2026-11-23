@@ -3222,6 +3222,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       clearFilters,
       nFilters,
       chips: chips.map((c) => ({ id: c.id, label: chipLabel(c), clear: () => setEff(c.clear(eff)) })),
+      allFns,
+      setAllFns,
       query,
       setQuery,
       rows: sorted,
