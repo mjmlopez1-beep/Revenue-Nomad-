@@ -26,6 +26,22 @@ export function startPlace(): { diff: boolean; rec: string | null; seat: string 
   return { diff: q.get("ff") === "diff" || q.get("p") === "partners", rec: q.get("fr"), seat: q.get("fs"), welcome: q.get("welcome") === "1", m: q.get("m") };
 }
 
+/**
+ * The same address for the new look's page (fractionals/FractionalsPage.tsx), read without using it
+ * up: the shell can mount that page twice while it settles on its key (?p=partners becomes peers),
+ * so the address counts for the first moments after the app loads, and no later.
+ */
+const START_AT = Date.now();
+export function startPlaceNow(nowMs = Date.now()): ReturnType<typeof startPlace> {
+  if (nowMs - START_AT > 15_000) return { diff: false, rec: null, seat: null, welcome: false, m: null };
+  const was = startUsed;
+  startUsed = false;
+  const out = startPlace();
+  startUsed = true;
+  void was;
+  return out;
+}
+
 /** A seat to open its fractional's record at (a company record's "See their record"): set before opening the page, taken once by it. */
 let wantSeat: string | null = null;
 export const openFractionalAt = (seatId: string) => {

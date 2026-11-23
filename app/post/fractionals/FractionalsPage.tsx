@@ -63,7 +63,7 @@ import {
   leadTitle,
   leadsWord,
   levelLine,
-  startPlace,
+  startPlaceNow,
   startThree,
   takeWantSeat,
   withPeers,
@@ -104,7 +104,7 @@ export function FractionalsPage() {
   const phone = c.phone;
   const { data, failed, load } = useFractionals([me.icp, me.function, me.fractionals, me.nameHidden, me.headline, me.city, me.leads]);
   const { view: peers } = usePeers();
-  const [addr] = useState(startPlace);
+  const [addr] = useState(() => startPlaceNow());
   const hasIcp = !!me.icp && !!(me.icp.industries.length || me.icp.employees.length || me.icp.revenue.length || me.icp.countries.length);
   // The directory's records, and the members Peers shows that hold no seat on file (withPeers).
   const records = useMemo(() => {
