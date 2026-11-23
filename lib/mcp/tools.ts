@@ -39,6 +39,7 @@ import { ALERT_MAX, alertMatches, alertOf, cleanCriteria, cleanListFields, descr
 import { sameView } from "../hunt";
 import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
+import { spendGate } from "./log";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
@@ -59,6 +60,8 @@ export interface Ctx {
   member: Member;
   /** The public address, for links. */
   origin: string;
+  /** The connected app making the call, as it registered (Agent access's log says which agent did what). */
+  app?: string;
 }
 export type ToolOut = Record<string, unknown>;
 
@@ -957,19 +960,34 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
   const ballSay = ball ? ` The company is in the member's ${FEATURE_NAME}, so on their plan it opens free (0 credits).` : "";
   const more = items.length > capped.length ? ` This covers the first 60 of ${items.length}. Unlock again for the rest.` : "";
   try {
+    // Agent access (lib/mcp/log.ts): the daily spend limit for the member's agents, checked on the quote before any spend.
+    const gate = spendGate();
     if (!a.confirm) {
       const r = await perform(ctx.member.token, action, ctx.origin, { dryRun: true, asMember: true });
       const cost = r.spent ?? 0;
+      const over = gate ? await gate.note(cost) : "";
       return {
         confirmed: false,
         would_spend: cost,
         credits_now: me.credits,
         would_open: what,
-        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : r.message.includes(PRO_OPEN_FREE) ? ` It opens free on the member's plan (${PRO_OPENS_DAILY} a day).` : ""}${r.message.includes(PRO_OPENS_USED) ? ` ${PRO_OPENS_USED}` : ""}${ballSay} Nothing was spent.${more}`,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : r.message.includes(PRO_OPEN_FREE) ? ` It opens free on the member's plan (${PRO_OPENS_DAILY} a day).` : ""}${r.message.includes(PRO_OPENS_USED) ? ` ${PRO_OPENS_USED}` : ""}${ballSay} Nothing was spent.${more}${over}`,
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }
-    const r = await perform(ctx.member.token, action, ctx.origin, { asMember: true });
+    if (gate) {
+      const q = await perform(ctx.member.token, action, ctx.origin, { dryRun: true, asMember: true });
+      const stop = await gate.before(q.spent ?? 0);
+      if (stop) throw new ToolProblem(stop);
+    }
+    let r: Awaited<ReturnType<typeof perform>>;
+    try {
+      r = await perform(ctx.member.token, action, ctx.origin, { asMember: true });
+    } catch (e) {
+      gate?.after(0);
+      throw e;
+    }
+    gate?.after(r.me?.credits != null ? Math.max(0, me.credits - r.me.credits) : 0);
     const shownNow = await afterChange(ctx, target.entity, target.id);
     return { confirmed: true, message: r.message + more, credits_left: r.me?.credits, ...(r.me?.unlocksLeft != null ? { unlocks_left_today: r.me.unlocksLeft } : {}), ...shownNow };
   } catch (e) {

@@ -705,6 +705,8 @@ console.log("\nThe API's routes");
     "api/account", "api/account/restore",
     // After a proposal or document goes out (lib/close): the member's cookie for their own activity and alert switches.
     "api/activity",
+    // Agent access (lib/mcp/log.ts): the member's cookie for their own agents' switches, spend limit and log.
+    "api/agent",
     "api/ask",
     // api/billing/ai-pack: the AI usage pack's checkout, the member's cookie (Close and the trial).
     "api/billing", "api/billing/ai-pack", "api/billing/webhook",

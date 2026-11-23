@@ -6,6 +6,7 @@
  * member (connecting the same app again replaces it). Shared by server code only.
  */
 import type { SavedSearch } from "./alerts";
+import type { AgentLogRow } from "./agentTools";
 
 export interface OAuthClient {
   /** Our random id, or the https URL of a Client ID Metadata Document (never stored, see oauth.ts). */
@@ -44,6 +45,17 @@ export interface ConnectorState {
   grants: Grant[];
   /** Saved searches (alerts) by member id. */
   alerts: Record<string, SavedSearch[]>;
+  /**
+   * Agent access (lib/mcp/log.ts), by member id: the tools they switched off for their agents and
+   * the daily spend limit for all their agents together. Settings: kept in the admin export.
+   */
+  agent?: Record<string, { off: string[]; limit: number | null; at?: string }>;
+  /**
+   * What each member's agents did (lib/mcp/log.ts), by member id, oldest first, 90 days: the tool,
+   * when, credits spent, the outcome and the app. Never an argument or a result. The member's own:
+   * never in the admin export; account closure's purge deletes it.
+   */
+  log?: Record<string, AgentLogRow[]>;
 }
 
 export const emptyConnector = (): ConnectorState => ({ clients: [], grants: [], alerts: {} });

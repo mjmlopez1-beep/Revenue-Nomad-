@@ -110,7 +110,7 @@ export function DataFlows() {
               Merlin&apos;s tools as that member, and gets only what those tools return to that member: what they would see in the app, with the same locks and credits. That
               happens under the member&apos;s own account with their assistant.
             </p>
-            <p className="cl-p">A member can see every assistant they connected, and disconnect it, in Your credits under Connected apps.</p>
+            <p className="cl-p">A member can see every assistant they connected, and disconnect it, in Your credits under Connected apps, or on Agent access.</p>
           </section>
 
           <section className="df-sec" aria-labelledby="df-train">
@@ -233,6 +233,22 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-agent">
+            <h2 className="df-h" id="df-agent">
+              Inside Merlin: your agents
+            </h2>
+            <p className="cl-p">
+              On Agent access you can switch off any of the tools your assistant uses, a whole group or one at a time, and set how many credits all your
+              assistants together may spend in a day. Spending credits and sending for signature always ask you first, whatever you switch. A tool you switched
+              off tells your assistant so, and does nothing.
+            </p>
+            <p className="cl-p">
+              Merlin keeps a log of what your assistants did for 90 days: which tool, when, which assistant, the credits it spent and what came of it. Never what
+              it asked for or what came back: no search, no company, no name. Only you see it. It is not in Revenue Nomad&apos;s copy for admins, and none of it goes
+              to an outside service. When you close your account it stays for the 30 days you can bring it back, then it is deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-crystal">
             <h2 className="df-h" id="df-crystal">
               Inside Merlin: tuning your Crystal Ball
@@ -298,7 +314,7 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Your connections file and your contacts file: People, Bring in who you know, or Your network. Each has its own Delete, and every way in found from it goes with it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
-              <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added.</li>
+              <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added. On Agent access: Revoke an assistant, switch off its tools, or set a daily spend limit for all of them.</li>
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
