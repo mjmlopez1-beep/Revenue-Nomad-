@@ -14,6 +14,7 @@
  */
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { personKey } from "../paths/match";
+import { shownName } from "../paths";
 import type { MemberPaths } from "../paths/types";
 import { coKey, knownLine, knownMoves, type KnownPerson, type NewLeader } from "./known";
 
@@ -36,16 +37,23 @@ export const hasKnownSources = (s: State, memberId: string): boolean => {
 export function knownPeopleOf(s: State, m: Pick<Member, "id">): KnownPerson[] {
   const out: KnownPerson[] = [];
   const p = filesOf(s, m.id);
+  // "Not a relationship" on Warm paths keeps a person out of this too: their key as Warm paths makes it
+  // (lib/paths/index.ts contactsOf), and every other row under the same name with them.
+  const away = new Set(p?.away ?? []);
+  const awayNames = new Set<string>();
   for (const r of p?.linkedin?.rows ?? []) {
     const name = `${r.f} ${r.l}`.trim();
     const nk = personKey(name);
+    if (nk && away.has(`l:${r.u ?? `${shownName(name)}|${r.c ?? ""}`}`)) awayNames.add(nk);
     if (nk) out.push({ name, nameKey: nk, companyId: null, company: r.c ?? null, src: "linkedin" });
   }
   for (const r of p?.csv?.rows ?? []) {
     const nk = personKey(r.n);
+    const sn = shownName(r.n);
+    if (nk && away.has(`c:${r.e ?? `${sn.toLowerCase()}|${(r.c ?? "").toLowerCase()}`}`)) awayNames.add(nk);
     if (nk) out.push({ name: r.n, nameKey: nk, companyId: null, company: r.c ?? null, src: "csv" });
   }
-  return out;
+  return awayNames.size ? out.filter((x) => !awayNames.has(x.nameKey)) : out;
 }
 
 /** New leaders whose time `inWin` takes: a leader a company's website shows now (its name kept), or a person a member added. */

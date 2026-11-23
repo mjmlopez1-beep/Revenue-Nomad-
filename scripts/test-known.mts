@@ -147,6 +147,21 @@ async function main() {
   check("hasKnownSources: the LinkedIn file or the CSV only", KV.hasKnownSources(s0, "mem_jordan") && !KV.hasKnownSources(s0, "mem_gee"));
   check("knownPeopleOf reads only the files", KV.knownPeopleOf(s0, { id: "mem_jordan" }).every((p) => p.src === "linkedin" || p.src === "csv") && !KV.knownPeopleOf(s0, { id: "mem_jordan" }).some((p) => p.name === "Robin Hale") && KV.knownPeopleOf(s0, { id: "mem_gee" }).length === 0);
 
+  {
+    // "Not a relationship" on Warm paths keeps the person out of Someone you know too.
+    const s1 = JSON.parse(JSON.stringify(s0));
+    const pj = s1.paths.mem_jordan;
+    const before = KV.knownPeopleOf(s1, { id: "mem_jordan" });
+    const row = pj.csv?.rows?.[0] ?? null;
+    if (row) {
+      const { shownName } = await import("../lib/paths");
+      const sn = shownName(row.n);
+      pj.away = [`c:${row.e ?? `${sn.toLowerCase()}|${(row.c ?? "").toLowerCase()}`}`];
+      const after = KV.knownPeopleOf(s1, { id: "mem_jordan" });
+      check("a person set aside as Not a relationship is left out of Someone you know", after.length < before.length && !after.some((x) => x.name === row.n), { before: before.length, after: after.length });
+    } else check("the made-up member has a contacts CSV row to set aside", false);
+  }
+
   // The watch's alert reads the same sources.
   await ev.afterWatch(t0);
   for (let i = 0; i < 4; i++) {
