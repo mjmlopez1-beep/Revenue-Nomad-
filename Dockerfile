@@ -23,6 +23,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 # Encrypted member seed (opened at runtime with RN_INTEL_SEED_KEY)
 COPY --from=builder /app/data/intel-seed.enc ./data/intel-seed.enc
+COPY --from=builder /app/data/fit-tags.enc ./data/fit-tags.enc
 # Never serve the sample data from this image. If the seed does not open (RN_INTEL_SEED_KEY
 # missing or wrong), every route answers 503 and GET /api/health fails, so the deploy does not
 # go live and nobody can sign in with the sample code.

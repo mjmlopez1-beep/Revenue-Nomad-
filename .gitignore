@@ -30,3 +30,4 @@ data/members/
 # The fit tag taxonomy (lib/evidence/tags.ts) is private: only its sealed copy, data/fit-tags.enc, is ever committed.
 data/fit-tags.json
 data/fit-tags*.json
+data/fit-tags*.csv

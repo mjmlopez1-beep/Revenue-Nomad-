@@ -8,3 +8,5 @@ data/jobs.json.tmp
 data/intel-seed.json
 data/intel-member-links.csv
 data/intel.json
+data/fit-tags*.json
+data/fit-tags*.csv
