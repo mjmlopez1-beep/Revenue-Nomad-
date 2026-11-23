@@ -532,16 +532,8 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   seats2: { title: "Seats", component: Seats2P, crumbs: ["today"], ownStrip: true },
 };
 
-/**
- * The new look's page that takes the table's place for a list, or null for the table itself:
- * Companies is the workbench, Seats the Seats page. Hiring now (seats on its "hiring" view) is
- * still the table until its own page exists.
- */
-export function tableSlotOf(t: RecordType, tab: Tab): "companies2" | "seats2" | null {
-  if (t === "companies") return "companies2";
-  if (t === "engagements" && tab !== "hiring") return "seats2";
-  return null;
-}
+/** The new look's page in the table's place for a list (shell/slots.ts). */
+export { tableSlotOf } from "./slots";
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */
 const ENTRY_OF: Partial<Record<string, string>> = { find: "find2" };

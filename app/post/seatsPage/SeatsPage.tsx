@@ -18,6 +18,7 @@
  * under the same three tabs.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { IconPlus } from "../../ui/shared";
 import { CardList } from "../Cards";
 import { endedTest, rowsFor } from "../model";
 import { Seats } from "../Seats";
@@ -31,6 +32,8 @@ import "../workbench/workbench.css";
 import "./seatsPage.css";
 
 const TITLE: Record<SeatTab, string> = { all: "All seats", ended: "Seats that ended lately", mine: "Your seats" };
+/** A phone's tabs, short enough to sit side by side. */
+const SHORT: Record<SeatTab, string> = { all: "All", ended: "Ended lately", mine: "Yours" };
 
 /** The first visit lands on Your seats once per browser session (sessionStorage), never in a loop. */
 const landedKey = (id: string) => `sp_landed_${id}`;
@@ -87,7 +90,8 @@ export function SeatsPage({ at }: { at: "data" | "mine" }) {
     <div role="tablist" aria-label="Seat tables" className="wb-bottom-tabs">
       {(["all", "ended", "mine"] as SeatTab[]).map((k) => (
         <button key={k} type="button" role="tab" aria-selected={k === tab} className={`wb-btab${k === tab ? " on" : ""}`} onClick={() => go(k)}>
-          {TITLE[k]} · <span className="num">{counts[k].toLocaleString("en-US")}</span>
+          {c.phone ? <span aria-hidden>{SHORT[k]}</span> : TITLE[k]}
+          {c.phone && <span className="sr-only">{TITLE[k]}</span>} · <span className="num">{counts[k].toLocaleString("en-US")}</span>
         </button>
       ))}
     </div>
@@ -111,6 +115,10 @@ export function SeatsPage({ at }: { at: "data" | "mine" }) {
         ) : (
           <PhoneList ended={tab === "ended"} />
         )}
+        {/* The main action in thumb reach, as on today's phone table. */}
+        <button type="button" className="btn btn-volt tp-fab" onClick={() => c.openAdd(tab === "mine" ? { mine: true } : undefined)}>
+          <IconPlus size={18} /> {tab === "mine" ? "Add a seat you held" : "Add what you know"}
+        </button>
       </div>
     );
 

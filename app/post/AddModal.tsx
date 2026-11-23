@@ -588,6 +588,7 @@ function EngagementForm({
     const rows = Object.entries(fields)
       .filter(([k]) => !(asMe && k === "operator"))
       .map(([k, x]) => ({ label: fieldDef("engagement", k)?.label ?? k, value: k === "start" || (k === "end" && x !== "Ongoing") ? fmtMonth(x) : x }));
+    if (asMe) rows.unshift({ label: "Who held the seat", value: "You" });
     if (bench) rows.push({ label: "Rate", value: `${v.rate.trim()}, benchmarks only` });
     onDone({ n: answers, before, message: r.message, capped: !!r.capped, bench: shared, rows, ...(r.id ? { seatId: r.id } : {}) });
   };
@@ -988,13 +989,13 @@ function DiscardAsk({ what, onKeep, onDiscard }: { what: string; onKeep: () => v
 /** What the member is adding. Each maps to an add path that exists: the seat form, the person form, a rate on a seat of theirs, the company facts, a company by its website. */
 export type AddKind = "mine" | "known" | "person" | "rate" | "fact" | "newco";
 
-const KINDS: { k: AddKind; name: string; line: string; earn: string; icon: string }[] = [
+const KINDS: { k: AddKind; name: string; tab?: string; line: string; earn: string; icon: string }[] = [
   { k: "mine", name: "A seat you held", line: "Your own fractional work. Function, title, dates, pay and how it came about. It goes on your Seats page.", earn: "Up to about 12 credits", icon: "M6 4v9h12V4M4 13h16v4H4zM7 17v3M17 17v3" },
-  { k: "known", name: "A seat you know about", line: "A seat someone else held, or a role that is open now. Merlin takes a seat only from the fractional who held it, so you add who hired for it.", earn: "+1 for each answer", icon: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" },
-  { k: "person", name: "A person and their role", line: "Who hires, who decides, or who a seat reported to. Name, title and how to reach them.", earn: "Up to 6 credits", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c1.5-4 4.5-5 8-5s6.5 1 8 5" },
+  { k: "known", name: "A seat you know about", tab: "A seat you know", line: "A seat someone else held, or a role that is open now. Merlin takes a seat only from the fractional who held it, so you add who hired for it.", earn: "+1 for each answer", icon: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" },
+  { k: "person", name: "A person and their role", tab: "A person", line: "Who hires, who decides, or who a seat reported to. Name, title and how to reach them.", earn: "Up to 6 credits", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c1.5-4 4.5-5 8-5s6.5 1 8 5" },
   { k: "rate", name: "A rate", line: "What one of your seats paid. Put it on the seat, or share it for the benchmarks only.", earn: "+1 credit", icon: "M12 3v18M16 7.5c-.8-1.5-2.3-2-4-2-2.2 0-4 1-4 3s1.8 2.7 4 3.2 4 1.3 4 3.3-1.8 3-4 3c-1.9 0-3.4-.7-4.2-2.2" },
   { k: "fact", name: "A company fact", line: "Website, who owns it, head office, how it sells. Merlin shows you what is missing.", earn: "+1 for each detail", icon: "M5 21V5l7-2v18M12 9h7v12M3 21h18M8 8h1M8 12h1M8 16h1M15 13h1M15 17h1" },
-  { k: "newco", name: "A company not in Merlin yet", line: "Paste its website. Merlin looks it up and fills in the name and industry for you to check.", earn: "Up to 4 credits", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" },
+  { k: "newco", name: "A company not in Merlin yet", tab: "A new company", line: "Paste its website. Merlin looks it up and fills in the name and industry for you to check.", earn: "Up to 4 credits", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" },
 ];
 /** The kinds that start from a company the member picks. */
 const NEEDS_CO: AddKind[] = ["mine", "known", "person", "fact"];
@@ -1827,7 +1828,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
           <div className="am2-tabs" role="tablist" aria-label="What to add">
             {KINDS.map((x) => (
               <button key={x.k} type="button" role="tab" aria-selected={kind === x.k} className={`am2-tab${kind === x.k ? " on" : ""}`} onClick={() => toKind(x.k)}>
-                {x.name}
+                {x.tab ?? x.name}
                 {drafts[x.k] && kind !== x.k ? " (draft)" : ""}
               </button>
             ))}

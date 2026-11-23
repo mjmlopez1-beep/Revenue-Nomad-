@@ -37,7 +37,7 @@ import { ToolsPanel } from "../workbench/ToolsPanel";
 import type { ToolDo, ToolTab } from "../workbench/tools";
 import { Workbench } from "../workbench/Workbench";
 import { SOURCE_LABEL } from "@/lib/tableFields";
-import { ENDED_MONTHS, endedBand, endedFilters, sortEnded, type SeatTab } from "./seatsModel";
+import { ENDED_MONTHS, endedBand, endedFilters, monthWords, sortEnded, type SeatTab } from "./seatsModel";
 
 const PAGE = 50;
 const colsKey = (memberId: string) => `wb_cols_${memberId}_engagements`;
@@ -55,7 +55,7 @@ const seatSub = (r: Row) => {
   const e = r.e!;
   const role = e.cells.role?.s === "value" ? e.cells.role.v : e.cells.function?.s === "value" ? `${e.cells.function.v} seat` : "A fractional seat";
   const start = e.cells.start?.s === "value" ? e.cells.start.v : null;
-  return `${role} at ${r.i.c.hidden ? "this company" : r.i.c.name}${start ? `, from ${start}` : isOpenRole(e) ? ", an open role" : ""}`;
+  return `${role} at ${r.i.c.hidden ? "this company" : r.i.c.name}${start ? `, from ${monthWords(start)}` : isOpenRole(e) ? ", an open role" : ""}`;
 };
 
 export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bottom: (status: ReactNode) => ReactNode }) {
