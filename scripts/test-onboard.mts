@@ -24,6 +24,13 @@ import {
 import { applyFilters, deriveAll, hireOfRow, placeFilters, rowsFor, sortRows, type Row } from "../app/post/model";
 import { FUNCTIONS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
 import { invitedLine } from "../lib/notify/format";
+import {
+  LIKE_ALERT, LIKE_LIST_NAME, PROFILE_SCREEN, SCREENS, SETUP_STEPS, companyLabel, factsLine, idealCounts, ledgerLines, likeListAction, likeRowView, likeStep, resumeScreen, screenN, seatSource,
+} from "../app/onboard/setupModel";
+import { defaultSeeds } from "../app/post/find/lookalikes";
+import { alertPlanProblem } from "../lib/hunt";
+import { alertOf } from "../lib/mcp/alerts";
+import { readFileSync } from "node:fs";
 
 let passed = 0;
 let failed = 0;
@@ -262,12 +269,59 @@ check("a copy with no time loses to one with a time", newerAnswers({ step: 2 }, 
 check("it opens on the step it left, inside the flow", resumeStep(3, { fn: "Sales", before: ["Marketing"] }, STEPS) === 3 && resumeStep(9, { fn: "Sales", before: [] }, STEPS) === 3 && resumeStep(0, { fn: "Sales", before: null }, STEPS) === 1);
 check("never past an answer it needs: the function, then the before answer (step 2)", resumeStep(3, { fn: null, before: ["Marketing"] }, STEPS) === 1 && resumeStep(3, { fn: "Sales", before: null }, STEPS) === 2 && resumeStep(2, { fn: "Sales", before: null }, STEPS) === 2);
 check("a draft from the six-step flow lands inside the three", resumeStep(5, { fn: "Sales", before: ["Marketing"] }, STEPS) === 3 && resumeStep(6, { fn: "Sales", before: [] }, STEPS) === 3 && resumeStep(4, { fn: "Sales", before: null }, STEPS) === 2);
-check("onboarding is three steps", STEPS === 3);
+check("the old look's onboarding (Classic.tsx, RN_UI2=off) is still three steps", STEPS === 3);
 check("a new member's goal: no fractional in their function yet, or repeat hirers for a catch-all", goalFor("Sales") === "adjacent" && goalFor("Other") === "friendly" && goalFor("Executive") === "friendly" && goalFor(null) === "friendly");
 const views = [{ id: "al_1", place: "v=hiring&t=seats&f=fn:Sales" }, { id: "al_2", place: fv1.place }];
 check("the table opens on the first view while it is saved", firstViewPlace({ firstView: "al_2", savedViews: views }) === fv1.place);
 check("not once it is gone, nor for a member from before", firstViewPlace({ firstView: "al_9", savedViews: views }) === null && firstViewPlace({ firstView: null, savedViews: views }) === null && firstViewPlace({ savedViews: views }) === null);
 check("the first view's numbers stay as set", ENOUGH === 5 && FIRST_WINDOW === 12 && WIDER_WINDOW === 24 && BEFORE_MAX === 3);
+
+
+/* ---------- the new look's set-up (app/onboard/Setup.tsx, setupModel.ts) ---------- */
+
+console.log("\nThe new look's set-up");
+check("the screens follow the mockup, with lookalikes right after the seats", SCREENS.join() === "welcome,ideal,seats,like,know,first,done" && screenN("like") === screenN("seats") + 1 && SETUP_STEPS === 5);
+check("the profile goes in on Open your first company, so a draft never resumes past Who you know", PROFILE_SCREEN === screenN("first") && resumeScreen(6, { fn: "Sales" }) === screenN("know") && resumeScreen(7, { fn: "Sales" }) === screenN("know"));
+check("it resumes on the screen it left, never past the function", resumeScreen(screenN("like"), { fn: "Sales" }) === screenN("like") && resumeScreen(screenN("like"), { fn: null }) === screenN("ideal") && resumeScreen(0, { fn: null }) === 1 && resumeScreen(2, { fn: null }) === 2);
+const ME2 = { ...ME, id: "m_setup", benchRates: [], credits: 31, plan: { name: "free", hadTrial: false } } as unknown as Me;
+const mySeat = (fn: string, extra: Record<string, Cell> = {}) => seat({ function: v(fn), type: v("Fractional"), status: v("Ended"), role: v(`Fractional VP ${fn}`), operator: v("Olive Onboard"), ...extra }, { yours: true });
+const pastA = co("Cedar and Pine", [mySeat("Sales")], { industry: "Software", employees: "51–200" });
+const pastB = co("Northwind Clinics", [mySeat("Sales")], { industry: "Software", employees: "51–200" });
+const lockedLike = co("Locked Lookalike", [hire("Sales", 6)], { industry: "Software", employees: "51–200", hidden: true });
+(lockedLike as { name: string }).name = "Secretname Coqa"; // as if a name had leaked onto a locked record: the step must still never print it
+const openLike = co("Halcyon Freight", [hire("Sales", 8)], { industry: "Software", employees: "51–200" });
+const unlike = co("Larkspur Learning", [hire("Finance", 3)], { industry: "EdTech", employees: "1–10" });
+const likeInfos = deriveAll([pastA, pastB, lockedLike, openLike, unlike]);
+const seeds0 = defaultSeeds(likeInfos, ME2);
+const ls = likeStep(likeInfos, ME2, seeds0);
+check("lookalikes: the seeds are the member's own seats' companies", seeds0.length === 2 && seeds0.includes(pastA.id) && seeds0.includes(pastB.id) && ls.seeds.map((x) => x.c.id).sort().join() === [pastA.id, pastB.id].sort().join(), seeds0);
+check("lookalikes: the profile shows as chips read from the seeds", ls.chips.some((c) => c.label === "Software") && ls.chips.some((c) => /51 to 200/.test(c.label)) && ls.chips.some((c) => /hired Sales/.test(c.label)), ls.chips);
+const likeIds = ls.ranked.map((r) => r.row.i.c.id);
+check("lookalikes: the companies that share the traits are ranked, never a seed, never the one that shares nothing", likeIds.includes(lockedLike.id) && likeIds.includes(openLike.id) && !likeIds.includes(unlike.id) && !likeIds.includes(pastA.id) && !likeIds.includes(pastB.id), likeIds);
+check("lookalikes: each row says why it matched", ls.ranked.every((r) => /^Same /.test(likeRowView(r).why)), ls.ranked.map((r) => r.why));
+const lockedRow = ls.ranked.find((r) => r.row.i.c.id === lockedLike.id)!;
+const lv = likeRowView(lockedRow);
+check("lookalikes: a locked company is described by its industry and size, never named", lv.locked && !JSON.stringify(lv).includes("Secretname") && /software company/i.test(lv.title) && /51–200 people/.test(lv.meta), lv);
+check("lookalikes: one the member can see keeps its name", likeRowView(ls.ranked.find((r) => r.row.i.c.id === openLike.id)!).title === "Halcyon Freight");
+check("a locked company's label and facts never carry a name", !companyLabel(lockedRow.row.i).includes("Secretname") && !factsLine(lockedRow.row.i).includes("Secretname"));
+const la = likeListAction(ls.tokens, true);
+check("lookalikes save as the member's first list, named Like your past clients, with its alert on", la.type === "savedView" && la.op === "save" && la.name === LIKE_LIST_NAME && LIKE_LIST_NAME === "Like your past clients" && la.list.kind === "companies" && la.list.alert.on === true && la.email === true);
+check("the list opens on the lookalike filter and follows the profile's industries and sizes", /f=[^&]*like/.test(la.place) && JSON.stringify(la.criteria.industry) === '["Software"]' && JSON.stringify(la.criteria.employees) === '["51–200"]', la);
+check("its alert passes Free's gate: weekly, never as it happens", LIKE_ALERT.every === "weekly" && alertPlanProblem(alertOf({ alert: la.list.alert as never }), null, true) === null && alertPlanProblem({ every: "instant", triggers: ["role"] }, null, true) !== null);
+check("turned off, it saves with no alert email", likeListAction(ls.tokens, false).list.alert.on === false && likeListAction(ls.tokens, false).email === false);
+const none = likeStep(deriveAll([lockedLike, openLike, unlike]), ME2, defaultSeeds(deriveAll([lockedLike, openLike, unlike]), ME2));
+check("no seats: the step is skipped with an honest line, nothing ranked, nothing to save", none.empty === "noSeats" && none.ranked.length === 0 && none.seeds.length === 0);
+const bare = co("Bare Seat Co", [seat({ type: v("Fractional"), operator: v("Olive Onboard") }, { yours: true })]);
+check("a seat with nothing on file to match: said so, nothing ranked", likeStep(deriveAll([bare, openLike]), ME2, [bare.id]).empty === "noTraits");
+const setupSrc = ["Setup.tsx", "SetupSeats.tsx", "SetupKnow.tsx"].map((f) => readFileSync(`app/onboard/${f}`, "utf8")).join("\n");
+check("the set-up seeds lookalikes with the member's seats and saves the list with likeListAction", /likeStep\(infos, me, seedIds/.test(setupSrc) && /seats\.map\(\(s\) => s\.i\.c\.id\)/.test(setupSrc) && /likeListAction\(like\.tokens, alertOn\)/.test(setupSrc));
+check("the ideal client's count: what fits, inside the table's count", (() => {
+  const c = idealCounts(likeInfos, ME2, { fn: "Sales", icp: { ...US, countries: [], industries: ["Software"] }, before: null, suggested: ["Marketing"] });
+  return c.total === 5 && c.match === 4 && c.hiring === 0 && c.match <= c.total;
+})(), idealCounts(likeInfos, ME2, { fn: "Sales", icp: { ...US, countries: [], industries: ["Software"] }, before: null, suggested: ["Marketing"] }));
+check("where a seat under their name came from, in their words", seatSource({ source: "Seat scan", cells: { operator: { s: "value" } } }) === "Revenue Nomad's seat scan found it with your name." && seatSource({ source: "Member added", cells: { operator: { s: "value", mine: true } } }) === "You added it." && /published on Revenue Nomad/.test(seatSource({ source: "Published engagement", cells: {} })));
+const ll = ledgerLines({ credits: 34 }, [{ delta: 1, reason: "Added a fact" }, { delta: 10, reason: "Invite bonus" }, { delta: -2, reason: "Unlocked a company" }]);
+check("the credits beside every screen: started, earned, the invite bonus, spent, have", ll.start === 25 && ll.earned === 1 && ll.bonus === 10 && ll.spent === 2 && ll.have === 34, ll);
 
 /* ---------- the server ---------- */
 
@@ -318,6 +372,19 @@ if (BASE) {
     const other = await call(undefined, token, "10.77.250.250");
     const d2 = other.json?.me?.draft;
     check("a new tab or device picks up the draft where they left off", d2?.step === 3 && d2?.function === "Sales" && d2?.before === null && d2?.icp?.countries[0] === "United States" && other.json?.me?.onboarded === false, d2);
+    // The new look's set-up (Setup.tsx): the seats said "Yes, this is mine" to ride in the draft, cleaned.
+    await act({ type: "onboardDraft", draft: { step: 4, function: "Sales", title: "", icp: US, before: null, mine: ["e_pub_1", "e_pub_1", "<b>x</b>", ...Array.from({ length: 60 }, (_, k) => `e_${k}`)], at: new Date().toISOString() } });
+    const dm = (await view())?.me?.draft;
+    check("set-up: the seats confirmed ride in the draft, each once, cleaned, at most 40", dm?.step === 4 && dm?.mine?.[0] === "e_pub_1" && dm?.mine?.filter((x: string) => x === "e_pub_1").length === 1 && !dm?.mine?.some((x: string) => /</.test(x)) && dm?.mine?.length === 40, dm?.mine);
+    // Lookalikes saved before onboarding ends: the first list, its alert on, weekly; as it happens refused (Free's gate, before the trial starts).
+    const likeTokens = ["i:Software", "e:51–200", "f:Sales"];
+    const la = likeListAction(likeTokens, true);
+    const instant = await act({ ...la, list: { ...la.list, alert: { ...la.list.alert, every: "instant" } } });
+    check("set-up: a lookalikes list with an as-it-happens alert is refused before the trial (Free's gate)", instant.r.status !== 200 && /Pro/.test(instant.json?.error ?? ""), instant.json);
+    const ok = await act(la);
+    const sv0 = (await view())?.me?.savedViews?.find((x: { id: string }) => x.id === ok.json?.id);
+    check("set-up: the lookalikes list saves as Like your past clients, its alert on, weekly", ok.r.status === 200 && sv0?.name === "Like your past clients" && sv0?.alert?.on === true && sv0?.alert?.every === "weekly" && /like/.test(sv0?.place ?? ""), sv0);
+    await act({ type: "savedView", op: "delete", id: ok.json?.id });
     const big = await act({ type: "onboardDraft", draft: "not an object" });
     check("a draft that isn't one still saves as an empty one, never a server error", big.r.status === 200, big.r.status);
     await act({ type: "onboardDraft", draft: { step: 3, function: "Sales", title: "Fractional VP Sales", icp: US, before: null, at: new Date().toISOString() } });

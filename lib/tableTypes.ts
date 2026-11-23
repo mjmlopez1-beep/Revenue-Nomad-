@@ -550,6 +550,11 @@ export interface OnboardDraft {
   clients: string[];
   views: string[];
   saved: string | null;
+  /**
+   * The new look's set-up (app/onboard/Setup.tsx): the seats on file under the member's name they
+   * said "Yes, this is mine" to (public engagement ids), so another device shows them answered.
+   */
+  mine?: string[];
   at: string;
 }
 
