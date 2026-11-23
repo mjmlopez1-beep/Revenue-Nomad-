@@ -135,7 +135,8 @@ export interface IntegrationsState {
   members: Record<string, MemberIntegrations>;
   /** Counts only, for the pilot metrics. */
   /** `proposal`: Close's proposal alerts (lib/close), which keep their own switches. */
-  stats: { sent: Partial<Record<AlertKind | "test" | "proposal", number>>; failed: number; connects: number; removes: number };
+  /** `watch`: the list alerts' other triggers, Companies you follow and Someone you know (lib/notify/events.ts afterWatch). */
+  stats: { sent: Partial<Record<AlertKind | "test" | "proposal" | "watch", number>>; failed: number; connects: number; removes: number };
   /** The app's address as last seen, for the links in alerts when RN_PUBLIC_URL isn't set. */
   origin?: string;
 }

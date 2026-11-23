@@ -137,6 +137,7 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 import { NoteProblem, addNote, editNote, forgetCompany as forgetCompanyNotes, mergeCompany as mergeCompanyNotes, notesOf, removeNote, type CompanyNote, type CompanyNotesState } from "./companyNotes";
 import { forgetMember as forgetRoutes, type RouteStats, type RoutesState } from "./paths/plan";
 import { forgetCompanyEvidence, forgetMemberEvidence, mergeCompanyEvidence, type EvidenceState } from "./evidence/types";
+import { forgetAlerts, logAlert, pushInbox, type AlertLogRow, type InboxEntry, type MemberAlertPrefs, type WatchState } from "./inbox";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 // Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
@@ -661,6 +662,16 @@ export interface State extends MessagingState {
    * the SHA-256 of the restore link's key and `mail` of their inbox key (no address is kept here).
    */
   closures?: Record<string, AccountClosure>;
+  /**
+   * The bell, v2 (lib/inbox.ts): each member's inbox (newest first, at most 200), the log of alerts
+   * sent (90 days, counts and the alert's key only), the switches of the alerts that are no list,
+   * and the watch pass's own keys and queues (lib/notify/events.ts afterWatch). The inbox and the
+   * watch are the member's alone: never in another member's view or the export; purge deletes all four.
+   */
+  inbox?: Record<string, InboxEntry[]>;
+  alertLog?: Record<string, AlertLogRow[]>;
+  alertPrefs?: Record<string, MemberAlertPrefs>;
+  alertWatch?: WatchState;
 }
 
 /** State.closures[memberId]. */
@@ -3556,6 +3567,8 @@ const NOBODY_BLIND = new Set([
   "moves", "voice",
   // Each member's pipeline is theirs alone too, and so are their notes on companies.
   "pipeline", "companyNotes",
+  // The bell's inbox, the alert log, the alerts' own switches and the watch pass (lib/inbox.ts): each member's alone.
+  "inbox", "alertLog", "alertPrefs", "alertWatch",
 ]);
 /** Per fact or confirmation: these change the records of the company they are at. */
 const BY_RECORD = new Set(["values", "verifications"]);
@@ -5322,6 +5335,11 @@ export async function perform(
   if (typeof a?.type === "string" && a.type.startsWith("pipeline.")) return (await import("./pipelineActions")).performPipeline(token, a);
   // Peers (lib/peers.ts): pass a lead, team up, circles, mute. Loaded the same way.
   if (typeof a?.type === "string" && a.type.startsWith("peer.")) return (await import("./peers")).performPeer(token, a, origin);
+  // The bell's inbox and the alerts that are no list (lib/inbox.ts): inbox.read, alerts.fixed, alerts.test.
+  if (typeof a?.type === "string" && (a.type.startsWith("inbox.") || a.type.startsWith("alerts."))) {
+    if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
+    return (await import("./inbox")).performInbox(token, a as unknown as { type: string } & Record<string, unknown>);
+  }
   // From Crystal Ball (an unlock with from "crystal"): its companies are read in the action, from the action's own state (lib/radar, loaded here so the two files don't import each other at start).
   const crystalMod = (a?.type === "unlock" || a?.type === "unlockMany") && a.from === "crystal" ? await import("./radar") : null;
   // A move is at a company in the member's own Crystal Ball: read the same way.
@@ -6686,7 +6704,7 @@ export async function perform(
           s.connector.alerts ??= {};
           try {
             const had = (s.connector.alerts[me.id] ?? []).length;
-            const r = savedViewAction(s.connector.alerts[me.id] ?? [], a, () => `al_${randomBytes(6).toString("base64url")}`, now);
+            const r = savedViewAction(s.connector.alerts[me.id] ?? [], a, () => `al_${randomBytes(6).toString("base64url")}`, now, { free: freeNow(s, me.id, nowMs) });
             // Free keeps one saved view (onboarding's own views aside). A view they saved already still comes back as that view.
             if (r.list.length > had && r.list.length > FREE_SAVED_VIEWS && s.profiles[me.id]?.onboarded && freeNow(s, me.id, nowMs)) throw new ActionError(SAVED_VIEW_FREE);
             s.connector.alerts[me.id] = r.list;
@@ -7797,7 +7815,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
   // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well, and so is their Evidence Bank (lib/evidence) and its AI agreement.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // The bell's inbox (lines that name what the member opened) and the watch pass's keys and queues are theirs alone too; the alert log (counts) and the alerts' switches stay.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, inbox: _inbox, alertWatch: _alertWatch, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7894,6 +7913,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
     del(s.close.prefs);
   }
   del(s.integrations?.members);
+  // The bell's inbox, the alert log, the alerts' switches and the watch's keys (lib/inbox.ts).
+  forgetAlerts(s, id);
   del(s.radar?.members);
   del(s.billing?.members);
   if (s.connector) {
@@ -10125,6 +10146,9 @@ export async function sendDigests(nowIso?: string, origin?: string): Promise<num
           draft.digest.members[memberId] = now;
           draft.digest.sent++;
           draft.digest.lastSentAt = now;
+          // The bell and the alert log (lib/inbox.ts): the email's headline, which names no company.
+          pushInbox(draft, memberId, [{ id: `digest:${now.slice(0, 10)}`, at: now, kind: "roles", line: mail.subject, sub: "The weekly email", href: "/?v=hiring", alert: "digest" }]);
+          logAlert(draft, memberId, [{ at: now, alert: "digest", kind: "roles", channel: "email", count: Math.max(1, data.newRolesMine || data.newRoles || 1) }]);
         });
       } catch (e) {
         console.error("weekly email failed for one member", e);

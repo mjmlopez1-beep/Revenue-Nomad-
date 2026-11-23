@@ -82,7 +82,7 @@ export async function seatAdded(): Promise<Map<string, number>> {
 }
 
 /** What a saved view reads: its place when it has one, else its criteria (hire functions and window, the company lists). */
-function viewFilters(v: SavedSearch): { f: Filters; tab: Tab; q: string } {
+export function viewFilters(v: SavedSearch): { f: Filters; tab: Tab; q: string } {
   const p = v.place ? placeFilters(v.place) : null;
   const f: Filters = p
     ? { ...p.f }
@@ -146,6 +146,47 @@ export async function newHires(m: Member, views: SavedSearch[], sinceMs: number,
       place: v.place ?? null,
       rows: hits.slice(0, HIRE_ROWS).map((h) => h.row),
     });
+  }
+  return out;
+}
+
+/* ---------- the companies on a list (Stage 7a: the list alerts' other triggers) ---------- */
+
+/** A company on a list, as the member sees it: its public id, and its name only once they have opened it. */
+export interface ListCompany {
+  /** Public id (the record in the app). */
+  id: string;
+  /** Null while the company is locked for the member: an alert describes it, never names it. */
+  name: string | null;
+  industry: string | null;
+  employees: string | null;
+}
+
+/**
+ * The companies on each of the member's lists, matched the way reopening the list shows them (its
+ * place read with the app's filters, against the member's own view of the table as a member): a
+ * seat, a new leader, a changed fact or a filing there sets off the list's alert (lib/notify/events.ts
+ * afterWatch). A list that follows hires is matched without its hire window (any company it would
+ * show, hired lately or not, is on it for these triggers). Keyed by view id, then public company id.
+ */
+export async function listCompanies(m: Member, views: SavedSearch[]): Promise<Map<string, Map<string, ListCompany>>> {
+  const out = new Map<string, Map<string, ListCompany>>();
+  if (!views.length) return out;
+  const view = await buildView(m.token, { asMember: true });
+  const me = view.me;
+  if (!me) return out;
+  const companies = rowsFor("companies", deriveAll(view.companies));
+  for (const v of views) {
+    const { f, tab, q } = viewFilters(v);
+    // These triggers watch the list's companies, not its hires: the hire window doesn't narrow them.
+    const ff: Filters = { ...f, hiredFn: [], hiredWithin: 0 };
+    const rows = applyFilters(companies, ff, tab, q, me, true).rows;
+    const map = new Map<string, ListCompany>();
+    for (const r of rows) {
+      const c = r.i.c;
+      map.set(c.id, { id: c.id, name: c.hidden ? null : c.name, industry: shown(c.cells.industry), employees: shown(c.cells.employees) });
+    }
+    out.set(v.id, map);
   }
   return out;
 }
