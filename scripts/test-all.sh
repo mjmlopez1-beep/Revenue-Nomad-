@@ -142,6 +142,7 @@ run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 run names env NAMES_PORT="$PORT" npx tsx scripts/test-names.mts
 # Ended seats (scripts/add-past-seats.mjs) and person keys (add-seat-scan.mjs --backfill-holder-keys): the drop rules, year-only dates, status Ended, HMAC ids and keys kept off every view, re-runs, duplicates of current seats, enrichment by match_method, US-only names and the refusal, counts-only output, the firm rule, claiming an ended seat and no hire alert for one, on a made-up seed and key.
 run pastseats npx tsx scripts/test-pastseats.mts
+run seatspage npx tsx scripts/test-seatspage.mts
 # Referral partners: Invite to connect, the claim bonus and the conversation it opens, Message, the Referral partners page and the connector's warm paths, on a made-up seed and key, with its own server.
 run partners env PARTNERS_PORT="$PORT" npx tsx scripts/test-partners.mts
 # Fractionals (lib/fractionals.ts, lib/fractionalsCore.ts, lib/table.ts personIndex, unlockFractional and activate): one record per fractional (by member, by person key, else the seat), who shows and how, every credit case (no second charge, plans, limits, refunds), invites and activating a profile with its bonuses and cap, Not mine, This isn't me, Remove my name, old claim links, Referral partners' links, the rename, and no person key in any answer. In process, billing live with made-up Stripe settings, fetch replaced.

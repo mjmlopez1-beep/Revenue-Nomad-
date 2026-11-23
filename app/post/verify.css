@@ -62,7 +62,17 @@
   white-space: nowrap;
 }
 .vf-pop {
-  padding: 12px 16px 4px;
+  padding: 12px 16px 8px;
+}
+/* The drill-in's eyebrow (Seats.dc.html "VERIFY · WHO HELD THIS SEAT"). */
+.vf-eyebrow {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .vf-h {
   margin: 0 0 4px;
@@ -87,26 +97,39 @@
 .vf-lead + .vf-count {
   margin-top: -4px;
 }
+/* Each choice is its own card: pine outline on hover, one decision per card. */
 .vf-list {
   display: grid;
-  border-top: 1px solid var(--line);
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.vf-list-compact {
+  display: flex;
+  flex-wrap: wrap;
 }
 .vf-row {
   display: grid;
   gap: 2px;
   width: 100%;
   min-height: 56px;
-  padding: 10px 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: none;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+  background: var(--surface);
   font: inherit;
   text-align: left;
   color: var(--ink);
   cursor: pointer;
+  transition: border-color var(--t);
 }
-.vf-row:last-child {
-  border-bottom: 0;
+.vf-list-compact .vf-row {
+  width: auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+button.vf-row:hover {
+  border-color: var(--pine);
 }
 /* Only where a pointer hovers: a tap on a phone leaves no underline behind. */
 @media (hover: hover) {
@@ -143,6 +166,49 @@ button.vf-row:active {
 }
 .vf-row.is-done b {
   color: var(--volt-ink);
+}
+
+/* The Seats page's side panel (VerifyPanel). */
+.vf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 18px;
+}
+.vf-panel-head {
+  display: grid;
+  gap: 4px;
+}
+.vf-panel-title {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.vf-panel-sub {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.vf-panel .vf-count {
+  margin: 2px 0 0;
+}
+.vf-panel-done {
+  padding: 10px 12px;
+  border: 1px solid #b9d9ca;
+  border-radius: var(--r-card);
+  background: #e8f3ee;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+.vf-panel-add {
+  align-self: flex-start;
+  min-height: 36px;
+  font-weight: 600;
+}
+.vf-panel-mine {
+  align-self: flex-start;
 }
 
 /* Pilot metrics: the names switch and the claims waiting for an admin (app/post/Admin.tsx PublicNames). */

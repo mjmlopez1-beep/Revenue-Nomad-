@@ -49,6 +49,12 @@ const PEOPLE_DESC: Record<string, { title: string; desc: string; wait: string }>
   phone: { title: "Find a phone number", desc: "Opens the phone for each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
   linkedin: { title: "Find a public profile", desc: "Opens the link to the public profile of each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
 };
+/** A seat row's own facts (the Seats page): each row is one seat, not a company's latest. */
+const SEAT_DESC: Record<string, { title: string; desc: string; wait: string }> = {
+  rate: { title: "Rate paid", desc: "What the seat paid, where a member shared it. It never says who added it.", wait: "are at a locked company" },
+  end: { title: "Month it ended", desc: "The month a seat ended. How long ago is free. The dated end costs 1 credit, and only on a seat that has ended.", wait: "are at a locked company" },
+  operator: { title: "A holder out of the directory", desc: "The name and role of a fractional who keeps out of the directory, one unlock for both. Every other holder is free once the company is open.", wait: "are at a locked company" },
+};
 
 export function RunConfig({
   type = "companies",
@@ -58,7 +64,7 @@ export function RunConfig({
   onBack,
   onDone,
 }: {
-  /** The list the rows are (People's runs are the person's own locks). */
+  /** The list the rows are (People's runs are the person's own locks; a seat row buys its own seat's fact). */
   type?: RecordType;
   col: string;
   /** The rows in view. */
@@ -71,8 +77,8 @@ export function RunConfig({
 }) {
   const ui = useUi();
   const toast = useToast();
-  const def = columnOf(type === "people" ? "people" : "companies", col) ?? columnOf("companies", col);
-  const d = (type === "people" ? PEOPLE_DESC[col] : null) ?? DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
+  const def = columnOf(type, col) ?? columnOf("companies", col);
+  const d = (type === "people" ? PEOPLE_DESC[col] : type === "engagements" ? SEAT_DESC[col] : undefined) ?? DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
   const [scope, setScope] = useState<Scope>(picked.length ? "sel" : "all");
   const scopeRows = (s: Scope) => (s === "all" ? rows : s === "sel" ? picked : rows.slice(0, 5));
   const plan = runPlan(col, scopeRows(scope));

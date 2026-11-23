@@ -1,0 +1,510 @@
+/*
+ * The Seats page (sp-, seatsPage/*) and the open row of Your seats (ys2-, Seats.tsx SeatCard "row").
+ * On the workbench's own frame (workbench.css: wb-toolbar, wb-ask, wb-body, wb-bottom). Pine for
+ * actions, volt only where something earns (Confirm, +1), ember never.
+ */
+.sp-host {
+  padding: 0 !important;
+  max-width: none !important;
+}
+
+/* ----- the line under the toolbar ----- */
+.sp-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.sp-note > span:first-child {
+  flex: 1 1 420px;
+}
+.sp-note strong {
+  color: var(--ink);
+}
+.sp-note-first {
+  padding: 12px 18px;
+}
+.sp-note-big {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 800;
+}
+.sp-note-back {
+  background: var(--volt-soft);
+}
+.sp-note .tp-flink {
+  min-height: 36px;
+  font-weight: 600;
+}
+.sp-hired {
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.sp-static {
+  cursor: default;
+}
+.sp-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--body-ink);
+  cursor: pointer;
+}
+.sp-track {
+  display: block;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #808a85;
+  transition: background var(--t);
+}
+.sp-track > span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #fff;
+  transition: margin var(--t);
+}
+.sp-switch[aria-checked="true"] .sp-track {
+  background: var(--pine);
+}
+.sp-switch[aria-checked="true"] .sp-track > span {
+  margin-left: 16px;
+}
+.sp-ask .wb-askchip[aria-pressed="true"],
+.wb-ask .wb-askchip[aria-pressed="true"] {
+  border-color: var(--pine);
+  background: var(--pine);
+  color: #fff;
+}
+
+/* ----- cells ----- */
+.sp-two {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sp-two > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--muted);
+}
+.sp-muted {
+  color: var(--muted);
+}
+.sp-tag {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sp-tag-ok {
+  background: #e8f3ee;
+  color: var(--volt-ink);
+}
+.sp-tag-wait {
+  background: #f1f3f2;
+  color: var(--body-ink);
+}
+.sp-held {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 0;
+}
+.sp-held .vf-btn {
+  margin-left: 6px;
+}
+
+/* ----- Your seats: the table ----- */
+.sp-mine {
+  padding-bottom: 12px;
+}
+.sp-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+.sp-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid #eef1ef;
+  background: #f7f8f7;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sp-table thead th > span {
+  display: block;
+}
+.sp-fill {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.sp-th-exp {
+  width: 40px;
+}
+.sp-table tbody td {
+  height: 60px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #eef1ef;
+  border-right: 1px solid #eef1ef;
+  vertical-align: middle;
+  color: var(--ink);
+}
+.sp-table tbody tr.on > td:not(.sp-td-exp) {
+  background: #f7fbf9;
+}
+.sp-td-exp {
+  width: 40px;
+  text-align: center;
+}
+.sp-exp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pine);
+  cursor: pointer;
+}
+.sp-exp:hover {
+  background: var(--pine-8);
+}
+.sp-co {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sp-co-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sp-co-t strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-guess > td {
+  background: var(--volt-soft);
+}
+.sp-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.sp-confirm {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.sp-hero {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+}
+.sp-mini {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--body-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-mini:hover {
+  border-color: var(--pine);
+  color: var(--pine);
+}
+.sp-gone td,
+.sp-wait td {
+  color: var(--muted);
+}
+.sp-gone td {
+  height: 44px;
+  font-size: 13.5px;
+}
+.sp-detail-tr > td {
+  height: auto !important;
+  padding: 0 !important;
+  background: #f7fbf9;
+}
+
+/* A guess, open: why Merlin thinks so, what confirming does, what it earns, and the title. */
+.sp-guess-d {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 14px 24px;
+  padding: 14px 18px 16px 56px;
+}
+.sp-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.sp-point {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.sp-point strong {
+  color: var(--ink);
+}
+.sp-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sp-title .input {
+  height: 40px;
+}
+.sp-fine {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.sp-fine svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* ----- Your seats: a seat, open (Seats.tsx SeatCard "row") ----- */
+.ys2-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+  gap: 18px 28px;
+  padding: 14px 18px 18px 56px;
+}
+.ys2-detail.focus {
+  box-shadow: inset 3px 0 0 var(--pine);
+}
+.ys2-ask {
+  min-width: 0;
+}
+.ys2-ask .ys-q {
+  margin-top: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+  background: #fff;
+}
+.ys2-prog {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--body-ink);
+}
+.ys2-prog strong {
+  color: var(--ink);
+}
+.ys2-prog .ys-bar {
+  grid-column: auto;
+}
+.ys2-prog-r {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ys2-known {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ys2-known-h {
+  font-size: 14px;
+  color: var(--ink);
+}
+.ys2-known .ys-known-box {
+  margin: 0;
+}
+.ys2-known-fine {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.ys2-known-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.ys2-known-foot .ys-seat-foot {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* ----- under the table ----- */
+.sp-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 14px 18px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-card);
+  background: #fff;
+}
+.sp-add-plus {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--pine-8);
+  color: var(--pine);
+  font-weight: 800;
+}
+.sp-add .input {
+  flex: 1 1 220px;
+  height: 40px;
+}
+.sp-add .btn {
+  height: 40px;
+}
+.sp-add-hint {
+  flex: 1 1 100%;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.sp-add-hint.err {
+  color: var(--ink);
+  font-weight: 700;
+}
+.sp-add-hint a {
+  color: var(--pine);
+  font-weight: 600;
+}
+.sp-find {
+  margin: 14px 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: #fff;
+}
+.sp-how {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 14px 18px 0;
+}
+.sp-how-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: #fff;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.sp-how-card strong {
+  color: var(--ink);
+}
+.sp-how-k {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ----- phones ----- */
+.sp-phone {
+  padding: 0 0 16px;
+}
+.sp-phone-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f8f7;
+  overflow-x: auto;
+}
+.sp-phone-tabs .wb-bottom-tabs {
+  flex-wrap: nowrap;
+}
+.sp-phone-tabs .wb-btab {
+  white-space: nowrap;
+}
+.sp-phone .ys-page {
+  padding: 16px;
+}
+
+@media (max-width: 1100px) {
+  .sp-guess-d,
+  .ys2-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 18px;
+  }
+  .sp-points {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

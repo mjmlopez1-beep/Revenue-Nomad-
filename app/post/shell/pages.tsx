@@ -19,11 +19,16 @@
  *               table while it lists companies. It reads and changes the table's place (TableCtx).
  *   find2       Find (find/Find.tsx), page key "find".
  *   people2     People (people/People.tsx), in place of the table while it lists people (Data / People).
- *              It reads the table's place (TableCtx) for its filters and the list type.
+ *               It reads the table's place (TableCtx) for its filters and the list type.
+ *   seats2      Seats (seatsPage/SeatsPage.tsx), in place of the table while it lists seats (not
+ *               Hiring now): its tabs All seats and Seats that ended lately. Its third tab, Your
+ *               seats, is the page "seats" (today's Seats.tsx inside it), so ?p=seats lands there.
  *
  *   company2    the company record (company/CompanyPage.tsx) while one is open (?c=<id>), in place of
  *               the list or page it was opened over, on wider screens (AppCtx.record). Phones keep
  *               the record drawer (Drawer.tsx).
+ *
+ * tableSlotOf(recordType, tab) (shell/slots.ts) names the slot that takes the table's place, or null.
  *
  * An entry with `placeholder` and no `component` draws today's page instead (TradingPost).
  */
@@ -295,15 +300,17 @@ const loadHome2 = () => import("../Home2");
 const loadFind = () => import("../find/Find");
 const loadWorkbench = () => import("./workbenchPage");
 const loadPeople = () => import("../people/People");
+const loadSeatsPage = () => import("../seatsPage/SeatsPage");
 const loadCompany = () => import("../company/CompanyPage");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
 // The company record as a page (company/CompanyPage.tsx), in place of the list while a record is open.
 const CompanyPage = dynamic(() => loadCompany().then((m) => m.CompanyPage), { ssr: false, loading: pageWait });
+const SeatsPage = dynamic(() => loadSeatsPage().then((m) => m.SeatsPage), { ssr: false, loading: pageWait });
 const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -370,9 +377,19 @@ function PeersP() {
   const c = useApp();
   return <PeersPage infos={c.infos} waiting={c.waiting} all={c.shell.peersAll || c.page !== "peers"} onAll={c.shell.setPeersAll} onProfile={c.openProfile} openCompany={c.openCompany} />;
 }
+/** Your seats. In the new look it is the Seats page's third tab (seatsPage/SeatsPage.tsx), with today's page inside it. */
 function SeatsP() {
   const c = useApp();
+  if (c.ui2) return <SeatsPage at="mine" />;
   return <Seats seats={c.shell.seats} infos={c.infos} focus={c.shell.seatFocus} search={c.shell.seatSearch} back={c.shell.seatBack} />;
+}
+/** Seats in place of the table while it lists seats: All seats, or Seats that ended lately. */
+function Seats2P() {
+  return (
+    <main className="tp-main tp-main-page wb-host sp-host">
+      <SeatsPage at="data" />
+    </main>
+  );
 }
 function PipelineP() {
   const c = useApp();
@@ -530,7 +547,7 @@ const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-m
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
  * Notifications, Agent access and Settings are Integrations).
  */
-export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2", PageDef>> = {
+export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
@@ -542,7 +559,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   peers: { title: "Peers", component: PeersP, mainClass: peersMain },
   fractionals: { title: "Peers", component: PeersP, mainClass: peersMain },
   partners: { title: "Peers", component: PeersP, mainClass: peersMain },
-  seats: { title: "Your seats", component: SeatsP, mainClass: "ys-main" },
+  seats: { title: "Your seats", component: SeatsP, mainClass: (c) => (c.ui2 && !c.phone ? "wb-host sp-host" : "ys-main"), ownStrip: true },
   pipeline: { title: "Your pipeline", component: PipelineP },
   proposals: { title: "Proposals", component: ProposalsP },
   getin: { title: "Where you can get in", component: GetInP, needsTable: true },
@@ -559,11 +576,12 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   find2: { title: "Find", component: FindP, ownStrip: true },
   // The company record (?c=<id>) as a page, while one is open on a wider screen: it draws its own header (breadcrumb, 3 of 64) and strip.
   company2: { title: "Company", component: CompanyP, ownHeader: true, ownStrip: true },
+  seats2: { title: "Seats", component: Seats2P, crumbs: ["today"], ownStrip: true },
   people2: { title: "People", component: People2P, crumbs: ["today"], ownStrip: true },
 };
 
-/** The new look's page that takes the table's place for a list type (companies2, people2), or null where the table stays. */
-export const tableSlot = (t: RecordType): "companies2" | "people2" | null => (t === "companies" ? "companies2" : t === "people" ? "people2" : null);
+/** The new look's page in the table's place for a list (shell/slots.ts). */
+export { tableSlotOf } from "./slots";
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */
 const ENTRY_OF: Partial<Record<string, string>> = { find: "find2" };

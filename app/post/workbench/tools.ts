@@ -175,6 +175,20 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
           { id: "en-motion", tab: "enrich" as const, label: "Sales motion", sub: "How the company sells, where members added it", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "motion" } },
         ]
       : []),
+    // Seats (seatsPage): each row is one seat, so a run buys that seat's own fact.
+    ...(type === "engagements"
+      ? [
+          { id: "seat-company", tab: "enrich" as const, label: "Company name and website", sub: "Opens the company and who held its seats", cost: co.cost, tone: co.tone, do: { kind: "run" as const, col: "company" } },
+          { id: "seat-held", tab: "enrich" as const, label: "Who held the seat", sub: "Free once the company is open", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "operator" } },
+          { id: "seat-hidden", tab: "enrich" as const, label: "A holder out of the directory", sub: "Their name and role, one unlock", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "operator" } },
+          { id: "seat-rate", tab: "enrich" as const, label: "Rate paid", sub: "Where a member shared it", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "rate" } },
+          { id: "seat-end", tab: "enrich" as const, label: "Month it ended", sub: "The dated end of a seat that ended", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "end" } },
+          { id: "seat-hours", tab: "enrich" as const, label: "Hours a week", sub: "Free where a member added it", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "hours" } },
+          { id: "seat-reason", tab: "enrich" as const, label: "Why they hired", sub: "Free where a member added it", cost: "Free", tone: "free" as const, do: { kind: "column" as const, col: "reason" } },
+          { id: "seat-you-rate", tab: "you" as const, label: "What these seats paid", sub: "Rate paid on the rows in view", cost: "1 / row", tone: "paid" as const, do: { kind: "run" as const, col: "rate" } },
+          { id: "seat-you-end", tab: "you" as const, label: "Watch for seats that end", sub: "An email the week one on this list ends", cost: "Free", tone: "free" as const, do: { kind: "alert" as const, trigger: "seat" as const } },
+        ]
+      : []),
     // Signals: what a saved list's alert watches for (F5). New executive and funding say where they come from.
     { id: "sig-role", tab: "signals", label: "Open role posted", sub: "A company on this list posts a fractional role", cost: "Free", tone: "free", do: { kind: "alert", trigger: "role" } },
     { id: "sig-seat", tab: "signals", label: "Seat ended", sub: "A fractional's seat there ended", cost: "Free", tone: "free", do: { kind: "alert", trigger: "seat" } },

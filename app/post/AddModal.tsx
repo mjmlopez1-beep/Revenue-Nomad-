@@ -14,22 +14,26 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import {
-  ENGAGEMENT_TYPES, END_REASONS, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, INTRO_FIELD, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, WHY_NOW,
+  ENGAGEMENT_TYPES, END_REASONS, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, INTRO_FIELD, PERSON_NAME_RE, PRICING_MODELS, REFERRAL_BONUS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, WHY_NOW,
   cleanValue, fieldDef,
 } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
 import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, monoTint, initials, post, val } from "../ui/shared";
-import { COMPANY_FILL, deriveAll, shown, type CoInfo } from "./model";
+import { COMPANY_FILL, deriveAll, mySeats, shown, type CoInfo } from "./model";
 import { useExactFind } from "../ui/find";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
 import { MissingFacts, claimLine } from "./Drawer";
+import { VerifyChoices, doneWords, type VerifyDone } from "./Verify";
+import { confirmedWords } from "./display";
+import { SEAT_YIELD } from "./earnBack";
 import { MonthYear } from "./MonthYear";
-import { RateWho, reasonsFor, type RateChoice } from "./Seats";
+import { RateAsk, RateWho, reasonsFor, type RateChoice } from "./Seats";
 import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
 import { Spot } from "../ui/fractions/lazy";
 import { pipelineAct } from "./pipelineStore";
 import { radioKeys, radioTab } from "./radioGroup";
+import "./addKnow.css";
 
 interface Lookup {
   domain: string;
@@ -167,7 +171,7 @@ function NewCompany({
 }: {
   initialName: string;
   lookup: Lookup | null;
-  onAdded: (id: string) => void;
+  onAdded: (id: string, sent?: Sent) => void;
   onDirty: (dirty: boolean) => void;
 }) {
   const ui = useUi();
@@ -218,9 +222,19 @@ function NewCompany({
     if (revenue) companyFields.revenue = revenue;
     // A LinkedIn page is the company's LinkedIn, not its website.
     if (linkedin) companyFields.linkedin = website.trim();
+    const before = ui.me.credits;
     const r = await ui.act({ type: "add", company: name.trim(), website: (!linkedin && website.trim()) || undefined, companyFields }, { quiet: true, silentError: true });
     setBusy(false);
-    if (r.ok && r.id) return onAdded(r.id);
+    if (r.ok && r.id) {
+      const rows = [
+        { label: "Company name", value: name.trim() },
+        ...(website.trim() ? [{ label: linkedin ? "LinkedIn page" : "Website", value: website.trim() }] : []),
+        ...Object.entries(companyFields)
+          .filter(([k]) => k !== "linkedin")
+          .map(([k, x]) => ({ label: fieldDef("company", k)?.label ?? k, value: x })),
+      ];
+      return onAdded(r.id, { n, before, message: r.message, capped: !!r.capped, rows });
+    }
     // A company on file that is still locked for the member, with nothing new sent: the server names nothing and says what opens it.
     if (r.ok) return fail({ key: "name", text: r.message });
     if (!r.ok) {
@@ -356,6 +370,8 @@ interface Sent {
   bench?: { ok: boolean; message: string };
   /** The seat saved (its public id). */
   seatId?: string;
+  /** What the member sent, label and value, for the last screen's table. */
+  rows?: { label: string; value: string }[];
 }
 
 /* ---------- a seat we already have ---------- */
@@ -569,7 +585,12 @@ function EngagementForm({
     }
     setBusy(false);
     setDraft(emptySeat);
-    onDone({ n: answers, before, message: r.message, capped: !!r.capped, bench: shared, ...(r.id ? { seatId: r.id } : {}) });
+    const rows = Object.entries(fields)
+      .filter(([k]) => !(asMe && k === "operator"))
+      .map(([k, x]) => ({ label: fieldDef("engagement", k)?.label ?? k, value: k === "start" || (k === "end" && x !== "Ongoing") ? fmtMonth(x) : x }));
+    if (asMe) rows.unshift({ label: "Who held the seat", value: "You" });
+    if (bench) rows.push({ label: "Rate", value: `${v.rate.trim()}, benchmarks only` });
+    onDone({ n: answers, before, message: r.message, capped: !!r.capped, bench: shared, rows, ...(r.id ? { seatId: r.id } : {}) });
   };
   const id = (k: string) => `tp-ef-${k}`;
   const txt = (k: string, opts: { label?: string; type?: string; hint?: ReactNode; last?: boolean } = {}) => {
@@ -828,7 +849,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
     setBusy(false);
     if (!r.ok) return fail(fromServer(r.message, "contact", PERSON_ORDER));
     setDraft((d) => ({ ...d, v: {} }));
-    onDone({ n: filled.length, before, message: r.message, capped: !!r.capped });
+    onDone({ n: filled.length, before, message: r.message, capped: !!r.capped, rows: Object.entries(person).map(([k, x]) => ({ label: fieldDef("contact", k)?.label ?? k, value: x })) });
   };
   const seatLabel = (e: CoInfo["engs"][number]) => {
     const fn = shown(e.cells.function);
@@ -963,11 +984,330 @@ function DiscardAsk({ what, onKeep, onDiscard }: { what: string; onKeep: () => v
   );
 }
 
+/* ---------- step 1: what you are adding (AddKnow.dc.html) ---------- */
+
+/** What the member is adding. Each maps to an add path that exists: the seat form, the person form, a rate on a seat of theirs, the company facts, a company by its website. */
+export type AddKind = "mine" | "known" | "person" | "rate" | "fact" | "newco";
+
+const KINDS: { k: AddKind; name: string; tab?: string; line: string; earn: string; icon: string }[] = [
+  { k: "mine", name: "A seat you held", line: "Your own fractional work. Function, title, dates, pay and how it came about. It goes on your Seats page.", earn: "Up to about 12 credits", icon: "M6 4v9h12V4M4 13h16v4H4zM7 17v3M17 17v3" },
+  { k: "known", name: "A seat you know about", tab: "A seat you know", line: "A seat someone else held, or a role that is open now. Merlin takes a seat only from the fractional who held it, so you add who hired for it.", earn: "+1 for each answer", icon: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" },
+  { k: "person", name: "A person and their role", tab: "A person", line: "Who hires, who decides, or who a seat reported to. Name, title and how to reach them.", earn: "Up to 6 credits", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c1.5-4 4.5-5 8-5s6.5 1 8 5" },
+  { k: "rate", name: "A rate", line: "What one of your seats paid. Put it on the seat, or share it for the benchmarks only.", earn: "+1 credit", icon: "M12 3v18M16 7.5c-.8-1.5-2.3-2-4-2-2.2 0-4 1-4 3s1.8 2.7 4 3.2 4 1.3 4 3.3-1.8 3-4 3c-1.9 0-3.4-.7-4.2-2.2" },
+  { k: "fact", name: "A company fact", line: "Website, who owns it, head office, how it sells. Merlin shows you what is missing.", earn: "+1 for each detail", icon: "M5 21V5l7-2v18M12 9h7v12M3 21h18M8 8h1M8 12h1M8 16h1M15 13h1M15 17h1" },
+  { k: "newco", name: "A company not in Merlin yet", tab: "A new company", line: "Paste its website. Merlin looks it up and fills in the name and industry for you to check.", earn: "Up to 4 credits", icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" },
+];
+/** The kinds that start from a company the member picks. */
+const NEEDS_CO: AddKind[] = ["mine", "known", "person", "fact"];
+const modeOf = (k: AddKind): AddMode => (k === "person" || k === "known" ? "person" : k === "fact" ? "facts" : "engagement");
+const kindOf = (o: AddOpts): AddKind | null => (o.mine || o.mode === "engagement" ? "mine" : o.mode === "person" ? "person" : o.mode === "facts" ? "fact" : null);
+
+const KindIcon = ({ d }: { d: string }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d={d} />
+  </svg>
+);
+
+/** The six kinds as cards. A kind with a draft says how many answers wait in it. */
+function KindCards({ onPick, drafts }: { onPick: (k: AddKind) => void; drafts: Partial<Record<AddKind, number>> }) {
+  return (
+    <section className="am2-sec" aria-labelledby="am2-kinds-h">
+      <h3 className="am2-h" id="am2-kinds-h">
+        What are you adding?
+      </h3>
+      <div className="am2-kinds">
+        {KINDS.map((x) => (
+          <button key={x.k} type="button" className="am2-kind" onClick={() => onPick(x.k)} data-kind={x.k}>
+            <span className="am2-kind-top">
+              <span className="am2-kind-ic">
+                <KindIcon d={x.icon} />
+              </span>
+              <strong>{x.name}</strong>
+            </span>
+            <span className="am2-kind-line">{x.line}</span>
+            <span className="am2-kind-foot">
+              <span className="am2-earn">{x.earn}</span>
+              {drafts[x.k] ? <span className="am2-draft">Draft, {plural(drafts[x.k]!, "answer")}</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Companies the member follows or opened with something missing: what, and what filling it earns. */
+function GapTable({ rows, onPick }: { rows: CoInfo[]; onPick: (id: string) => void }) {
+  const ui = useUi();
+  if (!rows.length) return null;
+  const missingOf = (x: CoInfo) => COMPANY_FILL.filter((f) => x.c.cells[f]?.s === "empty").map((f) => fieldDef("company", f)?.label ?? f);
+  const total = rows.reduce((n, x) => n + missingOf(x).length, 0);
+  const capped = earnNote(ui.me).capped;
+  return (
+    <section className="am2-sec" aria-labelledby="am2-gaps-h">
+      <div className="am2-sec-head">
+        <h3 className="am2-h" id="am2-gaps-h">
+          Or fill a gap at a company you have open
+        </h3>
+        <span className="am2-sub">
+          {plural(rows.length, "company", "companies")} you follow or opened {rows.length === 1 ? "has" : "have"} something missing.{capped ? "" : ` Up to ${plural(total, "credit")} in all.`}
+        </span>
+      </div>
+      <div className="am2-table" role="table" aria-label="Companies with something missing">
+        <div role="row" className="am2-tr am2-thead">
+          <span role="columnheader">Company</span>
+          <span role="columnheader">What Merlin is missing</span>
+          <span role="columnheader">It earns</span>
+          <span role="columnheader">
+            <span className="sr-only">Add</span>
+          </span>
+        </div>
+        {rows.map((x) => {
+          const miss = missingOf(x);
+          return (
+            <div key={x.c.id} role="row" className="am2-tr">
+              <span role="cell" className="am2-co">
+                <CompanyLogo name={x.c.name} domain={x.c.iconDomain ?? x.domain} />
+                <strong>{x.c.name}</strong>
+              </span>
+              <span role="cell" className="am2-miss">
+                {miss.slice(0, 3).join(", ")}
+                {miss.length > 3 ? `, and ${miss.length - 3} more` : ""}
+              </span>
+              <span role="cell">
+                <span className="am2-earn">{capped ? "Saves today" : `up to +${plural(miss.length, "credit")}`}</span>
+              </span>
+              <span role="cell">
+                <button type="button" className="btn btn-sm" aria-label={`Add details at ${x.c.name}`} onClick={() => onPick(x.c.id)}>
+                  Add details
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** "Or check a name": one seat holder's name from public profiles nobody has verified, at a company the member can see. Earns nothing. */
+function CheckName({ infos }: { infos: CoInfo[] }) {
+  const [done, setDone] = useState<{ d: VerifyDone; named: boolean; count: number } | null>(null);
+  const pick = useMemo(() => {
+    for (const i of infos) {
+      if (i.c.hidden) continue;
+      for (const e of i.engs) {
+        const op = e.cells.operator;
+        if (!e.yours && !e.claimWaiting && op?.s === "value" && op.unverified) return { i, e, name: op.v, count: op.ver, confirmed: !!op.iv };
+      }
+    }
+    return null;
+    // The seat stays put while the modal is open, even after its name is verified.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!pick) return null;
+  const role = shown(pick.e.cells.role) ?? `${shown(pick.e.cells.function) ?? "Fractional"} seat`;
+  const start = shown(pick.e.cells.start);
+  return (
+    <section className="am2-sec" aria-labelledby="am2-check-h">
+      <div className="am2-sec-head">
+        <h3 className="am2-h" id="am2-check-h">
+          Or check a name
+        </h3>
+        <span className="am2-sub">It earns nothing. It keeps Merlin right for everyone.</span>
+      </div>
+      <div className="am2-check">
+        <span className="am2-check-t">
+          <strong>
+            {pick.name}, {role}
+          </strong>
+          <span>
+            {pick.i.c.name}
+            {start ? `, since ${fmtMonth(start)}` : ""}. From public profiles. {confirmedWords(pick.count)}
+          </span>
+        </span>
+        {done ? (
+          <span className="am2-check-done" role="status">
+            {doneWords(done.d, done.named, done.count)}
+          </span>
+        ) : (
+          <VerifyChoices t={{ engagementId: pick.e.id, named: true, confirmed: pick.confirmed, count: pick.count }} compact onDone={(d) => setDone({ d, named: true, count: pick.count })} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** "A seat you know about": Merlin takes a seat only from its fractional (the add's own rule), so this adds who hired for it. */
+function KnownKind({ i, onPerson }: { i: CoInfo | null; onPerson: () => void }) {
+  return (
+    <div className="am2-known">
+      <p>
+        <strong>Merlin takes a seat only from the fractional who held it.</strong> That way one seat never counts as two hires, and nobody&apos;s work goes on Merlin without them. What you can add about a seat someone else held:
+      </p>
+      <ul>
+        <li>Who hired for it, who it reported to, or who decides{ i ? ` at ${i.c.name}` : ""}. Each answer earns 1 credit.</li>
+        <li>The fractional who held it, invited with your link from Credits and usage. You each get {REFERRAL_BONUS} credits when they join, and they add the seat.</li>
+        <li>A name on a seat that looks wrong: Verify it on the seat. It earns nothing, and keeps Merlin right.</li>
+      </ul>
+      <button type="button" className="btn btn-volt" onClick={onPerson}>
+        Add who hired for it
+      </button>
+    </div>
+  );
+}
+
+/** "A rate": one of the member's seats with no rate yet, then the rate and who sees it (Seats.tsx RateAsk, the same as on Your seats). */
+function RateKind({ infos, onDone }: { infos: CoInfo[]; onDone: (s: Sent & { companyId: string; seatId: string }) => void }) {
+  const ui = useUi();
+  const seats = useMemo(() => mySeats(infos, ui.me).filter((s) => s.missing.includes("rate")), [infos, ui.me]);
+  const [seat, setSeat] = useState<string | null>(seats.length === 1 ? seats[0].e.id : null);
+  const s = seats.find((x) => x.e.id === seat) ?? null;
+  if (!seats.length)
+    return (
+      <p className="am-note">
+        Every seat on your Seats page has a rate, or none is under your name yet. Add a seat you held first, with its rate in the form.
+      </p>
+    );
+  const label = (x: (typeof seats)[number]) => [x.i.c.hidden ? "A locked company" : x.i.c.name, shown(x.e.cells.role) ?? shown(x.e.cells.function), shown(x.e.cells.start)?.slice(0, 4)].filter(Boolean).join(", ");
+  return (
+    <div className="am2-rate">
+      <fieldset className="am2-fs">
+        <legend>Which seat</legend>
+        <div className="tp-chips" role="radiogroup" aria-label="Your seat" onKeyDown={radioKeys}>
+          {seats.map((x, n) => (
+            <button key={x.e.id} type="button" role="radio" aria-checked={seat === x.e.id} tabIndex={radioTab(n, seats.findIndex((y) => y.e.id === seat))} className={`chip tp-chipbtn${seat === x.e.id ? " chip-on" : ""}`} onClick={() => setSeat(x.e.id)}>
+              {label(x)}
+            </button>
+          ))}
+        </div>
+        <p className="am-hint">These are the seats on your Seats page with no rate yet.</p>
+      </fieldset>
+      {s && (
+        <fieldset className="am2-fs">
+          <legend>What it paid</legend>
+          <RateAsk
+            key={s.e.id}
+            t={{ entity: "engagement", id: s.e.id, field: "rate" }}
+            pricing={shown(s.e.cells.pricing)}
+            onSaved={(_, sv) => {
+              const before = ui.me.credits - (sv.earned ? 1 : 0);
+              onDone({
+                n: 1,
+                before,
+                message: sv.bench ? "Your rate is in the benchmarks only. It is never shown with your name or the seat." : "Your rate is on the seat. A member spends 1 credit to see it, and it never says who added it.",
+                capped: !sv.earned,
+                rows: [{ label: "Rate", value: sv.bench ? `${sv.bench}, benchmarks only` : "On the seat" }],
+                companyId: s.i.c.id,
+                seatId: s.e.id,
+              });
+            }}
+          />
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+/** The right side: earned today, what earns, how Merlin checks a fact, and that it never shows who added one. */
+function AddAside() {
+  const { me } = useUi();
+  const room = me.earnResetsAt ? 0 : Math.max(0, me.earnCap - me.earned24h);
+  const pct = Math.min(100, Math.round((100 * me.earned24h) / Math.max(1, me.earnCap)));
+  return (
+    <aside className="am2-aside" aria-label="Today and how it works">
+      <section className="am2-today" aria-label="Earned today">
+        <span className="am2-eyebrow">Earned today</span>
+        <span className="am2-big">
+          <strong className="num">{me.earned24h}</strong> of {me.earnCap} credits
+        </span>
+        <span className="am2-meter" role="img" aria-label={`${me.earned24h} of ${me.earnCap} credits earned today`}>
+          <span style={{ width: `${pct}%` }} />
+        </span>
+        <span className="am2-small">
+          {room ? `You can earn ${room} more today. Earning is counted over 24 hours.` : `You have earned today's ${me.earnCap}. What you add still saves. You can earn again ${atTime(me.earnResetsAt)}.`}
+        </span>
+        <span className="am2-small">
+          You have <strong className="num">{plural(me.credits, "credit")}</strong> to spend.
+        </span>
+      </section>
+      <section aria-labelledby="am2-earns">
+        <h3 className="am2-h4" id="am2-earns">
+          What earns
+        </h3>
+        <dl className="am2-earns">
+          {[
+            ["A fact Merlin does not have", "+1"],
+            ["A seat you held, filled in", SEAT_YIELD.replace(" credits a seat", "")],
+            ["A fact already on file", "0"],
+            ["Claiming a seat Merlin found", "0, 3 a day"],
+            ["Confirming or reporting a name", "0"],
+            ["A fractional who joins with your link", `+${REFERRAL_BONUS} each`],
+          ].map(([w, n]) => (
+            <div key={w}>
+              <dt>{w}</dt>
+              <dd className="num">{n}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section aria-labelledby="am2-check2">
+        <h3 className="am2-h4" id="am2-check2">
+          How Merlin checks a fact
+        </h3>
+        <p>
+          <strong>Two members make it verified.</strong> What you add shows as member added. When a second member confirms it, it shows as verified.
+        </p>
+        <p>
+          <strong>One report takes a name off.</strong> If a member says a name is wrong it comes off for everyone at once, and whoever paid to see it gets the credit back.
+        </p>
+        <p>
+          <strong>A new company waits.</strong> At a company new to Merlin with your seat in it, your credits are paid when a second member or Revenue Nomad confirms it.
+        </p>
+      </section>
+      <section aria-labelledby="am2-who">
+        <h3 className="am2-h4" id="am2-who">
+          Merlin never shows who added a fact
+        </h3>
+        <p>Members see the fact, never your name beside it. That goes for a rate, a person and a company detail.</p>
+        <p>
+          <strong>The one exception is your own seat.</strong> You are the seat holder, so your name is on it. You can hide it on your Seats page.
+        </p>
+        <p>
+          <strong>Your rate can stay out of sight.</strong> Share it for the benchmarks only and it is never shown with your name or the seat.
+        </p>
+      </section>
+    </aside>
+  );
+}
+
+/** 1 What you are adding, 2 The details, 3 What it earned. A step is a button once it can be gone back to. */
+function Steps({ step, go }: { step: 1 | 2 | 3; go: (n: 1 | 2 | 3) => void }) {
+  const names = ["What you are adding", "The details", "What it earned"] as const;
+  return (
+    <ol className="am2-steps" aria-label="Steps">
+      {names.map((n, k) => {
+        const no = (k + 1) as 1 | 2 | 3;
+        const cur = step === no;
+        const can = no < step && step !== 3;
+        return (
+          <li key={n}>
+            <button type="button" className={`am2-step${cur ? " cur" : no < step ? " past" : ""}`} aria-current={cur ? "step" : undefined} disabled={!can && !cur} onClick={() => can && go(no)}>
+              <span className="am2-step-n num">{no}</span>
+              {n}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /* ---------- the modal ---------- */
 
 /** What was just added, for the last screen. "claim": one of the company's unclaimed seats is the member's now (`seatId`). */
 interface Done extends Sent {
-  what: "seat" | "person" | "claim";
+  what: "seat" | "person" | "claim" | "company" | "rate";
   seatId?: string;
 }
 
@@ -1042,6 +1382,12 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   }, [findRes, tableInfos]);
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<AddMode>(opts.mode ?? "engagement");
+  // What the member is adding (step 1). From a page that says (Your seats, a record's "Add a person"), it starts there.
+  const [kind, setKindRaw] = useState<AddKind | null>(() => kindOf(opts));
+  const setKind = (k: AddKind | null) => {
+    setKindRaw(k);
+    if (k) setMode(modeOf(k));
+  };
   const [done, setDone] = useState<Done | null>(null);
   const [lookup, setLookup] = useState<Lookup | null>(null);
   const [looking, setLooking] = useState(false);
@@ -1242,9 +1588,19 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
     if (d.capped) return `${plural(d.n, "answer")} saved. No credit this time, because you've earned today's ${me.earnCap}.${me.earnResetsAt ? ` You can earn again ${atTime(me.earnResetsAt)}.` : ""}`;
     return `${plural(d.n, "answer")} saved.`;
   };
-  const body = (
-    <>
-      {!i && (
+  const step: 1 | 2 | 3 = done ? 3 : kind ? 2 : 1;
+  const drafts: Partial<Record<AddKind, number>> = { mine: Object.values(seat.v).filter((x) => x?.trim()).length, person: Object.values(person.v).filter((x) => x?.trim()).length };
+  /** A company the member just added by its website: the last screen says so, and what next is there. */
+  const added = (id: string, sent?: Sent) => {
+    pick(id);
+    if (kind === "newco" && sent) setDone({ ...sent, what: "company" });
+  };
+  const toKind = (k: AddKind) => {
+    setKind(k);
+    if (k === "newco") (setSelected(null), setQ(""));
+    setTimeout(() => (rootRef.current?.querySelector<HTMLElement>(".tp-find-input input, .tp-seg-b.on, .am2-tab.on") ?? null)?.focus({ preventScroll: true }), 30);
+  };
+  const finderEl = (
         <div className="tp-find">
           <label className="tp-find-input">
             <IconSearch size={16} />
@@ -1252,7 +1608,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
               ref={inputRef}
               className="tp-bare"
               autoFocus
-              placeholder="Company name or website"
+              placeholder={kind === "newco" ? "Paste the company's website, like acme.com" : "Company name or website"}
               value={q}
               maxLength={MAX}
               autoComplete="off"
@@ -1263,11 +1619,15 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
           </label>
           {!q && (
             <p className="am-note tp-find-hint">
-              {opts.mine ? "Which company was the seat at? Type its name. If we don't have it, paste its website and we'll fill in the basics." : "Start with the company. Type its name, or paste its website to add one we don't have."}{" "}
+              {kind === "newco"
+                ? "Paste the website and Merlin fills in the basics. If Merlin already has the company you are sent to it instead, so everything about it stays in one place. Use the real company, never an example name."
+                : kind === "mine"
+                  ? "Which company was the seat at? Type its name. If we don't have it, paste its website and we'll fill in the basics."
+                  : "Start with the company. Type its name, or paste its website to add one we don't have."}{" "}
               {earnLine}
             </p>
           )}
-          {!q && !opts.mine && suggestions.length > 0 && (
+          {!q && kind !== "mine" && kind !== "newco" && suggestions.length > 0 && (
             <>
               <div className="tp-sublabel">{allFollowed ? "Companies you follow with something missing" : "Companies you follow or unlocked with something missing"}</div>
               <div className="tp-matches">{suggestions.map(matchRow)}</div>
@@ -1306,7 +1666,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
                   </div>
                 </div>
               )}
-              {lookup && !lookup.error && !lookup.existing && <NewCompany initialName={q} lookup={lookup} onAdded={pick} onDirty={onCoDirty} />}
+              {lookup && !lookup.error && !lookup.existing && <NewCompany initialName={q} lookup={lookup} onAdded={added} onDirty={onCoDirty} />}
             </div>
           )}
           {q.trim().length >= 2 && !domainish && !exactMatch && !creating && (
@@ -1320,11 +1680,10 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
               </span>
             </button>
           )}
-          {creating && !domainish && <NewCompany initialName={q.trim()} lookup={null} onAdded={pick} onDirty={onCoDirty} />}
+          {creating && !domainish && <NewCompany initialName={q.trim()} lookup={null} onAdded={added} onDirty={onCoDirty} />}
         </div>
-      )}
-      {i && (
-        <div className="tp-picked">
+  );
+  const headEl = i && (
           <div className="tp-picked-head">
             <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} size="lg" />
             <div className="tp-picked-t">
@@ -1340,114 +1699,169 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
               Change company
             </button>
           </div>
-          {done ? (
-            <div className="tp-done-panel">
-              <div className={`tp-done${nothingNew ? " am-done-same" : " am-done-pic"}`} role="status">
-                {nothingNew ? null : <Spot name="factAdded" size={72} on="mint" ember className="am-done-art" />}
-                <span className="am-done-check" aria-hidden>
-                  <IconCheck size={13} />
-                </span>
-                <span className="am-done-t">
-                  <b>
-                    {done.what === "person"
-                      ? / already on file at /.test(done.message)
-                        ? "That person was already on file"
-                        : `Person added at ${i.c.name}`
-                      : claimed
-                        ? `Your seat at ${i.c.name} is claimed`
-                        : nothingNew
-                          ? "That seat is already on file"
-                          : opts.mine
-                            ? `Your seat at ${i.c.name} is added`
-                            : `Seat added at ${i.c.name}`}
-                  </b>
-                  <span>{doneLine(done, i.c.name)}</span>
-                  {nothingNew && <span>Open the company to confirm what&apos;s there, or report what&apos;s wrong.</span>}
-                  {done.bench && <span className={done.bench.ok ? undefined : "am-done-warn"}>{done.bench.ok ? done.bench.message || "Your rate is in the benchmarks only. It is never shown with your name or the seat." : `Your rate didn't go in. ${done.bench.message}`}</span>}
-                </span>
-              </div>
-              <h3 className="am-h3">What next?</h3>
-              <div className="am-next">
-                {done.what === "claim" ? (
-                  <>
-                    <button type="button" className="am-next-b primary" onClick={() => (onClose(), ui.openSeats(done.seatId))}>
-                      <b>Fill in your seat</b>
-                      <span>{capped ? "It's on Your seats now. Answer what's missing whenever you like." : "It's on Your seats now. Each answer you add there earns 1 credit."}</span>
-                    </button>
-                    <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""), setTimeout(() => inputRef.current?.focus()))}>
-                      <b>Add another seat you held</b>
-                      <span>At this company or a different one.</span>
-                    </button>
-                  </>
-                ) : opts.mine ? (
-                  <>
-                    <button type="button" className="am-next-b primary" onClick={onClose}>
-                      <b>Back to your seats</b>
-                      <span>{capped ? "The new seat is there. Answer more about it whenever you like." : "The new seat is there. Answer more about it and earn 1 credit each."}</span>
-                    </button>
-                    <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""))}>
-                      <b>Add another seat you held</b>
-                      <span>At this company or a different one.</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="am-next-b primary" onClick={() => (setDone(null), setMode(done.what === "seat" ? "person" : "engagement"))}>
-                      <b>{done.what === "seat" ? "Add a person there" : "Add a seat you held there"}</b>
-                      <span>
-                        {done.what === "seat" ? "Who hired for the seat, or who it reported to." : "A fractional seat you held at this company."}
-                        {capped ? "" : " 1 credit for each answer."}
-                      </span>
-                    </button>
-                    <button type="button" className="am-next-b" onClick={() => (setDone(null), setMode(done.what === "seat" ? "engagement" : "person"))}>
-                      <b>{done.what === "seat" ? "Add another seat you held" : "Add another person"}</b>
-                      <span>Also at {i.c.name}.</span>
-                    </button>
-                    <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""), setTimeout(() => inputRef.current?.focus()))}>
-                      <b>Add to a different company</b>
-                      <span>Search for it, or paste its website.</span>
-                    </button>
-                  </>
-                )}
-              </div>
-              <div className="tp-done-acts">
-                <button type="button" className="btn btn-sm" onClick={() => (ui.openCompany(i.c.id), onClose())}>
-                  Open the company
-                </button>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>
-                  Done
-                </button>
-              </div>
+  );
+  const gained2 = gained;
+  /** The table of what was sent, each with what it earned: +1 while today's room lasts, then saved with no credit; waiting at a company new to Merlin. */
+  const doneRows = (d: Done) => {
+    const rows = d.rows ?? [];
+    const waits = /when confirmed|wait/i.test(d.message) && gained2 <= 0;
+    let left = Math.max(0, gained2);
+    return rows.map((r) => {
+      const tag = waits ? "Waits for a check" : left > 0 ? "+1 credit" : d.capped ? "Saved, no credit today" : "Saved";
+      if (left > 0) left--;
+      return { ...r, tag, earned: tag === "+1 credit" };
+    });
+  };
+  const doneEl = done && i && (
+    <div className="tp-done-panel am2-done">
+      <section className={`am2-done-top${nothingNew ? " same" : ""}`} aria-labelledby="am2-done-h">
+        <span className="am-done-check" aria-hidden>
+          <IconCheck size={16} />
+        </span>
+        <div role="status" className="am2-done-t">
+          <h3 id="am2-done-h">
+            {done.what === "person"
+              ? / already on file at /.test(done.message)
+                ? "That person was already on file"
+                : `Person added at ${i.c.name}`
+              : done.what === "company"
+                ? `${i.c.name} is added to Merlin`
+                : done.what === "rate"
+                  ? "Your rate is added"
+                  : claimed
+                    ? `Your seat at ${i.c.name} is claimed`
+                    : nothingNew
+                      ? "That seat is already on file"
+                      : `Your seat at ${i.c.name} is added`}
+          </h3>
+          <span>{done.what === "rate" ? `${done.message}${gained2 > 0 ? ` You earned 1 credit. You have ${me.credits} now.` : ""}` : doneLine(done, i.c.name)}</span>
+          {nothingNew && <span>Open the company to confirm what&apos;s there, or report what&apos;s wrong.</span>}
+          {done.bench && <span className={done.bench.ok ? undefined : "am-done-warn"}>{done.bench.ok ? done.bench.message || "Your rate is in the benchmarks only. It is never shown with your name or the seat." : `Your rate didn't go in. ${done.bench.message}`}</span>}
+        </div>
+        <span className="am2-done-big">
+          <strong className="num">+{Math.max(0, gained2)}</strong>
+          <span>{gained2 === 1 ? "credit" : "credits"}</span>
+        </span>
+      </section>
+      {(done.rows?.length ?? 0) > 0 && (
+        <div className="am2-table" role="table" aria-label="What was saved">
+          <div role="row" className="am2-tr am2-thead am2-tr3">
+            <span role="columnheader">What you added</span>
+            <span role="columnheader">Saved as</span>
+            <span role="columnheader">Credit</span>
+          </div>
+          {doneRows(done).map((r) => (
+            <div key={r.label} role="row" className="am2-tr am2-tr3">
+              <span role="cell">{r.label}</span>
+              <span role="cell">{r.value}</span>
+              <span role="cell">
+                <span className={r.earned ? "am2-earn on" : "am2-earn"}>{r.tag}</span>
+              </span>
             </div>
-          ) : opts.mine ? (
-            <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} onClaimed={onClaimed} />
-          ) : (
-            <>
-              <div className="tp-seg" role="tablist" aria-label="What to add">
-                {(
-                  [
-                    ["engagement", seatDirty && mode !== "engagement" ? "A seat you held (draft)" : "A seat you held"],
-                    ["person", personDirty && mode !== "person" ? "A person (draft)" : "A person"],
-                    ...(missingCo ? ([["facts", ui.layout === "phone" ? `Company (${missingCo})` : `Company details (${missingCo})`]] as const) : []),
-                  ] as [AddMode, string][]
-                ).map(([k, label]) => (
-                  <button key={k} type="button" role="tab" aria-selected={mode === k} className={`tp-seg-b${mode === k ? " on" : ""}`} onClick={() => setMode(k)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {/* Members add only seats they held: the seat form is always "A seat you held". */}
-              {mode === "engagement" && <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} onClaimed={onClaimed} />}
-              {mode === "person" && <PersonForm i={i} draft={person} setDraft={setPerson} onDone={(s) => setDone({ ...s, what: "person" })} />}
-              {mode === "facts" && (missingCo ? <MissingFacts i={i} /> : <p className="am-note">Every company detail is filled in.</p>)}
-            </>
-          )}
+          ))}
         </div>
       )}
-    </>
+      {(done.what === "seat" || done.what === "claim") && !nothingNew && (
+        <p className="am-note">It is on your Seats page now. If the seat matches one Merlin already had, your name went on that one, so it never counts as two hires.</p>
+      )}
+      {done.what === "person" && <p className="am-note">If this person was already on file, your answers went on that person and only the new ones earned.</p>}
+      {done.what === "company" && <p className="am-note">The company is yours to add to now. Add your seat there next.</p>}
+      <h3 className="am2-h">Add another</h3>
+      <div className="am-next am2-next">
+        {(done.what === "seat" || done.what === "claim" ? [
+          { b: "Add a person there", sp: "Who hired for the seat, or who it reported to. 1 credit for each answer.", go: () => (setDone(null), setKind("person")) },
+          done.what === "claim"
+            ? { b: "Fill in your seat", sp: capped ? "It's on Your seats now. Answer what's missing whenever you like." : "Answer what is missing on it. 1 credit each.", go: () => (onClose(), ui.openSeats(done.seatId)) }
+            : { b: "Add another seat you held", sp: "At this company or a different one.", go: () => (setDone(null), setSelected(null), setQ(""), setKind("mine")) },
+        ] : done.what === "person" ? [
+          { b: "Add another person", sp: `Also at ${i.c.name}.`, go: () => (setDone(null), setKind("person")) },
+          { b: "Add a seat you held there", sp: SEAT_YIELD.replace(/^up/, "Up") + ".", go: () => (setDone(null), setKind("mine")) },
+        ] : done.what === "company" ? [
+          { b: "Add your seat there", sp: `The seat you held at ${i.c.name}.`, go: () => (setDone(null), setKind("mine")) },
+          { b: "Add a person there", sp: `Who hires at ${i.c.name}.`, go: () => (setDone(null), setKind("person")) },
+        ] : [
+          { b: "Add a seat you held", sp: SEAT_YIELD.replace(/^up/, "Up") + ".", go: () => (setDone(null), setSelected(null), setQ(""), setKind("mine")) },
+        ]).concat([{ b: "Add something else", sp: "A rate, a company detail, or a company Merlin does not have.", go: () => (setDone(null), setKind(null)) }]).map((x, n) => (
+          <button key={x.b} type="button" className={`am-next-b${n === 0 ? " primary" : ""}`} onClick={x.go}>
+            <b>{x.b}</b>
+            <span>{x.sp}</span>
+          </button>
+        ))}
+      </div>
+      <div className="tp-done-acts">
+        <button type="button" className="btn btn-sm" onClick={() => (ui.openCompany(i.c.id), onClose())}>
+          Open {i.c.name.length > 24 ? "the company" : i.c.name}
+        </button>
+        {(done.what === "seat" || done.what === "claim" || done.what === "rate") && (
+          <button type="button" className="btn btn-sm" onClick={() => (onClose(), ui.openSeats(done.seatId))}>
+            See it on Seats
+          </button>
+        )}
+        <button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
   );
+  const formEl = !i ? null : kind === "mine" ? (
+    <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(x) => setDone({ ...x, what: "seat" })} onClaimed={onClaimed} />
+  ) : kind === "person" ? (
+    <PersonForm i={i} draft={person} setDraft={setPerson} onDone={(x) => setDone({ ...x, what: "person" })} />
+  ) : kind === "fact" ? (
+    missingCo ? <MissingFacts i={i} /> : <p className="am-note">Every company detail Merlin asks for is filled in at {i.c.name}.</p>
+  ) : null;
+  const body =
+    step === 1 ? (
+      <>
+        <KindCards onPick={toKind} drafts={drafts} />
+        {!opts.mine && <GapTable rows={suggestions} onPick={(id) => (pick(id), setKind("fact"))} />}
+        {!opts.mine && <CheckName infos={infos} />}
+      </>
+    ) : step === 3 ? (
+      <div className="tp-picked">
+        {done?.what !== "rate" && headEl}
+        {doneEl}
+      </div>
+    ) : (
+      <>
+        {!opts.mine && (
+          <div className="am2-tabs" role="tablist" aria-label="What to add">
+            {KINDS.map((x) => (
+              <button key={x.k} type="button" role="tab" aria-selected={kind === x.k} className={`am2-tab${kind === x.k ? " on" : ""}`} onClick={() => toKind(x.k)}>
+                {x.tab ?? x.name}
+                {drafts[x.k] && kind !== x.k ? " (draft)" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+        {kind === "rate" ? (
+          <RateKind infos={infos} onDone={(x) => (setSelected(x.companyId), setDone({ ...x, what: "rate" }))} />
+        ) : kind === "known" ? (
+          <>
+            {i ? <div className="tp-picked">{headEl}</div> : finderEl}
+            <KnownKind i={i} onPerson={() => setKind("person")} />
+          </>
+        ) : kind === "newco" ? (
+          finderEl
+        ) : (
+          <>
+            {i ? (
+              <div className="tp-picked">
+                {headEl}
+                {formEl}
+              </div>
+            ) : (
+              finderEl
+            )}
+          </>
+        )}
+      </>
+    );
 
   const title = opts.mine ? "Add a seat you held" : "Add what you know";
+  const goStep = (n: 1 | 2 | 3) => {
+    if (n === 1) setKind(null);
+  };
   const asking = ask && (
     <DiscardAsk
       what={what}
@@ -1467,7 +1881,8 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
     return (
       <>
         <Sheet title={title} onClose={() => leave()} full history={false}>
-          <div ref={rootRef} className="am-root">
+          <div ref={rootRef} className="am-root am2 am2-phone">
+            <Steps step={step} go={goStep} />
             {body}
           </div>
         </Sheet>
@@ -1479,7 +1894,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
       {createPortal(
         <div className="tp-modal-wrap" onMouseDown={(e) => e.target === e.currentTarget && leave()}>
           <div
-            className="tp-modal"
+            className="tp-modal am2-modal"
             role="dialog"
             aria-modal="true"
             aria-label={title}
@@ -1494,14 +1909,21 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
               else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first.focus());
             }}
           >
-            <div className="tp-modal-head">
-              <h2 className="tp-modal-title">{title}</h2>
+            <div className="tp-modal-head am2-head">
+              <div className="am2-head-t">
+                <h2 className="tp-modal-title">{title}</h2>
+                <span className="am2-sub">You earn 1 credit for each thing you add that Merlin does not have yet.</span>
+              </div>
+              <Steps step={step} go={goStep} />
               <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Done (Esc)" onClick={() => leave()}>
                 <IconX />
               </button>
             </div>
-            <div className="tp-modal-body" ref={rootRef}>
-              {body}
+            <div className="am2-cols">
+              <div className="tp-modal-body am2 am2-main" ref={rootRef}>
+                {body}
+              </div>
+              <AddAside />
             </div>
           </div>
         </div>,
