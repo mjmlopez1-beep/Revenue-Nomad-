@@ -374,7 +374,7 @@ export function alertGroups(x: Inputs): Group[] {
 
   const mk = (key: Group["key"], name: string, note: string, rows: Row[]): Group => ({ key, name, note, rows, on: rows.filter((r) => r.on).length });
   return [
-    mk("lists", "Lists and saved views", starterRows.length && !listRows.length ? "Your starter lists are here. Turn one on." : "", [...listRows, ...starterRows, radar, ...(digest ? [digest] : []), follows]),
+    mk("lists", "Your lists", starterRows.length && !listRows.length ? "Your starter lists are here. Turn one on." : "", [...listRows, ...starterRows, radar, ...(digest ? [digest] : []), follows]),
     mk("proposals", "Proposals and contracts", closeOpen ? "Part of Close" : "Part of Close. They start with your first proposal.", proposalRows),
     mk("you", "You and your network", "", [known, message, peer, seat]),
   ];

@@ -1029,7 +1029,7 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
           ? `Your trial is the Close plan, proposals included. It ends on ${planDay(plan.trialEndsAt)}. Nothing to do: when it ends you are on Free, and no card is asked.`
           : plan.name === "pro"
             ? `${plan.prices.proCredits} credits come with each paid month, and companies open free, up to ${PRO_OPENS_DAILY} a day.`
-            : "Free keeps earning, 1 saved view with the weekly email, median rates by function, and one Crystal Ball company a day."}
+            : "Free keeps earning, 1 list with the weekly email, median rates by function, and one Crystal Ball company a day."}
       </p>
       {plan.topup && plan.name !== "pro" && <TopupLine plan={plan} />}
     </section>
