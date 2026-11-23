@@ -17,6 +17,9 @@
  *     opens the role, posting and rate of its open roles). Its other locks are quiet and open the record.
  *   - an open role's role, posting and rate are one purchase: only the first lock spends, the others are quiet.
  * A lock's label never takes clicks (post.css), so only the lock's own box spends.
+ *
+ * The cells are exported for the workbench (app/post/workbench/cells.tsx), whose columns draw them
+ * as these rows do, with the same locks and the same one-purchase-per-click rule.
  */
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
@@ -330,7 +333,7 @@ export function HiddenCompany({ i, big, bare, quiet }: { i: CoInfo; big?: boolea
  * `tagged`: a hiring company the member unlocked says "Unlocked" beside its name. The companies
  * table says it beside its Hiring now chip instead (Fit), so it passes false.
  */
-function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo; following?: boolean; tagged?: boolean; quiet?: boolean }) {
+export function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo; following?: boolean; tagged?: boolean; quiet?: boolean }) {
   const why = useFitWhy(i);
   // Best fit for you: a maybe (part of the ideal client not on file) says so under the name, not only in the tooltip.
   const unknown = why?.match(/(?:^|· )([^·]*not on file)$/)?.[1] ?? null;
@@ -360,7 +363,7 @@ function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo; follow
 }
 
 /** Nothing to show and nothing to add here: a dash to see, "No value" (or `label`) to hear. */
-const None = ({ title, label = "No value" }: { title?: string; label?: string }) => (
+export const None = ({ title, label = "No value" }: { title?: string; label?: string }) => (
   <span className="tp-none" title={title}>
     <span aria-hidden>–</span>
     <span className="sr-only">{label}</span>
@@ -384,7 +387,7 @@ export function HireLine({ e }: { e: EngagementRec }) {
 }
 
 /** The latest seat: the role, and under it when it started (or since when the role is open). */
-function SeatCell({ i }: { i: CoInfo }) {
+export function SeatCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   const e = i.latest;
   if (!e) return <AddPill label="Add your seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
@@ -399,7 +402,7 @@ function SeatCell({ i }: { i: CoInfo }) {
 }
 
 /** A table row's functions: 3 chips at most, the dashed "No fractional Sales yet" counted, then "+N", so the column keeps one width. */
-function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: boolean }) {
+export function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: boolean }) {
   const ui = useCellUi();
   if (i.fns.length) return <FnChips i={i} mine={mine} gap={gap} total={3} />;
   const e = i.engs.find((x) => x.cells.function?.s === "empty");
@@ -408,7 +411,7 @@ function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: 
 }
 
 /** The decision maker on file (else the first person): title, then the name, then how many more. */
-function PeopleCell({ i }: { i: CoInfo }) {
+export function PeopleCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   if (!i.people.length) {
     if (i.c.hidden) return <None title="Unlock the company first, then you can add who hired here." label="Locked" />;
@@ -452,7 +455,7 @@ const rowProps = (r: Row, sel: boolean, onOpen: (r: Row) => void) => ({
  * A fact of a seat in a row: quiet when another control buys it, a dash when an open role can't
  * have it yet. Its role, on a seat whose holder is on file, opens with who held it (one lock each, one purchase).
  */
-function engCell(i: CoInfo, e: EngagementRec, field: string, opts: { render?: (v: string) => ReactNode; addLabel?: string } = {}) {
+export function engCell(i: CoInfo, e: EngagementRec, field: string, opts: { render?: (v: string) => ReactNode; addLabel?: string } = {}) {
   if (NOT_YET_ON_OPEN_ROLE.includes(field) && isUnheldOpenRole(e) && e.cells[field]?.s === "empty") return <None title={NOT_YET} label="Not yet, the role is still open" />;
   return <RowFact t={{ entity: "engagement", id: e.id, field }} cell={e.cells[field]} cover={coverOf(i, e, field)} noun={seatNoun(e, field)} what={seatWhat(e, field)} {...opts} />;
 }
@@ -671,7 +674,7 @@ const EngRow = memo(function EngRow({ r, mine, sel, onOpen, hiring }: { r: Row; 
  * A person's name and title in one cell. While both are locked: one lock, "Unlock name and title ·
  * 1 credit", that opens the two. Otherwise the name, with the title under it.
  */
-function NameAndTitle({ i, e, p }: { i: CoInfo; e: EngagementRec | null | undefined; p: PersonRec }) {
+export function NameAndTitle({ i, e, p }: { i: CoInfo; e: EngagementRec | null | undefined; p: PersonRec }) {
   const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
   if (personBothLocked(p.cells)) return <RowFact t={t("name")} cell={p.cells.name} cover={personCoverOf(i, e, p, "name")} noun={personNoun(p.cells, "name")} />;
   return (

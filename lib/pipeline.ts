@@ -462,6 +462,46 @@ export function routeEntry(log: PipelineLog, o: { id: string; companyId: string;
   return { entry, created: true };
 }
 
+/** The most companies one "Add to pipeline" takes (the workbench's selection, a page of rows). */
+export const PIPELINE_ADD_MAX = 100;
+
+/**
+ * Add a company from a list (the workbench's "Add to pipeline", source "record"): a new deal waits
+ * at To reach out, with nothing sent and no follow-up due, until the member's first note or email
+ * moves it to Sent by the usual rules (openEntry, detectEntry). A company with an open deal keeps
+ * it as it is (`created` false), so adding twice never makes a second deal or moves one back.
+ */
+export function addEntry(log: PipelineLog, o: { id: string; companyId: string; nowMs: number; source?: Source }): { entry: PipelineEntry; created: boolean } {
+  const had = log.entries.find((e) => e.companyId === o.companyId && (isOpen(e.stage) || e.stage === "quiet"));
+  if (had) return { entry: had, created: false };
+  const at = iso(o.nowMs);
+  const entry: PipelineEntry = {
+    id: o.id,
+    companyId: o.companyId,
+    stage: "reach",
+    channel: "email",
+    to: {},
+    source: o.source ?? "record",
+    dates: { reach: at },
+    via: { reach: "you" },
+    due: null,
+    follow: 0,
+    lastOut: at,
+    seen: {},
+    notes: [],
+    log: [],
+    createdAt: at,
+    updatedAt: at,
+  };
+  logLine(entry, "To reach out: you added it from a list", o.nowMs);
+  log.entries.push(entry);
+  if (log.entries.length > PIPELINE_LIMITS.entries) {
+    const closed = log.entries.filter((e) => !isOpen(e.stage) && e.stage !== "won").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+    for (const c of closed.slice(0, log.entries.length - PIPELINE_LIMITS.entries)) log.entries.splice(log.entries.indexOf(c), 1);
+  }
+  return { entry, created: true };
+}
+
 const LOG_WORDS: Record<Stage, string> = {
   reach: "To reach out",
   sent: "Back to Sent",
