@@ -103,6 +103,24 @@ export const COMPANY_PATHS_MAX = 8;
 export type PathSource = "linkedin" | "google" | "messages" | "csv";
 
 /**
+ * The owner's default (2026-11, changeable): what comes from the member's own files (their LinkedIn
+ * connections file or a contacts CSV) never says WHICH locked company it matched. At a company still
+ * locked for them, a match from a file shows as a count only ("You know someone at 4 locked
+ * companies. Open them to see who."); the company and the person are named once they open it.
+ * Google's network names the companies it reads from the member's own mail and calendar, as before.
+ */
+export const fromFile = (src: readonly PathSource[]) => src.includes("linkedin") || src.includes("csv");
+/**
+ * The switch for that default: RN_LOCKED_MATCHES=show brings back the earlier behaviour (a locked
+ * company's ways in from the files shown by its facts and id). Anything else, or unset, is counts only.
+ */
+export const lockedMatchesHidden = () => (typeof process !== "undefined" ? process.env.RN_LOCKED_MATCHES ?? "" : "").trim().toLowerCase() !== "show";
+/** The count line for matches held back at locked companies, or null for none. */
+export const lockedKnowWords = (n: number) => (n > 0 ? `You know someone at ${n} locked ${n === 1 ? "company" : "companies"}. Open ${n === 1 ? "it" : "them"} to see who.` : null);
+/** The same for ways in held back at locked companies. */
+export const lockedWaysWords = (n: number) => (n > 0 ? `You have a way in at ${n} locked ${n === 1 ? "company" : "companies"} through people you know. Open ${n === 1 ? "it" : "them"} to see who.` : null);
+
+/**
  * The kinds of way in, strongest first.
  *  1st degree, someone you know:
  *   leads    is a leader at the company now (their title reads like one who hires or signs);
@@ -198,6 +216,8 @@ export interface PathsView {
    * Ball, saved views, their profile), strongest first, with the specific ask (lib/paths/intro.ts).
    */
   people: IntroPlanView[];
+  /** Locked companies where ways in from the member's own files are held back until they open them (fromFile): a count only, never which. */
+  lockedWays: number;
 }
 export type PathsAnswer = PathsView | { on: false };
 
@@ -238,6 +258,8 @@ export interface KnownPersonView {
 
 export interface KnownView {
   people: KnownPersonView[];
+  /** Locked companies where someone from the member's own files works (fromFile): a count only, never which. They show once opened. */
+  locked: number;
   /** What each source brought, as counts. */
   sources: { google: boolean; linkedin: number | null; csv: number | null; messages: number };
 }
@@ -433,6 +455,8 @@ export interface GetInView {
   ball: number;
   views: { name: string; n: number }[];
   profile: number;
+  /** Locked companies whose ways in from the member's own files wait until they open them (fromFile): a count only. */
+  lockedWays?: number;
 }
 
 /** One plan, for Home's move and the pipeline's route line (GET /api/paths?plans=1). */

@@ -32,6 +32,7 @@ import { Prop } from "../../ui/fractions/lazy";
 import { gmailLink } from "@/lib/moveNote";
 import { ZONES, ZONE_WORDS, betweenWords, estWords, type Zone } from "@/lib/paths/rank";
 import type { GetInRow, GetInView, PlanLine, PlanView, RouteNote, RouteStepView, RouteView, WayInView } from "@/lib/paths/types";
+import { lockedWaysWords } from "@/lib/paths/types";
 import type { StepOp } from "@/lib/paths/plan";
 import { openWay, useGetIn, usePlans, useWayIn, wayPost, type WayDo } from "./useWays";
 import "./ways.css";
@@ -886,6 +887,11 @@ export function GetInBody({ view, infos, phone, openCompany }: { view: GetInView
         {view.ball ? chip("ball", `Crystal Ball · ${view.ball}`) : null}
         {view.views.map((x) => chip(x.name, `Saved view: ${x.name} · ${x.n}`))}
       </div>
+      {lockedWaysWords(view.lockedWays ?? 0) && (
+        <p className="nw-muted gi-locked" role="note">
+          {lockedWaysWords(view.lockedWays ?? 0)} Each one names its company and the person once it is open.
+        </p>
+      )}
       {!view.rows.length ? (
         <EmptyState spot="noResults" title="No companies fit yet">
           Add companies to your Crystal Ball, save a view, or fill in Your profile. They show here, by your best way in.

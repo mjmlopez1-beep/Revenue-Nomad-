@@ -224,6 +224,9 @@ export function PersonBubble({ anchor, i, p, e = null, known, onClose, stage, on
                   {!own && shown?.name !== known.name && <span className="pb-as">In your own contacts as {known.name}</span>}
                 </>
               )
+            ) : coLocked ? (
+              // At a locked company nothing of the member's own is matched here, for any locked company alike (lib/paths/types.ts fromFile).
+              <span className="pb-muted">Shows once the company is open</span>
             ) : onConnect ? (
               <button type="button" className="tp-flink" onClick={onConnect}>
                 Not brought in yet. Bring in who you know

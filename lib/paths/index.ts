@@ -35,7 +35,7 @@ import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
 import { forgetSource } from "./plan";
 import {
-  AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, waysWords,
+  AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, fromFile, lockedMatchesHidden, lockedWaysWords, waysWords,
   type CompanyPathsView, type ContactRow, type KnownPersonView, type KnownView, type LinkedInRow, type MemberPaths, type PathsAnswer, type PathsState, type PathView, type TargetView,
 } from "./types";
 
@@ -331,6 +331,8 @@ export interface Found {
   matched: number;
   csvMatched: number;
   me: Me;
+  /** Locked companies (internal ids) whose ways in from the member's own files are held back (types.ts fromFile): counted, never shown. */
+  lockedWays: Set<string>;
 }
 const found = new WeakMap<State, Map<string, Found>>();
 
@@ -369,7 +371,8 @@ export function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found 
   let per = found.get(s);
   if (!per) found.set(s, (per = new Map()));
   // Google's part comes and goes with Your network (RN_GOOGLE): the answer is kept per switch too.
-  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${networkOn() ? "g" : "-"}`;
+  const hide = lockedMatchesHidden();
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${networkOn() ? "g" : "-"}:${hide ? "h" : "s"}`;
   let hit = per.get(k);
   if (!hit) {
     const got = contactsOf(seed, s, m, nowMs);
@@ -377,8 +380,29 @@ export function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found 
     const away = awayOf(s, m.id);
     const contacts = got.contacts.filter((c) => !isAway(c, away));
     const me = meOf(seed, s, m, nowMs);
-    const all = findAll(worldOf(seed, s, nowMs), me, contacts);
-    hit = { byCompany: all.byCompany, byContact: all.byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched: got.matched, csvMatched: got.csvMatched, me };
+    const world = worldOf(seed, s, nowMs);
+    const all = findAll(world, me, contacts);
+    // A locked company keeps only the ways in that come from Google, messages or the directory; those
+    // through someone from the member's own files wait until it is opened, and are only counted.
+    const files = new Set(hide ? contacts.filter((c) => fromFile(c.src)).map((c) => c.key) : []);
+    const lockedWays = new Set<string>();
+    for (const [k, l] of all.byContact) if (files.has(k)) for (const t of l) if (!me.visible(t.target)) lockedWays.add(t.target);
+    for (const [id, x] of all.byCompany) if (!lockedWays.has(id) && !me.visible(id) && x.paths.some((p) => !!p.via.key && files.has(p.via.key))) lockedWays.add(id);
+    let byCompany = all.byCompany;
+    if (lockedWays.size) {
+      const rest = findAll(world, me, contacts.filter((c) => !files.has(c.key))).byCompany;
+      byCompany = new Map();
+      for (const [id, x] of all.byCompany) {
+        if (!lockedWays.has(id)) byCompany.set(id, x);
+        else if (rest.has(id)) byCompany.set(id, rest.get(id)!);
+      }
+    }
+    const byContact = new Map<string, ContactTarget[]>();
+    for (const [k, l] of all.byContact) {
+      const keep = files.has(k) ? l.filter((t) => me.visible(t.target)) : l;
+      if (keep.length) byContact.set(k, keep);
+    }
+    hit = { byCompany, byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched: got.matched, csvMatched: got.csvMatched, me, lockedWays };
     if (per.size > 2000) per.clear();
     per.set(k, hit);
   }
@@ -578,6 +602,7 @@ export async function pathsView(token: string | null, nowMs = Date.now()): Promi
     targets: targets.slice(0, TARGETS_MAX).map(({ r: _r, ...t }) => t), // eslint-disable-line @typescript-eslint/no-unused-vars
     counts,
     people: introPlansOf(seed, s, m, f, nowMs),
+    lockedWays: f.lockedWays.size,
   };
 }
 
@@ -610,8 +635,10 @@ export async function accountPathsLine(member: Member, nowMs = Date.now()): Prom
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const f = foundFor(seed, s, member, nowMs);
   const k = f.byCompany.size;
-  if (!k) return {};
-  return { smart_ways_in: `Ways in through people you know at ${k} ${k === 1 ? "company" : "companies"}. Your hidden paths on Your network in Merlin lists them with who to ask.` };
+  const held = lockedWaysWords(f.lockedWays.size);
+  if (!k && !held) return {};
+  const line = k ? `Ways in through people you know at ${k} ${k === 1 ? "company" : "companies"}. Your hidden paths on Your network in Merlin lists them with who to ask.` : "";
+  return { smart_ways_in: [line, held].filter(Boolean).join(" ") };
 }
 
 /* ---------- People I know (the People page, the person bubble) ---------- */
@@ -639,14 +666,23 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
   const me = meOf(seed, s, m, nowMs);
   const away = awayOf(s, m.id);
   const p = pathsOf(s, m.id);
+  const hide = lockedMatchesHidden();
   const people: (KnownPersonView & { r: number })[] = [];
   let messages = 0;
+  const locked = new Set<string>();
   for (const c of contacts) {
     if (c.src.includes("messages")) messages++;
     // The member themself is never someone they know.
     if (c.member === m.id || (c.nameKey && c.nameKey === me.nameKey)) continue;
     if (!c.companyId && !c.member) continue;
     const seen = !!c.companyId && me.visible(c.companyId);
+    // Someone from the member's own files at a company still locked for them: counted, never which (types.ts fromFile).
+    // A member they know stays listed, at no company.
+    const held = hide && !!c.companyId && !seen && fromFile(c.src);
+    if (held) {
+      locked.add(c.companyId!);
+      if (!c.member) continue;
+    }
     const recs = seen ? leadersOfContact(world, c).filter((l) => l.companyId === c.companyId) : [];
     const lastMet = c.lastMet ?? null;
     const msg = c.msgLast ?? null;
@@ -656,7 +692,7 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
       key: c.key,
       name: c.name,
       title: c.title,
-      company: c.companyId ? T.pubId(c.companyId) : null,
+      company: c.companyId && !held ? T.pubId(c.companyId) : null,
       src: c.src,
       warmth: c.warmth,
       why: c.why,
@@ -673,6 +709,7 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
   people.sort((a, b) => b.r - a.r || a.name.localeCompare(b.name));
   return {
     people: people.slice(0, KNOWN_MAX).map(({ r: _r, ...x }) => x), // eslint-disable-line @typescript-eslint/no-unused-vars
+    locked: locked.size,
     sources: { google: networkOn() && !!(s as WithPaths).network?.[m.id]?.google, linkedin: p?.linkedin ? p.linkedin.rows.length : null, csv: p?.csv ? p.csv.rows.length : null, messages },
   };
 }

@@ -21,6 +21,9 @@
  *  6. People I know: a record named only by a precise match at a company the member can see, never
  *     a locked company's person, never a value of Merlin's own record; "Not a relationship" and its
  *     Undo.
+ *  6b. A match at a locked company (the owner's default, lib/paths/types.ts fromFile): a CSV naming
+ *     two locked companies never says which locked row matched, anywhere (People I know, ways in,
+ *     the record's paths, the connector's lines, Your way in): counts only. Opening one names it.
  *  7. Privacy and limits: another member sees nothing of it, the admin export and a closed
  *     account's purge, the daily upload limit shared by the two files, RN_PATHS=off.
  *  8. The People page's rows: the views, the member's own rows, the chips, the sorts, the example
@@ -62,6 +65,7 @@ const seed = {
     { id: "mem_go", name: "Gia Google", email: "gia.google@example.org", title: "Fractional CFO", token: "tok-go-0001" },
     { id: "mem_ot", name: "Otto Other", email: "otto.other@example.org", title: "Fractional CTO", token: "tok-ot-0001" },
     { id: "mem_ad", name: "Ada Admin", email: "ada.admin@example.com", title: "Fractional CTO", token: "tok-ad-0001" },
+    { id: "mem_lk", name: "Lou Locked", email: "lou.locked@example.org", title: "Fractional CRO", token: "tok-lk-0001" },
   ],
   companies: [
     co("c_north", "Northwind Clinics", "northwindclinics.example", "Healthcare", "201–500"),
@@ -98,7 +102,7 @@ const state = {
   ledger: [],
   values: {},
   // Cedar and Halcyon are open for Jordan and the CSV member; Larkspur is locked for everyone.
-  unlocks: { "c_cedar.identity": ["mem_jo", "mem_cv", "mem_li"], "c_halcyon.identity": ["mem_jo", "mem_cv"], "c_north.identity": ["mem_jo", "mem_go"] },
+  unlocks: { "c_cedar.identity": ["mem_jo", "mem_cv", "mem_li", "mem_lk"], "c_halcyon.identity": ["mem_jo", "mem_cv"], "c_north.identity": ["mem_jo", "mem_go"] },
   seen: Object.fromEntries(seed.members.map((m) => [m.id, ago(1)])),
   profiles: Object.fromEntries(seed.members.map((m) => [m.id, { function: "Sales", onboarded: true }])),
   names: { hide: true },
@@ -195,6 +199,7 @@ async function main() {
   const pub = (id: string) => t.tableInternals.pubId(id);
   type PV = import("../lib/paths/types.ts").PathsView;
   type KV = import("../lib/paths/types.ts").KnownView;
+  const T6 = await import("../lib/paths/types.ts");
   const view = async (tok: string) => (await P.pathsView(tok)) as PV;
   const known = async (tok: string) => (await P.knownView(tok)) as KV;
   const startedOf = async (tok: string) => (await t.buildView(tok)).me.started;
@@ -225,7 +230,7 @@ async function main() {
   const cvK = await known(CV);
   const marta = cvK.people.find((p) => p.name === "Marta Lindholm");
   check("People I know from the CSV alone: Marta at Halcyon, by her email's website", !!marta && marta.company === pub("c_halcyon") && marta.src.join() === "csv" && marta.email === "marta@halcyonfreight.example" && marta.why === "In your contacts file", marta);
-  check("Lee (no company, an email at Larkspur) is placed by the email", cvK.people.some((p) => p.name === "Lee Park" && p.company === pub("c_lark")));
+  check("Lee (no company, an email at Larkspur, still locked for this member) is counted, never placed", !cvK.people.some((p) => p.name === "Lee Park") && cvK.locked === 1 && !JSON.stringify(cvK).includes(pub("c_lark")), cvK.locked);
   check("Kim at a company not on Merlin is left out", !cvK.people.some((p) => p.name === "Kim Tran"));
   check("Joan, written two ways, is one person matched to her record", cvK.people.filter((p) => p.company === pub("c_cedar")).length === 2 && cvK.people.some((p) => p.record === pub("p_cedar_joan")), cvK.people.map((p) => [p.name, p.record]));
   check("step 3 is done by the CSV alone", (await startedOf(CV))?.network === true);
@@ -270,7 +275,7 @@ async function main() {
   /* ---------- 6. People I know: what it names ---------- */
   console.log("\nPeople I know: what it names");
   const owen = liK.people.find((p) => p.name === "Owen Reyes");
-  check("someone at a locked company: their company, never Merlin's record of them", !!owen && owen.company === pub("c_lark") && owen.record === null, owen);
+  check("someone from the file at a locked company: left out and counted, never their company or Merlin's record", !owen && liK.locked === 1 && !JSON.stringify(liK).includes(pub("c_lark")), { owen, locked: liK.locked });
   const kJSON = JSON.stringify(liK);
   check("no value of Merlin's own records (their emails) is in it", !kJSON.includes("dana@cedarandpine.example") && !kJSON.includes("owen@larkspurlearning.example"));
   check("Rita, at a company not on Merlin and not a member, is left out", !liK.people.some((p) => p.name === "Rita Okafor"));
@@ -282,6 +287,40 @@ async function main() {
   const back = await P.setAway(LI, dana!.key, false);
   check("Undo: back in People I know, a way in again", "people" in back && back.people.find((p) => p.key === dana!.key)?.away === false && ((await view(LI)).counts[pub("c_cedar")]?.n ?? 0) === cedarBefore);
   check("a key that isn't theirs is refused", (await P.setAway(OT, dana!.key, true).then(() => "ok", (e: Error) => e.message)) !== "ok");
+
+  /* ---------- 6b. a match at a locked company: counts only ---------- */
+  console.log("\nA match at a locked company: counts only, until it is opened");
+  const LK = "tok-lk-0001";
+  await P.importContacts(LK, "Name,Company,Title,Email\nOwen Reyes,Larkspur Learning,CEO,\nPia Fill,Filler Works 3,COO,\nDana Whitfield,Cedar and Pine,CEO,\n");
+  const lkK = await known(LK);
+  const lkV = await view(LK);
+  const lockedIds = [pub("c_lark"), pub("c_fill3")];
+  const leaks = (x: unknown) => { const j = JSON.stringify(x); return lockedIds.filter((id) => j.includes(id)).concat(["Larkspur", "Filler Works 3", "Owen Reyes", "Pia Fill"].filter((w) => j.includes(w))); };
+  check("People I know: Dana at the open company; the two at locked companies only counted", lkK.people.some((p) => p.name === "Dana Whitfield" && p.company === pub("c_cedar")) && lkK.locked === 2 && leaks(lkK).length === 0, { locked: lkK.locked, leaks: leaks(lkK) });
+  check("the count line says how many, never which", T6.lockedKnowWords(2) === "You know someone at 2 locked companies. Open them to see who." && T6.lockedKnowWords(1) === "You know someone at 1 locked company. Open it to see who." && T6.lockedKnowWords(0) === null);
+  check("ways in: no count, target or person's ask names a locked row; the held-back companies are counted", !lockedIds.some((id) => id in lkV.counts) && leaks({ t: lkV.targets, p: lkV.people, c: lkV.counts }).length === 0 && lkV.lockedWays === 2 && !!lkV.counts[pub("c_cedar")], { leaks: leaks(lkV), lockedWays: lkV.lockedWays });
+  const lkPaths = await Promise.all(lockedIds.map((id) => P.companyPaths(LK, id)));
+  check("the record's smart ways in at a locked company: none, the same as a company with no match", lkPaths.every((x, k) => JSON.stringify(x) === JSON.stringify({ id: lockedIds[k], paths: [] })) && JSON.stringify(await P.companyPaths(LK, pub("c_fill5"))) === JSON.stringify({ id: pub("c_fill5"), paths: [] }));
+  const lkW = await P.who(LK);
+  const lines = await Promise.all(lockedIds.map((id) => P.pathsLine(lkW!.m, id)));
+  const acct = await P.accountPathsLine(lkW!.m);
+  check("the connector: get_company's line says nothing at a locked company; my_account counts them", lines.every((l) => Object.keys(l).length === 0) && /way in at 2 locked companies/.test(acct.smart_ways_in ?? "") && leaks(acct).length === 0, { lines, acct });
+  const lkRoutes = W.routesOf(lkW!.seed, lkW!.s, lkW!.m, "c_lark");
+  check("Your way in (and the connector's ways_in) at the locked company: no route through the file's person", lkRoutes.every((b) => !b.srcs.flat().includes("csv")), lkRoutes.map((b) => b.srcs));
+  const lkGet = await W.getInView(LK);
+  check("Where you can get in: the locked rows carry no route from the file, and the count is there", !!lkGet && "rows" in lkGet && lkGet.lockedWays === 2 && leaks(lkGet.rows.filter((r) => r.locked)).filter((x) => !lockedIds.includes(x)).length === 0, lkGet && "rows" in lkGet ? lkGet.lockedWays : lkGet);
+  // Opening Larkspur names it and its person; the other stays a count.
+  await t.tableInternals.mutate((st) => {
+    st.unlocks["c_lark.identity"] = [...(st.unlocks["c_lark.identity"] ?? []), "mem_lk"];
+  });
+  const lkK2 = await known(LK);
+  const lkV2 = await view(LK);
+  check("once opened: Owen at Larkspur shows in People I know, and the count drops to 1", lkK2.people.some((p) => p.name === "Owen Reyes" && p.company === pub("c_lark")) && lkK2.locked === 1 && !JSON.stringify(lkK2).includes(pub("c_fill3")), { locked: lkK2.locked });
+  check("once opened: its ways in show (count, the record's paths, the connector), the other stays held back", !!lkV2.counts[pub("c_lark")] && lkV2.lockedWays === 1 && !(pub("c_fill3") in lkV2.counts) && ((await P.companyPaths(LK, pub("c_lark"))) as { paths: unknown[] }).paths.length > 0 && !!(await P.pathsLine(lkW!.m, pub("c_lark"))).ways_in_through_people_you_know);
+  check("the upload limit still holds: 3 a day", (await view(LK)).importsLeft === 2);
+  const src = (f: string) => readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", f), "utf8");
+  check("the pages say the count: People I know, Your hidden paths, Where you can get in; the bubble at a locked company says the same for every one", /lockedKnowWords\(known\.known\?\.locked \?\? 0\)/.test(src("app/post/people/People.tsx")) && /lockedWaysWords\(view\.lockedWays/.test(src("app/post/network/SmartPaths.tsx")) && /lockedWaysWords\(view\.lockedWays/.test(src("app/post/network/Ways.tsx")) && /coLocked \? \(\s*\/\/[^\n]*\n\s*<span className="pb-muted">Shows once the company is open<\/span>/.test(src("app/post/PersonBubble.tsx")));
+  check("the connector's ways_in never names someone from the CSV either", /src\.includes\("csv"\)/.test(src("lib/mcp/ways.ts")));
 
   /* ---------- 7. privacy and limits ---------- */
   console.log("\nPrivacy and limits");
@@ -323,14 +362,14 @@ async function main() {
   check("Decision makers: people marked Decision maker", all.filter((r) => M.inView(r, "dm", false)).every((r) => M.relOf(r) === "Decision maker") && all.some((r) => M.inView(r, "dm", false)));
   check("Hired a fractional: who hired or managed a seat", all.filter((r) => M.inView(r, "hired", false)).every((r) => M.HIRED_RELS.includes(M.relOf(r) ?? "")));
   const knownRows = all.filter((r) => M.inView(r, "known", false));
-  check("People I know: Dana on Merlin's own row, Owen as the member's own row (no record at a locked company)", knownRows.some((r) => !r.own && r.p?.id === pub("p_cedar_dana")) && knownRows.some((r) => r.own && r.k?.name === "Owen Reyes"), names(knownRows));
+  check("People I know: Dana on Merlin's own row; Owen, at a locked company, is no row at all", knownRows.some((r) => !r.own && r.p?.id === pub("p_cedar_dana")) && !knownRows.some((r) => r.k?.name === "Owen Reyes") && !all.some((r) => M.hayOf(r).includes("owen reyes")), names(knownRows));
   check("a name shows only where the record's cell holds it (Dana's is still locked)", knownRows.find((r) => r.p?.id === pub("p_cedar_dana")) && M.nameOf(knownRows.find((r) => r.p?.id === pub("p_cedar_dana"))!) === null);
   check("the member's own rows are only in People I know and All", own.every((r) => !M.inView(r, "dm", false) && !M.inView(r, "hired", false) && M.inView(r, "all", false)));
   const sizes = all.map((r) => M.sizeOf(r.i));
   check("size groups from the employees band", M.sizeOf(byId.get(pub("c_cedar"))!) === 1 && M.sizeOf(byId.get(pub("c_halcyon"))!) === 2 && M.sizeOf(byId.get(pub("c_north"))!) === 3 && sizes.every((x) => x >= 0));
   check("chips: strong or good needs a warm relationship (a file alone is Cold)", all.filter((r) => M.passesChips(r, new Set(["warm"]), { pipe: new Set() })).length === 0);
   check("chips: not in pipeline", all.filter((r) => M.passesChips(r, new Set(["nopipe"]), { pipe: new Set([pub("c_cedar")]) })).every((r) => r.i.c.id !== pub("c_cedar")));
-  check("search reads no name it can't show", !all.some((r) => M.hayOf(r).includes("joan tierney")) && all.some((r) => M.hayOf(r).includes("owen reyes")));
+  check("search reads no name it can't show", !all.some((r) => M.hayOf(r).includes("joan tierney")) && !all.some((r) => M.hayOf(r).includes("owen reyes")));
   const sorted = M.sortPeople(all.slice(), 0, () => 0);
   check("best way in first: someone you know before someone you don't", M.knows(sorted[0]));
   check("fill rates of the member's own columns", M.ownFill("know", all, new Set()).filled === all.filter(M.knows).length && M.ownFill("pipe", all, new Set([pub("c_cedar")])).filled === all.filter((r) => r.i.c.id === pub("c_cedar")).length);

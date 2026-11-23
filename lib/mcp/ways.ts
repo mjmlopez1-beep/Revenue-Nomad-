@@ -5,7 +5,7 @@
  *
  * Naming, stricter than the app:
  *   - a locked company is never named, and its routes stay behind "open it first";
- *   - a person from the member's own Google network or LinkedIn import is never named here: they
+ *   - a person from the member's own Google network, LinkedIn import or contacts CSV is never named here: they
  *     are "someone you know" (the member sees who on Merlin);
  *   - everyone else is named only as the app names them (a member on Merlin, a seat holder or a
  *     person the member can see), which already keeps public-profile names to United States seats
@@ -42,7 +42,7 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
     // People from the member's own Google or LinkedIn are never named here.
     const named = r.nodes.slice(1).map((n, i) => {
       const src = srcs[i] ?? [];
-      const own = (src.includes("google") || src.includes("linkedin")) && !src.includes("merlin");
+      const own = (src.includes("google") || src.includes("linkedin") || src.includes("csv")) && !src.includes("merlin");
       return own ? SOMEONE : n.label;
     });
     const say = (text: string) => r.nodes.slice(1).reduce((t, n, i) => (named[i] === n.label ? t : t.split(n.label).join(SOMEONE).split(n.label.split(" ")[0]).join(SOMEONE)), text);

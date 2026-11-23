@@ -17,7 +17,7 @@ import type { CoInfo } from "../model";
 import { useCopy } from "../Credits";
 import { CompanyLogo, useToast } from "../../ui/shared";
 import { CSV_PROBLEM_WORDS, parseConnections } from "@/lib/paths/csv";
-import { EXPORT_STEPS, FILE_MAX_BYTES, waysWords, type PathView, type TargetView } from "@/lib/paths/types";
+import { EXPORT_STEPS, FILE_MAX_BYTES, lockedWaysWords, waysWords, type PathView, type TargetView } from "@/lib/paths/types";
 import { WarmthChip } from "./parts";
 import { pathsAct, useCompanyPaths, usePathCount, usePaths, usePlan } from "./usePaths";
 import { IntroLine } from "./IntroWhy";
@@ -227,8 +227,10 @@ export function HiddenPaths({ infos, openCompany, google }: { infos: CoInfo[]; o
   const [more, setMore] = useState(false);
   if (!view) return failed ? <p className="nw-muted">We couldn&apos;t load your hidden paths. Refresh the page to try again.</p> : null;
   // Nothing to look through yet: the LinkedIn card below says how to start.
-  if (!view.linkedin && !google) return null;
+  if (!view.linkedin && !view.csv && !google) return null;
   const all = view.targets;
+  // Ways in from the member's own files at locked companies: a count only, never which (lib/paths/types.ts fromFile).
+  const held = lockedWaysWords(view.lockedWays ?? 0);
   const shown = more ? all : all.slice(0, 8);
   const total = Object.keys(view.counts).length;
   return (
@@ -260,6 +262,11 @@ export function HiddenPaths({ infos, openCompany, google }: { infos: CoInfo[]; o
                 : "No ways in yet at companies on Merlin. As Merlin learns more seats and people, new ones show here."}
           </p>
         </div>
+      )}
+      {held && (
+        <p className="nw-muted sp-locked" role="note">
+          {held} Each one names its company and the person once it is open.
+        </p>
       )}
     </section>
   );

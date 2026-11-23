@@ -22,7 +22,7 @@
  * No export anywhere: members cannot export data from Merlin. A phone gets the card list.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KnownPersonView } from "@/lib/paths/types";
+import { lockedKnowWords, type KnownPersonView } from "@/lib/paths/types";
 import { STAGE_WORDS } from "@/lib/pipeline";
 import { buyerNoteMove, moveSent } from "@/lib/moves";
 import { IconSearch, IconX, useToast } from "../../ui/shared";
@@ -352,6 +352,16 @@ export function PeoplePage() {
   const stripKey = ["people", "people-known"][stage];
   const showStrip = first && stripOff !== stage && !stripGone(c, stripKey);
   const knownN = (known.known?.people ?? []).filter((p) => !p.away && p.company).length;
+  // Someone from the member's own files at a locked company: a count only, never which (lib/paths/types.ts fromFile).
+  const lockedLine = view === "known" && !aside ? lockedKnowWords(known.known?.locked ?? 0) : null;
+  const lockedNote = lockedLine ? (
+    <p className="ppl-locked" role="note">
+      <span>{lockedLine} Each one names its company and your contact once it is open.</span>
+      <button type="button" className="tp-flink" onClick={() => c.openPage("find")}>
+        Find a company by its name
+      </button>
+    </p>
+  ) : null;
   const opensUsed = live.proOpens ? live.proOpens.of - live.proOpens.left : null;
   const status =
     msg ??
@@ -394,6 +404,7 @@ export function PeoplePage() {
             </label>
             <span className="wb-phone-n num">{n(listed.length)} people</span>
           </div>
+          {lockedNote}
           {view === "known" && !hasSources ? (
             <ConnectPanel variant="inline" start={src} step={first ? { n: 3, of: c.start.six.of } : null} onSeeKnown={() => setView("known")} onNext={() => t.setRecordType("companies")} />
           ) : (
@@ -589,6 +600,8 @@ export function PeoplePage() {
         {pickedRows.length > 0 && (
           <SelectionBar type="people" rows={pickedRows} onClear={() => setSelected(new Set())} onPipeline={() => void toPipeline(pickedRows)} onNotes={() => draft(pickedRows)} onPass={() => pass(pickedRows)} />
         )}
+
+        {lockedNote}
 
         <div className="wb-body">
           <section aria-label="People" className="wb-main">

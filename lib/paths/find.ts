@@ -18,7 +18,7 @@
 import type { Warmth } from "../google/types";
 import type { VoiceStyle } from "../voice";
 import { nameCo } from "./match";
-import { COMPANY_PATHS_MAX, type PathKind, type PathSource, type PathView } from "./types";
+import { COMPANY_PATHS_MAX, fromFile, lockedMatchesHidden, type PathKind, type PathSource, type PathView } from "./types";
 import { actionOf, lineOf, noteOf, type MeWords, type Parts, type Who } from "./words";
 
 /* ---------- the inputs ---------- */
@@ -278,7 +278,8 @@ export function findAll(w: World, me: Me, contacts: Contact[]): { byCompany: Map
     const bridgeWords = (b: string) => {
       const co = w.companies.get(b);
       if (!co) return "another company";
-      return b === c.companyId || me.visible(b) ? co.name : co.kind ? `${/^[aeiou]/i.test(co.kind) ? "an" : "a"} ${co.kind} company` : "another company";
+      // Where they work, as the member's own list has it: but a locked company matched from their file stays unnamed (types.ts fromFile).
+      return me.visible(b) || (b === c.companyId && !(lockedMatchesHidden() && fromFile(c.src))) ? co.name : co.kind ? `${/^[aeiou]/i.test(co.kind) ? "an" : "a"} ${co.kind} company` : "another company";
     };
     /** Each other seat X holds at a company other than the bridge: the path's other side. */
     const across = (x: WSeat, b: string, fn: (t: WSeat) => void) => {

@@ -22,6 +22,8 @@
  *     contact names and never a person key, the daily upload limit.
  *  7b. Disconnect and delete everything on Your network: the ways in through Google go, the
  *     LinkedIn import and its ways in stay (it has its own Delete).
+ *  7c. The owner's default (RN_LOCKED_MATCHES unset): at a locked company the file's ways in are a
+ *     count only, never which; the sections above run with RN_LOCKED_MATCHES=show.
  *  8. Delete removes everything derived from the file. RN_GOOGLE off: ways in stay on without
  *     Google's people (each source is independent); RN_PATHS=off: nothing.
  */
@@ -180,6 +182,9 @@ Object.assign(process.env, {
   RN_ADMIN_EMAILS: "ada.admin@example.com",
   RN_ID_SECRET: "test-id-secret-not-real",
   RN_GOOGLE: "1",
+  // The path finder's checks below look at every way in, a locked company's included (the earlier
+  // behaviour). The owner's default, a count only at a locked company, is checked in 7c.
+  RN_LOCKED_MATCHES: "show",
 });
 for (const k of ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "RESEND_API_KEY", "RN_SCAN", "RN_BILLING", "RN_BACKUP_S3_ENDPOINT", "RN_SCAN_TEST", "RN_MCP_TEST", "RN_EMAIL_API_URL"]) delete process.env[k];
 
@@ -407,6 +412,22 @@ async function main() {
   await t.tableInternals.mutate((s) => {
     (s.network ??= {}).mem_ana = keptNet;
   });
+
+  /* ---------- 7c. the owner's default: a locked company's matches from the file are counts only ---------- */
+  console.log("\nThe default: at a locked company, ways in from the file are a count only");
+  const shown = await view();
+  const fileAt = async (id: string) => ((await P.companyPaths(ANA, id)) as import("../lib/paths/types.ts").CompanyPathsView).paths.filter((p) => types.fromFile(p.via.src));
+  const lockedNow = new Set((await t.buildView(ANA)).companies.filter((c) => c.hidden).map((c) => c.id));
+  const lockedWithFile: string[] = [];
+  for (const id of Object.keys(shown.counts)) if (lockedNow.has(id) && (await fileAt(id)).length) lockedWithFile.push(id);
+  check("with RN_LOCKED_MATCHES=show (the earlier behaviour, as above): locked companies with ways in from the file are listed", lockedWithFile.length >= 2 && shown.lockedWays === 0, lockedWithFile.length);
+  delete process.env.RN_LOCKED_MATCHES;
+  const held = await view();
+  const fileNow = (await Promise.all(lockedWithFile.map(fileAt))).flat();
+  check("by default: none of their ways in from the file shows, by count, path, target or ask", fileNow.length === 0 && lockedWithFile.every((id) => !(held.counts[id]?.n && held.counts[id].n === shown.counts[id].n)) && !held.targets.some((x) => !x.name && types.fromFile(x.best.via.src)) && held.people.every((x) => x.targets.every((tt) => tt.name !== null || !x.keys.some((k) => k.startsWith("l:")))), { fileNow: fileNow.length });
+  check("they are counted instead, and an open company keeps its own (Lee at Acme)", held.lockedWays === lockedWithFile.length && (await at("c_acme")).some((p) => p.via.name === "Lee Park"), held.lockedWays);
+  check("the connector's my_account says how many locked companies, never which", /way in at \d+ locked compan/.test((await tools.myAccount({ member: await member("mem_ana"), origin: ORIGIN })).smart_ways_in as string));
+  process.env.RN_LOCKED_MATCHES = "show";
 
   /* ---------- 8. delete, and off ---------- */
   console.log("\nDelete and off");

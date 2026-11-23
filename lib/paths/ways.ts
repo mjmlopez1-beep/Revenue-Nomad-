@@ -37,6 +37,7 @@ import {
   type Evidence, type OddsBand, type PathBand, type Zone,
 } from "./rank";
 import * as Plan from "./plan";
+import { lockedMatchesHidden } from "./types";
 import {
   GETIN_MAX, ROUTES_MAX,
   type GetInRow, type GetInView, type PathView, type PlanLine, type PlanView, type RouteAct, type RouteLink, type RouteNode, type RouteNote, type RouteStepView, type RouteView, type WayInView,
@@ -892,7 +893,7 @@ const memo = new WeakMap<State, Map<string, GetInView>>();
 export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): GetInView {
   let per = memo.get(s);
   if (!per) memo.set(s, (per = new Map()));
-  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}`;
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${lockedMatchesHidden() ? "h" : "s"}`;
   const hit = per.get(k);
   if (hit) return hit;
   const cx = cxOf(seed, s, m, nowMs);
@@ -958,6 +959,7 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
     ball,
     views: [...viewN].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)),
     profile,
+    lockedWays: cx.f.lockedWays.size,
   };
   if (per.size > 500) per.clear();
   per.set(k, view);
