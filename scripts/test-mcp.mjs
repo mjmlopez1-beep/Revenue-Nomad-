@@ -401,7 +401,7 @@ async function main() {
   check("a notification gets 202", note.status === 202, note.status);
   const list = await rpc(at, "tools/list");
   const names = (list.json?.result?.tools ?? []).map((t) => t.name).sort();
-  const want = ["add_company_fact", "add_my_seat", "add_person", "alerts", "change_proposal", "create_or_update_proposal", "draft_proposal_from_call", "find_company", "follow_company", "get_company", "get_proposal", "get_proposal_kit", "leads_passed_to_me", "list_open_roles", "list_peers", "list_proposal_templates", "my_account", "my_pipeline", "my_voice", "pass_lead", "rate_benchmarks", "save_my_voice", "search_companies", "send_document_for_signature", "send_proposal_for_signature", "todays_moves", "unlock", "update_pipeline"];
+  const want = ["add_company_fact", "add_my_seat", "add_person", "alerts", "change_proposal", "create_or_update_proposal", "draft_proposal_from_call", "find_company", "follow_company", "get_company", "get_proposal", "get_proposal_kit", "leads_passed_to_me", "list_open_roles", "list_peers", "list_proposal_templates", "my_account", "my_pipeline", "my_voice", "pass_lead", "rate_benchmarks", "save_my_voice", "search_companies", "send_document_for_signature", "send_proposal_for_signature", "todays_moves", "unlock", "update_pipeline", "ways_in"];
   check("tools/list has every tool", JSON.stringify(names) === JSON.stringify(want), names);
   const unlockTool = list.json?.result?.tools?.find((t) => t.name === "unlock");
   check("the unlock tool tells the model to ask first", /ASK THE MEMBER FIRST/.test(unlockTool?.description ?? "") && unlockTool.inputSchema?.properties?.confirm?.type === "boolean");
@@ -890,7 +890,7 @@ async function main() {
     check("SDK client: after sign-in it completes the handshake", !!c2c.getServerVersion()?.name && c2c.getServerVersion().name === "merlin");
     const tl = await c2c.listTools();
     // 25 with RN_GOOGLE off (as this test runs): the base 15, my_pipeline and update_pipeline (Your pipeline), the five proposal tools, and the three peer tools (list_peers, pass_lead, leads_passed_to_me). RN_GOOGLE=1 adds save_my_network and my_network (27).
-    check("SDK client: it lists the tools", tl.tools.length === 28, tl.tools.length);
+    check("SDK client: it lists the tools (ways_in with ways in on, RN_PATHS)", tl.tools.length === 29, tl.tools.length);
     const res = await c2c.callTool({ name: "search_companies", arguments: { hiring_now: true, limit: 3 } });
     const parsed = JSON.parse(res.content?.[0]?.text ?? "{}");
     check("SDK client: it calls a tool and reads the answer", Array.isArray(parsed.companies) && parsed.companies.length > 0, res);

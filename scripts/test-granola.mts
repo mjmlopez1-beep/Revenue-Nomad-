@@ -475,14 +475,17 @@ async function main() {
   /* ---------- 9. the picker's words, the top row ---------- */
   console.log("\nThe picker's words");
   const Wd = await import("../app/post/granolaWords.ts");
-  const call0 = { noteId: "not_cedar000000001", when: iso(today10), minutes: 42, with: [{ name: "Dana Whitfield", email: "dana@cedarpine.example" }], more: 0 };
-  const hhmm = new Date(today10).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  check("Today's call with Dana, 10:00 AM (the app's clock, not 24 hours)", Wd.callTitle(call0, NOW) === `Today\u2019s call with Dana, ${hhmm}` && hhmm === "10:00 AM", Wd.callTitle(call0, NOW));
-  check("Granola has a 42-minute call from today with dana@cedarpine.example.", Wd.callLine(call0, NOW) === "Granola has a 42-minute call from today with dana@cedarpine.example.", Wd.callLine(call0, NOW));
-  check("an 8-minute call; yesterday; more people", Wd.callLine({ ...call0, minutes: 8 }, NOW).startsWith("Granola has an 8-minute") && Wd.callTitle({ ...call0, when: iso(today10 - DAY) }, NOW).startsWith("Yesterday\u2019s call with Dana") && Wd.whoOf({ ...call0, more: 2 }) === "Dana and 2 others");
-  check("an older call names the day; nobody named reads plainly", /^Call with Dana on [A-Z][a-z]{2} \d+, \d{1,2}:\d\d [AP]M$/.test(Wd.callTitle({ ...call0, when: iso(today10 - 12 * DAY) }, NOW)) && Wd.callTitle({ ...call0, with: [] }, NOW).startsWith("Today\u2019s call, "));
+  // The words read against a fixed afternoon clock (today at 3:00 PM, a call at 10:00 AM), so they hold at any hour the suite runs.
+  const W_NOW = (() => { const d = new Date(NOW); d.setHours(15, 0, 0, 0); return d.getTime(); })();
+  const w10 = (() => { const d = new Date(NOW); d.setHours(10, 0, 0, 0); return d.getTime(); })();
+  const call0 = { noteId: "not_cedar000000001", when: iso(w10), minutes: 42, with: [{ name: "Dana Whitfield", email: "dana@cedarpine.example" }], more: 0 };
+  const hhmm = new Date(w10).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  check("Today's call with Dana, 10:00 AM (the app's clock, not 24 hours)", Wd.callTitle(call0, W_NOW) === `Today\u2019s call with Dana, ${hhmm}` && hhmm === "10:00 AM", Wd.callTitle(call0, W_NOW));
+  check("Granola has a 42-minute call from today with dana@cedarpine.example.", Wd.callLine(call0, W_NOW) === "Granola has a 42-minute call from today with dana@cedarpine.example.", Wd.callLine(call0, W_NOW));
+  check("an 8-minute call; yesterday; more people", Wd.callLine({ ...call0, minutes: 8 }, W_NOW).startsWith("Granola has an 8-minute") && Wd.callTitle({ ...call0, when: iso(w10 - DAY) }, W_NOW).startsWith("Yesterday\u2019s call with Dana") && Wd.whoOf({ ...call0, more: 2 }) === "Dana and 2 others");
+  check("an older call names the day; nobody named reads plainly", /^Call with Dana on [A-Z][a-z]{2} \d+, \d{1,2}:\d\d [AP]M$/.test(Wd.callTitle({ ...call0, when: iso(w10 - 12 * DAY) }, W_NOW)) && Wd.callTitle({ ...call0, with: [] }, W_NOW).startsWith("Today\u2019s call, "));
   const jsxText = (f: string) => [...readFileSync(new URL(f, import.meta.url), "utf8").matchAll(/>\s*([A-Z][^<>{}=&?()]*)</g)].map((m) => m[1]).join(" ");
-  const words = [...Object.values(W), Wd.callTitle(call0, NOW), Wd.callLine(call0, NOW), jsxText("../app/post/GranolaCallPicker.tsx"), jsxText("../app/post/GranolaSection.tsx")].join(" ");
+  const words = [...Object.values(W), Wd.callTitle(call0, W_NOW), Wd.callLine(call0, W_NOW), jsxText("../app/post/GranolaCallPicker.tsx"), jsxText("../app/post/GranolaSection.tsx")].join(" ");
   check("no exclamation marks or em dashes in the words", !/[!—]/.test(words), (words.match(/.{0,30}[!—].{0,10}/) ?? [])[0]);
 
   console.log("\nThe top row of Integrations");

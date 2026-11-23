@@ -311,7 +311,7 @@ async function main() {
   check("the connector: draft_proposal_from_call with a granola_note_id reads the call through Merlin's Granola connection", viaTool.saved === true && viaTool.transcript_kept === false && (await PS.getProposal(JOR, String(viaTool.proposal_id), BASE)).signer?.email === "dana@cedarpine.example", viaTool);
   check("  Close only: a Free member's note id is refused", /Close/.test((await refused(MG.granolaForDraft("mem_fre", NOTE))) ?? "") && /Close/.test((await refused(MP.draftFromCall(fctx, { granola_note_id: NOTE }))) ?? ""));
   const toolsOn = Object.keys((MSV.makeServer(jctx) as unknown as { _registeredTools: Record<string, unknown> })._registeredTools);
-  check("  the connector's tools with Granola on: C1's three, C4's one, and the rest", ["draft_proposal_from_call", "change_proposal", "send_document_for_signature", "list_granola_calls", "create_or_update_proposal", "send_proposal_for_signature"].every((t) => toolsOn.includes(t)) && toolsOn.length === 29, toolsOn.length);
+  check("  the connector's tools with Granola on: C1's three, C4's one, and the rest", ["draft_proposal_from_call", "change_proposal", "send_document_for_signature", "list_granola_calls", "create_or_update_proposal", "send_proposal_for_signature"].every((t) => toolsOn.includes(t)) && toolsOn.length === 30, toolsOn.length); // ways_in now registers with ways in on (RN_PATHS), not only with Google
   for (const k of ["RN_AI_DRAFTS", "ANTHROPIC_API_KEY", "RN_AI_MODEL", "RN_AI_TEST_BASE_URL"]) delete process.env[k];
 
   /* ================= 2. tracking on the client's page ================= */
