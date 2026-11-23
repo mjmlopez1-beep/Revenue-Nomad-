@@ -3,7 +3,7 @@
  * bars, the search row, the member's own columns and the first visit's examples. Pine for
  * actions, volt only for "+ Add a person · earn 1 credit", no ember.
  */
-.pp-bar {
+.ppl-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -12,16 +12,16 @@
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
-.pp-bar2 {
+.ppl-bar2 {
   padding-top: 6px;
   padding-bottom: 6px;
 }
-.pp-views {
+.ppl-views {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
-.pp-view {
+.ppl-view {
   height: 36px;
   padding: 0 12px;
   border: 1px solid transparent;
@@ -35,18 +35,18 @@
   gap: 8px;
   cursor: pointer;
 }
-.pp-view.on {
+.ppl-view.on {
   border-color: var(--line-strong);
   background: #fff;
   color: var(--ink);
   font-weight: 700;
 }
-.pp-view-n {
+.ppl-view-n {
   font-size: 12px;
   color: var(--muted);
   font-weight: 600;
 }
-.pp-earn {
+.ppl-earn {
   height: 36px;
   padding: 0 12px;
   border: 1px solid #2ee59d;
@@ -58,12 +58,12 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.pp-rows {
+.ppl-rows {
   margin-left: auto;
   font-size: 13px;
   color: var(--muted);
 }
-.pp-ideal {
+.ppl-ideal {
   flex: 1 1 100%;
   display: flex;
   flex-wrap: wrap;
@@ -72,14 +72,14 @@
   font-size: 13px;
   color: var(--body-ink);
 }
-.pp-chips {
+.ppl-chips {
   flex: 1 1 100%;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.pp-chip {
+.ppl-chip {
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
@@ -90,12 +90,12 @@
   font-weight: 600;
   cursor: pointer;
 }
-.pp-chip.on {
+.ppl-chip.on {
   border-color: var(--pine);
   background: #e8f3ee;
   color: var(--pine);
 }
-.pp-ask {
+.ppl-ask {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -104,7 +104,7 @@
   background: #f7f8f7;
   border-bottom: 1px solid var(--line);
 }
-.pp-search {
+.ppl-search {
   flex: 1 1 320px;
   display: flex;
   align-items: center;
@@ -116,7 +116,7 @@
   background: #fff;
   color: var(--pine);
 }
-.pp-search input {
+.ppl-search input {
   flex: 1;
   min-width: 0;
   border: 0;
@@ -126,13 +126,13 @@
   font-size: 14px;
   color: var(--ink);
 }
-.pp-search:focus-within {
+.ppl-search:focus-within {
   outline: 3px solid #0b6b45;
   outline-offset: 2px;
 }
 
 /* the cells People draws */
-.pp-name {
+.ppl-name {
   border: 0;
   background: transparent;
   padding: 0;
@@ -147,7 +147,7 @@
   font: inherit;
   cursor: pointer;
 }
-.pp-name-t {
+.ppl-name-t {
   font-weight: 700;
   color: var(--ink);
   white-space: nowrap;
@@ -157,10 +157,10 @@
   text-decoration-color: #b9d9ca;
   text-underline-offset: 3px;
 }
-.pp-name:hover .pp-name-t {
+.ppl-name:hover .ppl-name-t {
   text-decoration-color: var(--pine);
 }
-.pp-name-s {
+.ppl-name-s {
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
@@ -170,7 +170,7 @@
   gap: 6px;
   align-items: center;
 }
-.pp-yours {
+.ppl-yours {
   font-size: 11px;
   font-weight: 700;
   border-radius: 999px;
@@ -178,11 +178,11 @@
   border: 1px solid var(--line-strong);
   color: var(--body-ink);
 }
-.pp-muted {
+.ppl-muted {
   color: var(--muted);
   font-size: 13px;
 }
-.pp-warm {
+.ppl-warm {
   align-self: flex-start;
   font-size: 12px;
   font-weight: 700;
@@ -190,25 +190,25 @@
   padding: 2px 8px;
   white-space: nowrap;
 }
-.pp-warm-strong {
+.ppl-warm-strong {
   background: #073f2f;
   color: #fff;
 }
-.pp-warm-good {
+.ppl-warm-good {
   background: #e8f3ee;
   color: #073f2f;
   border: 1px solid #b9d9ca;
 }
-.pp-warm-fading {
+.ppl-warm-fading {
   background: #fff;
   color: #28322d;
   border: 1px solid #808a85;
 }
-.pp-warm-cold {
+.ppl-warm-cold {
   background: #f1f3f2;
   color: #5b6661;
 }
-.pp-link {
+.ppl-link {
   border: 0;
   background: transparent;
   padding: 0;
@@ -222,7 +222,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.pp-stage {
+.ppl-stage {
   height: 32px;
   padding: 0 12px;
   border: 1px solid #b9d9ca;
@@ -234,7 +234,7 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.pp-add {
+.ppl-add {
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
@@ -245,7 +245,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.pp-own {
+.ppl-own {
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -255,19 +255,19 @@
   font-weight: 600;
   color: var(--pine);
 }
-.pp-side {
+.ppl-side {
   flex-basis: 360px;
   max-width: 380px;
 }
 
 /* the first visit */
-.pp-first {
+.ppl-first {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 14px 18px;
 }
-.pp-ex-head {
+.ppl-ex-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -277,17 +277,17 @@
   border-radius: 10px;
   background: #fafaf7;
 }
-.pp-ex-head > span:first-child {
+.ppl-ex-head > span:first-child {
   flex: 1 1 320px;
 }
-.pp-ex {
+.ppl-ex {
   min-width: 720px;
 }
-.pp-ex-row td {
+.ppl-ex-row td {
   background: #fafaf7;
   height: 60px;
 }
-.pp-ex-tag {
+.ppl-ex-tag {
   font-size: 11px;
   font-weight: 700;
   border-radius: 999px;
@@ -296,7 +296,7 @@
   background: #f1f3f2;
   color: #5b6661;
 }
-.pp-rel {
+.ppl-rel {
   font-size: 12px;
   font-weight: 700;
   border-radius: 999px;
@@ -305,15 +305,15 @@
   color: #073f2f;
   border: 1px solid #b9d9ca;
 }
-.pp-phone .cp {
+.ppl-phone .cp {
   margin: 12px 16px;
 }
 @media (max-width: 860px) {
-  .pp-rows {
+  .ppl-rows {
     margin-left: 0;
   }
 }
-.pp-cards {
+.ppl-cards {
   list-style: none;
   margin: 12px 16px;
   padding: 0;
@@ -321,7 +321,7 @@
   flex-direction: column;
   gap: 10px;
 }
-.pp-card {
+.ppl-card {
   display: flex;
   flex-direction: column;
   gap: 8px;

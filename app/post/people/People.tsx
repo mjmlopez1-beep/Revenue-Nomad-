@@ -178,7 +178,7 @@ export function PeoplePage() {
   /* ----- the bubble ----- */
   const rowByKey = useMemo(() => new Map(listed.map((r) => [r.key, r])), [listed]);
   const openWho = (r: Row, el?: HTMLElement | null) => {
-    const anchor = el ?? (document.querySelector(`tr[data-row="${CSS.escape(r.key)}"] .pp-name`) as HTMLElement | null) ?? (document.querySelector(`tr[data-row="${CSS.escape(r.key)}"]`) as HTMLElement | null);
+    const anchor = el ?? (document.querySelector(`tr[data-row="${CSS.escape(r.key)}"] .ppl-name`) as HTMLElement | null) ?? (document.querySelector(`tr[data-row="${CSS.escape(r.key)}"]`) as HTMLElement | null);
     if (!anchor) return;
     setWho((w) => (w?.key === r.key ? null : { key: r.key, el: anchor }));
   };
@@ -257,31 +257,31 @@ export function PeoplePage() {
     if (r.k?.away)
       return (
         <span className="tp-stack">
-          <span className="pp-muted">Set aside</span>
+          <span className="ppl-muted">Set aside</span>
           <span className="tp-stack-sub">Not a relationship</span>
         </span>
       );
     if (knows(r))
       return (
         <span className="tp-stack">
-          <span className={`pp-warm pp-warm-${warmWord(r.k!.warmth).toLowerCase()}`}>{warmWord(r.k!.warmth)}</span>
+          <span className={`ppl-warm ppl-warm-${warmWord(r.k!.warmth).toLowerCase()}`}>{warmWord(r.k!.warmth)}</span>
           <span className="tp-stack-sub" title={srcLine(r.k!.src)}>
             {r.k!.why}
           </span>
         </span>
       );
-    if (!hasSources) return <span className="pp-muted">Not brought in yet</span>;
+    if (!hasSources) return <span className="ppl-muted">Not brought in yet</span>;
     const w = ways(r.i.c.id);
     if (w && !r.i.c.hidden)
       return (
-        <button type="button" className="pp-link" onClick={(e) => (e.stopPropagation(), openWay(r.i.c.id))}>
+        <button type="button" className="ppl-link" onClick={(e) => (e.stopPropagation(), openWay(r.i.c.id))}>
           <span>{w === 1 ? "1 way in" : `${n(w)} ways in`}</span>
           <span className="tp-stack-sub">Through people you know</span>
         </button>
       );
     return (
       <span className="tp-stack">
-        <span className="pp-muted">No one you know yet</span>
+        <span className="ppl-muted">No one you know yet</span>
       </span>
     );
   };
@@ -289,23 +289,23 @@ export function PeoplePage() {
     const nm = nameOf(r);
     if (nm)
       return (
-        <button type="button" className="pp-name" aria-haspopup="dialog" aria-expanded={who?.key === r.key} onClick={(e) => (e.stopPropagation(), openWho(r, e.currentTarget))}>
-          <span className="pp-name-t">{nm}</span>
-          <span className="pp-name-s">
+        <button type="button" className="ppl-name" aria-haspopup="dialog" aria-expanded={who?.key === r.key} onClick={(e) => (e.stopPropagation(), openWho(r, e.currentTarget))}>
+          <span className="ppl-name-t">{nm}</span>
+          <span className="ppl-name-s">
             {titleOf(r) ?? ""}
-            {r.own && <span className="pp-yours">Yours</span>}
+            {r.own && <span className="ppl-yours">Yours</span>}
           </span>
         </button>
       );
     if (r.i.c.hidden)
       return (
-        <span className="tp-stack pp-wait">
-          <span className="pp-muted">Opens after the company</span>
+        <span className="tp-stack ppl-wait">
+          <span className="ppl-muted">Opens after the company</span>
           <span className="tp-stack-sub">Name and title: 1 credit</span>
         </span>
       );
     return (
-      <span className="tp-stack pp-locked">
+      <span className="tp-stack ppl-locked">
         <NameAndTitle i={r.i} e={r.e} p={r.p!} />
         <span className="tp-stack-sub">Name and title, one unlock</span>
       </span>
@@ -322,19 +322,19 @@ export function PeoplePage() {
           {r.k!.lastKind && <span className="tp-stack-sub">{r.k!.lastKind}</span>}
         </span>
       ) : (
-        <span className="pp-muted">None yet</span>
+        <span className="ppl-muted">None yet</span>
       );
     if (id === "pipe") {
       const st = stageOf.get(r.i.c.id);
       if (st)
         return (
-          <button type="button" className="pp-stage" onClick={(e) => (e.stopPropagation(), c.openPage("pipeline"))}>
+          <button type="button" className="ppl-stage" onClick={(e) => (e.stopPropagation(), c.openPage("pipeline"))}>
             {st}
           </button>
         );
       if (r.i.c.hidden) return <None title="Open the company first. Then it can go in your pipeline." />;
       return (
-        <button type="button" className="pp-add" aria-label={`Add ${r.i.c.name} to your pipeline as a target`} onClick={(e) => (e.stopPropagation(), void toPipeline([r]))}>
+        <button type="button" className="ppl-add" aria-label={`Add ${r.i.c.name} to your pipeline as a target`} onClick={(e) => (e.stopPropagation(), void toPipeline([r]))}>
           Add
         </button>
       );
@@ -342,7 +342,7 @@ export function PeoplePage() {
     if (!r.own) return undefined;
     // The member's own people: their own words, nothing to unlock.
     if (id === "company") return <CompanyName i={r.i} following={r.i.c.following} />;
-    if (id === "email") return r.k?.email ? <span className="pp-own" title="From what you brought in">{r.k.email}</span> : <None title="Not on file" />;
+    if (id === "email") return r.k?.email ? <span className="ppl-own" title="From what you brought in">{r.k.email}</span> : <None title="Not on file" />;
     if (id === "linkedin") return r.k?.profile ? profileLink(r.k.profile) : <None title="Not on file" />;
     return <None title="Merlin holds no record of them yet" />;
   };
@@ -379,7 +379,7 @@ export function PeoplePage() {
   if (layout === "phone")
     return (
       <main className="tp-main tp-main-page wb-host">
-        <div className="wb wb-phone pp pp-phone">
+        <div className="wb wb-phone pp ppl-phone">
           <h1 className="sr-only">People: {listName}</h1>
           <div className="wb-phone-bar">
             <label className="wb-phone-view">
@@ -400,16 +400,16 @@ export function PeoplePage() {
             <>
               <CardList type="people" rows={shown.filter((r) => !r.own)} me={me} onOpen={(r) => openWho(r, document.activeElement as HTMLElement | null)} />
               {shown.some((r) => r.own) && (
-                <ul className="pp-cards" aria-label="People you know">
+                <ul className="ppl-cards" aria-label="People you know">
                   {shown
                     .filter((r) => r.own)
                     .map((r) => (
-                      <li key={r.key} className="pp-card">
-                        <button type="button" className="pp-name" onClick={(e) => openWho(r, e.currentTarget)}>
-                          <span className="pp-name-t">{nameOf(r)}</span>
-                          <span className="pp-name-s">
+                      <li key={r.key} className="ppl-card">
+                        <button type="button" className="ppl-name" onClick={(e) => openWho(r, e.currentTarget)}>
+                          <span className="ppl-name-t">{nameOf(r)}</span>
+                          <span className="ppl-name-s">
                             {titleOf(r) ?? ""}
-                            <span className="pp-yours">Yours</span>
+                            <span className="ppl-yours">Yours</span>
                           </span>
                         </button>
                         <CompanyName i={r.i} following={r.i.c.following} />
@@ -467,8 +467,8 @@ export function PeoplePage() {
           </section>
         )}
 
-        <div className="pp-bar">
-          <div role="tablist" aria-label="Views" className="pp-views">
+        <div className="ppl-bar">
+          <div role="tablist" aria-label="Views" className="ppl-views">
             {PEOPLE_VIEWS.map((v) => {
               const on = view === v.key && !aside;
               return (
@@ -477,14 +477,14 @@ export function PeoplePage() {
                   type="button"
                   role="tab"
                   aria-selected={on}
-                  className={`pp-view${on ? " on" : ""}`}
+                  className={`ppl-view${on ? " on" : ""}`}
                   onClick={() => {
                     setView(v.key);
                     if (aside) setChips((s) => (s.delete("aside"), new Set(s)));
                   }}
                 >
                   {v.label}
-                  <span className="pp-view-n num">{n(counts[v.key])}</span>
+                  <span className="ppl-view-n num">{n(counts[v.key])}</span>
                 </button>
               );
             })}
@@ -498,7 +498,7 @@ export function PeoplePage() {
           </button>
         </div>
 
-        <div className="pp-bar pp-bar2">
+        <div className="ppl-bar ppl-bar2">
           <button type="button" className="wb-tb" aria-pressed={slim} onClick={() => setSlim(!slim)}>
             {cols.length} of {order.length} columns · {slim ? "show more" : "show fewer"}
           </button>
@@ -510,14 +510,14 @@ export function PeoplePage() {
               Sort<span className="wb-tb-sub">: {PEOPLE_SORTS[sort]}</span>
             </span>
           </button>
-          <button type="button" className="pp-earn" onClick={() => c.openAdd({ mode: "person" })}>
+          <button type="button" className="ppl-earn" onClick={() => c.openAdd({ mode: "person" })}>
             + Add a person · earn 1 credit
           </button>
-          <span className="pp-rows num" role="status">
+          <span className="ppl-rows num" role="status">
             {aside ? `${n(listed.length)} set aside` : examples ? "4 example rows" : `${n(shown.length)} of ${n(listed.length)} rows`}
           </span>
           {scope === "ideal" && hasIcp && (
-            <span className="pp-ideal">
+            <span className="ppl-ideal">
               <span>{first ? "Already filtered to your ideal client, from sign-up." : "People at your ideal client."}</span>
               <button type="button" className="tp-flink" onClick={c.openProfile}>
                 Change your ideal client
@@ -525,7 +525,7 @@ export function PeoplePage() {
             </span>
           )}
           {fOpen && (
-            <span role="group" aria-label="Filters" className="pp-chips">
+            <span role="group" aria-label="Filters" className="ppl-chips">
               {CHIPS.map((x) => {
                 const on = chips.has(x.key);
                 return (
@@ -533,7 +533,7 @@ export function PeoplePage() {
                     key={x.key}
                     type="button"
                     aria-pressed={on}
-                    className={`pp-chip${on ? " on" : ""}`}
+                    className={`ppl-chip${on ? " on" : ""}`}
                     onClick={() =>
                       setChips((s) => {
                         const next = new Set(s);
@@ -554,8 +554,8 @@ export function PeoplePage() {
           )}
         </div>
 
-        <div className="pp-ask">
-          <label className="pp-search">
+        <div className="ppl-ask">
+          <label className="ppl-search">
             <IconSearch size={16} />
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people by name, company or title" placeholder="Search a name, company or title" />
           </label>
@@ -593,14 +593,14 @@ export function PeoplePage() {
         <div className="wb-body">
           <section aria-label="People" className="wb-main">
             {examples ? (
-              <div className="pp-first">
+              <div className="ppl-first">
                 {side !== "step" && <ConnectPanel variant="inline" start={src} step={first ? { n: 3, of: c.start.six.of } : null} onSeeKnown={() => setView("known")} onNext={() => t.setRecordType("companies")} />}
-                <div className="pp-ex-head">
+                <div className="ppl-ex-head">
                   <span>
                     <strong>These 4 rows are examples.</strong> This view fills with your own people once you bring in who you know: how you know them, when you last spoke and which of them decide. Only you see it.
                   </span>
                   {side !== "step" ? null : (
-                    <span className="pp-muted">Step 3 is open beside the table.</span>
+                    <span className="ppl-muted">Step 3 is open beside the table.</span>
                   )}
                 </div>
                 <ExampleTable />
@@ -625,7 +625,7 @@ export function PeoplePage() {
                 sort="title"
                 onAddColumn={() => (setSide("tools"), setRun(null), setToolsTab("enrich"))}
                 cell={cell}
-                rowClass={(r) => ((r as PeopleRow).own ? "pp-own-row" : "")}
+                rowClass={(r) => ((r as PeopleRow).own ? "ppl-own-row" : "")}
               />
             ) : (
               <div className="wb-empty-list">
@@ -666,7 +666,7 @@ export function PeoplePage() {
             />
           )}
           {side === "step" && (
-            <aside className="wb-tools pp-side" aria-label="Bring in who you know">
+            <aside className="wb-tools ppl-side" aria-label="Bring in who you know">
               <ConnectPanel
                 key={src}
                 start={src}
@@ -725,7 +725,7 @@ export function PeoplePage() {
 function ExampleTable() {
   return (
     <div className="wb-scroll">
-      <table className="wb-table pp-ex" aria-label="Example rows">
+      <table className="wb-table ppl-ex" aria-label="Example rows">
         <thead>
           <tr className="wb-head">
             <th scope="col" className="wb-th">Name and title</th>
@@ -737,11 +737,11 @@ function ExampleTable() {
         </thead>
         <tbody>
           {EXAMPLE_PEOPLE.map((x) => (
-            <tr key={x.value.name} className="pp-ex-row">
+            <tr key={x.value.name} className="ppl-ex-row">
               <td className="wb-td">
                 <span className="tp-stack">
                   <span>
-                    {x.value.name} <span className="pp-ex-tag">{x.label}</span>
+                    {x.value.name} <span className="ppl-ex-tag">{x.label}</span>
                   </span>
                   <span className="tp-stack-sub">{x.value.title}</span>
                 </span>
@@ -754,7 +754,7 @@ function ExampleTable() {
               </td>
               <td className="wb-td">
                 <span className="tp-stack">
-                  <span className={`pp-warm pp-warm-${x.value.warm.toLowerCase()}`}>{x.value.warm}</span>
+                  <span className={`ppl-warm ppl-warm-${x.value.warm.toLowerCase()}`}>{x.value.warm}</span>
                   <span className="tp-stack-sub">{x.value.why}</span>
                 </span>
               </td>
@@ -764,7 +764,7 @@ function ExampleTable() {
                   {x.value.lastKind && <span className="tp-stack-sub">{x.value.lastKind}</span>}
                 </span>
               </td>
-              <td className="wb-td">{x.value.rel ? <span className="pp-rel">{x.value.rel}</span> : <span className="pp-muted">Not on file</span>}</td>
+              <td className="wb-td">{x.value.rel ? <span className="ppl-rel">{x.value.rel}</span> : <span className="ppl-muted">Not on file</span>}</td>
             </tr>
           ))}
         </tbody>
