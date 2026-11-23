@@ -443,7 +443,8 @@ function MapCard({
   for (const r of [...rows].sort((a, b) => a.rank - b.rank)) {
     if (named.size >= 6) break;
     if (r.locked || !shownIds.has(r.id) || named.has(r.id)) continue;
-    if (spots.some(([x, y]) => Math.abs(x - r.x) < 26 && Math.abs(y - r.y) < 8)) continue;
+    // The picked company's label is wider (its estimate in a pill): keep further clear of it.
+    if (spots.some(([x, y], k) => Math.abs(x - r.x) < (k === 0 && cur ? 40 : 26) && Math.abs(y - r.y) < 8)) continue;
     named.add(r.id);
     spots.push([r.x, r.y]);
   }
