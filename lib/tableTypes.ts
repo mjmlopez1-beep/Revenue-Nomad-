@@ -1214,6 +1214,12 @@ export type Action =
    */
   | { type: "voice"; voice?: unknown; remove?: boolean }
   /**
+   * Your private notes on a company (lib/companyNotes.ts, the company page's Notes and activity):
+   * add one, change one (`noteId`) or remove one. Any company on file, open or locked. Answers with
+   * the member's notes there as `notes`, newest first. Only they ever see them.
+   */
+  | { type: "companyNote"; op: "add" | "edit" | "remove"; companyId: string; noteId?: string; text?: string }
+  /**
    * Invite to connect (EngagementRec.invite): the member sent the seat holder a note with the seat's
    * claim link. One record per member and seat ("Invited Nov 18"): sending again keeps the first date
    * and the latest note. When the holder claims the seat through the link, both get the invite bonus
@@ -1305,6 +1311,8 @@ export interface UnlockQuote {
 
 export type ActionResult = {
   message: string;
+  /** companyNote: the member's notes on that company, as they now stand, newest first. */
+  notes?: { id: string; at: string; text: string; edited?: string }[];
   /** The record the action touched (a public id). */
   id?: string;
   capped?: boolean;

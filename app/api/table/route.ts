@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
-  ABOUT_MAX, ActionError, aboutCells, billingVisit, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
+  ABOUT_MAX, ActionError, aboutCells, billingVisit, companyNotesFor, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, partnersView, perform, searchMembers, touch, viewPatch, viewVersion, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
@@ -203,7 +203,7 @@ async function viewAnswer(view: Built, enc: Enc | null, key?: string): Promise<N
  * shows, or answer with what they changed themselves (messages), or change too much (an admin
  * removing everything a member added: the page loads the table again).
  */
-const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember", "lockedView", "promoCode"]);
+const NO_PATCH = new Set(["scanNow", "aboutNow", "leadersNow", "adminRemoveMember", "lockedView", "promoCode", "companyNote"]);
 /** Actions that can move the rate benchmarks. */
 const BENCH_ACTIONS = new Set(["benchRate", "benchRateRemove", "fill", "retract", "review", "adminRemove", "report"]);
 /** The public ids of the records an action touched: what it named, what it made, and the cells it changed. */
@@ -232,6 +232,8 @@ const patchless = (a: Action) =>
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?peers=1     PeersView: the Peers page (lib/peers.ts). ?peers=home: PeersHome, Home's From your peers. ?peers=picks&c=ID[&role=ID][&for=team]:
  *                  PeerPicks, who to pass a company to or team up with. 401 signed out.
+ * GET ?notes=ID   { notes }: the member's own private notes on that company, newest first (lib/companyNotes.ts). 404 for an id
+ *                  that names no company, 401 signed out.
  * GET ?pipeline=1  PipelineView: the member's own pipeline, follow-ups due and intros (lib/pipelineActions.ts). 401 signed out.
  * GET ?partners=1  PartnersView: the Referral partners page's server half (lib/table.ts partnersView). 401 signed out.
  * GET ?fractionals=1  FractionalsView: the Fractionals directory, one record per fractional as the member may see it
@@ -331,6 +333,13 @@ export const GET = guarded(async (req: NextRequest) => {
     const out = pr === "home" ? await peersHome(token) : pr === "picks" ? await peerPicks(token, q.get("c") ?? "", q.get("role"), q.get("for") === "team") : await peersView(token);
     if (out) return sendJson(req, out);
     return (await memberForToken(token)) ? err("That company isn't on Merlin anymore.", 404) : err("You're signed out. Sign in again to see your peers.", 401);
+  }
+  // Your notes on a company (lib/companyNotes.ts): the member's own, never anyone else's.
+  const notesId = req.nextUrl.searchParams.get("notes");
+  if (notesId !== null) {
+    const n = await companyNotesFor(token, notesId);
+    if (n === null) return err("You're signed out. Sign in again to see your notes.", 401);
+    return n ? sendJson(req, n) : err("That company isn't on Merlin anymore.", 404);
   }
   // Your pipeline (lib/pipelineActions.ts): the member's own deals, moved by what Merlin sees, with the follow-ups due and their intros.
   if (req.nextUrl.searchParams.get("pipeline") !== null) {
