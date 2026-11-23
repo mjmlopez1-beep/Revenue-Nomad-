@@ -244,6 +244,23 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-alerts">
+            <h2 className="df-h" id="df-alerts">
+              Inside Merlin: your alerts and the bell
+            </h2>
+            <p className="cl-p">
+              An alert watches one of your lists, or the companies you follow, or the people you know. When something changes, a new role, a seat that ended, a
+              new leader on a company&apos;s website, a fact, or a raise as its SEC filing says it, Merlin tells you by email, in Slack or in the bell, as you
+              set it. The bell keeps your newest 200 lines: what happened, when, and where it opens. A company you haven&apos;t opened is described, never
+              named. Someone you know changed jobs reads only your own contacts and matches a whole name and a new company, never a guess.
+            </p>
+            <p className="cl-p">
+              Merlin also counts the alerts it sends, by channel and number, for 90 days, so the page can say how many went since your last visit. The count
+              never holds what an alert said. Only you see your bell and your alerts, and none of it is in Revenue Nomad&apos;s copy for admins beyond those
+              counts. Every alert email has a link that turns that alert off in one click. When you close your account they are deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-crystal">
             <h2 className="df-h" id="df-crystal">
               Inside Merlin: tuning your Crystal Ball
@@ -321,7 +338,7 @@ export function DataFlows() {
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, your alerts and the bell, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>

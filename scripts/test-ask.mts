@@ -189,7 +189,7 @@ check("part of a name in a sentence is never a company", ask("hiring companies l
   const id = () => `al_test000${n++}`;
   const legacy: SavedSearch = { id: "al_legacy01", name: "Old view", function: "Sales", createdAt: now, place: "v=all&t=companies&f=fn:Sales" };
   const off: SavedSearch = { ...legacy, id: "al_legacy02", name: "Quiet view", email: false, place: "v=all&t=companies&f=fn:Finance" };
-  check("an old view reads its alert from its weekly email", same(alertOf(legacy), { on: true, every: "weekly", email: true, slack: true }) && alertOf(off).on === false);
+  check("an old view reads its alert from its weekly email", same(alertOf(legacy), { on: true, triggers: ["role"], every: "weekly", email: true, slack: true, bell: true }) && alertOf(off).on === false);
   check("an old view keeps going to Slack, as every saved view did (its weekly email aside)", slackOn(legacy) && slackOn(off));
   check("a list with its alert off, or its Slack off, stays out of Slack", !slackOn({ alert: { on: false, every: "weekly", email: true, slack: true } }) && !slackOn({ alert: { on: true, every: "weekly", email: true, slack: false } }));
   const out = savedViewsOut([legacy, off]);
@@ -204,7 +204,7 @@ check("part of a name in a sentence is never a company", ask("hiring companies l
   check("an alert turned off stops the weekly email too", offAlert.list[1].alert?.on === false && offAlert.list[1].email === false && /Alert off/.test(offAlert.message), offAlert.list[1]);
   const onAgain = savedViewAction(offAlert.list, { op: "alert", id: s.id, list: { alert: { on: true, email: true, slack: false } } }, id, now);
   check("turned on by email, the weekly email is on", onAgain.list[1].email === true && onAgain.list[1].alert?.slack === false && /by email each week/.test(onAgain.message), onAgain);
-  const bare = savedViewAction(onAgain.list, { op: "alert", id: s.id, list: { alert: { on: true, email: false, slack: false } } }, id, now);
+  const bare = savedViewAction(onAgain.list, { op: "alert", id: s.id, list: { alert: { on: true, email: false, slack: false, bell: false } } }, id, now);
   check("an alert on with no channel goes by email", bare.list[1].alert?.email === true && bare.list[1].email === true);
   const mailOff = savedViewAction(bare.list, { op: "email", id: s.id, on: false }, id, now);
   check("the old email switch still works on a list, and moves its alert", mailOff.list[1].email === false && mailOff.list[1].alert?.email === false && mailOff.list[1].alert?.on === false, mailOff.list[1]);

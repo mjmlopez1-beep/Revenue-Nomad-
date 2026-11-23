@@ -70,6 +70,8 @@ import { siteKey } from "../tableFields";
 import { emailEnabled, sendEmail } from "../email";
 import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
+import { logAlert, pushInbox } from "../inbox";
+import { radarAlert } from "./format";
 import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, standingSignals, type RawSignal } from "./signals";
 import { deliverable, icpMisses, inIcp, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
 import { isOut, type RadarOutRow } from "./out";
@@ -83,7 +85,7 @@ import { followUpsOf } from "../pipelineActions";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
+  FEATURE_NAME, RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
   type RadarDay, type RadarEmail, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
 import { NOTIFICATIONS_PATH, emailLinker, grantQuery, safePath } from "../emailIn";
@@ -729,6 +731,12 @@ async function run(opts: { now?: string; force?: boolean; origin?: string; fundi
         if (via.includes("email")) r.stats.emails++;
         if (via.includes("slack")) r.stats.slack++;
         T.addSignal(d, m.id, "radar_sent", where, nowIso);
+        // The bell and the alert log (lib/inbox.ts): the day's companies, as the Slack post's headline says them, by the channels that carried them.
+        if (!upsOnly && day.cards.length) {
+          const head = radarAlert([{ kind: "radar", at: nowIso, day }], "")?.headline ?? `${FEATURE_NAME}: ${day.companies} new today`;
+          pushInbox(d, m.id, [{ id: `radar:${today}`, at: nowIso, kind: "radar", line: head, sub: FEATURE_NAME, href: radarPath(today), alert: "radar" }]);
+        }
+        logAlert(d, m.id, via.map((c) => ({ at: nowIso, alert: "radar", kind: "radar", channel: c === "email" ? ("email" as const) : ("slack" as const), count: Math.max(1, day.companies) })));
       });
     } catch (e) {
       console.error("radar failed for one member", e);

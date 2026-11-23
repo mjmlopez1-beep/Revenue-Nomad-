@@ -8,7 +8,7 @@
  */
 import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, standardIndustries, stripInvisible } from "./tableFields";
 import type { Icp, SavedViewCriteria, SavedViewRec } from "./tableTypes";
-import { ALERT_MAX, alertOf, cleanCriteria, cleanListFields, countryKey, describeAlert, pickFrom, type ListAlert, type ListKind, type SavedSearch } from "./mcp/alerts";
+import { ALERT_EVERY, ALERT_MAX, alertOf, cleanCriteria, cleanListFields, cleanTriggers, countryKey, describeAlert, pickFrom, type AlertEvery, type ListAlert, type ListKind, type SavedSearch } from "./mcp/alerts";
 import { followsHires } from "./hired";
 
 /** Problems the member can fix, as the app shows them. */
@@ -43,13 +43,19 @@ function criteriaOfView(a: SavedSearch): SavedViewCriteria {
   return criteria;
 }
 
+/** Where a list's alert goes, in words: "by email each week, in Slack, in the bell". */
+function howWords(alert: Required<ListAlert>): string {
+  const often = alert.every === "instant" ? "as it happens" : alert.every === "daily" ? "every morning" : "each week";
+  return [alert.email ? `by email ${often}` : "", alert.slack ? "in Slack" : "", alert.bell ? "in the bell" : ""].filter(Boolean).join(", ") || "by email";
+}
+
 /** A saved view as a list (F5): SavedViewRec's list fields, each with its default filled in. */
 export interface SavedListFields {
   kind: ListKind | null;
   cols: string[];
   starter: boolean;
   openedAt: string | null;
-  alert: ListAlert;
+  alert: Required<ListAlert>;
 }
 export type SavedListRec = SavedViewRec & SavedListFields;
 
@@ -72,7 +78,14 @@ export function savedViewsOut(list: SavedSearch[] | undefined): SavedListRec[] {
 
 /** A saved view read as a list, whatever server sent it (an older one leaves the list fields out). */
 export function listOf(v: SavedViewRec): SavedListRec {
-  return { ...v, kind: v.kind ?? null, cols: Array.isArray(v.cols) ? v.cols : [], starter: v.starter === true, openedAt: v.openedAt ?? null, alert: v.alert ?? alertOf({ email: v.email }) };
+  return {
+    ...v,
+    kind: v.kind ?? null,
+    cols: Array.isArray(v.cols) ? v.cols : [],
+    starter: v.starter === true,
+    openedAt: v.openedAt ?? null,
+    alert: alertOf({ alert: v.alert, email: v.email, hiredFn: v.criteria?.hiredFn, hiredWithin: v.criteria?.hiredWithin }),
+  };
 }
 
 /* ---------- the same view twice ---------- */
@@ -198,6 +211,8 @@ export function savedViewAction(
   },
   newId: () => string,
   now: string,
+  /** free: the member is on Free now (as it happens is Pro's). */
+  opts: { free?: boolean } = {},
 ): { list: SavedSearch[]; message: string; id?: string } {
   const gone = () => new HuntError("That saved view is gone already.");
   if (a.op === "delete") {
@@ -219,23 +234,27 @@ export function savedViewAction(
     };
   }
   if (a.op === "alert") {
-    // The alert on a list: on or off, by email, by Slack (the roles that open). The weekly email follows it.
+    // The alert on a list: on or off, what sets it off, how often, and where it goes (email, Slack, the bell). The weekly email follows it.
     const at = list.findIndex((x) => x.id === a.id);
     if (at < 0) throw gone();
     const cur = alertOf(list[at]);
     const raw = (a.list?.alert ?? {}) as Record<string, unknown>;
-    const alert: ListAlert = {
+    const every = (ALERT_EVERY as readonly unknown[]).includes(raw.every) ? (raw.every as AlertEvery) : cur.every;
+    // As it happens is Pro's: a Free member is told so, and nothing changes.
+    if (opts.free && every === "instant" && cur.every !== "instant") throw new HuntError("As it happens is part of Pro. On Free an alert comes every morning or weekly.");
+    const alert: Required<ListAlert> = {
       on: typeof raw.on === "boolean" ? raw.on : a.on !== undefined ? a.on !== false : cur.on,
-      every: "weekly",
+      triggers: cleanTriggers(raw.triggers) ?? cur.triggers,
+      every,
       email: typeof raw.email === "boolean" ? raw.email : cur.email,
       slack: typeof raw.slack === "boolean" ? raw.slack : cur.slack,
+      bell: typeof raw.bell === "boolean" ? raw.bell : cur.bell,
     };
-    // An alert on with neither channel would say nothing: on means by email at least.
-    if (alert.on && !alert.email && !alert.slack) alert.email = true;
+    // An alert on with no channel would say nothing: on means by email at least.
+    if (alert.on && !alert.email && !alert.slack && !alert.bell) alert.email = true;
     const next = [...list];
     next[at] = { ...next[at], alert, email: alert.on && alert.email };
-    const how = [alert.email ? "by email each week" : "", alert.slack ? "in Slack when roles open" : ""].filter(Boolean).join(" and ");
-    return { list: next, id: a.id, message: alert.on ? `Alert on for "${next[at].name}": ${how}.` : `Alert off for "${next[at].name}". It stays saved.` };
+    return { list: next, id: a.id, message: alert.on ? `Alert on for "${next[at].name}": ${howWords(alert)}.` : `Alert off for "${next[at].name}". It stays saved.` };
   }
   if (a.op === "list") {
     // A list's columns, kind or starter flag changed (the alert has its own op).
@@ -298,5 +317,7 @@ export function savedViewAction(
   // A list saved with its alert: the weekly email is the alert's.
   if (saved.alert) saved.email = saved.alert.on && saved.alert.email;
   const mailed = saved.email !== false;
-  return { list: [...list, saved], id, message: !mailed ? (saved.alert?.on ? `Saved "${name}". New roles go to Slack.` : `Saved "${name}".`) : `Saved "${name}". New matches come in your weekly email.` };
+  // A list saved with its own alert says where that alert goes; a view without one keeps its weekly email's words.
+  if (saved.alert) return { list: [...list, saved], id, message: saved.alert.on ? `Saved "${name}". Its alert is on: ${howWords(alertOf(saved))}.` : `Saved "${name}".` };
+  return { list: [...list, saved], id, message: !mailed ? `Saved "${name}".` : `Saved "${name}". New matches come in your weekly email.` };
 }

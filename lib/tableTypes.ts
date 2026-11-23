@@ -607,7 +607,7 @@ export interface SavedViewRec {
   starter?: boolean;
   /** When the member last opened it in the app (ISO), or null. */
   openedAt?: string | null;
-  /** Its alert: on, weekly, by email and by Slack (lib/mcp/alerts.ts alertOf). */
+  /** Its alert: on, what sets it off, how often, by email, Slack and the bell (lib/mcp/alerts.ts alertOf). */
   alert?: ListAlert;
 }
 
@@ -1116,7 +1116,7 @@ export type Action =
       at?: number;
       /**
        * A saved list's own fields (F5). save and list: its kind, columns and starter flag; save and
-       * alert: its alert (on, email, Slack). alert: `id` and `list.alert`; list: `id` and the fields
+       * alert: its alert (on, triggers, how often, email, Slack, the bell). alert: `id` and `list.alert`; list: `id` and the fields
        * that change; opened: `id` (the lists table's Opened and New read it).
        */
       list?: { kind?: ListKind; cols?: string[]; starter?: boolean; alert?: Partial<ListAlert> };
@@ -1254,6 +1254,12 @@ export type Action =
    * Messages between members (lib/messages.ts). Start one with the holder of a seat the viewer
    * can see (unlocked, or free) who has signed in. `engagementId` and `conversationId` are public ids.
    */
+  /** The bell's inbox (lib/inbox.ts): mark lines read (every line without `ids`). */
+  | { type: "inbox.read"; ids?: string[] }
+  /** An alert that is no list (lib/inbox.ts FIXED_KEYS): Companies you follow, Someone you know changed jobs. */
+  | { type: "alerts.fixed"; key: "follows" | "known"; on?: boolean; email?: boolean; slack?: boolean; bell?: boolean }
+  /** Send a test of one alert to the bell (Alerts, "Send a test"). */
+  | { type: "alerts.test"; alert: string }
   | { type: "message.start"; engagementId: string; text: string }
   /** Connect with a member listed in Referral partners (PartnersView.members): a conversation about no seat. `memberId` is a public id. */
   | { type: "message.connect"; memberId: string; text: string }

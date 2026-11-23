@@ -88,6 +88,10 @@ ${status === 200 ? CHECK : ""}<h1>${title}</h1>
 /** While Merlin cannot serve, the link answers 503 with a page, and nothing is changed. */
 const paused = (e: unknown) => (isDown(e) || isBusy(e) ? page("Try this link again in a few minutes", "Merlin is paused while we fix a problem on our side. Your weekly email setting has not changed yet.", 503) : null);
 
+/** A list alert's email carries r=alert and a=<the alerts>: the link turns those alerts off (lib/notify/events.ts alertOffByLink). */
+const isAlert = (q: URLSearchParams) => q.get("r") === "alert";
+const ALERTS = "/?p=alerts";
+const alertOff = async (q: URLSearchParams) => (await import("@/lib/notify/events")).alertOffByLink(q.get("m"), q.get("a"), q.get("s"));
 /** The radar email's link carries r=radar (and its own signature, lib/radar radarSig): it sets the radar's email, not the weekly email. */
 const isRadar = (q: URLSearchParams) => q.get("r") === "radar";
 
@@ -139,6 +143,12 @@ const radarBad = () =>
 export const GET = guarded(async (req: NextRequest) => {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return page("Too many tries in one minute", "Wait a minute, then open the link from your email again.", 429);
   const q = req.nextUrl.searchParams;
+  if (isAlert(q)) {
+    const names = await alertOff(q);
+    if (!names) return page("That link didn't work", "It may have been cut off in your email. You can turn any alert off yourself in Alerts and workflows.", 400, { href: ALERTS, label: "Open your alerts" });
+    const what = names.length === 1 ? `“${esc(names[0])}” is off` : names.length ? "Those alerts are off" : "That alert is off";
+    return page(what, "We won't send it again. It stays saved, and you can turn it back on in Alerts and workflows.", 200, { href: ALERTS, label: "Open your alerts" });
+  }
   if (isRadar(q)) {
     const who = await radarLinkMember(q.get("m"), q.get("s"));
     if (!who) return radarBad();
@@ -166,6 +176,6 @@ export const POST = guarded(async (req: NextRequest) => {
     if (!(await setRadarEmail(q.get("m"), q.get("s"), picked))) return radarBad();
     return radarDone(picked);
   }
-  const done = isRadar(q) ? await setRadarEmail(q.get("m"), q.get("s"), "off") : await unsubscribe(q.get("m"), q.get("s"));
+  const done = isAlert(q) ? !!(await alertOff(q)) : isRadar(q) ? await setRadarEmail(q.get("m"), q.get("s"), "off") : await unsubscribe(q.get("m"), q.get("s"));
   return new NextResponse(null, { status: done ? 200 : 400, headers: { "cache-control": "no-store" } });
 });

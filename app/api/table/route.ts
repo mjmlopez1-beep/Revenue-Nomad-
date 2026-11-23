@@ -63,6 +63,7 @@ const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 /** An action with no member behind it. The same words perform() uses. */
 const SIGNED_OUT = "You're signed out. Sign in again to add, confirm or unlock.";
 const SIGNED_OUT_READ = "You're signed out. Sign in again to see your messages.";
+const SIGNED_OUT_ALERTS = "You're signed out. Sign in again to see your alerts.";
 /** The same answer whether or not the email belongs to a member, so nobody can test which emails are members. */
 const LINK_ON_ITS_WAY = "If that email is on Merlin, a link is on its way.";
 const LINK_USED = "That sign-in link has expired or was already used. A link works once, for 20 minutes. Ask for a new one in Sign in.";
@@ -220,11 +221,15 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   return ids;
 }
 const patchless = (a: Action) =>
-  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || a.type.startsWith("inbox.") || a.type.startsWith("alerts.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
+ * GET ?inbox=1    the bell (lib/inbox.ts InboxView): the member's inbox, newest first, and how many are unread. 401 signed out.
+ *                  POST { action: { type: "inbox.read", ids? } } marks lines read.
+ * GET ?alerts=1&since=ISO   the Alerts page (lib/inbox.ts AlertsView): the fixed alerts' switches, alerts sent since then,
+ *                  each alert's last time. 401 signed out.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?preview=1&fn=F&ind=I&country=C&view=all|hiring|notyet   the landing page's "Try it" and example record: counts, sample rows with their companies, never
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
@@ -304,6 +309,15 @@ export const GET = guarded(async (req: NextRequest) => {
       if (e instanceof ActionError) return err(e.message);
       throw e;
     }
+  }
+  // The bell, v2 (lib/inbox.ts): the member's inbox, newest first, with the unread count. And what the Alerts page reads besides Me.
+  if (req.nextUrl.searchParams.get("inbox") !== null) {
+    const v = await (await import("@/lib/inbox")).inboxFor(token);
+    return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err(SIGNED_OUT_ALERTS, 401);
+  }
+  if (req.nextUrl.searchParams.get("alerts") !== null) {
+    const v = await (await import("@/lib/inbox")).alertsFor(token, req.nextUrl.searchParams.get("since"));
+    return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err(SIGNED_OUT_ALERTS, 401);
   }
   // Messages between members (lib/messages.ts): the viewer's conversations, or only the unread count for the badge.
   if (req.nextUrl.searchParams.get("messages") !== null) {

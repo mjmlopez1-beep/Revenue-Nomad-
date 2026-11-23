@@ -12,6 +12,7 @@ import { publicBase } from "../links";
 import { ActionError, alertKindOpen, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type State } from "../table";
 import { functionOf } from "../tableFields";
 import { alertFor, bodyFor, testAlert, type Alert } from "./format";
+import { logAlert } from "../inbox";
 import { integrationsAllowed } from "./plan";
 import { exchangeCode, slackAppConfigured, takeState, type SlackHook } from "./slackApp";
 import { checkSlackUrl, checkWebhookUrl, maskUrl, postJson, problemWords, UrlProblem, type PostResult } from "./url";
@@ -304,6 +305,8 @@ async function sendNow(memberId: string, kind: AlertKind, items: AlertItem[]): P
       if (dest) record(dest, r, now);
       if (r.ok) st.stats.sent[kind] = (st.stats.sent[kind] ?? 0) + 1;
       else st.stats.failed++;
+      // The alert log (lib/inbox.ts): what went, by channel and count, for the Alerts page. Never what it said.
+      if (r.ok) logAlert(d, memberId, [{ at: now, alert: kind, kind, channel: dest?.kind === "webhook" ? "webhook" : "slack", count: items.length }]);
     }
   });
   for (const { r } of results) if (!r.ok) console.error(`alert not delivered (${kind}): ${r.error}`);
@@ -331,6 +334,38 @@ export function postNow(memberId: string, a: Alert): Promise<boolean> {
           if (dest) record(dest, r, now);
           if (r.ok) st.stats.sent.proposal = (st.stats.sent.proposal ?? 0) + 1;
           else st.stats.failed++;
+          if (r.ok) logAlert(d, memberId, [{ at: now, alert: "proposal", kind: "proposal", channel: dest?.kind === "webhook" ? "webhook" : "slack", count: 1 }]);
+        }
+      });
+      return results.some((x) => x.r.ok);
+    })(),
+  );
+}
+
+/**
+ * Post the watch's news now (lib/notify/events.ts afterWatch: a list alert's seat, leader, fact or
+ * funding, Companies you follow, Someone you know), one post for the batch, to the member's working
+ * destinations. The watch keeps its own 15-minute window. `log` is the alerts the lines came from,
+ * with their counts. False when nothing is connected or nothing took it.
+ */
+export function postWatch(memberId: string, a: Alert, log: { alert: string; count: number }[]): Promise<boolean> {
+  return track(
+    (async () => {
+      if (!integrationsAllowed(memberId)) return false;
+      const s = await loadState();
+      const dests = live(s.integrations?.members[memberId]);
+      if (!dests.length) return false;
+      const now = new Date().toISOString();
+      const results = await Promise.all(dests.map(async (d) => ({ url: d.url, r: await post(d.kind, d.url, a, now) })));
+      await T.mutate((d) => {
+        const st = integ(d);
+        const cur = st.members[memberId];
+        for (const { url, r } of results) {
+          const dest = [cur?.slack, cur?.webhook].find((x) => x?.url === url);
+          if (dest) record(dest, r, now);
+          if (r.ok) st.stats.sent.watch = (st.stats.sent.watch ?? 0) + 1;
+          else st.stats.failed++;
+          if (r.ok) logAlert(d, memberId, log.map((x) => ({ at: now, alert: x.alert, kind: "watch", channel: dest?.kind === "webhook" ? ("webhook" as const) : ("slack" as const), count: x.count })));
         }
       });
       return results.some((x) => x.r.ok);
