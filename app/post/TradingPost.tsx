@@ -302,15 +302,16 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
     const cur = new URLSearchParams(window.location.search);
     if (cur.get("p") === "proposals") for (const k of ["pr", "dc", "new", "ct"]) if (cur.get(k)) q.set(k, cur.get(k)!);
   }
-  // The Companies workbench's columns (the new look, place.ts COLS_PARAM) ride along with the companies list.
+  const path = typeof window === "undefined" ? "/" : window.location.pathname;
+  if (x.p === "today") return path;
+  if (x.p === "table" && !q.toString()) q.set("p", "table");
+  // The Companies workbench's columns (the new look, place.ts COLS_PARAM) ride along with the companies list. Not a place on their own: p=table stays.
   if (x.p === "table" && x.t === "companies" && typeof window !== "undefined") {
     const k = colsOf(window.location.search);
     if (k) q.set(COLS_PARAM, k.join(","));
   }
-  const path = typeof window === "undefined" ? "/" : window.location.pathname;
-  if (x.p === "today") return path;
-  if (x.p === "table" && !q.toString()) q.set("p", "table");
-  const s = q.toString();
+  // The columns read as written (cols=heldBy,seat); every other key is encoded as before.
+  const s = q.toString().replace(/(^|&)cols=[^&]*/, (m) => m.replace(/%2C/g, ","));
   return `${path}${s ? `?${s}` : ""}`;
 }
 

@@ -66,7 +66,7 @@ export function withCols(search: string, cols: readonly string[] | null): string
   const clean = (cols ?? []).filter((c) => COL_ID.test(c)).slice(0, 30);
   if (clean.length) q.set(COLS_PARAM, clean.join(","));
   else q.delete(COLS_PARAM);
-  const s = q.toString().replace(/%2C/g, ",");
+  const s = q.toString().replace(/(^|&)cols=[^&]*/, (m) => m.replace(/%2C/g, ","));
   return s ? `?${s}` : "";
 }
 

@@ -130,3 +130,10 @@
 .h2-page .h2 { margin: 0 auto; width: 100%; }
 .h2-page .fd { min-height: 100%; }
 .h2-h1:focus, .fd h1:focus { outline: none; }
+/* A phone: the actions sit on their own line above the greeting, so the greeting keeps the width. */
+@media (max-width: 640px) {
+  .h2-head { grid-template-columns: minmax(0, 1fr); }
+  .h2-acts { grid-column: 1; grid-row: 1; justify-content: flex-end; }
+  .h2-head > .h2-h1 { grid-row: 2; }
+  .h2-head > .h2-day { grid-row: 3; }
+}
