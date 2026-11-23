@@ -176,7 +176,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
             {fellowN
               ? `Merlin already found ${fellowN === 1 ? "1 path" : `${fellowN} paths`} through fellow fractionals who held a seat there. They are free.`
               : "Bring in who you know and each person at a company that fits becomes a path here."}
-            {withPath > through ? ` Until then a cold note to who decides is the way in at ${n(withPath - through)}, and the map says so.` : ""}
+            {withPath > through ? ` Until then a cold note to who decides is the way in at ${n(withPath - through)}, said as one.` : ""}
           </span>
           <button type="button" className="ws-strip-x" aria-label="Dismiss" onClick={() => c.start.dismissStrip("warm")}>
             <IconX size={16} />
