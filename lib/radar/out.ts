@@ -111,11 +111,12 @@ export interface RadarOutRow {
   /** "you" left it out, or "merlin" held it back. */
   by: "you" | "merlin";
   /**
-   * You: the reason. Merlin: "limit" (kept off the email by the morning's limit), "quiet" (shown in the
+   * You: the reason. Merlin: "limit" (kept off the email by the morning's limit), "held" (kept off that
+   * morning's email for another reason, such as a roll-up's day), "quiet" (shown in the
    * last 30 days and nothing new since), "icp" (a strong signal outside the ideal client; `line` says
    * which part), or "anyway" (the member asked for it: first in the next morning's run).
    */
-  r: OutReason | "limit" | "quiet" | "icp" | "anyway";
+  r: OutReason | "limit" | "held" | "quiet" | "icp" | "anyway";
   /** When (ISO): the reason's, or the held-back event's. */
   at: string;
   /** Merlin's rows: the band and what happened there, never naming the company. */

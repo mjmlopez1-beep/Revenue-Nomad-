@@ -83,7 +83,7 @@ import { followUpsOf } from "../pipelineActions";
 import { fundingSource, type FundingSource } from "./sources/funding";
 import { isDue, settingOf } from "../schedule";
 import {
-  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
+  RADAR_CARRY_DAYS, RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_HOUR_UTC, RADAR_KEEP_DAYS, RADAR_KEEP_VIEW_DAYS, RADAR_MAX_WINDOW_DAYS, RADAR_RANGES, RADAR_ROLLUP_MAX, RADAR_VIEW_DAYS, SIG_DAY_RE, emptyRadar, radarEmailDue, radarOpenPath, radarPath, radarPrefs, radarRangeOf,
   type RadarDay, type RadarEmail, type RadarRange, type RadarSentRow, type RadarState, type RadarView,
 } from "./types";
 import { NOTIFICATIONS_PATH, emailLinker, grantQuery, safePath } from "../emailIn";
@@ -538,6 +538,8 @@ function outRows(
     if (!keptDaysMap[d]?.length) continue;
     const day = byDay.get(d) ?? [];
     const sentCo = new Set(day.filter((x) => sent[x.k]).map((x) => x.c));
+    // A day that sent nothing (only standing states kept for the page, or no email at all) held nothing back.
+    if (!sentCo.size) continue;
     for (const x of day) {
       if (held >= OUT_HELD_MAX) break;
       if (sent[x.k] || sentCo.has(x.c) || listed.has(x.c) || !x.b || x.b === "Low") continue;
@@ -545,7 +547,8 @@ function outRows(
       held++;
       const shownAt = Date.parse(mem?.shown?.[x.c] ?? "");
       const quiet = Number.isFinite(shownAt) && isCalendar({ kind: x.kind }) && nowMs - shownAt < RADAR_COMPANY_QUIET_DAYS * DAY;
-      rows.push({ id: T.pubId(x.c), by: "merlin", r: quiet ? "quiet" : "limit", at: `${d}T12:00:00.000Z`, band: x.b, line: x.l, ...known(x.c) } as RadarOutRow);
+      // The morning's limit only when that morning sent its full day; else a company shown lately with nothing new, else simply kept off.
+      rows.push({ id: T.pubId(x.c), by: "merlin", r: sentCo.size >= RADAR_DAY_MAX ? "limit" : quiet ? "quiet" : "held", at: `${d}T12:00:00.000Z`, band: x.b, line: x.l, ...known(x.c) } as RadarOutRow);
     }
   }
   // Outside the ideal client: the strongest this week, each with the part that doesn't match.

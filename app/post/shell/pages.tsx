@@ -302,6 +302,7 @@ const loadWorkbench = () => import("./workbenchPage");
 const loadPeople = () => import("../people/People");
 const loadSeatsPage = () => import("../seatsPage/SeatsPage");
 const loadCompany = () => import("../company/CompanyPage");
+const loadCrystal = () => import("../crystal/CrystalBall");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -309,8 +310,10 @@ const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage)
 const CompanyPage = dynamic(() => loadCompany().then((m) => m.CompanyPage), { ssr: false, loading: pageWait });
 const SeatsPage = dynamic(() => loadSeatsPage().then((m) => m.SeatsPage), { ssr: false, loading: pageWait });
 const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
+// Crystal Ball in the new look (crystal/CrystalBall.tsx); the old look keeps Radar.tsx.
+const CrystalBall = dynamic(() => loadCrystal().then((m) => m.CrystalBallPage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -351,6 +354,8 @@ function MessagesP() {
 function RadarP() {
   const c = useApp();
   const s = c.shell;
+  // The new look: Crystal Ball on the workbench, with its side panel, tuning and Why not (crystal/CrystalBall.tsx).
+  if (c.ui2) return <CrystalBall />;
   return (
     <RadarPage
       view={s.radar.data}
@@ -554,7 +559,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   rates: { title: "Rate benchmarks", component: RatesP },
   metrics: { title: "Pilot metrics", component: MetricsP, when: (c) => !!c.view.admin },
   messages: { title: "Messages", component: MessagesP },
-  radar: { title: YOUR_FEATURE, component: RadarP, mainClass: "rd-main", needsTable: true },
+  radar: { title: YOUR_FEATURE, component: RadarP, mainClass: (c) => (c.ui2 ? "wb-host cb-host" : "rd-main"), needsTable: true, ownStrip: true },
   billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan },
   peers: { title: "Peers", component: PeersP, mainClass: peersMain },
   fractionals: { title: "Peers", component: PeersP, mainClass: peersMain },
