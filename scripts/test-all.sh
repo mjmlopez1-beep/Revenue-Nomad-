@@ -199,6 +199,8 @@ run views npx tsx scripts/test-views.mts
 run alerts npx tsx scripts/test-alerts.mts
 # Agent access (Stage 7a, lib/mcp/agentTools.ts, lib/mcp/log.ts): every connector tool on the page, switches that refuse in plain words, a log with no arguments, the daily spend limit across calls and agents, export and purge, the page. In process, on a made-up seed.
 run agent npx tsx scripts/test-agent.mts
+# Settings (Stage 8, app/post/settings): the sections, the old addresses that land on one (?p=integrations, Google's return, ?p=voice), no export or download anywhere, each Connections Remove making its source's own delete, Your setup's counts, Notifications on Alerts and workflows' own switches, the sample note, the words, every section drawn for a made-up member. In process, no seed.
+run settings npx tsx scripts/test-settings.mts
 # The Stage 7a merge's wiring (lib/notify/knownView.ts, KnownMoves.tsx): Someone you know on Home and Warm paths from the LinkedIn file and CSV only (never Google, no Californian named, a locked company described), and the connector setting an alert's triggers and how often through the app's plan gate. In process, on a made-up seed.
 run known npx tsx scripts/test-known.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
