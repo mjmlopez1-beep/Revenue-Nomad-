@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { LINE, STAGE_WORDS, isOpen, type MoveStage, type PipelineRec, type PipelineView } from "@/lib/pipeline";
+import { LINE, STAGE_WORDS, isOpen, type FollowUpRec, type MoveStage, type PipelineRec, type PipelineView } from "@/lib/pipeline";
 import { COMPANY_PRICE } from "@/lib/tableFields";
 import { CompanyLogo, IconX, LockedName, useToast } from "../../ui/shared";
 import { useUi } from "../ui";
@@ -31,6 +31,7 @@ export function DealDrawer({
   today,
   route,
   sees,
+  due,
   onClose,
   onMove,
   onWin,
@@ -41,6 +42,8 @@ export function DealDrawer({
   today: string;
   route: RouteHint | null;
   sees: PipelineView["sees"];
+  /** Its follow-up when one is due (Home's words for it: "Sent 3 days ago by email."). */
+  due: FollowUpRec | null;
   onClose: () => void;
   onMove: (s: MoveStage) => void;
   onWin: () => void;
@@ -221,7 +224,7 @@ export function DealDrawer({
           {r.name && r.stage !== "won" && <PassButton company={r.company} from="deal" className="pl2-big pl2-quiet" />}
         </div>
       </div>
-      {drafting && <FollowUpSheet f={null} rec={r} me={ui.me} onClose={() => setDrafting(false)} />}
+      {drafting && <FollowUpSheet f={due} rec={r} me={ui.me} onClose={() => setDrafting(false)} />}
     </aside>
   );
 }

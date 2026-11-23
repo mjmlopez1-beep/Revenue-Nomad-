@@ -259,7 +259,7 @@ export function PipelineBoard() {
         )}
       </section>
     ) : mode === "table" ? (
-      <DealTable deals={shown} infos={c.infos} waiting={c.waiting} today={today} routes={routes} first={first} cur={cur?.id ?? null} onOpen={(r) => setPanel({ kind: "deal", id: r.id })} onMove={move} busy={busy} />
+      <DealTable deals={shown} infos={c.infos} waiting={c.waiting} today={today} routes={routes} first={first} cur={cur?.id ?? null} onOpen={(r) => setPanel({ kind: "deal", id: r.id })} busy={busy} />
     ) : (
       <div className="pl2-board">
         {STACKS.map((stack) => (
@@ -321,6 +321,7 @@ export function PipelineBoard() {
       today={today}
       route={routes.get(cur.company) ?? null}
       sees={view.sees}
+      due={view.due.find((f) => f.id === cur.id) ?? null}
       onClose={() => setPanel(null)}
       onMove={(s) => void move(cur, s)}
       onWin={() => (cur.stage === "won" ? setWinning(cur.id) : void move(cur, "won"))}
@@ -588,7 +589,6 @@ function DealTable({
   first,
   cur,
   onOpen,
-  onMove,
   busy,
 }: {
   deals: PipelineRec[];
@@ -599,11 +599,11 @@ function DealTable({
   first: boolean;
   cur: string | null;
   onOpen: (r: PipelineRec) => void;
-  onMove: (r: PipelineRec, s: MoveStage) => Promise<void>;
   busy: boolean;
 }) {
   const toast = useToast();
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const coRows = useMemo(() => new Map(rowsFor("companies", infos).map((r) => [r.i.c.id, r])), [infos]);
   // One row per deal (a company can have a closed deal and an open one): the company's row, keyed by the deal.
   const rows: Row[] = useMemo(() => deals.flatMap((d) => (coRows.get(d.company) ? [{ ...coRows.get(d.company)!, key: d.id }] : [])), [deals, coRows]);
@@ -675,11 +675,21 @@ function DealTable({
               key={s}
               type="button"
               className="wb-sel-btn"
-              disabled={busy}
+              disabled={busy || bulkBusy}
               onClick={async () => {
-                for (const d of sel) if (d.stage !== s) await onMove(d, s);
+                // One move each, as Move to on a card ("You marked it"); no Won sheet for a batch: each won card asks on its own.
+                setBulkBusy(true);
+                let n = 0;
+                let err: string | null = null;
+                for (const d of sel) {
+                  if (d.stage === s) continue;
+                  const r = await pipelineAct({ type: "pipeline.move", id: d.id, stage: s });
+                  if (r.ok) n++;
+                  else err = r.message;
+                }
+                setBulkBusy(false);
                 setPicked(new Set());
-                toast(`Moved ${sel.length === 1 ? "1 deal" : `${sel.length} deals`} to ${STAGE_WORDS[s]}.`);
+                toast(err ?? `Moved ${n === 1 ? "1 deal" : `${n} deals`} to ${STAGE_WORDS[s]}.`, !!err);
               }}
             >
               {STAGE_WORDS[s]}
