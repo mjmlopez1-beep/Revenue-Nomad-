@@ -41,3 +41,10 @@
   .ak-text { flex-basis: 100%; }
   .ak-go { flex: 1 1 100%; }
 }
+
+/* The workbench's Ask row ("line"): one line and Go, the label for screen readers only. */
+.ak-line { position: relative; gap: 8px; }
+.ak-line .ak-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ak-line .ak-row { gap: 8px; flex-wrap: nowrap; }
+.ak-line .ak-text { flex: 1 1 auto; height: 40px; padding: 8px 12px; resize: none; font-size: 14px; line-height: 22px; overflow: hidden; white-space: nowrap; }
+.ak-line .ak-go { height: 40px; padding: 0 16px; font-size: 14px; }

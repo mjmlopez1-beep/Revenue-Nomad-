@@ -6,7 +6,8 @@
  * set (each one comes off with a tap) and the words it skipped. Go hands the plan to the page, which
  * puts it in its normal interface (Find's filters, a page), so every part stays editable there.
  *
- * Used on Home (a textarea and Go, with suggestion chips) and in Find's Ask pane (its examples).
+ * Used on Home (a textarea and Go, with suggestion chips), in Find's Ask pane (its examples) and
+ * on the Companies workbench's Ask row (one line and Go, "line").
  * Nothing here spends a credit or calls the server: the AI path (POST /api/ask) is the page's to
  * offer, and its answer comes back as the same plan.
  */
@@ -30,6 +31,7 @@ export function AskBar({
   variant = "home",
   suggestionsLabel,
   initial = "",
+  where,
 }: {
   label: string;
   placeholder: string;
@@ -38,10 +40,12 @@ export function AskBar({
   onGo: (plan: AskPlan, text: string) => void;
   goLabel?: string;
   rows?: number;
-  /** "home": the box, Go beside it, chips under. "pane": Find's narrow column, examples as full-width buttons. */
-  variant?: "home" | "pane";
+  /** "home": the box, Go beside it, chips under. "pane": Find's narrow column, examples as full-width buttons. "line": one line and Go, its label for screen readers. */
+  variant?: "home" | "pane" | "line";
   suggestionsLabel?: string;
   initial?: string;
+  /** Where the plan lands as this page sees it (the workbench sets a companies list on itself), else the plan's own. */
+  where?: (plan: AskPlan) => string;
 }) {
   const id = useId();
   const [text, setText] = useState(initial);
@@ -81,7 +85,7 @@ export function AskBar({
           }}
           aria-describedby={typed ? `${id}-plan` : undefined}
         />
-        {variant === "home" && (
+        {variant !== "pane" && (
           <button type="button" className={`ak-go${typed ? " on" : ""}`} onClick={go} disabled={!typed} aria-label={`${goLabel}: ask Merlin`}>
             {goLabel}
           </button>
@@ -107,7 +111,7 @@ export function AskBar({
               <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6" />
             </svg>
             <span>
-              <b>Where this lands: {plan.where}.</b> {nothing ? "Merlin found nothing to set in that. Try a function, an industry, a size, a place or a signal like hiring now." : plan.cost}
+              <b>Where this lands: {where ? where(plan) : plan.where}.</b> {nothing ? "Merlin found nothing to set in that. Try a function, an industry, a size, a place or a signal like hiring now." : plan.cost}
             </span>
           </p>
           {plan.chips.length > 0 && (

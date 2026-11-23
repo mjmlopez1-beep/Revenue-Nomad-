@@ -14,7 +14,7 @@
  * highlighted lock on the first row ("Open your first company. Free on the trial"), Tools closed,
  * and a one-line strip that moves to the next step (save the list with an alert) once it opens.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { COMPANY_PRICE, RN_EMPLOYEES, RN_REVENUE } from "@/lib/tableFields";
 import type { Me, View } from "@/lib/tableTypes";
 import { bestBuyer, buyerNoteMove, moveSent } from "@/lib/moves";
@@ -32,6 +32,7 @@ import {
 } from "../model";
 import { useUi, type AppPage } from "../ui";
 import { pipelineAct } from "../pipelineStore";
+import { colsOf, withCols } from "../place";
 import { BottomTabs } from "./BottomTabs";
 import { columnOf, defaultCols, fillRate, visibleColumns } from "./columns";
 import { SelectionBar } from "./SelectionBar";
@@ -42,6 +43,32 @@ import type { ToolDo, ToolTab } from "./tools";
 import { Workbench } from "./Workbench";
 import "./workbench.css";
 
+/**
+ * The list's place as the shell keeps it (shell/pages.tsx TableCtx): with it the view, the filters
+ * and the sort are the app's own, so the address, a saved list opened from Home or Find, and the
+ * header's breadcrumb all follow the workbench. Without it (the tests) the workbench keeps its own.
+ */
+export interface WorkbenchBind {
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  /** The filters, with `icp` on for the ideal-client view. */
+  filters: Filters;
+  setFilters: (f: Filters) => void;
+  /** The member's own sort, or null for the view's default. */
+  sort: SortKey | null;
+  setSort: (s: SortKey | null) => void;
+  /** The saved list on screen: its name and its columns (empty: the member's own). */
+  listName?: string | null;
+  listCols?: string[] | null;
+}
+
+/** What Ask Merlin's bar puts on the workbench: filters, a sort, columns to show. */
+export interface WorkbenchAsk {
+  filters?: Filters;
+  sort?: SortKey | null;
+  cols?: string[];
+}
+
 export interface CompaniesWorkbenchProps {
   view: View;
   infos: CoInfo[];
@@ -49,10 +76,15 @@ export interface CompaniesWorkbenchProps {
   openCompany: (id: string, focus?: string) => void;
   openPage: (p: AppPage) => void;
   refresh: () => void;
-  /** Builder C's AskBar, when it is in (F4). Without it the row keeps its quick chips. */
-  askBar?: ReactNode;
-  /** First visit, from the shell's firstVisit.ts when it is in. Without it: no company opened yet. */
+  /** Ask Merlin's bar (F4), handed what it may set here. Without it the row keeps its quick chips. */
+  askBar?: ReactNode | ((apply: (x: WorkbenchAsk) => void) => ReactNode);
+  /** First visit, from the shell's firstVisit.ts. Without it: no company opened yet. */
   first?: boolean;
+  /** The shell's place for the list (see WorkbenchBind). */
+  bind?: WorkbenchBind;
+  /** The strips dismissed (Profile.stripsOff, by key), and dismissing one. Without them a dismissal lasts this visit. */
+  stripOff?: (key: string) => boolean;
+  onStripOff?: (key: string) => void;
   /** Your network is on (RN_GOOGLE): the member's contacts are a source. */
   network?: boolean;
   /** Open the ideal-client sheet ("Change your ideal client"). */
@@ -65,12 +97,32 @@ type ViewKey = "icp" | Tab;
 const PAGE = 50;
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", people: "People at these companies", engagements: "Seats at these companies" };
 const colsKey = (memberId: string, t: RecordType) => `wb_cols_${memberId}_${t}`;
-const readCols = (memberId: string, t: RecordType): string[] => {
+/** The columns in this browser for a list type (the fallback when the address and the list say none). */
+const storedCols = (memberId: string, t: RecordType): string[] | null => {
   try {
     const x = JSON.parse(store.get(colsKey(memberId, t)) ?? "null");
-    return Array.isArray(x) && x.every((v) => typeof v === "string") ? x : defaultCols(t);
+    return Array.isArray(x) && x.every((v) => typeof v === "string") ? x : null;
   } catch {
-    return defaultCols(t);
+    return null;
+  }
+};
+/**
+ * The columns a list opens with: for companies, the address's `k=` (place.ts colsOf, so a reload or
+ * a shared link keeps them), then the saved list's own; then this browser's; then the defaults.
+ */
+const readCols = (memberId: string, t: RecordType, listCols?: string[] | null): string[] => {
+  const fromAddress = t === "companies" && typeof window !== "undefined" ? colsOf(window.location.search) : null;
+  return fromAddress ?? (t === "companies" && listCols?.length ? listCols : null) ?? storedCols(memberId, t) ?? defaultCols(t);
+};
+/** The companies' columns in the address (`k=`), none while they are the defaults. */
+const writeColsAddress = (cols: string[]) => {
+  try {
+    const def = defaultCols("companies");
+    const same = cols.length === def.length && cols.every((c, k) => c === def[k]);
+    const next = `${window.location.pathname}${withCols(window.location.search, same ? null : cols)}${window.location.hash}`;
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(window.history.state, "", next);
+  } catch {
+    /* the address stays as it is */
   }
 };
 
@@ -87,7 +139,7 @@ function icpChips(me: Me): string[] {
   return out;
 }
 
-export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, askBar, first: firstProp, network = false, onEditIcp, onUpgrade }: CompaniesWorkbenchProps) {
+export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, askBar, first: firstProp, bind, stripOff: stripGone, onStripOff, network = false, onEditIcp, onUpgrade }: CompaniesWorkbenchProps) {
   const ui = useUi();
   const toast = useToast();
   const layout = useLayout();
@@ -99,12 +151,24 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const upgrade = onUpgrade ?? ((from: "evidence" | "signals" | "proposal") => openPlans(from === "signals" ? "billing" : "proposals"));
 
   const [type, setType] = useState<RecordType>("companies");
-  const [viewKey, setViewKey] = useState<ViewKey>(hasIcp ? "icp" : "all");
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [sortPicked, setSort] = useState<SortKey | null>(null);
+  // The view, the filters and the sort: the shell's (bind), else the workbench's own.
+  const [viewKeyOwn, setViewKeyOwn] = useState<ViewKey>(hasIcp ? "icp" : "all");
+  const [filtersOwn, setFiltersOwn] = useState<Filters>(EMPTY_FILTERS);
+  const [sortOwn, setSortOwn] = useState<SortKey | null>(null);
+  const viewKey: ViewKey = bind ? (bind.tab === "all" && bind.filters.icp && hasIcp ? "icp" : bind.tab) : viewKeyOwn;
+  const bound = bind?.filters;
+  const filters: Filters = useMemo(() => (bound ? { ...bound, icp: false } : filtersOwn), [bound, filtersOwn]);
+  const setFilters = (f: Filters) => (bind ? bind.setFilters({ ...f, icp: viewKey === "icp" && hasIcp }) : setFiltersOwn(f));
+  const setViewKey = (k: ViewKey) => {
+    if (!bind) return setViewKeyOwn(k);
+    bind.setTab(k === "icp" ? "all" : k);
+    bind.setFilters({ ...filters, icp: k === "icp" });
+  };
+  const sortPicked = bind ? bind.sort : sortOwn;
+  const setSort = bind ? bind.setSort : setSortOwn;
   const [pageSize, setPageSize] = useState(PAGE);
   const [limit, setLimit] = useState(PAGE);
-  const [picked, setPicked] = useState<string[]>(() => readCols(me.id, "companies"));
+  const [picked, setPicked] = useState<string[]>(() => readCols(me.id, "companies", bind?.listCols));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toolsOpen, setToolsOpen] = useState<boolean | null>(null);
   const [toolsTab, setToolsTab] = useState<ToolTab>("enrich");
@@ -119,13 +183,40 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const [passes, setPasses] = useState<CoInfo[]>([]);
   const [heroBusy, setHeroBusy] = useState(false);
 
-  useEffect(() => setPicked(readCols(me.id, type)), [me.id, type]);
+  // Another list type, or another saved list with its own columns: its columns.
+  const listColsKey = (bind?.listCols ?? []).join(",");
+  const firstCols = useRef(true);
+  useEffect(() => {
+    if (firstCols.current) return void (firstCols.current = false);
+    setPicked(type === "companies" && listColsKey ? listColsKey.split(",") : storedCols(me.id, type) ?? defaultCols(type));
+  }, [me.id, type, listColsKey]);
   const saveCols = (next: string[]) => {
     setPicked(next);
     store.set(colsKey(me.id, type), JSON.stringify(next));
+    if (type === "companies") writeColsAddress(next);
   };
-  const showCol = (id: string) => {
-    if (!picked.includes(id)) saveCols([...picked, id]);
+  const showCols = (ids: string[]) => {
+    const add = ids.filter((id) => !picked.includes(id) && columnOf(type, id));
+    if (add.length) saveCols([...picked, ...add]);
+  };
+  const showCol = (id: string) => showCols([id]);
+  /** What Ask Merlin set: its filters (the ideal-client view when it kept the ideal client), its sort, its columns. */
+  const applyAsk = (x: WorkbenchAsk) => {
+    if (x.filters) {
+      const k: ViewKey = x.filters.icp && hasIcp ? "icp" : "all";
+      if (bind) {
+        bind.setTab("all");
+        bind.setFilters({ ...x.filters, icp: k === "icp" });
+      } else {
+        setViewKeyOwn(k);
+        setFiltersOwn({ ...x.filters, icp: false });
+      }
+    }
+    if (x.sort !== undefined) setSort(x.sort);
+    if (x.cols?.length) {
+      showCols(x.cols);
+      setFresh(new Set(x.cols));
+    }
   };
 
   const tab: Tab = viewKey === "icp" ? "all" : viewKey;
@@ -191,15 +282,19 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
     : null;
   const stage = opened ? (alerted ? 2 : 1) : 0;
   const openedName = opened ? infos.find((i) => i.c.id === opened)?.c.name ?? "The company" : "";
-  const showStrip = first && stripOff !== stage;
+  // Each stage's strip has its own key, so dismissing the first doesn't hide "Step 4 done".
+  const stripKey = ["companies", "companies-open", "companies-alert"][stage];
+  const showStrip = first && stripOff !== stage && !stripGone?.(stripKey);
 
   /* ----- saving the list with an alert ----- */
   const spelled = withIcpSpelled(eff, me.icp);
   const herePlace = absolutePlace({ t: type, v: tab, s: sortPicked, f: eff, q: "" });
   const savedHere = (me.savedViews ?? []).find((v) => v.place === herePlace) ?? null;
-  const listName = viewKey === "icp" ? "Your ideal client" : views.find((v) => v.key === viewKey)?.label ?? "Companies";
+  const listName = bind?.listName || (viewKey === "icp" ? "Your ideal client" : views.find((v) => v.key === viewKey)?.label ?? "Companies");
   const saveList = async (name: string, email: boolean) => {
-    const r = await ui.act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, null) }, { quiet: true });
+    // The list keeps its kind and, on companies, the columns on screen (the connector and Home read them).
+    const list = type === "companies" ? { kind: "companies" as const, cols: picked, alert: { on: email, email, slack: email } } : { kind: type === "people" ? ("people" as const) : ("seats" as const), alert: { on: email, email, slack: email } };
+    const r = await ui.act({ type: "savedView", op: "save", name, email, place: herePlace, criteria: criteriaOf(spelled, null), list }, { quiet: true });
     if (!r.ok) return false;
     toast(r.message || "Saved.");
     setAlerted(true);
@@ -350,7 +445,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
               <strong>Step 5 done. Merlin is watching this list.</strong> You get an email when a company on it starts hiring.
             </span>
           )}
-          <button type="button" className="wb-iconbtn" aria-label="Dismiss" onClick={() => setStripOff(stage)}>
+          <button type="button" className="wb-iconbtn" aria-label="Dismiss" onClick={() => (setStripOff(stage), onStripOff?.(stripKey))}>
             <IconX size={16} />
           </button>
         </section>
@@ -398,7 +493,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
 
       {type === "companies" && (
         <div className="wb-ask">
-          {askBar}
+          {typeof askBar === "function" ? askBar(applyAsk) : askBar}
           <button type="button" className="wb-askchip" onClick={() => onDo({ kind: "run", col: "decider" })}>
             Add who decides
           </button>

@@ -15,15 +15,16 @@
  *                 starter questions, "Already here for you", the funnel as it starts, the starter
  *                 lists made from the ideal client (turning one's alert on saves it: step 5).
  *
- * Its props are Home's own (HomeProps, so the merge mounts it where HomePage is) plus the six steps
- * (`six`: Builder A's getting-started model at the merge; sixSteps() below builds them from what the
- * app has until then), `first` (firstVisit.ts at the merge), Ask's hand-off and Find.
+ * Its props are Home's own (HomeProps, the same TradingPost gives HomePage) plus Getting started's
+ * six steps (getStarted.ts sixSteps) and their buttons, `first` (firstVisit.ts), the strip's
+ * dismissal (Profile.stripsOff), the header's actions, Ask's hand-off and Find. The page registry
+ * (shell/pages.tsx Home2P) mounts it.
  *
  * Known gap: Today shows its sources one after another, most urgent first (each keeps its own
  * actions and sheets), not interleaved row by row by due time: that needs the sources' data lifted
  * out of their components.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Me, SavedViewRec } from "@/lib/tableTypes";
 import { FEATURE_NAME, YOUR_FEATURE } from "@/lib/radar/types";
 import type { MovesWire } from "@/lib/moves";
@@ -49,103 +50,23 @@ import { placeRows, savedViewPlace } from "./place";
 import { AskBar } from "./AskBar";
 import { fillRate } from "./find/findModel";
 import { alertWords, icpChips, kindLabel, kindOfList, listAct, listsOf, readFavs, starterLists, writeFavs, type SavedListRec, type StarterList } from "./find/lists";
+import { sixLine, type SixKey, type SixSteps as SixStepsT } from "./getStarted";
 import "./home2.css";
-
-/* ---------- the six steps ---------- */
-
-/** One of Getting started's steps, as Home draws it. */
-export interface SixStep {
-  key: "icp" | "seats" | "network" | "open" | "alert" | "evidence";
-  title: string;
-  /** What it takes, or (done) what the member said. */
-  takes: string;
-  earns: string;
-  time: string;
-  done: boolean;
-  go: () => void;
-  goLabel: string;
-  pill?: { text: string; earn?: boolean };
-}
-
-/**
- * The six steps from what the app has today (BUILD_PLAN F6). Builder A's getStarted.ts replaces this
- * at the merge. Step 6 (Evidence Bank) is Close only, and hidden until Evidence ships (part 8).
- */
-export function sixSteps(x: {
-  me: Me;
-  infos: CoInfo[];
-  seatsN: number;
-  /** Google linked, a LinkedIn file or a contacts CSV (Get started's network step today). */
-  network: boolean;
-  go: { icp: () => void; seats: () => void; network: () => void; open: () => void; alert: () => void };
-}): SixStep[] {
-  const { me } = x;
-  const icpDone = !icpEmpty(me.icp);
-  const fn = me.function && me.function !== "Other" ? me.function : null;
-  const opened = (me.companiesUnlocked ?? 0) > 0 || me.unlocked > 0;
-  const alertOn = listsOf(me).some((v) => v.alert.on);
-  return [
-    {
-      key: "icp",
-      title: "Say who your ideal client is",
-      takes: icpDone ? icpChips(me).map((c) => c.replace(/^[^:]+: /, "")).join(" · ") : "Your function, the industries and the company size you want.",
-      earns: "Find, Crystal Ball and every list start tuned to these companies.",
-      time: "2 minutes",
-      done: icpDone && !!fn,
-      go: x.go.icp,
-      goLabel: icpDone ? "Change it" : "Say who",
-    },
-    {
-      key: "seats",
-      title: "Add the seats you have held",
-      takes: "The company, your role and the dates. The rate and hours if you want to share them.",
-      earns: `1 credit for each fact Merlin does not have, up to ${me.earnCap} a day. Each seat becomes a way in.`,
-      time: "5 minutes",
-      done: x.seatsN > 0,
-      go: x.go.seats,
-      goLabel: "Add your seats",
-      pill: { text: "Earns credits", earn: true },
-    },
-    {
-      key: "network",
-      title: "Bring in who you know",
-      takes: "Google contacts, your LinkedIn connections file or a CSV. Merlin reads names and companies, never message text.",
-      earns: "Warm paths: who can get you into which company.",
-      time: "3 minutes",
-      done: x.network,
-      go: x.go.network,
-      goLabel: "Bring them in",
-    },
-    {
-      key: "open",
-      title: "Open your first company",
-      takes: "One click on a company in your list.",
-      earns: "Its name, its website and who held the seat. It stays open for you.",
-      time: "1 minute",
-      done: opened,
-      go: x.go.open,
-      goLabel: "Go to Companies",
-      ...(me.proOpens ? { pill: { text: "Free on the trial" } } : {}),
-    },
-    {
-      key: "alert",
-      title: "Save a list with an alert",
-      takes: "Pick one of your starter lists and turn its alert on.",
-      earns: "Merlin watches the list and tells you by email, or in Slack, when a company on it starts hiring.",
-      time: "1 minute",
-      done: alertOn,
-      go: x.go.alert,
-      goLabel: "Go to your lists",
-    },
-  ];
-}
 
 /* ---------- Home ---------- */
 
 export interface Home2Props extends HomeProps {
-  six: SixStep[] | null;
-  /** First visit: none of the member's own data yet (firstVisit.ts at the merge). */
+  /** Getting started (getStarted.ts sixSteps), or null while it is hidden. */
+  six: SixStepsT | null;
+  /** A step's button. */
+  runSix: (k: SixKey) => void;
+  /** First visit: none of the member's own data yet (firstVisit.ts). */
   first: boolean;
+  /** "What Home is for" is still showing (not dismissed: Profile.stripsOff), and dismissing it. */
+  stripOn: boolean;
+  onStripOff: () => void;
+  /** The header's right side (the bell, the credits pill, Add what you know): Home draws its own header. */
+  actions?: ReactNode;
   /** Ask Merlin's plan, for the page it lands on (Find, Hiring now, Rate benchmarks...). */
   onAsk: (plan: AskPlan, text: string) => void;
   /** Find, and the pages the quick starts open. */
@@ -157,7 +78,6 @@ export interface Home2Props extends HomeProps {
   openList: (v: SavedViewRec) => void;
 }
 
-const ABOUT_KEY = "rn_strip_home";
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || "there";
 const TINTS = ["#E3E8F7", "#E8F3EE", "#FFE7A8", "#F3E8F5", "#DDF0F7", "#FBE3D6"];
 
@@ -166,13 +86,7 @@ export function Home2(p: Home2Props) {
   const rest = useAfterFirstPaint();
   const { data, byId, me, first } = p;
   const hello = useMemo(() => ((h) => (h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"))(new Date().getHours()), []);
-  const [about, setAbout] = useState(() => {
-    try {
-      return localStorage.getItem(ABOUT_KEY) !== "off";
-    } catch {
-      return true;
-    }
-  });
+  const about = p.stripOn;
   // Today's moves as the server picked them, then as it answered Done, Snooze or Undo (as Home.tsx).
   const [after, setAfter] = useState<MovesWire | null>(null);
   const wire = useMemo<MovesWire | null>(() => after ?? data?.moves ?? (data ? { list: data.rows.slice(0, 3).map((row) => ({ id: row.id, row })), month: 0, google: "off" } : null), [after, data]);
@@ -209,14 +123,7 @@ export function Home2(p: Home2Props) {
   ].filter((c) => c.n > 0 && (c.k === "unread" || p.sinceAt));
   const missing = ui.seats.missing;
 
-  const hideAbout = () => {
-    setAbout(false);
-    try {
-      localStorage.setItem(ABOUT_KEY, "off");
-    } catch {
-      /* this visit only */
-    }
-  };
+  const hideAbout = p.onStripOff;
 
   return (
     <div className="h2">
@@ -226,6 +133,7 @@ export function Home2(p: Home2Props) {
           {first ? "Welcome" : hello}, {firstName(me.name)}
         </h1>
         <span className="h2-day">{daySub}</span>
+        {p.actions && <div className="h2-acts">{p.actions}</div>}
       </div>
 
       {first && about && (
@@ -262,7 +170,7 @@ export function Home2(p: Home2Props) {
         </nav>
       )}
 
-      {p.six && (first || p.six.some((s) => !s.done)) && <SixSteps steps={p.six} big={first} onHide={first ? undefined : p.onHideSteps} />}
+      {p.six && (first || p.six.next) && <SixSteps six={p.six} me={me} run={p.runSix} big={first} onHide={first ? undefined : p.onHideSteps} />}
 
       <section aria-label="Ask Merlin" className="h2-card h2-ask">
         <AskBar
@@ -348,10 +256,9 @@ function askSuggestions(me: Me, first: boolean): { t: string }[] {
 
 /* ---------- Getting started ---------- */
 
-function SixSteps({ steps, big, onHide }: { steps: SixStep[]; big: boolean; onHide?: () => void }) {
-  const done = steps.filter((s) => s.done).length;
+function SixSteps({ six, me, run, big, onHide }: { six: SixStepsT; me: Me; run: (k: SixKey) => void; big: boolean; onHide?: () => void }) {
+  const { steps } = six;
   const next = steps.findIndex((s) => !s.done);
-  const left = steps.filter((s) => !s.done).reduce((n, s) => n + (parseInt(s.time, 10) || 0), 0);
   return (
     <section aria-labelledby="h2-gs" className={`h2-card h2-gs${big ? " big" : ""}`}>
       <div className="h2-gs-head">
@@ -359,7 +266,8 @@ function SixSteps({ steps, big, onHide }: { steps: SixStep[]; big: boolean; onHi
           Getting started
         </h2>
         <span className="h2-sub">
-          {done} of {steps.length} done{left ? ` · about ${left} minutes left` : ""}
+          {sixLine(six)}
+          {six.minutes ? ` · about ${six.minutes} minutes left` : ""}
         </span>
         <span className="h2-gs-bar" aria-hidden>
           {steps.map((s) => (
@@ -374,38 +282,42 @@ function SixSteps({ steps, big, onHide }: { steps: SixStep[]; big: boolean; onHi
         <span className="h2-gs-line">Each step says what you give, what you get and how long it takes. Do them in any order. Nothing here spends a credit.</span>
       </div>
       <ol className="h2-gs-list">
-        {steps.map((s, k) => (
-          <li key={s.key} className={`h2-gs-row${k === next ? " next" : ""}`}>
-            <span className={`h2-gs-dot${s.done ? " done" : k === next ? " next" : ""}`} aria-hidden>
-              {s.done ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12.5l4.5 4.5L19 7.5" />
-                </svg>
-              ) : (
-                k + 1
-              )}
-            </span>
-            <span className="h2-gs-t">
-              <span className="h2-gs-title">
-                <strong>{s.title}</strong>
-                {s.done && <span className="h2-sr"> (done)</span>}
-                {s.pill && !s.done && <span className={`h2-pill${s.pill.earn ? " volt" : " mint"}`}>{s.pill.text}</span>}
+        {steps.map((s, k) => {
+          // The ideal client, once given, reads back as what the member said.
+          const said = s.key === "icp" && s.done ? icpChips(me).map((c) => c.replace(/^[^:]+: /, "")).join(" · ") : "";
+          return (
+            <li key={s.key} className={`h2-gs-row${k === next ? " next" : ""}`}>
+              <span className={`h2-gs-dot${s.done ? " done" : k === next ? " next" : ""}`} aria-hidden>
+                {s.done ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                ) : (
+                  s.n
+                )}
               </span>
-              <span className="h2-gs-takes">
-                <strong>{s.done && s.key === "icp" ? "You said:" : "Takes:"}</strong> {s.takes}
+              <span className="h2-gs-t">
+                <span className="h2-gs-title">
+                  <strong>{s.label}</strong>
+                  {s.done && <span className="h2-sr"> (done)</span>}
+                  {s.pill && !s.done && <span className={`h2-pill${s.pillKind === "earn" ? " volt" : " mint"}`}>{s.pill}</span>}
+                </span>
+                <span className="h2-gs-takes">
+                  <strong>{said ? "You said:" : "Takes:"}</strong> {said || s.takes}
+                </span>
               </span>
-            </span>
-            <span className="h2-gs-earns">
-              <strong>Earns:</strong> {s.earns}
-            </span>
-            <span className="h2-gs-time">{s.done ? "Done" : s.time}</span>
-            <span className="h2-gs-go">
-              <button type="button" className={k === next ? "h2-volt" : s.done ? "h2-quiet" : "h2-outline"} onClick={s.go}>
-                {s.goLabel}
-              </button>
-            </span>
-          </li>
-        ))}
+              <span className="h2-gs-earns">
+                <strong>Earns:</strong> {s.gives}
+              </span>
+              <span className="h2-gs-time">{s.done ? "Done" : s.time}</span>
+              <span className="h2-gs-go">
+                <button type="button" className={k === next ? "h2-volt" : s.done ? "h2-quiet" : "h2-outline"} onClick={() => run(s.key)}>
+                  {s.go}
+                </button>
+              </span>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

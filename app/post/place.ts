@@ -45,6 +45,30 @@ export const UI2_FROM_OLD: Partial<Record<string, Ui2Page>> = { getin: "warm", i
 /** The page an old page key opens with the new look on (itself when it has no new home). */
 export const ui2PageOf = <T extends string>(p: T): T | Ui2Page => UI2_FROM_OLD[p] ?? p;
 
+/**
+ * The Companies workbench's columns in the address (`k=heldBy,seat,industry`, new look only): a
+ * reload or a shared link opens the same columns. Not a place on its own (it isn't in PLACE_KEYS):
+ * it rides along with the table's place, and the browser's own copy is the fallback.
+ */
+export const COLS_PARAM = "k";
+const COL_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,39}$/;
+/** The columns an address names, cleaned (at most 30, each a column id once), or null for none. */
+export function colsOf(search: string): string[] | null {
+  const raw = new URLSearchParams(search).get(COLS_PARAM);
+  if (!raw) return null;
+  const cols = [...new Set(raw.split(",").map((c) => c.trim()).filter((c) => COL_ID.test(c)))].slice(0, 30);
+  return cols.length ? cols : null;
+}
+/** The address query with these columns (null or none: without `k=`), "?..." or "". */
+export function withCols(search: string, cols: readonly string[] | null): string {
+  const q = new URLSearchParams(search);
+  const clean = (cols ?? []).filter((c) => COL_ID.test(c)).slice(0, 30);
+  if (clean.length) q.set(COLS_PARAM, clean.join(","));
+  else q.delete(COLS_PARAM);
+  const s = q.toString().replace(/%2C/g, ",");
+  return s ? `?${s}` : "";
+}
+
 /** The address keys that name a place in the app. With none of them, / opens Today. */
 export const PLACE_KEYS = ["v", "t", "s", "f", "q", "c", "p", "af", "sig", "upgrade", "plans", "w"];
 

@@ -12,15 +12,14 @@
  *   useApp()       read it in a page
  *   pageDef(k)     the entry for a key, or null (the table and Home are TradingPost's own)
  *
- * Three slots belong to the new look (RN_UI2) and start as placeholders that draw today's page:
+ * Three slots belong to the new look (RN_UI2), each the page that takes an old one's place:
  *
- *   home2       Home in the new look (Builder C). Placeholder: today's Home (ctx.legacy.home).
- *   companies2  the Companies workbench (Builder B), in place of the table while it lists
- *               companies. Placeholder: today's table (ctx.legacy.table).
- *   find2       Find (Builder C), page key "find". Placeholder: "find" opens the table, with its
- *               search and filters (TradingPost pageFor), until the entry has a component.
+ *   home2       Home in the new look (Home2.tsx), in place of today's Home.
+ *   companies2  the Companies workbench (workbench/CompaniesWorkbench.tsx), in place of the
+ *               table while it lists companies. It reads and changes the table's place (TableCtx).
+ *   find2       Find (find/Find.tsx), page key "find".
  *
- * To swap one in: set `component` and drop `placeholder` on its entry. Nothing else changes.
+ * An entry with `placeholder` and no `component` draws today's page instead (TradingPost).
  */
 import dynamic from "next/dynamic";
 import { createContext, useContext, type ComponentType, type ReactNode } from "react";
@@ -33,6 +32,7 @@ import type { Layout } from "../hooks";
 import type { AddOpts } from "../ui";
 import type { Ui2Page } from "../place";
 import type { SixSteps } from "../getStarted";
+import type { HomeProps } from "../Home";
 import { MyCredits } from "../Credits";
 import { MessagesPage } from "../Messages";
 import { RadarPage } from "../Radar";
@@ -41,6 +41,10 @@ import { Seats } from "../Seats";
 import { PipelinePage } from "../Pipeline";
 import { GetInPage, WayInPage } from "../network/Ways";
 import { NetworkPage } from "../network/Network"; // [google network]
+import { useState } from "react";
+import type { AskPlan } from "@/lib/ask";
+import { setFindStart } from "../find/start";
+import { firstOf, ownOf } from "../firstVisit";
 
 /* ---------- the keys ---------- */
 
@@ -64,6 +68,8 @@ export interface TableCtx {
   setTab: (t: Tab) => void;
   /** The sort in use (the member's pick, else the view's default), and the sorts this list offers. null puts the default back. */
   sort: SortKey;
+  /** The member's own pick, or null while the view's default applies. */
+  sortPicked: SortKey | null;
   setSort: (s: SortKey | null) => void;
   sorts: { key: SortKey; label: string }[];
   /** The filters in play (the onboarding preset and a widened search applied). setFilters keeps the preset's rules (TradingPost setEff). */
@@ -165,6 +171,8 @@ export interface AppCtx {
   phone: boolean;
   /** The new look is on (RN_UI2, Me.ui2). */
   ui2: boolean;
+  /** Your network is on (RN_GOOGLE) and loaded: the member's contacts are a source. */
+  network: boolean;
   /** The page on screen. */
   page: ShellPage;
   /** Open a company's record, at a seat or a person when `focus` is given. Closing it comes back here. */
@@ -186,7 +194,7 @@ export interface AppCtx {
   /** What today's pages read from the shell. */
   shell: ShellState;
   /** What the old look draws, for a placeholder to draw until its new page exists. */
-  legacy: { home: ReactNode; table: ReactNode };
+  legacy: { home: ReactNode; table: ReactNode; homeProps: HomeProps };
   /** The new header's right side (bell, credits pill, Add what you know), for a page that draws its own header (Home). */
   headerActions: ReactNode;
   start: StartCtx;
@@ -249,6 +257,18 @@ const PeersPage = dynamic(() => loadPeers().then((m) => m.PeersPage), { ssr: fal
 const Admin = dynamic(() => loadAdmin().then((m) => m.Admin), { ssr: false, loading: pageWait });
 // Proposals (Proposals.tsx), loaded when opened.
 const ProposalsPage = dynamic(() => import("../Proposals").then((m) => m.ProposalsPage), { ssr: false, loading: pageWait });
+/*
+ * The new look's own pages load on their own too, so the old look's first paint carries none of
+ * their code. A member in the new look fetches them once the whole table is here (preloadPages).
+ */
+const loadHome2 = () => import("../Home2");
+const loadFind = () => import("../find/Find");
+const loadWorkbench = () => import("./workbenchPage");
+const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
+const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
+const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
+/** The new look's pages, fetched while the member reads. */
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -379,6 +399,85 @@ function EvidenceSoon() {
   );
 }
 
+/* ---------- the new look's own pages ---------- */
+
+/** A dismissed strip: on the member's profile (Profile.stripsOff), or dismissed in this visit. */
+export const stripGone = (c: AppCtx, k: string) => c.start.stripOff(k) || (c.me.stripsOff ?? []).includes(k);
+
+/**
+ * Where an Ask Merlin answer lands from Home or the workbench: Find with the plan set (filters,
+ * kind, sort; or a company to look up), Hiring now, Crystal Ball, or the page it names.
+ */
+export function askGo(c: AppCtx, plan: AskPlan, text: string) {
+  const hp = c.legacy.homeProps;
+  if (plan.company && (plan.page === "lookup" || plan.page === "warm" || plan.page === "find")) return setFindStart({ lookup: plan.company }), c.openPage("find");
+  if (plan.page === "find" || plan.page === "lookup") return setFindStart({ plan, text }), c.openPage("find");
+  if (plan.page === "hiring") return hp.roles.go();
+  if (plan.page === "radar") return hp.radar.go();
+  c.openPage(plan.page);
+}
+
+/** Home in the new look (Home2.tsx): Home's own props, Getting started, the first visit and Ask. */
+function Home2P() {
+  const c = useApp();
+  // Read once when Home opens: what the member does here doesn't swap the page under them.
+  const [first] = useState(() => firstOf("home", ownOf("home", c.me)).first);
+  const run = (k: SixSteps["steps"][number]["key"]) => {
+    // Step 5 on Home: the lists are right here (the starter lists' alert switch saves one).
+    const lists = k === "alert" ? document.getElementById("h2-lists") : null;
+    if (lists) return lists.scrollIntoView({ block: "start", behavior: "smooth" });
+    c.start.run(k);
+  };
+  return (
+    <main className="tp-main tp-main-page td-page hm-page h2-page">
+      <Home2
+        {...c.legacy.homeProps}
+        six={c.start.hidden ? null : c.start.six}
+        runSix={run}
+        first={first}
+        stripOn={!stripGone(c, "home")}
+        onStripOff={() => c.start.dismissStrip("home")}
+        actions={c.headerActions}
+        onAsk={(plan, text) => askGo(c, plan, text)}
+        openFind={() => c.openPage("find")}
+        openLookalikes={() => (setFindStart({ kind: "lookalikes" }), c.openPage("find"))}
+        openPage={(p) => c.openPage(p)}
+        openList={(v) => c.table.openView(v)}
+      />
+    </main>
+  );
+}
+
+/** Find (find/Find.tsx), page key "find", under the shell's header and breadcrumb. */
+function FindP() {
+  const c = useApp();
+  const [first] = useState(() => firstOf("find", ownOf("find", c.me)).first);
+  return (
+    <Find
+      me={c.me}
+      infos={c.infos}
+      waiting={c.waiting}
+      first={first}
+      openCompany={(id) => c.openCompany(id)}
+      openList={(v) => c.table.openView(v)}
+      openPage={(p) => c.openPage(p)}
+      onProfile={c.openProfile}
+      stripOn={!stripGone(c, "find")}
+      onStripOff={() => c.start.dismissStrip("find")}
+    />
+  );
+}
+
+/**
+ * The Companies workbench, in place of the table while it lists companies. Its view, filters and
+ * sort are the table's own (TableCtx), so the address, a saved list opened from Home or Find, and
+ * the breadcrumb follow it; Ask Merlin's bar sets them here, or hands off to Find.
+ */
+/** The Companies workbench, in place of the table while it lists companies (shell/workbenchPage.tsx). */
+function Companies2P() {
+  return <WorkbenchPage />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -410,9 +509,9 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2",
   agent: { title: "Agent access", component: IntegrationsP },
   settings: { title: "Settings", component: IntegrationsP },
   // Mount points for the new look's own pages (see the top of this file).
-  home2: { title: "Home", placeholder: "home", ownHeader: true },
-  companies2: { title: "Companies", placeholder: "table", crumbs: ["today"] },
-  find2: { title: "Find", placeholder: "table" },
+  home2: { title: "Home", component: Home2P, ownHeader: true, ownStrip: true },
+  companies2: { title: "Companies", component: Companies2P, crumbs: ["today"], ownStrip: true },
+  find2: { title: "Find", component: FindP, ownStrip: true },
 };
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */

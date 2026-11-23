@@ -8,14 +8,16 @@
  * cost per row and the total, the alert), and "one company in mind?": look it up by its full name or
  * website (the find_company rules, app/ui/find.ts), or add it by its website (Add what you know).
  *
- * The first visit starts from the ideal client (the pill on) and says so. Lookalikes are in
- * findModel.ts but left out of the switcher until the owner decides (BUILD_PLAN part 8).
+ * The first visit starts from the ideal client (the pill on) and says so. Lookalikes is the last
+ * kind (BUILD_PLAN part 8): companies like the member's past clients.
  *
- * Mounted by the page registry at the merge (TradingPost's `?p=find2` in this branch). Props are
- * explicit; actions go through UiCtx (act, unlockMany, openAdd) as every page's do.
+ * Mounted by the page registry (shell/pages.tsx FindP, page key "find"), under the shell's header
+ * and breadcrumb. Props are explicit; actions go through UiCtx (act, unlockMany, openAdd) as every
+ * page's do. The save step's "Add data now" is priced by the server's quote (workbench/quote.ts)
+ * and runs as the workbench's bulk runs do (workbench/run.ts): one quote, one button.
  */
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import type { FractionalRec, FractionalsView, Me, SavedViewRec } from "@/lib/tableTypes";
+import type { FractionalRec, FractionalsView, Me, SavedViewRec, UnlockQuote } from "@/lib/tableTypes";
 import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { AskPlan, AskVocab } from "@/lib/ask";
 import { AskBar } from "../AskBar";
@@ -35,15 +37,15 @@ import {
 } from "./findModel";
 import { alertWords, kindOfList, listAct, listsOf } from "./lists";
 import { takeFindStart } from "./start";
+import { appDeps, fetchQuote, quoteWords } from "../workbench/quote";
+import { runUnlock } from "../workbench/run";
 import { defaultSeeds, likeCriteria, profileOf, profileWords, rankLike, seedMatches, traitChips, withoutTrait, type LikeRow } from "./lookalikes";
 import type { LikeTrait } from "../model";
 import "./find.css";
 
 /** The kinds in the switcher, Lookalikes last (the owner's "reverse engineer what works into a target account list"). */
 const KINDS: FindKind[] = ["companies", "people", "seats", "roles", "fractionals", "lookalikes"];
-const STRIP_KEY = "rn_strip_find";
 const PREVIEW = 8;
-const BATCH = 60;
 
 export interface FindProps {
   me: Me;
@@ -56,9 +58,11 @@ export interface FindProps {
   /** Open a saved view (or a list just saved) in the table. */
   openList: (v: SavedViewRec) => void;
   openPage: (p: AppPage) => void;
-  /** Home, and Your profile (to change the ideal client). */
-  home: { href?: string; go: () => void };
+  /** Your profile (to change the ideal client). */
   onProfile: () => void;
+  /** "What Find is for" is still showing (not dismissed: Profile.stripsOff), and dismissing it. */
+  stripOn: boolean;
+  onStripOff: () => void;
 }
 
 const word = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
@@ -97,13 +101,6 @@ export function Find(p: FindProps) {
   // Lookalikes: the seed companies (null: the member's seats) and the traits taken off.
   const [seeds, setSeeds] = useState<string[] | null>(null);
   const [traitsOff, setTraitsOff] = useState<LikeTrait[]>([]);
-  const [strip, setStrip] = useState(() => {
-    try {
-      return localStorage.getItem(STRIP_KEY) !== "off";
-    } catch {
-      return true;
-    }
-  });
   // What another page sent: an Ask plan to set, or a company to look up.
   useEffect(() => {
     const s = takeFindStart();
@@ -166,22 +163,6 @@ export function Find(p: FindProps) {
 
   return (
     <div className="fd">
-      <div className="fd-head">
-        <nav aria-label="Breadcrumb" className="fd-crumb">
-          <a
-            href={p.home.href}
-            onClick={(e) => {
-              if (e.button !== 0 || e.metaKey || e.ctrlKey) return;
-              e.preventDefault();
-              p.home.go();
-            }}
-          >
-            Home
-          </a>{" "}
-          / <strong>Find</strong>
-        </nav>
-      </div>
-
       <div className="fd-bar">
         <div role="group" aria-label="What to find" className="fd-kinds">
           {kinds}
@@ -202,7 +183,7 @@ export function Find(p: FindProps) {
 
       {panel === "saved" && <SavedPanel me={me} openList={(v) => (setPanel(""), p.openList(v))} onKeep={() => (setPanel(""), setStep("save"))} openAgent={() => p.openPage("integrations")} />}
 
-      {p.first && strip && (
+      {p.first && p.stripOn && (
         <div role="note" className="fd-strip">
           <span>
             <strong>Find is where you build a list.</strong> Describe who you want or pick filters, check the preview, then save it. Nothing is spent here, and opening a company is free on the trial, up to 15 a day.
@@ -211,14 +192,7 @@ export function Find(p: FindProps) {
             type="button"
             aria-label="Dismiss"
             className="fd-x"
-            onClick={() => {
-              setStrip(false);
-              try {
-                localStorage.setItem(STRIP_KEY, "off");
-              } catch {
-                /* this visit only */
-              }
-            }}
+            onClick={p.onStripOff}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden>
               <path d="M6 6l12 12M18 6L6 18" />
@@ -646,7 +620,31 @@ function SavePane(p: {
   const take = many === "all" ? p.n : Math.min(25, p.n);
   const companyKind = p.kind !== "fractionals";
   const cost = useMemo(() => saveCost(p.rows, take, me), [p.rows, take, me]);
-  const total = (adds.names ? cost.names : 0) + (adds.dm ? cost.deciders : 0);
+  // What "Add data now" would open, and the server's quote for it (a dry run: nothing is spent).
+  const items = useMemo(() => {
+    const cos = runCompanies(p.rows, take);
+    return [
+      ...(adds.names ? cos.filter((i) => i.c.hidden).map((i) => ({ entity: "company" as const, id: i.c.id, field: "identity" })) : []),
+      ...(adds.dm ? cos.flatMap(deciderRefs) : []),
+    ];
+  }, [p.rows, take, adds.names, adds.dm]);
+  const itemsKey = items.map((x) => `${x.entity}:${x.id}:${x.field}`).join("|");
+  const [quote, setQuote] = useState<UnlockQuote | { error: string } | null>(null);
+  useEffect(() => {
+    setQuote(null);
+    if (!items.length) return;
+    let live = true;
+    const t = setTimeout(() => void fetchQuote(items).then((q) => live && setQuote(q)), 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey]);
+  const quoted = quote && !("error" in quote) ? quote : null;
+  const total = quoted?.cost ?? 0;
+  const words = quoted ? quoteWords(quoted, ["fact", "facts"]) : null;
+  const quoting = items.length > 0 && !quote;
   const credits = me.credits;
   const save = async () => {
     if (busy) return;
@@ -661,17 +659,11 @@ function SavePane(p: {
       p.toast(r.message || "That list didn't save. Try again.", true);
       return;
     }
-    // Add data now: one question for the whole run, then batches of 60 (the server's limit).
-    const cos = runCompanies(p.rows, take);
-    const items = [
-      ...(adds.names ? cos.filter((i) => i.c.hidden).map((i) => ({ entity: "company" as const, id: i.c.id, field: "identity" })) : []),
-      ...(adds.dm ? cos.flatMap(deciderRefs) : []),
-    ];
-    let asked = false;
-    for (let k = 0; k < items.length; k += BATCH) {
-      const ok = await p.unlock(items.slice(k, k + BATCH), asked ? { confirmed: true, cost: 0 } : { cost: total });
-      if (!ok) break;
-      asked = true;
+    // Add data now: what the quote covers, in batches of 60, each quoted again first so the run never spends more than it said (workbench/run.ts).
+    // The button that says the cost is the yes.
+    if (quoted && quoted.fits > 0) {
+      const out = await runUnlock({ items, quote: quoted, confirmed: true }, appDeps({ unlockMany: p.unlock }));
+      if (out.stopped) p.toast(out.stopped, true);
     }
     setBusy(false);
     p.toast(r.message);
@@ -727,18 +719,20 @@ function SavePane(p: {
           </span>
         )}
       </div>
-      <div className="fd-total">
-        <strong>{total === 0 ? "This costs nothing." : `This costs about ${total.toLocaleString("en-US")} credits.`}</strong>
+      <div className="fd-total" role="status">
+        <strong>{!items.length ? "This costs nothing." : quoting ? "Working out the cost…" : quote && "error" in quote ? quote.error : total === 0 ? "This costs nothing." : `This costs ${total.toLocaleString("en-US")} ${total === 1 ? "credit" : "credits"}.`}</strong>
         <span>
-          You have {credits.toLocaleString("en-US")} credits. {total > 0 ? "Merlin asks before it spends. " : ""}Anything you skip can be added later from the table, row by row or in bulk.
+          {words && total > 0 ? `${words.after} ` : `You have ${credits.toLocaleString("en-US")} credits. `}
+          {words?.stop ? `${words.stop} ` : ""}
+          Anything you skip can be added later from the table, row by row or in bulk.
         </span>
       </div>
       <div className="fd-foot">
         <button type="button" className="fd-outline" onClick={p.onBack}>
           Back
         </button>
-        <button type="button" className="fd-primary fd-grow" onClick={() => void save()} disabled={busy} aria-busy={busy}>
-          Save and open the table
+        <button type="button" className="fd-primary fd-grow" onClick={() => void save()} disabled={busy || quoting} aria-busy={busy}>
+          {total > 0 ? `Save and spend ${total.toLocaleString("en-US")} ${total === 1 ? "credit" : "credits"}` : "Save and open the table"}
         </button>
       </div>
     </div>

@@ -2,7 +2,10 @@
 .h2 { padding: 28px 28px 40px; display: flex; flex-direction: column; gap: 20px; background: var(--bg); color: var(--body-ink); font-family: var(--font); max-width: 1200px; box-sizing: border-box; }
 .h2 button { font: inherit; cursor: pointer; }
 .h2 button:focus-visible, .h2 a:focus-visible { outline: 3px solid var(--volt-ink); outline-offset: 2px; }
-.h2-head { display: flex; flex-direction: column; gap: 2px; }
+.h2-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 2px; align-items: start; }
+.h2-head > .h2-h1, .h2-head > .h2-day { grid-column: 1; }
+/* The header's actions (bell, credits, Add what you know): Home draws its own header in the new look. */
+.h2-acts { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 8px; }
 .h2-h1 { margin: 0; font-size: 28px; line-height: 34px; font-weight: 800; color: var(--ink); }
 .h2-day { font-size: 15px; line-height: 22px; }
 .h2-h2 { margin: 0; font-size: 17px; font-weight: 800; color: var(--ink); }

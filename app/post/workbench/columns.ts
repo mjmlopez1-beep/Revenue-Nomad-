@@ -236,6 +236,17 @@ export const PEOPLE_COLUMNS: ColumnDef[] = [
 
 export const COLUMNS: Record<RecordType, ColumnDef[]> = { companies: COMPANY_COLUMNS, engagements: SEAT_COLUMNS, people: PEOPLE_COLUMNS };
 
+/**
+ * Ask Merlin's column words (lib/ask.ts ASK_COLS) as the companies columns they show. "Your way in"
+ * (wayIn) has no column here yet: the ways in come from Warm paths (lib/paths), not from the rows
+ * the table holds, so it is left out and Ask's chip for it sets nothing on this table.
+ */
+export const ASK_COLUMN: Record<string, string | null> = { decisionMaker: "decider", email: "email", rate: "rate", holder: "heldBy", wayIn: null };
+/** The companies columns for Ask's column words, in order, each once; words with no column are left out. */
+export function askColumns(cols: readonly string[]): string[] {
+  return [...new Set(cols.map((c) => ASK_COLUMN[c] ?? null).filter((c): c is string => !!c && COMPANY_COLUMNS.some((x) => x.id === c)))];
+}
+
 export const columnOf = (type: RecordType, id: string): ColumnDef | undefined => COLUMNS[type].find((c) => c.id === id);
 /** The columns a list shows before the member picks. */
 export const defaultCols = (type: RecordType): string[] => COLUMNS[type].filter((c) => c.def).map((c) => c.id);

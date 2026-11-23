@@ -44,7 +44,7 @@ import {
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
-import { PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
+import { COLS_PARAM, colsOf, PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
 import { ui2Action } from "@/lib/ui2";
 import { alertView } from "../onboard/suggest"; // [ux ws3]
 import { ICP_SKIPPED, holderSeen, holderTarget, personSeen, personTarget, sameBuy, sixSteps, startSteps, stepOneKind, type SixKey, type StepTarget } from "./getStarted";
@@ -72,7 +72,7 @@ import type { TodayView } from "@/lib/viewWire";
 import { fmtStamp } from "./RoleDate";
 import { Strip, sinceText } from "./Guide";
 import { rolesSince, useTodayData } from "./Today";
-import { HomePage, type HomeView } from "./Home";
+import { HomePage, type HomeProps, type HomeView } from "./Home";
 import { MoreSheet, Sidebar, TabBar } from "./Sidebar";
 import { currentKey2, navItems, navItems2, type AppPageKey, type NavItem, type NavItem2 } from "./navModel";
 import { MoreSheet2, TabBar2 } from "./Sidebar";
@@ -80,7 +80,6 @@ import { Rail } from "./shell/Rail";
 import { HeaderActions, ShellHeader, type Crumb } from "./shell/Header";
 import { Bell } from "./shell/Bell";
 import { PageStrip } from "./shell/PageStrip";
-import { GettingStartedList } from "./shell/GettingStarted";
 import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
 import { joinedLine } from "@/lib/notify/format";
@@ -109,7 +108,7 @@ const preloadLater = (admin: boolean) => {
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
-import { AppCtxProvider, opensTable, pageDef, preloadPages, type AppCtx, type ShellPage } from "./shell/pages";
+import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, type AppCtx, type ShellPage } from "./shell/pages";
 
 export interface TradingPostProps {
   view: View;
@@ -303,6 +302,11 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
     const cur = new URLSearchParams(window.location.search);
     if (cur.get("p") === "proposals") for (const k of ["pr", "dc", "new", "ct"]) if (cur.get(k)) q.set(k, cur.get(k)!);
   }
+  // The Companies workbench's columns (the new look, place.ts COLS_PARAM) ride along with the companies list.
+  if (x.p === "table" && x.t === "companies" && typeof window !== "undefined") {
+    const k = colsOf(window.location.search);
+    if (k) q.set(COLS_PARAM, k.join(","));
+  }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
   if (x.p === "table" && !q.toString()) q.set("p", "table");
@@ -414,6 +418,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const ui2 = !!me.ui2;
   const ui2Ref = useRef(ui2);
   ui2Ref.current = ui2;
+  // The new look's own pages (Home, Find, the workbench) load on their own: with it on, at once.
+  useEffect(() => {
+    if (ui2) for (const f of preloadUi2()) void f().catch(() => {});
+  }, [ui2]);
   /** Every page change goes through here: with the new look an old page opens its new home (place.ts ui2PageOf), without it a new page its old one. */
   const setPage = useCallback((p: Page) => setPageRaw(pageFor(p, ui2Ref.current)), []);
   // The member switched the look (the member menu): the page on screen moves to its home in the other look.
@@ -2703,76 +2711,70 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     const done = six.steps.filter((x) => x.done).map((x) => `six:${x.key}`);
     if (done.some((k) => !had.has(k))) store.set(sixDoneKey, [...new Set([...had, ...done])].join(","));
   }, [ui2, six, sixDoneKey]);
+  /** Home's props: today's Home (HomePage) and the new look's (Home2, shell/pages.tsx) read the same. */
+  const homeProps: HomeProps = {
+    me,
+    infos,
+    byId,
+    firstRow: listWaits ? null : sorted[0] ?? null,
+    waiting,
+    data: today.data,
+    failed: today.failed,
+    sinceAt: since.at,
+    unread,
+    // The new look's Home draws Getting started itself (Home2, from getStarted.ts sixSteps).
+    nudge: nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null,
+    events,
+    trialStarted: !!me.plan?.trialStarted && !trialStartSeen,
+    onTrialStartSeen: () => {
+      setTrialStartSeen(true);
+      void act({ type: "noticeSeen", kind: "trialStarted" }, { quiet: true, silentError: true });
+    },
+    trialEnded: !!me.plan?.trialEnded && !trialSeen,
+    onTrialSeen: () => {
+      setTrialSeen(true);
+      void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
+    },
+    onSeePro: () => openPlans("billing"),
+    proWelcome: !!me.plan?.proWelcome && !proSeen,
+    onProSeen: () => {
+      setProSeen(true);
+      void act({ type: "noticeSeen", kind: "proWelcome" }, { quiet: true, silentError: true });
+    },
+    integrations: { href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) },
+    onClaude: () => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500)),
+    steps: homeSteps && !ui2 ? steps.steps : null,
+    onStep: (k) => runNudge(stepAction[k]),
+    onHideSteps: hideCheck,
+    find: { href: firstViewHref, go: openFirstView },
+    radar: radarGo,
+    onAdd: () => openAdd(),
+    seats: seatsCard,
+    roles: { href: tableHref("engagements", "hiring", hiringFilters, null, false), go: seeOpenRoles },
+    follows: { href: tableHref("companies", "following"), go: () => navTo(nav.find((x) => x.key === "following")!) },
+    messages: { href: pageHref("messages"), go: () => (setDrawer(null), setPage("messages")) },
+    views: homeViews,
+    onOpenView: openView,
+    onEmailView: emailView,
+    table: { href: firstViewHref, go: openFirstView },
+    openCompany: (id) => openCompany(id),
+    onSearch: (text) => {
+      setDrawer(null);
+      setSearchTab(null);
+      // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
+      setSearchWide(true);
+      setQuery(text);
+      // The table's search takes the cursor with the text, so typing on carries on there.
+      searchNavAt.current = Date.now();
+      setPage("table");
+      setFindNow(Date.now());
+    },
+    nav,
+    onNav: navTo,
+  };
   const homeEl = (
     <main className="tp-main tp-main-page td-page hm-page">
-      <HomePage
-        me={me}
-        infos={infos}
-        byId={byId}
-        firstRow={listWaits ? null : sorted[0] ?? null}
-        waiting={waiting}
-        data={today.data}
-        failed={today.failed}
-        sinceAt={since.at}
-        unread={unread}
-        nudge={
-          ui2 && !checkOff && !(waiting && !pf) && six.next ? (
-            <>
-              {nudgeFor("today") ? <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} /> : null}
-              <GettingStartedList six={six} onRun={(k) => runSix(k)} onHide={hideCheck} />
-            </>
-          ) : nudgeFor("today") ? (
-            <NudgeSlot nudge={nudgeFor("today")} onAction={runNudge} />
-          ) : null
-        }
-        events={events}
-        trialStarted={!!me.plan?.trialStarted && !trialStartSeen}
-        onTrialStartSeen={() => {
-          setTrialStartSeen(true);
-          void act({ type: "noticeSeen", kind: "trialStarted" }, { quiet: true, silentError: true });
-        }}
-        trialEnded={!!me.plan?.trialEnded && !trialSeen}
-        onTrialSeen={() => {
-          setTrialSeen(true);
-          void act({ type: "noticeSeen", kind: "trialEnded" }, { quiet: true, silentError: true });
-        }}
-        onSeePro={() => openPlans("billing")}
-        proWelcome={!!me.plan?.proWelcome && !proSeen}
-        onProSeen={() => {
-          setProSeen(true);
-          void act({ type: "noticeSeen", kind: "proWelcome" }, { quiet: true, silentError: true });
-        }}
-        integrations={{ href: pageHref("integrations"), go: () => (setDrawer(null), setPage("integrations")) }}
-        onClaude={() => (setDrawer(null), setClaudeLink(true), setPage("integrations"), setTimeout(() => document.getElementById("claude-voice")?.scrollIntoView({ block: "start" }), 500))}
-        steps={homeSteps && !ui2 ? steps.steps : null}
-        onStep={(k) => runNudge(stepAction[k])}
-        onHideSteps={hideCheck}
-        find={{ href: firstViewHref, go: openFirstView }}
-        radar={radarGo}
-        onAdd={() => openAdd()}
-        seats={seatsCard}
-        roles={{ href: tableHref("engagements", "hiring", hiringFilters, null, false), go: seeOpenRoles }}
-        follows={{ href: tableHref("companies", "following"), go: () => navTo(nav.find((x) => x.key === "following")!) }}
-        messages={{ href: pageHref("messages"), go: () => (setDrawer(null), setPage("messages")) }}
-        views={homeViews}
-        onOpenView={openView}
-        onEmailView={emailView}
-        table={{ href: firstViewHref, go: openFirstView }}
-        openCompany={(id) => openCompany(id)}
-        onSearch={(text) => {
-          setDrawer(null);
-          setSearchTab(null);
-          // Home's search reads every company: the saved view, the profile and the filters are off for it (they come back when it is cleared).
-          setSearchWide(true);
-          setQuery(text);
-          // The table's search takes the cursor with the text, so typing on carries on there.
-          searchNavAt.current = Date.now();
-          setPage("table");
-          setFindNow(Date.now());
-        }}
-        nav={nav}
-        onNav={navTo}
-      />
+      <HomePage {...homeProps} />
     </main>
   );
   const tableEl = phone ? (
@@ -3052,6 +3054,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       const v = views.find((x) => x.id === currentView);
       if (v) return v.name;
       if (tab === "hiring") return "Hiring now";
+      // The Companies workbench's view of the ideal client (its View menu's first item).
+      if (recordType === "companies" && tab === "all" && eff.icp && !icpEmpty(me.icp)) return "Your ideal client";
       const t = TABS.find((x) => x.key === tab);
       return tab === "all" || !t ? `All ${(recordType === "people" ? "people" : TYPE_TITLE[recordType]).toLowerCase()}` : t.label;
     }
@@ -3168,6 +3172,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     layout,
     phone,
     ui2,
+    network: !!network,
     page: onScreen,
     openCompany,
     openPage: openShellPage,
@@ -3182,6 +3187,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       tab,
       setTab,
       sort,
+      sortPicked,
       setSort,
       sorts: sortList,
       filters: eff,
@@ -3229,7 +3235,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       wayCo,
       setWayCo,
     },
-    legacy: { home: homeEl, table: tableEl },
+    legacy: { home: homeEl, table: tableEl, homeProps },
     headerActions,
     start: {
       six,
