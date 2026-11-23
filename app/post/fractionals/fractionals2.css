@@ -359,6 +359,8 @@
   color: #28322d;
 }
 .fy-chips {
+  /* The containing block of the pickers' hidden labels (sr-only, absolute): on a phone, where the row scrolls, they stay inside it instead of widening the page. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -928,6 +930,7 @@
   flex: 0 0 auto;
 }
 .fy-phone .wb-bottom {
+  position: relative;
   flex-wrap: nowrap;
   overflow-x: auto;
 }
