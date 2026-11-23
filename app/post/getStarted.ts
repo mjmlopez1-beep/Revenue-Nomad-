@@ -273,9 +273,9 @@ export const alertOn = (v: { email?: boolean; alert?: { on?: boolean } }) => (v.
 
 /**
  * Getting started's six steps (BRIEF "The six steps"), each ticked from the member's own state:
- * 1 an ideal client on file (Profile.icp), 2 a seat they held, 3 Google or their LinkedIn
- * connections file brought in (Me.started.network; left out while Your network is off, so it can
- * never be done), 4 a company opened (a company or a seat holder unlocked, a Crystal Ball open
+ * 1 an ideal client on file (Profile.icp), 2 a seat they held, 3 Google, their LinkedIn
+ * connections file or a contacts CSV brought in (Me.started.network; each works on its own, so it is
+ * left out only when Google is off and the files are too: Me.started.networkOff without filesOn), 4 a company opened (a company or a seat holder unlocked, a Crystal Ball open
  * included), 5 a saved list with its alert on, 6 an evidence case ready (left out until Evidence
  * ships). Example rows are never counted: nothing here reads a list's rows.
  */
@@ -288,13 +288,13 @@ export function sixSteps(x: SixInput): SixSteps {
   const all: SixStep[] = [
     { key: "icp", n: 1, label: "Say who your ideal client is", takes: "The function you sell, the industries and the company sizes.", gives: "Find, Crystal Ball and every list start tuned to these companies.", time: "2 minutes", go: icpOn ? "Change it" : "Set it", done: icpOn },
     { key: "seat", n: 2, label: "Add the seats you have held", takes: "The company, your role and the dates. The rate and hours if you want to share them.", gives: "1 credit for each fact Merlin does not have, up to 25 a day. Each seat becomes a way in.", time: "5 minutes", go: "Add your seats", pill: "Earns credits", pillKind: "earn", done: x.seatsHeld > 0 },
-    { key: "network", n: 3, label: "Bring in who you know", takes: "Google contacts or your LinkedIn connections file. Merlin reads names and companies, never message text.", gives: "Warm paths: who can get you into which company.", time: "3 minutes", go: "Bring them in", done: !!me.started?.network },
+    { key: "network", n: 3, label: "Bring in who you know", takes: "Google contacts, your LinkedIn connections file or a contacts CSV. Merlin reads names and companies, never message text.", gives: "Warm paths: who can get you into which company.", time: "3 minutes", go: "Bring them in", done: !!me.started?.network },
     { key: "open", n: 4, label: "Open your first company", takes: "One click on a company in your list.", gives: "Its name, its website and who held the seat. It stays open for you.", time: "1 minute", go: "Go to Companies", ...(free ? { pill: me.proOpens ? "Free on your plan" : "Free today", pillKind: "free" as const } : {}), done: opened },
     { key: "alert", n: 5, label: "Save a list with an alert", takes: "Save a list and keep its email on.", gives: "Merlin watches the list and tells you when a company on it starts hiring.", time: "1 minute", go: "Go to your lists", done: (me.savedViews ?? []).some(alertOn) },
     { key: "evidence", n: 6, label: "Write your first evidence case", takes: "The problem, what you did, and the numbers before and after. The client name stays hidden unless you show it.", gives: "It fills the Proof part of every proposal you send.", time: "10 minutes", go: "Go to Evidence Bank", done: false },
   ];
   const steps = all
-    .filter((s) => (s.key !== "evidence" || ((x.evidence ?? EVIDENCE_ON) && !!x.close)) && (s.key !== "network" || !me.started?.networkOff || s.done))
+    .filter((s) => (s.key !== "evidence" || ((x.evidence ?? EVIDENCE_ON) && !!x.close)) && (s.key !== "network" || !me.started?.networkOff || !!me.started?.filesOn || s.done))
     .map((s) => (stuck(s.key) ? { ...s, done: true } : s));
   const done = steps.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done) ?? null;

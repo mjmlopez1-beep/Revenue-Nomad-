@@ -1,0 +1,348 @@
+/*
+ * "Bring in who you know" (network/ConnectPanel.tsx, People.dc.html step 3). Pine for actions,
+ * the pale green for what Merlin reads, no volt (nothing here earns), no ember.
+ */
+.cp {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  color: var(--body-ink, #28322d);
+  font-size: 14px;
+  line-height: 20px;
+}
+.cp button {
+  font-family: inherit;
+}
+.cp :is(button, a, input, select):focus-visible {
+  outline: 3px solid #0b6b45;
+  outline-offset: 2px;
+}
+.cp-inline {
+  border: 1px solid var(--line, #e2e6e3);
+  border-radius: 14px;
+  background: #fff;
+  max-width: 980px;
+}
+.cp-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0b6b45;
+}
+.cp-x {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pine, #073f2f);
+  cursor: pointer;
+}
+.cp-x:hover {
+  background: #f1f3f2;
+}
+.cp-title {
+  font-size: 18px;
+  line-height: 24px;
+  color: #0a1a13;
+}
+.cp-lead {
+  color: #5b6661;
+}
+.cp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cp-inline .cp-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.cp-inline .cp-sources {
+  flex: 1 1 320px;
+}
+.cp-inline .cp-reads {
+  flex: 1 1 280px;
+}
+.cp-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cp-src {
+  min-height: 52px;
+  padding: 6px 12px;
+  border: 1px solid #cdd4d0;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: #0a1a13;
+}
+.cp-src.on {
+  border: 2px solid var(--pine, #073f2f);
+  padding: 5px 11px;
+}
+.cp-dot {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 50%;
+  border: 2px solid #808a85;
+  box-sizing: border-box;
+}
+.cp-src.on .cp-dot {
+  border: 5px solid var(--pine, #073f2f);
+}
+.cp-src-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cp-src-t strong {
+  font-size: 14px;
+}
+.cp-src-t span {
+  font-size: 13px;
+  color: #5b6661;
+}
+.cp-reads {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f8f7;
+}
+.cp-reads strong {
+  font-size: 13px;
+  color: #0a1a13;
+}
+.cp-reads strong + .cp-read {
+  margin-top: 0;
+}
+.cp-read {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+}
+.cp-read svg {
+  flex: 0 0 16px;
+  margin-top: 2px;
+}
+.cp-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.cp-go {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cp-g {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  align-items: center;
+  justify-content: center;
+}
+.cp-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: #28322d;
+}
+.cp-steps li + li {
+  margin-top: 4px;
+}
+.cp-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.cp-note,
+.cp-foot {
+  margin: 0;
+  font-size: 13px;
+  color: #5b6661;
+}
+.cp-ok {
+  color: #0b6b45;
+  font-weight: 600;
+}
+.cp-err {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fdf0ec;
+  color: #8a2e17;
+  font-size: 13px;
+}
+.cp-danger {
+  color: #8a2e17;
+  border-color: #e7c4b8;
+}
+.cp-danger-solid {
+  background: #8a2e17;
+  border-color: #8a2e17;
+  color: #fff;
+}
+.cp-confirm {
+  padding: 12px;
+  border: 1px solid #e7c4b8;
+  border-radius: 10px;
+  background: #fff;
+}
+.cp-confirm p {
+  margin: 0 0 8px;
+}
+
+/* the CSV's columns and preview */
+.cp-file-name {
+  font-weight: 700;
+  color: #0a1a13;
+  overflow-wrap: anywhere;
+}
+.cp-maps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.cp-csv-wide .cp-maps {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.cp-map {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #28322d;
+}
+.cp-map select {
+  height: 40px;
+  border: 1px solid #cdd4d0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 8px;
+  font: inherit;
+  font-weight: 400;
+  color: #0a1a13;
+}
+.cp-halves {
+  justify-self: start;
+  min-height: 32px;
+}
+.cp-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cp-ptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.cp-ptable th,
+.cp-ptable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eef1ef;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cp-ptable th {
+  color: #5b6661;
+  font-weight: 700;
+}
+
+/* after a source is in */
+.cp-found .cp-eyebrow span {
+  color: #0b6b45;
+}
+.cp-top {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-top li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #eef1ef;
+  border-radius: 10px;
+}
+.cp-top-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cp-top-t span {
+  font-size: 13px;
+  color: #5b6661;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp-warm {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.cp-warm-strong {
+  background: #073f2f;
+  color: #fff;
+}
+.cp-warm-good {
+  background: #e8f3ee;
+  color: #073f2f;
+  border: 1px solid #b9d9ca;
+}
+.cp-warm-fading {
+  background: #fff;
+  color: #28322d;
+  border: 1px solid #808a85;
+}
+.cp-warm-cold {
+  background: #f1f3f2;
+  color: #5b6661;
+}
+.cp-next {
+  font-size: 13px;
+  color: #28322d;
+}

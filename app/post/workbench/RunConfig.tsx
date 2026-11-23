@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import type { UnlockQuote } from "@/lib/tableTypes";
 import { useToast } from "../../ui/shared";
-import type { FactRef, Row } from "../model";
+import type { FactRef, RecordType, Row } from "../model";
 import { useUi } from "../ui";
 import { columnOf, costWords, rowNeed } from "./columns";
 import { appDeps, creditWords, fetchQuote } from "./quote";
@@ -41,14 +41,25 @@ const DESC: Record<string, { title: string; desc: string; wait: string }> = {
   email: { title: "Work email", desc: "The decision maker's work email, where one is on file. Their name has to be open first.", wait: "need the company or the decision maker's name first" },
   rate: { title: "Rate paid", desc: "What the latest seat paid, where a member shared it. A company has to be open first.", wait: "need the company opened first" },
 };
+/** People's runs (People.dc.html): the person's own locks. */
+const PEOPLE_DESC: Record<string, { title: string; desc: string; wait: string }> = {
+  company: { title: "Open these companies", desc: "Opens each company: its name, website and who held the seat. Its people can then be opened.", wait: "" },
+  name: { title: "Find the decider", desc: "Opens the name and title of each locked person in this view. One unlock shows both. A locked company has to be open first.", wait: "need the company opened first" },
+  email: { title: "Find an email", desc: "Opens the email for each person whose name you can see. Where none is on file nothing is spent, and you can add it to earn 1 credit.", wait: "need the company or the name opened first" },
+  phone: { title: "Find a phone number", desc: "Opens the phone for each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
+  linkedin: { title: "Find a public profile", desc: "Opens the link to the public profile of each person whose name you can see. Where none is on file nothing is spent.", wait: "need the company or the name opened first" },
+};
 
 export function RunConfig({
+  type = "companies",
   col,
   rows,
   picked,
   onBack,
   onDone,
 }: {
+  /** The list the rows are (People's runs are the person's own locks). */
+  type?: RecordType;
   col: string;
   /** The rows in view. */
   rows: Row[];
@@ -60,8 +71,8 @@ export function RunConfig({
 }) {
   const ui = useUi();
   const toast = useToast();
-  const def = columnOf("companies", col);
-  const d = DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
+  const def = columnOf(type === "people" ? "people" : "companies", col) ?? columnOf("companies", col);
+  const d = (type === "people" ? PEOPLE_DESC[col] : null) ?? DESC[col] ?? { title: def?.label ?? col, desc: def?.tip ?? "", wait: "need something opened first" };
   const [scope, setScope] = useState<Scope>(picked.length ? "sel" : "all");
   const scopeRows = (s: Scope) => (s === "all" ? rows : s === "sel" ? picked : rows.slice(0, 5));
   const plan = runPlan(col, scopeRows(scope));

@@ -281,7 +281,14 @@ export interface Me {
   /** Trial and Pro, billing live: free company opens left today, of PRO_OPENS_DAILY. Crystal Ball's don't count. Left out otherwise. */
   proOpens?: { left: number; of: number };
   /** Get started: a first note went out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections are in. */
-  started?: { note: boolean; network: boolean; /** Your network isn't on for Merlin (RN_GOOGLE): the Connect Google step is left out. */ networkOff?: boolean };
+  started?: {
+    note: boolean;
+    network: boolean;
+    /** Your network isn't on for Merlin (RN_GOOGLE): the old look's Connect Google step is left out. */
+    networkOff?: boolean;
+    /** The LinkedIn connections file and a contacts CSV can be brought in (RN_PATHS on), with or without Google: the new look's step 3 stays. */
+    filesOn?: boolean;
+  };
   /**
    * How a company in their Crystal Ball opens from Crystal Ball and the Today card, while billing
    * is live (left out otherwise: the 2-credit unlock, as anywhere). "all": Trial and Pro, every

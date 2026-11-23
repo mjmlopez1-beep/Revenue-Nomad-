@@ -18,6 +18,8 @@
  *   companies2  the Companies workbench (workbench/CompaniesWorkbench.tsx), in place of the
  *               table while it lists companies. It reads and changes the table's place (TableCtx).
  *   find2       Find (find/Find.tsx), page key "find".
+ *   people2     People (people/People.tsx), in place of the table while it lists people (Data / People).
+ *              It reads the table's place (TableCtx) for its filters and the list type.
  *
  *   company2    the company record (company/CompanyPage.tsx) while one is open (?c=<id>), in place of
  *               the list or page it was opened over, on wider screens (AppCtx.record). Phones keep
@@ -292,14 +294,16 @@ const ProposalsPage = dynamic(() => import("../Proposals").then((m) => m.Proposa
 const loadHome2 = () => import("../Home2");
 const loadFind = () => import("../find/Find");
 const loadWorkbench = () => import("./workbenchPage");
+const loadPeople = () => import("../people/People");
 const loadCompany = () => import("../company/CompanyPage");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
 // The company record as a page (company/CompanyPage.tsx), in place of the list while a record is open.
 const CompanyPage = dynamic(() => loadCompany().then((m) => m.CompanyPage), { ssr: false, loading: pageWait });
+const PeoplePage = dynamic(() => loadPeople().then((m) => m.PeoplePage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -514,6 +518,11 @@ function CompanyP() {
   return <CompanyPage />;
 }
 
+/** People (people/People.tsx), in place of the table while it lists people. It draws its own <main>. */
+function People2P() {
+  return <PeoplePage />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -521,7 +530,7 @@ const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-m
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
  * Notifications, Agent access and Settings are Integrations).
  */
-export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2", PageDef>> = {
+export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
@@ -550,7 +559,11 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   find2: { title: "Find", component: FindP, ownStrip: true },
   // The company record (?c=<id>) as a page, while one is open on a wider screen: it draws its own header (breadcrumb, 3 of 64) and strip.
   company2: { title: "Company", component: CompanyP, ownHeader: true, ownStrip: true },
+  people2: { title: "People", component: People2P, crumbs: ["today"], ownStrip: true },
 };
+
+/** The new look's page that takes the table's place for a list type (companies2, people2), or null where the table stays. */
+export const tableSlot = (t: RecordType): "companies2" | "people2" | null => (t === "companies" ? "companies2" : t === "people" ? "people2" : null);
 
 /** Keys drawn by another key's entry: the page "find" is the find2 slot. */
 const ENTRY_OF: Partial<Record<string, string>> = { find: "find2" };

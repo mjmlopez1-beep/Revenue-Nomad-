@@ -225,13 +225,22 @@ const person = (field: string, label: string, width: string, extra: Partial<Colu
   ...extra,
 });
 
+/**
+ * People (People.dc.html). "How you know them", "Last touch" and "In pipeline" are the member's own
+ * (their sources and their pipeline, read by the People page, people/People.tsx, which fills them and
+ * their fill rates); here they count nothing, and only that page shows them by default.
+ */
+const own = (id: string, label: string, width: string, word: string, tip: string): ColumnDef => ({ id, type: "people", label, cost: "free", word, fill: () => "empty", width, tip });
 export const PEOPLE_COLUMNS: ColumnDef[] = [
   { ...COMPANY_COLUMNS[0], type: "people" },
-  person("name", "Name and title", "minmax(180px, 1.2fr)", { def: true, cost: 1, needs: "Opens after the company", sort: "title", tip: "1 credit shows a person's name and title together." }),
-  person("relationship", "Relationship", "minmax(130px, 0.8fr)", { def: true }),
-  person("linkedin", "LinkedIn", "minmax(110px, 0.7fr)", { def: true, cost: 1, needs: "Opens after the name" }),
-  person("email", "Email", "minmax(150px, 0.9fr)", { def: true, cost: 1, needs: "Opens after the name" }),
-  person("phone", "Phone", "minmax(120px, 0.7fr)", { def: true, cost: 1, needs: "Opens after the name" }),
+  person("name", "Name and title", "minmax(240px, 1.5fr)", { def: true, cost: 1, needs: "Opens after the company", sort: "title", tip: "1 credit shows a name and title together. Email, phone and public profile open after that, 1 credit each." }),
+  person("relationship", "Relationship", "minmax(134px, 0.8fr)", { def: true, tip: "Their part in hiring the fractional. Free to see." }),
+  own("know", "How you know them", "minmax(160px, 1.1fr)", "matched", "From your own contacts, calendar, connections file and CSV. Only you see this."),
+  person("email", "Email", "minmax(150px, 1fr)", { def: true, cost: 1, needs: "Opens after the name", tip: "1 credit, once you can see the name." }),
+  person("phone", "Phone", "minmax(124px, 0.7fr)", { def: true, cost: 1, needs: "Opens after the name", tip: "1 credit, once you can see the name." }),
+  person("linkedin", "Public profile", "minmax(124px, 0.7fr)", { def: true, cost: 1, needs: "Opens after the name", tip: "A link to their public profile. 1 credit, once you can see the name." }),
+  own("last", "Last touch", "minmax(100px, 0.6fr)", "in touch", "The last meeting, email or message Merlin can see. It never reads what was said."),
+  own("pipe", "In pipeline", "minmax(124px, 0.7fr)", "in pipeline", "The stage of the deal with their company."),
 ];
 
 export const COLUMNS: Record<RecordType, ColumnDef[]> = { companies: COMPANY_COLUMNS, engagements: SEAT_COLUMNS, people: PEOPLE_COLUMNS };
@@ -291,6 +300,18 @@ export const costWords = (cost: ColumnDef["cost"]) => (cost === "free" ? "Free" 
 export function rowNeed(colId: string, r: Row): FactRef | "skip" | "wait" {
   const i = r.i;
   if (colId === "company") return i.c.hidden ? { entity: "company", id: i.c.id, field: "identity" } : "skip";
+  // A person's row (People): the name and title are one purchase; the email, phone and public profile open after it.
+  const p = r.p;
+  if (p && colId === "name") {
+    const lead = (["name", "title"] as const).find((f) => p.cells[f]?.s === "locked");
+    if (!lead) return "skip";
+    return i.c.hidden ? "wait" : { entity: "contact", id: p.id, field: lead };
+  }
+  if (p && (colId === "email" || colId === "phone" || colId === "linkedin")) {
+    if (p.cells[colId]?.s !== "locked") return "skip";
+    if (i.c.hidden || p.cells.name?.s === "locked" || p.cells.title?.s === "locked") return "wait";
+    return { entity: "contact", id: p.id, field: colId };
+  }
   if (colId === "decider") {
     const d = deciderOf(i);
     if (!d) return "skip";

@@ -6,7 +6,7 @@
  * Crystal Ball's chip. With Your network off the answer is { on: false } and none of them render.
  */
 import { useEffect, useState } from "react";
-import type { CompanyPathsView, PathsAnswer, PathsView } from "@/lib/paths/types";
+import type { CompanyPathsView, KnownView, PathsAnswer, PathsView } from "@/lib/paths/types";
 import type { IntroPlanView } from "@/lib/paths/intro";
 import { errorText } from "../../ui/shared";
 
@@ -34,12 +34,17 @@ export function loadPaths(force = false): Promise<void> {
   return loading;
 }
 
-/** Upload the member's own Connections.csv (its text), or delete it. The answer replaces the view. */
-export async function pathsAct(op: "import" | "delete", csv?: string): Promise<{ message?: string; error?: string }> {
+/**
+ * Upload the member's own Connections.csv (its text) or contacts CSV (only the columns they picked:
+ * lib/paths/csv.ts pickColumns), or delete either. The answer replaces the view, and who they know
+ * (useKnown) is read again.
+ */
+export async function pathsAct(op: "import" | "delete" | "importCsv" | "deleteCsv", csv?: string): Promise<{ message?: string; error?: string }> {
   try {
-    const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op === "import" ? { op, csv } : { op }) });
+    const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op === "import" || op === "importCsv" ? { op, csv } : { op }) });
     const j = (await r.json().catch(() => ({}))) as { view?: PathsAnswer; message?: string; error?: string };
     if (j.view) set(j.view);
+    if (r.ok) void loadKnown(true);
     return r.ok ? { message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
   } catch {
     return { error: "We couldn't reach Merlin. Check your connection and try again." };
@@ -115,4 +120,53 @@ export function usePlan(...keys: (string | null | undefined)[]): IntroPlanView |
   const m = plansOf(view);
   for (const k of keys) if (k && m.has(k)) return m.get(k)!;
   return null;
+}
+
+/* ---------- who the member knows (GET /api/paths?known=1): People I know and the person bubble ---------- */
+
+type KnownSnap = { known: KnownView | null; off: boolean; failed: boolean; version: number };
+let ksnap: KnownSnap = { known: null, off: false, failed: false, version: 0 };
+let kloading: Promise<void> | null = null;
+const ksubs = new Set<(s: KnownSnap) => void>();
+function kset(x: Partial<KnownSnap>) {
+  ksnap = { ...ksnap, ...x, version: ksnap.version + 1 };
+  ksubs.forEach((f) => f(ksnap));
+}
+
+export function loadKnown(force = false): Promise<void> {
+  if (kloading && !force) return kloading;
+  kloading = fetch("/api/paths?known=1", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((j: { known: KnownView | { on: false } }) => kset("people" in j.known ? { known: j.known, off: false, failed: false } : { known: null, off: true, failed: false }))
+    .catch(() => kset({ failed: true }))
+    .finally(() => {
+      kloading = null;
+    });
+  return kloading;
+}
+
+/** Everyone the member knows at companies on Merlin, merged across their own sources; null while loading or with ways in off (`off`). */
+export function useKnown(): KnownSnap {
+  const [s, setS] = useState<KnownSnap>(ksnap);
+  useEffect(() => {
+    ksubs.add(setS);
+    if (!ksnap.known && !kloading && !ksnap.off) void loadKnown();
+    return () => {
+      ksubs.delete(setS);
+    };
+  }, []);
+  return s;
+}
+
+/** "Not a relationship" on someone the member knows (on), or its Undo. The answer replaces who they know; ways in are read again. */
+export async function awayAct(key: string, on: boolean): Promise<{ message?: string; error?: string }> {
+  try {
+    const r = await fetch("/api/paths", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "away", key, on }) });
+    const j = (await r.json().catch(() => ({}))) as { known?: KnownView | { on: false }; message?: string; error?: string };
+    if (j.known && "people" in j.known) kset({ known: j.known });
+    if (r.ok) void loadPaths(true);
+    return r.ok ? { message: j.message } : { error: errorText(r.status, j.error, "That didn't go through. Try again.") };
+  } catch {
+    return { error: "We couldn't reach Merlin. Check your connection and try again." };
+  }
 }

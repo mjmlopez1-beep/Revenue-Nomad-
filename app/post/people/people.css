@@ -1,0 +1,332 @@
+/*
+ * People (people/People.tsx, People.dc.html) on the workbench's styles (workbench.css): its two
+ * bars, the search row, the member's own columns and the first visit's examples. Pine for
+ * actions, volt only for "+ Add a person · earn 1 credit", no ember.
+ */
+.ppl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.ppl-bar2 {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.ppl-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ppl-view {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--body-ink);
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.ppl-view.on {
+  border-color: var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+}
+.ppl-view-n {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ppl-earn {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #2ee59d;
+  border-radius: 999px;
+  background: #e8fbf2;
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ppl-rows {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ppl-ideal {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--body-ink);
+}
+.ppl-chips {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ppl-chip {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--body-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ppl-chip.on {
+  border-color: var(--pine);
+  background: #e8f3ee;
+  color: var(--pine);
+}
+.ppl-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #f7f8f7;
+  border-bottom: 1px solid var(--line);
+}
+.ppl-search {
+  flex: 1 1 320px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--pine);
+}
+.ppl-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+.ppl-search:focus-within {
+  outline: 3px solid #0b6b45;
+  outline-offset: 2px;
+}
+
+/* the cells People draws */
+.ppl-name {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  min-height: 36px;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.ppl-name-t {
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: #b9d9ca;
+  text-underline-offset: 3px;
+}
+.ppl-name:hover .ppl-name-t {
+  text-decoration-color: var(--pine);
+}
+.ppl-name-s {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.ppl-yours {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  color: var(--body-ink);
+}
+.ppl-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.ppl-warm {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.ppl-warm-strong {
+  background: #073f2f;
+  color: #fff;
+}
+.ppl-warm-good {
+  background: #e8f3ee;
+  color: #073f2f;
+  border: 1px solid #b9d9ca;
+}
+.ppl-warm-fading {
+  background: #fff;
+  color: #28322d;
+  border: 1px solid #808a85;
+}
+.ppl-warm-cold {
+  background: #f1f3f2;
+  color: #5b6661;
+}
+.ppl-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  font: inherit;
+  color: var(--pine);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ppl-stage {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #b9d9ca;
+  border-radius: 999px;
+  background: #e8f3ee;
+  color: var(--pine);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ppl-add {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--body-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ppl-own {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wb-profile {
+  font-weight: 600;
+  color: var(--pine);
+}
+.ppl-side {
+  flex-basis: 360px;
+  max-width: 380px;
+}
+
+/* the first visit */
+.ppl-first {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+}
+.ppl-ex-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: #fafaf7;
+}
+.ppl-ex-head > span:first-child {
+  flex: 1 1 320px;
+}
+.ppl-ex {
+  min-width: 720px;
+}
+.ppl-ex-row td {
+  background: #fafaf7;
+  height: 60px;
+}
+.ppl-ex-tag {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  background: #f1f3f2;
+  color: #5b6661;
+}
+.ppl-rel {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #e8f3ee;
+  color: #073f2f;
+  border: 1px solid #b9d9ca;
+}
+.ppl-phone .cp {
+  margin: 12px 16px;
+}
+@media (max-width: 860px) {
+  .ppl-rows {
+    margin-left: 0;
+  }
+}
+.ppl-cards {
+  list-style: none;
+  margin: 12px 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ppl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}

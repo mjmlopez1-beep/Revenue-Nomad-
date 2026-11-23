@@ -79,6 +79,8 @@ export function personCell(id: string, r: Row): ReactNode {
   if (id === "company") return <CompanyName i={i} following={i.c.following} />;
   if (!p) return <None />;
   if (id === "name") return <NameAndTitle i={i} e={r.e} p={p} />;
+  // The member's own columns (how you know them, last touch, pipeline) are the People page's to fill.
+  if (id === "know" || id === "last" || id === "pipe") return <None />;
   const unseen = personUnseen(p.cells);
   return (
     <RowFact
@@ -87,6 +89,17 @@ export function personCell(id: string, r: Row): ReactNode {
       cover={personCoverOf(i, r.e, p, id)}
       noun={personNoun(p.cells, id)}
       noAdd={unseen && PERSON_NO_ADD.includes(id) ? ADD_AFTER_NAME : null}
+      render={id === "linkedin" ? profileLink : undefined}
     />
   );
 }
+
+/** A public profile, once open: a link, never called a source. */
+export const profileLink = (v: string) =>
+  /^https?:\/\//i.test(v) ? (
+    <a className="wb-profile" href={v} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+      Public profile
+    </a>
+  ) : (
+    v
+  );

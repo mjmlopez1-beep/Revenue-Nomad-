@@ -2336,13 +2336,20 @@ function planCounts(s: State, _g: Graph, _idx: MemberIndex, memberId: string, no
   if (proOpens(s, memberId, nowMs)) out.proOpens = { left: freeCompaniesLeft(s, memberId, nowMs), of: PRO_OPENS_DAILY };
   return out;
 }
-/** Get started's last two steps (Me.started): a first note out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections in. */
+/**
+ * Get started's last two steps (Me.started): a first note out (a deal at Sent, an invite or a
+ * conversation), and who you know brought in: Google, the LinkedIn connections file or a contacts
+ * CSV, each on its own (the owner's decision: the files need no Google). networkOff: Google is off
+ * here (the old look's "Connect Google" step is left out); filesOn: the two files can be brought in
+ * all the same (RN_PATHS on), so the new look's "Bring in who you know" stays.
+ */
 function startedOf(s: State, memberId: string): NonNullable<Me["started"]> {
   const note =
     (s.pipeline?.[memberId]?.entries ?? []).some((e) => !!e.dates?.sent) || (s.seatInvites ?? []).some((x) => x.by === memberId) || (s.conversations ?? []).some((c) => c.a === memberId);
   const net = s.network?.[memberId];
-  const network = !!net?.google || !!net?.gmail || !!(s as State & { paths?: Record<string, { linkedin?: unknown }> }).paths?.[memberId]?.linkedin;
-  return { note, network, ...(networkOn() ? {} : { networkOff: true }) };
+  const files = (s as State & { paths?: Record<string, { linkedin?: unknown; csv?: unknown }> }).paths?.[memberId];
+  const network = !!net?.google || !!net?.gmail || !!files?.linkedin || !!files?.csv;
+  return { note, network, ...(networkOn() ? {} : { networkOff: true }), ...(process.env.RN_PATHS !== "off" ? { filesOn: true } : {}) };
 }
 /** Company unlocks from Crystal Ball (LedgerEntry.why): they cost nothing and the day's limit doesn't count them. */
 const CRYSTAL_WHY = new Set(["crystal", "crystalFull"]);

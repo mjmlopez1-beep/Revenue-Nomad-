@@ -10,7 +10,7 @@
  *  - the log: what happened when (a kind of event and the step, never a name or any text);
  *  - the outcomes of each step (made the intro, no reply yet, can't help, meeting booked) and the
  *    route's Est. success when chosen, so the estimate can be calibrated later;
- *  - where the route came from (google, linkedin): deleting that data deletes the plan with it.
+ *  - where the route came from (google, linkedin, csv): deleting that data deletes the plan with it.
  * Names are worked out when the plan is shown, by the rules that hold then.
  *
  * State.routeStats is the only thing that leaves a member's own entry: counts of outcomes by the
@@ -66,7 +66,7 @@ export interface RoutePlan {
   /** Est. success when it was chosen (5 to 85). */
   est: number;
   /** Where the route came from: the member's own Google network, their LinkedIn import. */
-  src?: ("google" | "linkedin")[];
+  src?: ("google" | "linkedin" | "csv")[];
   log: PlanLog[];
   outcomes: PlanOutcome[];
 }
@@ -91,7 +91,7 @@ export interface RouteShape {
   links: PathBand[];
   decides: boolean;
   est: number;
-  src?: ("google" | "linkedin")[];
+  src?: ("google" | "linkedin" | "csv")[];
 }
 
 /** The steps a route takes: the member's ask, one intro per person in between, then the meeting. A note straight to who decides: the note, their reply, the meeting. */
@@ -295,7 +295,7 @@ export function forgetMember(routes: RoutesState | undefined, memberId: string):
   return n;
 }
 /** The member deleted their Google data, or their LinkedIn import: the plans through it go with it. */
-export function forgetSource(routes: RoutesState | undefined, memberId: string, src: "google" | "linkedin"): number {
+export function forgetSource(routes: RoutesState | undefined, memberId: string, src: "google" | "linkedin" | "csv"): number {
   const mine = routes?.[memberId];
   if (!mine) return 0;
   let n = 0;

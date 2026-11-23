@@ -25,12 +25,12 @@ import type { RadarSentRow } from "../radar/types";
 import { companyFacts } from "../radar/signals";
 import { icpIsEmpty, inIcp } from "../radar/match";
 import { oddsFor, ownSeatTest } from "../google/odds";
-import { networkOn, type HireOdds } from "../google/types";
+import type { HireOdds } from "../google/types";
 import { alertMatches, type SavedSearch } from "../mcp/alerts";
 import * as P from "../pipeline";
 import { peerPicks } from "../peers";
 import { PATH_RAW, personOfContact, type Contact, type WLeader, type WSeat, type World } from "./find";
-import { factsOf, foundFor, shownName, who, type Found } from "./index";
+import { factsOf, foundFor, pathsOn, shownName, who, type Found } from "./index";
 import { worldOf } from "./world";
 import {
   HOW_ESTIMATED, betweenWords, compareRoutes, estRaw, estWords, evidenceWords, fitLevel, initialsOf, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, roundEst, spread, strongestOf, timeWords, zoneOf, companyScore,
@@ -229,7 +229,8 @@ function youEvidence(cx: Cx, c: Contact | null, directory: string | null, bridge
     return { ev, at };
   }
   if ((c.meetings ?? 0) > 0 || (c.emails ?? 0) > 0) ev.push({ kind: "met", meetings: c.meetings ?? 0, emails: c.emails ?? 0, both: c.both, last: c.lastMet ?? null });
-  else if (c.src.includes("google")) ev.push({ kind: "contact" });
+  // Saved in their Google contacts or their own contacts file, never met.
+  else if (c.src.includes("google") || c.src.includes("csv")) ev.push({ kind: "contact" });
   if (c.msgCount) ev.push({ kind: "messages", count: c.msgCount, last: c.msgLast ?? null });
   if (c.member) ev.push({ kind: "peer" });
   if (c.src.includes("linkedin")) ev.push({ kind: "linkedin", since: c.connected });
@@ -301,7 +302,7 @@ export interface Built {
   raw: number;
   tie: number;
   /** Per node after You: where the name came from (the connector names only Merlin's own). */
-  srcs: ("google" | "linkedin" | "merlin")[][];
+  srcs: ("google" | "linkedin" | "csv" | "merlin")[][];
   /** The first person is a member (or in the directory). */
   firstMember: boolean;
   /** Act for the ask and the person's email, from the member's own list. */
@@ -324,7 +325,7 @@ interface Draft {
   targetFirst: string;
   /** Hop keys (internal), for the ids. */
   keys: string[];
-  srcs: ("google" | "linkedin" | "merlin")[][];
+  srcs: ("google" | "linkedin" | "csv" | "merlin")[][];
   act: RouteAct;
   email: string | null;
   note: { subject: string; body: string } | null;
@@ -340,7 +341,7 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
   const parts = raw.parts;
   const c = raw.contact;
   const you: RouteNode = { role: "you", label: "You", sub: cx.f.me.words.as ? cx.f.me.words.as.charAt(0).toUpperCase() + cx.f.me.words.as.slice(1) : null, initials: "You" };
-  const viaSrc: ("google" | "linkedin" | "merlin")[] = c ? [...(c.src.includes("google") ? (["google"] as const) : []), ...(c.src.includes("linkedin") ? (["linkedin"] as const) : []), ...(c.member || c.src.includes("messages") ? (["merlin"] as const) : [])] : ["merlin"];
+  const viaSrc: ("google" | "linkedin" | "csv" | "merlin")[] = c ? [...(c.src.includes("google") ? (["google"] as const) : []), ...(c.src.includes("linkedin") ? (["linkedin"] as const) : []), ...(c.src.includes("csv") ? (["csv"] as const) : []), ...(c.member || c.src.includes("messages") ? (["merlin"] as const) : [])] : ["merlin"];
   const y = youEvidence(cx, c, raw.directory?.key ?? null, parts.bridgeId);
   const nodes: RouteNode[] = [you];
   const links: RouteLink[] = [];
@@ -599,7 +600,7 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
   const tNode = d.nodes[d.nodes.length - 1];
   const hops = d.keys.map((k) => `h${hash(`${cx.m.id}|${k}`)}`);
   const id = `r${hash(`${cx.m.id}|${companyId}|${hops.join(",")}`)}`;
-  const src = [...new Set(d.srcs.flat().filter((x): x is "google" | "linkedin" => x === "google" || x === "linkedin"))];
+  const src = [...new Set(d.srcs.flat().filter((x): x is "google" | "linkedin" | "csv" => x === "google" || x === "linkedin" || x === "csv"))];
   const short = between === 0 ? `Write to ${d.targetFirst}` : `${cap(d.firsts[0])}'s route`;
   const view: RouteView = {
     id,
@@ -1045,7 +1046,7 @@ const internalOf = (seed: Seed, s: State, pub: unknown): string | null => {
  * Sent); a message or an invite on Merlin moves it when it goes out. Nothing is sent from here.
  */
 export async function wayAct(token: string | null, pub: unknown, op: WayOp, nowMs = Date.now()): Promise<{ view: WayInView; message: string }> {
-  if (!networkOn()) throw new ActionError("Your network isn't on for Merlin yet.");
+  if (!pathsOn()) throw new ActionError("Ways in aren't on for Merlin yet.");
   const w = await who(token);
   if (!w) throw new ActionError("You're signed out. Sign in again.");
   const id = internalOf(w.seed, w.s, pub);
@@ -1124,9 +1125,9 @@ export async function wayAct(token: string | null, pub: unknown, op: WayOp, nowM
 
 /* ---------- for the route ---------- */
 
-/** GET /api/paths?way=<public id>. { on: false } with Your network off; null signed out; { none: true } for no such company. */
+/** GET /api/paths?way=<public id>. { on: false } with RN_PATHS off; null signed out; { none: true } for no such company. */
 export async function wayIn(token: string | null, pub: unknown, nowMs = Date.now()): Promise<WayInView | { on: false } | { none: true } | null> {
-  if (!networkOn()) return { on: false };
+  if (!pathsOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   const id = internalOf(w.seed, w.s, pub);
@@ -1145,7 +1146,7 @@ export async function wayIn(token: string | null, pub: unknown, nowMs = Date.now
 
 /** GET /api/paths?map=1. */
 export async function getInView(token: string | null, nowMs = Date.now()): Promise<GetInView | { on: false } | null> {
-  if (!networkOn()) return { on: false };
+  if (!pathsOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   return getInOf(w.seed, w.s, w.m, nowMs);
@@ -1153,7 +1154,7 @@ export async function getInView(token: string | null, nowMs = Date.now()): Promi
 
 /** GET /api/paths?plans=1. */
 export async function planLines(token: string | null, nowMs = Date.now()): Promise<{ plans: PlanLine[] } | { on: false } | null> {
-  if (!networkOn()) return { on: false };
+  if (!pathsOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   return { plans: planLinesOf(w.seed, w.s, w.m, nowMs) };

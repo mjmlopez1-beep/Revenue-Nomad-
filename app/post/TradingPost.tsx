@@ -108,7 +108,8 @@ const preloadLater = (admin: boolean) => {
 };
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
-import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, type AppCtx, type ShellPage } from "./shell/pages";
+import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, tableSlot, type AppCtx, type ShellPage } from "./shell/pages";
+import { setPeopleStart } from "./people/start";
 
 export interface TradingPostProps {
   view: View;
@@ -3123,7 +3124,15 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const runSix = useStable((k: SixKey) => {
     if (k === "icp") return setIcpOpen(true);
     if (k === "seat") return seatStats.n > 0 ? openSeats() : openSeatSearch();
-    if (k === "network") return openPage("network");
+    if (k === "network") {
+      // The new look: People, at People I know, with "Bring in who you know" beside the table (each source works without Google).
+      if (ui2) {
+        setPeopleStart({ view: "known", step: true });
+        setRecordType("people");
+        return openShellPage("table");
+      }
+      return openPage("network");
+    }
     if (k === "open") return stepOne();
     if (k === "evidence") return openShellPage("evidence");
     if (k === "alert") {
@@ -3293,9 +3302,11 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const pageMain = defNow ? (typeof defNow.mainClass === "function" ? defNow.mainClass(ctx) : defNow.mainClass ?? "") : "";
   /** The new look's Home and Companies workbench, once they exist (shell/pages.tsx home2, companies2). */
   const Home2 = ui2 ? pageDef("home2")?.component ?? null : null;
-  const Companies2 = ui2 && onScreen === "table" && recordType === "companies" ? pageDef("companies2")?.component ?? null : null;
+  // The list's own page in the new look: the Companies workbench, People (shell/pages.tsx tableSlot).
+  const slot = ui2 && onScreen === "table" ? tableSlot(recordType) : null;
+  const Companies2 = slot ? pageDef(slot)?.component ?? null : null;
   /** The entry on screen (Home's, the workbench's or the page's): whether it draws its own header and strip. */
-  const defShown = RecordPage ? pageDef("company2") : onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 ? pageDef("companies2") : null) : defNow;
+  const defShown = RecordPage ? pageDef("company2") : onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 && slot ? pageDef(slot) : null) : defNow;
   const headOwn = !!defShown?.ownHeader && !!defShown.component;
 
   /* ----- layout ----- */

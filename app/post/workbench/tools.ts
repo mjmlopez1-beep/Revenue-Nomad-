@@ -52,7 +52,11 @@ export type ToolDo =
   | { kind: "page"; page: "network" | "proposals" | "pipeline" }
   | { kind: "alert"; trigger: "role" | "seat" | "leader" | "funding" }
   | { kind: "action"; action: "pipeline" | "notes" | "pass" | "proposal" }
-  | { kind: "evidence" };
+  | { kind: "evidence" }
+  /** People: bring in who you know from one source (network/ConnectPanel.tsx), the people on a list, Gmail through the member's own agent. */
+  | { kind: "connect"; source: "google" | "linkedin" | "csv" }
+  | { kind: "scope"; scope: "ideal" | "pipe" | "all" }
+  | { kind: "agent" };
 
 export interface ToolItem {
   id: string;
@@ -67,11 +71,61 @@ export interface ToolItem {
 /** What the panel needs to know about the member and the server's switches. */
 export interface ToolCtx {
   me: Pick<Me, "proOpens" | "plan" | "credits">;
-  /** Your network (RN_GOOGLE) is on: Google contacts and the LinkedIn file are sources. */
+  /** Your network (RN_GOOGLE) is on: Google contacts are a source. */
   network: boolean;
   /** Close features are open (the trial, Close, grandfathered Pro): Start a proposal. */
   close: boolean;
+  /** People: what the member has brought in, each source on its own (lib/paths): Google connected, the LinkedIn file's and the CSV's rows. */
+  sources?: { google: boolean; googleOn: boolean; linkedin: number | null; csv: number | null };
+  /** People: the member has an ideal client on file (the "People at your ideal client" source). */
+  icp?: boolean;
 }
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+
+/**
+ * People's tools (People.dc.html): Enrich runs the person's own locks (the name and title as one,
+ * then email, phone and public profile, 1 credit a row each, quoted first) and "Match to my
+ * contacts"; Sources are the member's own (Google, their LinkedIn connections file, a CSV, Gmail
+ * through their own agent), each independent; Actions add to the pipeline, draft notes, watch for a
+ * new decider. Left out: "Ask Merlin, a column Merlin researches" (nothing on the server backs it)
+ * and Export (members cannot export data from Merlin).
+ */
+function peopleItems(ctx: ToolCtx): ToolItem[] {
+  const co = companyCost(ctx.me);
+  const src = ctx.sources ?? { google: false, googleOn: ctx.network, linkedin: null, csv: null };
+  const any = src.google || src.linkedin !== null || src.csv !== null;
+  const pro = proNow(ctx.me);
+  return [
+    { id: "pp-dm", tab: "enrich", label: "Find the decider", sub: "Name and title of who hires. One unlock for both", cost: "1 / row", tone: "paid", do: { kind: "run", col: "name" } },
+    { id: "pp-email", tab: "enrich", label: "Find an email", sub: "Work email. Needs the name first", cost: "1 / row", tone: "paid", do: { kind: "run", col: "email" } },
+    { id: "pp-phone", tab: "enrich", label: "Find a phone number", sub: "A direct line, where a member shared one", cost: "1 / row", tone: "paid", do: { kind: "run", col: "phone" } },
+    { id: "pp-profile", tab: "enrich", label: "Find a public profile", sub: "A link to their public profile", cost: "1 / row", tone: "paid", do: { kind: "run", col: "linkedin" } },
+    { id: "pp-open", tab: "enrich", label: "Open these companies", sub: "Their people open after the company", cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
+    { id: "pp-match", tab: "enrich", label: "Match to my contacts", sub: "Fills How you know them and Last touch", cost: any ? "Free" : "Step 3", tone: any ? "free" : "gate", do: { kind: "connect", source: src.googleOn && !src.google ? "google" : "linkedin" } },
+    {
+      id: "src-google",
+      tab: "sources",
+      label: "Google contacts and calendar",
+      sub: !src.googleOn ? "Not on for Merlin yet. The files below work without it" : src.google ? "Connected. Read once a day" : "Not connected",
+      cost: src.google ? "On" : src.googleOn ? "Connect" : "Off",
+      tone: src.google ? "free" : "gate",
+      do: { kind: "connect", source: "google" },
+    },
+    { id: "src-linkedin", tab: "sources", label: "Your LinkedIn connections file", sub: src.linkedin !== null ? `${fmt(src.linkedin)} connections` : "Not added", cost: src.linkedin !== null ? "On" : "Add", tone: src.linkedin !== null ? "free" : "gate", do: { kind: "connect", source: "linkedin" } },
+    { id: "src-csv", tab: "sources", label: "Import a CSV", sub: src.csv !== null ? `${fmt(src.csv)} contacts` : "Any list with a name and a company", cost: src.csv !== null ? "On" : "Add", tone: src.csv !== null ? "free" : "gate", do: { kind: "connect", source: "csv" } },
+    { id: "src-agent", tab: "sources", label: "Gmail, through your own agent", sub: "Your agent reads your inbox on your side and saves only who and when", cost: "Agent", tone: "gate", do: { kind: "agent" } },
+    ...(ctx.icp ? [{ id: "src-icp", tab: "sources" as const, label: "People at your ideal client", sub: "The companies you said you sell to", cost: "Free", tone: "free" as const, do: { kind: "scope" as const, scope: "ideal" as const } }] : []),
+    { id: "src-co", tab: "sources", label: "These companies", sub: "One row a company", cost: "Free", tone: "free", do: { kind: "type", type: "companies" } },
+    { id: "act-pipe", tab: "actions", label: "Add to pipeline", sub: "Ticked rows' companies become targets", cost: "Free", tone: "free", do: { kind: "action", action: "pipeline" } },
+    { id: "act-notes", tab: "actions", label: "Draft notes", sub: "One note per person, from a template in your voice", cost: "Free", tone: "free", do: { kind: "action", action: "notes" } },
+    { id: "act-watch", tab: "actions", label: "Watch for a new decider", sub: "Tell me when one joins a company in this view", cost: pro ? "Free" : "Pro", tone: pro ? "free" : "gate", do: { kind: "alert", trigger: "leader" } },
+    { id: "act-pass", tab: "actions", label: "Pass as a lead", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
+  ];
+}
+
+/** The tabs a list's Tools panel shows: People has no For you or Signals (its alert is in Actions). */
+export const toolTabsFor = (type: RecordType) => (type === "people" ? TOOL_TABS.filter((t) => t.key === "enrich" || t.key === "sources" || t.key === "actions") : TOOL_TABS);
 
 /** Trial and Pro: companies open free up to PRO_OPENS_DAILY a day (Me.proOpens). */
 export const opensFree = (me: Pick<Me, "proOpens">) => !!me.proOpens && me.proOpens.left > 0;
@@ -85,6 +139,7 @@ export function companyCost(me: Pick<Me, "proOpens" | "plan">): { cost: string; 
 }
 
 export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
+  if (type === "people" && ctx.sources) return peopleItems(ctx);
   const co = companyCost(ctx.me);
   const pro = proNow(ctx.me);
   const gate = (ok: boolean, name: string): { cost: string; tone: CostTone } => (ok ? { cost: "On", tone: "free" } : { cost: name, tone: "gate" });

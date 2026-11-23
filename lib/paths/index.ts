@@ -7,8 +7,10 @@
  * Every read here is for the signed-in member's own entry. Nothing builds anything for another
  * member or an admin; the connector gets counts only (pathsLine, accountPathsLine).
  *
- * Switched on with Your network (RN_GOOGLE=1): it lives on that page, and with it off every answer
- * is { on: false } and nothing shows.
+ * The sources are independent (the owner's decision): the LinkedIn connections file and a contacts
+ * CSV work without Google, and Google without them; each alone gives people you know and ways in,
+ * and together they merge (contactsOf). Google's part still needs Your network (RN_GOOGLE=1). The
+ * whole of it switches off with RN_PATHS=off: then every answer is { on: false } and nothing shows.
  */
 import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
 import { companiesOf, selfTest } from "../google";
@@ -26,16 +28,24 @@ import { FIT_WEIGHT, INTRO_NOTE_MAX, INTRO_TARGETS_MAX, askPerson, askTo, fitWor
 import { alertMatches, type SavedSearch } from "../mcp/alerts";
 import { clientKinds, myWords } from "../partners";
 import { styleOf, type VoiceProfile } from "../voice";
-import { parseConnections, CSV_PROBLEM_WORDS } from "./csv";
-import { findAll, type Contact, type ContactTarget, type Me } from "./find";
+import { parseConnections, parseContacts, CSV_PROBLEM_WORDS, CONTACTS_PROBLEM_WORDS } from "./csv";
+import { findAll, leadersOfContact, type Contact, type ContactTarget, type Me } from "./find";
 import { firstWord, personKey } from "./match";
 import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
 import { forgetSource } from "./plan";
 import {
-  FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, waysWords,
-  type CompanyPathsView, type LinkedInRow, type MemberPaths, type PathsAnswer, type PathsState, type PathView, type TargetView,
+  AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, waysWords,
+  type CompanyPathsView, type ContactRow, type KnownPersonView, type KnownView, type LinkedInRow, type MemberPaths, type PathsAnswer, type PathsState, type PathView, type TargetView,
 } from "./types";
+
+/**
+ * People you know and ways in are on (RN_PATHS, on unless set to "off"). They need no Google: the
+ * member's LinkedIn file and contacts CSV are sources of their own. Google's part is Your network's
+ * (networkOn, RN_GOOGLE=1).
+ */
+export const pathsOn = () => process.env.RN_PATHS !== "off";
+const OFF = "Ways in aren't on for Merlin yet.";
 
 const DAY = 86_400_000;
 const SIGNED_OUT = "You're signed out. Sign in again.";
@@ -60,7 +70,7 @@ const importsToday = (p: MemberPaths | undefined, nowMs: number) => (p?.imports 
  * new file replaces the last one. IMPORTS_DAILY uploads in any rolling 24 hours.
  */
 export async function importConnections(token: string | null, text: unknown, nowMs = Date.now()): Promise<{ answer: PathsAnswer; message: string }> {
-  if (!networkOn()) throw new ActionError("Your network isn't on for Merlin yet.");
+  if (!pathsOn()) throw new ActionError(OFF);
   const w = await who(token);
   if (!w) throw new ActionError(SIGNED_OUT);
   if (typeof text !== "string" || !text) throw new ActionError(CSV_PROBLEM_WORDS.empty);
@@ -81,6 +91,70 @@ export async function importConnections(token: string | null, text: unknown, now
   return { answer, message: `Added ${n.toLocaleString("en-US")} ${n === 1 ? "connection" : "connections"}. Only you see them.` };
 }
 
+/**
+ * The member's own contacts CSV: only the columns they picked (the page sends the file
+ * lib/paths/csv.ts pickColumns wrote), read and cleaned (parseContacts) and kept for them alone. A
+ * new file replaces the last one. It shares the daily upload limit with the LinkedIn file.
+ */
+export async function importContacts(token: string | null, text: unknown, nowMs = Date.now()): Promise<{ answer: PathsAnswer; message: string }> {
+  if (!pathsOn()) throw new ActionError(OFF);
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  if (typeof text !== "string" || !text) throw new ActionError(CONTACTS_PROBLEM_WORDS.empty);
+  if (text.length > FILE_MAX_BYTES) throw new ActionError("That file is too large. Pick a CSV under 8 MB, or split it in two.");
+  const limit = `That's ${IMPORTS_DAILY} uploads today, the most in a day. Try again tomorrow.`;
+  if (importsToday(pathsOf(w.s, w.m.id), nowMs) >= IMPORTS_DAILY) throw new ActionError(limit);
+  const r = parseContacts(text);
+  if (!r.ok) throw new ActionError(CONTACTS_PROBLEM_WORDS[r.problem]);
+  const at = new Date(nowMs).toISOString();
+  await T.mutate((s) => {
+    const p = (allPaths(s)[w.m.id] ??= {});
+    if (importsToday(p, nowMs) >= IMPORTS_DAILY) throw new ActionError(limit);
+    p.imports = [...(p.imports ?? []).filter((x) => nowMs - Date.parse(x) < DAY), at];
+    p.csv = { at, rows: r.rows, skipped: r.skipped };
+  });
+  const answer = (await pathsView(token, nowMs))!;
+  const n = r.rows.length;
+  return { answer, message: `Added ${n.toLocaleString("en-US")} ${n === 1 ? "contact" : "contacts"}. Only you see them.` };
+}
+
+/** Delete the contacts CSV and everything worked out from it (its ways in, plans through it). */
+export async function deleteContacts(token: string | null): Promise<PathsAnswer> {
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  await T.mutate((s) => {
+    const all = allPaths(s);
+    forgetSource(s.routes, w.m.id, "csv");
+    const p = all[w.m.id];
+    if (!p) return;
+    delete p.csv;
+    if (!p.linkedin && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
+  });
+  return (await pathsView(token))!;
+}
+
+/**
+ * "Not a relationship" on someone the member knows (their own key, KnownPersonView.key), or its
+ * Undo. Remembered across reads; the person leaves the member's ways in. Nothing else changes.
+ */
+export async function setAway(token: string | null, key: unknown, on: boolean): Promise<KnownView | { on: false }> {
+  if (!pathsOn()) throw new ActionError(OFF);
+  const w = await who(token);
+  if (!w) throw new ActionError(SIGNED_OUT);
+  const k = typeof key === "string" ? key.slice(0, 300) : "";
+  const all = contactsOf(w.seed, w.s, w.m).contacts;
+  const hit = all.find((c) => c.key === k || (c.aliases ?? []).includes(k));
+  if (!hit) throw new ActionError("That person isn't in what you brought in any more. Refresh the page.");
+  const keys = [hit.key, ...(hit.aliases ?? [])];
+  await T.mutate((s) => {
+    const p = (allPaths(s)[w.m.id] ??= {});
+    const rest = (p.away ?? []).filter((x) => !keys.includes(x));
+    p.away = on ? [...rest, hit.key].slice(-AWAY_MAX) : rest;
+    if (!p.away.length) delete p.away;
+  });
+  return (await knownView(token))!;
+}
+
 /** Delete the import and everything worked out from it. The daily upload count stays (it is not from the file). */
 export async function deleteConnections(token: string | null): Promise<PathsAnswer> {
   const w = await who(token);
@@ -92,7 +166,7 @@ export async function deleteConnections(token: string | null): Promise<PathsAnsw
     forgetSource(s.routes, w.m.id, "linkedin");
     if (!p) return;
     delete p.linkedin;
-    if (!(p.imports ?? []).length) delete all[w.m.id];
+    if (!p.csv && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
   });
   return (await pathsView(token))!;
 }
@@ -114,7 +188,7 @@ function messageWarmth(lastIso: string, nowMs: number): Warmth {
 }
 
 /** LinkedIn connections and Google contacts at companies on Merlin, plus the members the member has messaged. One entry a person. */
-export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): { contacts: Contact[]; matched: number } {
+export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): { contacts: Contact[]; matched: number; csvMatched: number } {
   const w = worldOf(seed, s, nowMs);
   const dir = directoryOf(seed, s);
   const own = new Set<string>();
@@ -223,8 +297,29 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
       connected: r.d ?? null, member,
     });
   }
-  return { contacts: [...out.values()], matched };
+
+  // The member's own contacts CSV: the company by the email's website first, else its exact name. No Google needed.
+  const crows: ContactRow[] = pathsOf(s, m.id)?.csv?.rows ?? [];
+  let csvMatched = 0;
+  for (const r of crows) {
+    const name = shownName(r.n);
+    const email = r.e ?? null;
+    const dom = email ? workDomain(email, own) : null;
+    const companyId = (dom ? matchDomain(dir, dom) : null) ?? (r.c ? matchOrg(dir, r.c) : null);
+    if (companyId) csvMatched++;
+    const member = email ? (w.memberByEmail.get(email) ?? null) : null;
+    if (!companyId && !member) continue;
+    put({
+      key: `c:${email ?? `${name.toLowerCase()}|${(r.c ?? "").toLowerCase()}`}`, name, first: firstWord(name), nameKey: personKey(name), title: r.t ?? null, companyId, email, slug: null,
+      linkedin: null, src: ["csv"], warmth: null, why: "In your contacts file", met: false, connected: null, member,
+    });
+  }
+  return { contacts: [...out.values()], matched, csvMatched };
 }
+
+/** The member's "Not a relationship" keys. */
+const awayOf = (s: State, memberId: string) => new Set(pathsOf(s, memberId)?.away ?? []);
+const isAway = (c: Contact, away: Set<string>) => away.has(c.key) || (c.aliases ?? []).some((k) => away.has(k));
 
 /* ---------- the member's ways in ---------- */
 
@@ -234,6 +329,7 @@ export interface Found {
   byContact: Map<string, ContactTarget[]>;
   contacts: Map<string, Contact>;
   matched: number;
+  csvMatched: number;
   me: Me;
 }
 const found = new WeakMap<State, Map<string, Found>>();
@@ -272,13 +368,17 @@ function meOf(seed: Seed, s: State, m: Member, nowMs: number): Me {
 export function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found {
   let per = found.get(s);
   if (!per) found.set(s, (per = new Map()));
-  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}`;
+  // Google's part comes and goes with Your network (RN_GOOGLE): the answer is kept per switch too.
+  const k = `${m.id}:${new Date(nowMs).toISOString().slice(0, 10)}:${networkOn() ? "g" : "-"}`;
   let hit = per.get(k);
   if (!hit) {
-    const { contacts, matched } = contactsOf(seed, s, m, nowMs);
+    const got = contactsOf(seed, s, m, nowMs);
+    // Someone the member said is not a relationship is no way in.
+    const away = awayOf(s, m.id);
+    const contacts = got.contacts.filter((c) => !isAway(c, away));
     const me = meOf(seed, s, m, nowMs);
     const all = findAll(worldOf(seed, s, nowMs), me, contacts);
-    hit = { byCompany: all.byCompany, byContact: all.byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched, me };
+    hit = { byCompany: all.byCompany, byContact: all.byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched: got.matched, csvMatched: got.csvMatched, me };
     if (per.size > 2000) per.clear();
     per.set(k, hit);
   }
@@ -443,9 +543,9 @@ export function introPlansOf(seed: Seed, s: State, m: Member, f: Found, nowMs = 
 /** People the page carries a plan for (the strongest first). */
 export const INTRO_PLANS_MAX = 300;
 
-/** GET /api/paths: the import, the counts by company, and "Your hidden paths". { on: false } with Your network off. */
+/** GET /api/paths: the imports, the counts by company, and "Your hidden paths". { on: false } with RN_PATHS off. */
 export async function pathsView(token: string | null, nowMs = Date.now()): Promise<PathsAnswer | null> {
-  if (!networkOn()) return { on: false };
+  if (!pathsOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   const { seed, s, m } = w;
@@ -472,6 +572,8 @@ export async function pathsView(token: string | null, nowMs = Date.now()): Promi
   return {
     on: true,
     linkedin: p?.linkedin ? { at: p.linkedin.at, rows: p.linkedin.rows.length, matched: f.matched, skipped: p.linkedin.skipped } : null,
+    csv: p?.csv ? { at: p.csv.at, rows: p.csv.rows.length, matched: f.csvMatched, skipped: p.csv.skipped } : null,
+    googleOn: networkOn(),
     importsLeft: Math.max(0, IMPORTS_DAILY - importsToday(p, nowMs)),
     targets: targets.slice(0, TARGETS_MAX).map(({ r: _r, ...t }) => t), // eslint-disable-line @typescript-eslint/no-unused-vars
     counts,
@@ -481,7 +583,7 @@ export async function pathsView(token: string | null, nowMs = Date.now()): Promi
 
 /** GET /api/paths?company=: one company's ways in (its public id), best first. */
 export async function companyPaths(token: string | null, companyPub: unknown, nowMs = Date.now()): Promise<CompanyPathsView | { on: false } | null> {
-  if (!networkOn()) return { on: false };
+  if (!pathsOn()) return { on: false };
   const w = await who(token);
   if (!w) return null;
   const pub = typeof companyPub === "string" ? companyPub.slice(0, 80) : "";
@@ -494,7 +596,7 @@ export async function companyPaths(token: string | null, companyPub: unknown, no
 
 /** get_company's one line: "You have 2 ways in through people you know. Open Merlin to see them." Never a name. */
 export async function pathsLine(member: Member, companyPub: string, nowMs = Date.now()): Promise<{ ways_in_through_people_you_know?: string }> {
-  if (!networkOn()) return {};
+  if (!pathsOn()) return {};
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const f = foundFor(seed, s, member, nowMs);
   for (const [id, x] of f.byCompany)
@@ -504,10 +606,73 @@ export async function pathsLine(member: Member, companyPub: string, nowMs = Date
 
 /** my_account's one line: how many companies the member has a way into through people they know. Counts only. */
 export async function accountPathsLine(member: Member, nowMs = Date.now()): Promise<{ smart_ways_in?: string }> {
-  if (!networkOn()) return {};
+  if (!pathsOn()) return {};
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const f = foundFor(seed, s, member, nowMs);
   const k = f.byCompany.size;
   if (!k) return {};
   return { smart_ways_in: `Ways in through people you know at ${k} ${k === 1 ? "company" : "companies"}. Your hidden paths on Your network in Merlin lists them with who to ask.` };
+}
+
+/* ---------- People I know (the People page, the person bubble) ---------- */
+
+/** Who the member knows at companies on Merlin, at most this many (the strongest first). */
+export const KNOWN_MAX = 3000;
+const WARM_ORDER = ["Hot", "Warm", "Fading", "Cold"];
+
+/**
+ * GET /api/paths?known=1: everyone the member knows at a company on Merlin, from each of their own
+ * sources merged (contactsOf), strongest first. Their own words only (the name, title and email from
+ * their own file, contacts or messages). `record` names which person record on file this is, only
+ * where the match is precise (the same public profile, or the one record with the same name at the
+ * same company: lib/paths/find.ts leadersOfContact) and only at a company the member can see, so a
+ * locked company's people stay as locked as they are. The record's own cells keep their locks: the
+ * page reads them from the table, never from here.
+ */
+export async function knownView(token: string | null, nowMs = Date.now()): Promise<KnownView | { on: false } | null> {
+  if (!pathsOn()) return { on: false };
+  const w = await who(token);
+  if (!w) return null;
+  const { seed, s, m } = w;
+  const { contacts } = contactsOf(seed, s, m, nowMs);
+  const world = worldOf(seed, s, nowMs);
+  const me = meOf(seed, s, m, nowMs);
+  const away = awayOf(s, m.id);
+  const p = pathsOf(s, m.id);
+  const people: (KnownPersonView & { r: number })[] = [];
+  let messages = 0;
+  for (const c of contacts) {
+    if (c.src.includes("messages")) messages++;
+    // The member themself is never someone they know.
+    if (c.member === m.id || (c.nameKey && c.nameKey === me.nameKey)) continue;
+    if (!c.companyId && !c.member) continue;
+    const seen = !!c.companyId && me.visible(c.companyId);
+    const recs = seen ? leadersOfContact(world, c).filter((l) => l.companyId === c.companyId) : [];
+    const lastMet = c.lastMet ?? null;
+    const msg = c.msgLast ?? null;
+    const last = lastMet && (!msg || lastMet >= msg) ? lastMet : msg;
+    const lastKind = !last ? null : last === lastMet && lastMet ? ((c.meetings ?? 0) > 0 ? "Meeting" : "Email") : "Message";
+    people.push({
+      key: c.key,
+      name: c.name,
+      title: c.title,
+      company: c.companyId ? T.pubId(c.companyId) : null,
+      src: c.src,
+      warmth: c.warmth,
+      why: c.why,
+      last,
+      lastKind,
+      email: c.email,
+      profile: c.linkedin,
+      record: recs.length === 1 ? T.pubId(recs[0].id) : null,
+      member: c.member ? T.pubId(c.member) : null,
+      away: isAway(c, away),
+      r: (c.warmth ? 10 - WARM_ORDER.indexOf(c.warmth) : 0) * 1e9 + (last ? Date.parse(`${last}T12:00:00Z`) / 1e3 : 0),
+    });
+  }
+  people.sort((a, b) => b.r - a.r || a.name.localeCompare(b.name));
+  return {
+    people: people.slice(0, KNOWN_MAX).map(({ r: _r, ...x }) => x), // eslint-disable-line @typescript-eslint/no-unused-vars
+    sources: { google: networkOn() && !!(s as WithPaths).network?.[m.id]?.google, linkedin: p?.linkedin ? p.linkedin.rows.length : null, csv: p?.csv ? p.csv.rows.length : null, messages },
+  };
 }

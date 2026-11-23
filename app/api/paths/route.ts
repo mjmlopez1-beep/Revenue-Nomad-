@@ -5,6 +5,10 @@
  * GET ?company=<public id>   CompanyPathsView: that company's ways in, best first
  * POST { op: "import", csv } the member's own Connections.csv, as text (replaces the last one)
  * POST { op: "delete" }      delete the import and everything worked out from it
+ * GET ?known=1               KnownView: everyone the member knows at companies on Merlin, from each of their own sources
+ * POST { op: "importCsv", csv }   the member's own contacts CSV, only the columns they picked (lib/paths/csv.ts pickColumns)
+ * POST { op: "deleteCsv" }   delete the contacts CSV and everything worked out from it
+ * POST { op: "away", key, on }    "Not a relationship" on someone they know (on: false is Undo)
  * GET ?map=1                 GetInView: Where you can get in, every company that fits the member, placed (lib/paths/ways.ts)
  * GET ?way=<public id>       WayInView: Your way into that company, its routes with Est. success, and the member's plan
  * GET ?plans=1               { plans: PlanLine[] }: the member's plans, for Home's move and the pipeline's route line
@@ -12,14 +16,15 @@
  * POST { op: "way", company, do: "step", step, answer }        what happened at a step (sent, intro, noreply, nudged, cant, booked)
  * POST { op: "way", company, do: "drop" }                      drop the plan (the deal stays)
  *                            Nothing is ever sent from here, and no credit is spent.
- * Every answer is { view } (or { company }) or { error }. { on: false } with Your network off.
+ * Every answer is { view } (or { company }, { known }) or { error }. { on: false } with RN_PATHS off. The
+ * LinkedIn file and the contacts CSV need no Google (RN_GOOGLE): each source works on its own.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { ActionError } from "@/lib/table";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
-import { companyPaths, deleteConnections, importConnections, pathsView } from "@/lib/paths";
+import { companyPaths, deleteConnections, deleteContacts, importConnections, importContacts, knownView, pathsView, setAway } from "@/lib/paths";
 import { FILE_MAX_BYTES } from "@/lib/paths/types";
 import { getInView, planLines, wayAct, wayIn, type WayOp } from "@/lib/paths/ways";
 
@@ -36,6 +41,11 @@ export const GET = guarded(async (req: NextRequest) => {
     const v = await getInView(token);
     if (!v) return fail(SIGNED_OUT, 401);
     return NextResponse.json({ map: v }, { headers: noStore });
+  }
+  if (sp.get("known") !== null) {
+    const v = await knownView(token);
+    if (!v) return fail(SIGNED_OUT, 401);
+    return NextResponse.json({ known: v }, { headers: noStore });
   }
   if (sp.get("plans") !== null) {
     const v = await planLines(token);
@@ -65,10 +75,10 @@ export const POST = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
   if (!token) return fail(SIGNED_OUT, 401);
   const size = Number(req.headers.get("content-length") ?? 0);
-  if (size > FILE_MAX_BYTES + 4096) return fail("That file is larger than LinkedIn's Connections.csv can be.", 413);
+  if (size > FILE_MAX_BYTES + 4096) return fail("That file is too large. Pick one under 8 MB.", 413);
   const raw = await req.text();
-  if (raw.length > FILE_MAX_BYTES + 4096) return fail("That file is larger than LinkedIn's Connections.csv can be.", 413);
-  type Body = { op?: unknown; csv?: unknown; company?: unknown; do?: unknown; route?: unknown; step?: unknown; answer?: unknown };
+  if (raw.length > FILE_MAX_BYTES + 4096) return fail("That file is too large. Pick one under 8 MB.", 413);
+  type Body = { op?: unknown; csv?: unknown; company?: unknown; do?: unknown; route?: unknown; step?: unknown; answer?: unknown; key?: unknown; on?: unknown };
   let body: Body | null = null;
   try {
     body = JSON.parse(raw) as Body;
@@ -82,6 +92,18 @@ export const POST = guarded(async (req: NextRequest) => {
         if (limited(`paths-import:${key}`, 6, 60 * 60_000)) return fail("That's a lot of uploads at once. Give it a few minutes.", 429);
         const r = await importConnections(token, body.csv);
         return NextResponse.json({ view: r.answer, message: r.message }, { headers: noStore });
+      }
+      case "importCsv": {
+        if (limited(`paths-import:${key}`, 6, 60 * 60_000)) return fail("That's a lot of uploads at once. Give it a few minutes.", 429);
+        const r = await importContacts(token, body.csv);
+        return NextResponse.json({ view: r.answer, message: r.message }, { headers: noStore });
+      }
+      case "deleteCsv":
+        return NextResponse.json({ view: await deleteContacts(token), message: "Deleted your contacts file and every way in found from it." }, { headers: noStore });
+      case "away": {
+        if (limited(`paths-away:${key}`, 240, 60 * 60_000)) return fail("That's a lot at once. Give it a few minutes.", 429);
+        const on = body.on !== false;
+        return NextResponse.json({ known: await setAway(token, body.key, on), message: on ? "Set aside. Merlin remembers it on every read." : "Back in People I know." }, { headers: noStore });
       }
       case "way": {
         if (limited(`paths-way:${key}`, 120, 60 * 60_000)) return fail("That's a lot at once. Give it a few minutes.", 429);
