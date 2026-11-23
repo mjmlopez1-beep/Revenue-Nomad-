@@ -427,6 +427,7 @@ async function inBrowser() {
           }
           check("the new look's server is up", up2, log2.slice(-400));
           if (up2) {
+            let phoneKey: string | null = null;
             const ctx2 = async (opts: import("playwright").BrowserContextOptions) => {
               const ctx = await browser.newContext(opts);
               await ctx.addCookies([{ name: "rn_table", value: members[0].token, url: BASE2 }]);
@@ -440,6 +441,7 @@ async function inBrowser() {
               await page.waitForSelector(".wb-scroll tbody tr[data-row]", { timeout: 20_000 }).catch(() => {});
               const opener = page.locator(".wb-scroll tbody tr[data-row]").first();
               const key = await opener.getAttribute("data-row");
+              const key2 = await page.locator(".wb-scroll tbody tr[data-row]").nth(1).getAttribute("data-row");
               await opener.focus();
               await page.keyboard.press("Enter");
               await page.waitForSelector("main.co-page", { timeout: 10_000 }).catch(() => {});
@@ -449,15 +451,16 @@ async function inBrowser() {
               await page.waitForTimeout(500);
               const back = await page.evaluate(() => ({ page: !!document.querySelector("main.co-page"), table: !!document.querySelector(".wb-scroll"), row: (document.activeElement as HTMLElement | null)?.closest("tr")?.getAttribute("data-row") ?? null }));
               check("Escape goes back to the list, and focus to the row it was opened from", !back.page && back.table && back.row === key, { back, key });
-              await page.goto(`${BASE2}/?c=${cos[1].id}`);
+              await page.goto(`${BASE2}/?c=${key2}`);
               await page.waitForSelector("main.co-page", { timeout: 10_000 }).catch(() => {});
               check("an old /?c= address opens the page too", await page.evaluate(() => !!document.querySelector("main.co-page") && !document.querySelector(".tp-drawer")));
+              phoneKey = key2;
               await ctx.close();
             }
             {
               const ctx = await ctx2({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
               const page = await ctx.newPage();
-              await page.goto(`${BASE2}/?c=${cos[1].id}`);
+              await page.goto(`${BASE2}/?c=${phoneKey}`);
               await page.waitForSelector(".tp-drawer", { timeout: 10_000 }).catch(() => {});
               check("on a phone the record stays the drawer", await page.evaluate(() => !!document.querySelector(".tp-drawer") && !document.querySelector("main.co-page")));
               await ctx.close();
