@@ -74,6 +74,9 @@ const lastAt = (c: StoredConversation) => c.messages[c.messages.length - 1]?.at 
 const year = (v: string | null | undefined) => (v && /^\d{4}/.test(v) ? v.slice(0, 4) : null);
 
 /** The conversation as `me` sees it. Public ids only, no email addresses, no member ids. */
+export function conversationRec(seed: Seed, s: State, me: Member, c: StoredConversation): ConversationRec {
+  return recFor(seed, s, me, c);
+}
 function recFor(seed: Seed, s: State, me: Member, c: StoredConversation): ConversationRec {
   const g = T.graph(seed, s);
   const idx = T.memberIndex(seed, s);

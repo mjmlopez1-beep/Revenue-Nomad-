@@ -102,6 +102,11 @@ export function DataFlows() {
               API to write it. Merlin keeps the draft, not the transcript. It is off unless Revenue Nomad switches it on, and each member agrees before their first draft.
             </p>
             <p className="cl-p">
+              The same switch lets Merlin draft a reply in Messages, once a member agrees: that one conversation&apos;s messages, what it is about as the member sees it (a company
+              still locked for them is never named) and their writing voice go to Anthropic&apos;s API, and the draft comes back to their message box. Merlin keeps no word of it.
+              Otherwise &quot;Draft with Merlin&quot; fills the box from a template in the member&apos;s voice, with no AI. An unsent draft stays in the member&apos;s own browser.
+            </p>
+            <p className="cl-p">
               To meter each member&apos;s monthly AI usage, Merlin keeps for each draft only how much it used, as numbers: never a word of the call or the draft. You see
               the share of this month&apos;s AI usage you have used in Plan and billing.
             </p>
