@@ -52,7 +52,7 @@ async function main() {
   check("the page draws each one", keys.every((k) => page.includes(`sec === "${k}" &&`)), keys.filter((k) => !page.includes(`sec === "${k}" &&`)));
   check("each has a lead", keys.every((k) => model.SEC_LEAD[k].length > 20));
   const pages = src("app/post/shell/pages.tsx");
-  check("the registry draws Settings in the new look and Integrations in the old", /settings: \{ title: "Settings", component: SettingsP, ownHeader: true, ownStrip: true/.test(pages) && /c\.ui2 \? <SettingsL \/> : <IntegrationsP \/>/.test(pages) && /loadEvidence, loadSettings, loadAlerts/.test(pages));
+  check("the registry draws Settings in the new look and Integrations in the old", /settings: \{ title: "Settings", component: SettingsP, ownHeader: true, ownStrip: true/.test(pages) && /c\.ui2 \? <SettingsL \/> : <IntegrationsP \/>/.test(pages) && /loadSettings, loadAlerts/.test(pages));
   check("the old Integrations page is untouched for the old look", /integrations: \{ title: "Integrations", component: IntegrationsP \}/.test(pages));
 
   /* ---------- 2. old addresses ---------- */

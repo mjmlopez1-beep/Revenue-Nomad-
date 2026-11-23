@@ -60,6 +60,7 @@ import { useNetwork } from "../network/useNetwork";
 import { useState } from "react";
 import type { AskPlan } from "@/lib/ask";
 import { setFindStart } from "../find/start";
+import { setRatesStart } from "../pageStart";
 import { firstOf, ownOf } from "../firstVisit";
 // Where Settings opens: read from the address as the shell loads, before the app rewrites it (settings/at.ts).
 import "../settings/at";
@@ -342,8 +343,13 @@ const AlertsPageL = dynamic(() => loadAlerts().then((m) => m.AlertsPage), { ssr:
 const AgentAccessL = dynamic(() => loadAgent().then((m) => m.AgentAccess), { ssr: false, loading: pageWait });
 // Settings (settings/SettingsPage.tsx): the section list with Your setup, Connections, Notifications and the rest.
 const SettingsL = dynamic(() => loadSettings().then((m) => m.SettingsPage), { ssr: false, loading: pageWait });
+// Rate benchmarks (rates/RatesPage.tsx) and Credits and usage (credits/CreditsUsage.tsx), each with its tabs. The old look keeps Benchmarks, Your credits and Plan and billing.
+const loadRates2 = () => import("../rates/RatesPage");
+const loadCredits2 = () => import("../credits/CreditsUsage");
+const RatesPageL = dynamic(() => loadRates2().then((m) => m.RatesPage), { ssr: false, loading: pageWait });
+const CreditsUsageL = dynamic(() => loadCredits2().then((m) => m.CreditsUsage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadSettings, loadAlerts, loadAgent];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadRates2, loadCredits2, loadSettings, loadAlerts, loadAgent];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -351,6 +357,7 @@ export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmark
 
 function CreditsP() {
   const c = useApp();
+  if (c.ui2) return <CreditsUsageL page="credits" />;
   return <MyCredits view={c.view} refresh={c.refresh} onUseInClaude={() => c.openPage(c.ui2 ? "agent" : "integrations")} onNotifications={() => c.openPage("notifications")} />;
 }
 function IntegrationsP() {
@@ -378,6 +385,7 @@ function AlertsP() {
 }
 function RatesP() {
   const c = useApp();
+  if (c.ui2) return <RatesPageL />;
   return <Benchmarks view={c.view} refresh={c.refresh} />;
 }
 function MetricsP() {
@@ -413,6 +421,8 @@ function RadarP() {
 }
 function BillingP() {
   const c = useApp();
+  // The new look: Plan and billing is Credits and usage's Plans tab (every email's ?p=billing&plans=1 and Stripe's way back land there).
+  if (c.ui2) return <CreditsUsageL page="billing" />;
   return <BillingPage view={c.view} refresh={c.refresh} />;
 }
 function PeersP() {
@@ -491,6 +501,8 @@ export function askGo(c: AppCtx, plan: AskPlan, text: string) {
   if (plan.page === "find" || plan.page === "lookup") return setFindStart({ plan, text }), c.openPage("find");
   if (plan.page === "hiring") return hp.roles.go();
   if (plan.page === "radar") return hp.radar.go();
+  // "What should I charge …" opens Rate benchmarks with the question asked there (rates/start.ts).
+  if (plan.page === "rates" && c.ui2) setRatesStart(text);
   c.openPage(plan.page);
 }
 
@@ -601,15 +613,15 @@ const peersMain = (c: AppCtx) => (c.ui2 ? "wb-host fy-host" : c.shell.peersAll |
  * Notifications; Settings and Agent access are their own pages in the new look, Integrations in the old).
  */
 export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2" | "hiring2", PageDef>> = {
-  credits: { title: "Your credits", component: CreditsP },
+  credits: { title: "Your credits", component: CreditsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "cnu-host" : "") },
   integrations: { title: "Integrations", component: IntegrationsP },
   notifications: { title: "Notifications", component: NotificationsP },
-  rates: { title: "Rate benchmarks", component: RatesP },
+  rates: { title: "Rate benchmarks", component: RatesP, ownStrip: true, mainClass: (c) => (c.ui2 ? "rt-host" : "") },
   metrics: { title: "Pilot metrics", component: MetricsP, when: (c) => !!c.view.admin },
   // The new look draws its three columns full width (messages/Messages2.tsx) with its own first-visit strip.
   messages: { title: "Messages", component: MessagesP, ownStrip: true, mainClass: (c) => (c.ui2 ? "ms2-host" : "") },
   radar: { title: YOUR_FEATURE, component: RadarP, mainClass: (c) => (c.ui2 ? "wb-host cb-host" : "rd-main"), needsTable: true, ownStrip: true },
-  billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan },
+  billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan || c.ui2, ownStrip: true, mainClass: (c) => (c.ui2 ? "cnu-host" : "") },
   peers: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
   fractionals: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },
   partners: { title: "Fractionals", component: PeersP, mainClass: peersMain, ownHeader: true, ownStrip: true },

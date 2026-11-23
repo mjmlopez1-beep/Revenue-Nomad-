@@ -405,7 +405,7 @@ export function AiPackLine({ plan }: { plan: PlanView }) {
   );
 }
 
-function TopupLine({ plan, emphasis }: { plan: PlanView; emphasis?: boolean }) {
+export function TopupLine({ plan, emphasis }: { plan: PlanView; emphasis?: boolean }) {
   const { busy, run } = useBilling();
   if (!plan.topup) return null;
   return (
@@ -843,7 +843,7 @@ export function AiUsageCard({ ai }: { ai: NonNullable<PlanView["ai"]> }) {
   );
 }
 
-function Status({ plan }: { plan: PlanView }) {
+export function Status({ plan }: { plan: PlanView }) {
   if (plan.name === "trial")
     return (
       <>
@@ -916,12 +916,9 @@ function Status({ plan }: { plan: PlanView }) {
   );
 }
 
-export function BillingPage({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
+/** Back from Stripe (?paid=1, ?topup=1): say what happened, once, and take the flag out of the address. Plan and billing, and Credits and usage's Plans. */
+export function useStripeReturn(plan: PlanView | undefined, refresh: () => Promise<void>) {
   const toast = useToast();
-  const plan = view.me?.plan;
-  const { busy, run } = useBilling();
-  const [confirm, setConfirm] = useState(false);
-  // Back from Stripe: say what happened, once, and take the flag out of the address.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const paid = q.get("paid") === "1";
@@ -939,47 +936,56 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!plan) return null;
+}
+
+/** The plan now, with its one button: See Pro, Keep Pro or Close, Keep a cancelled plan, End the pause. `art`: Plan and billing's picture of the trial's last days. */
+export function PlanStatusCard({ plan, refresh, art = true, className }: { plan: PlanView; refresh: () => Promise<void>; art?: boolean; className?: string }) {
+  const { busy, run } = useBilling();
+  return (
+    <section className={`tp-card bl-status bl-status-${plan.name}${className ? ` ${className}` : ""}`} aria-label="Your plan">
+      <div className="bl-status-t">
+        <Status plan={plan} />
+      </div>
+      <div className="bl-status-acts">
+        {/* The trial's last days: the Nomad knocks. It holds the page's ember, so the calendar above is drawn calm. */}
+        {art && plan.name === "trial" && plan.ending ? <NomadArt pose="knock" height={52} className="bl-status-art" /> : null}
+        {plan.name === "free" && plan.pause !== "now" && (
+          <button type="button" className={`btn${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("billing")}>
+            See Pro
+          </button>
+        )}
+        {plan.name === "trial" && (
+          <button type="button" className={`btn${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("trial")}>
+            {plan.notLooking ? "See plans" : keepCta(plan)}
+          </button>
+        )}
+        {plan.cancelAt && plan.subscribed && (
+          <button type="button" className="btn btn-pine" disabled={!!busy} aria-busy={busy === "keep"} onClick={() => run("keep", {}, refresh)}>
+            Keep {paidOf(plan)}
+          </button>
+        )}
+        {plan.pause && plan.subscribed && (
+          <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "resume"} onClick={() => run("resume", {}, refresh)}>
+            End the pause
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * What a member does with a plan they pay for: cancel before it starts, pause or cancel ("Book
+ * full?"), the AI usage pack, the top-up, and the card and invoices in Stripe's portal. `ai`: the
+ * AI usage card too (Credits and usage draws the allowance on its Overview instead).
+ */
+export function PlanManageCards({ plan, refresh, ai = true }: { plan: PlanView; refresh: () => Promise<void>; ai?: boolean }) {
+  const { busy, run } = useBilling();
+  const [confirm, setConfirm] = useState(false);
   const paidPlan = plan.subscribed && (plan.name === "pro" || plan.pause === "now");
   return (
-    <div className="page-narrow bl-page">
-      {/* Pro is the door with the saffron lining; a trial is its calendar. */}
-      <PageHead
-        title="Plan and billing"
-        art={plan.name === "pro" ? <Prop name="doorOpen" pro height={72} on="bg" /> : plan.name === "trial" ? <Prop name="calendar" height={72} on="bg" ember={!plan.ending} /> : <Prop name="doorAjar" pro height={72} on="bg" />}
-      />
-
-      <section className={`tp-card bl-status bl-status-${plan.name}`} aria-label="Your plan">
-        <div className="bl-status-t">
-          <Status plan={plan} />
-        </div>
-        <div className="bl-status-acts">
-          {/* The trial's last days: the Nomad knocks. It holds the page's ember, so the calendar above is drawn calm. */}
-          {plan.name === "trial" && plan.ending ? <NomadArt pose="knock" height={52} className="bl-status-art" /> : null}
-          {plan.name === "free" && plan.pause !== "now" && (
-            <button type="button" className={`btn${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("billing")}>
-              See Pro
-            </button>
-          )}
-          {plan.name === "trial" && (
-            <button type="button" className={`btn${plan.notLooking ? "" : " btn-pine"}`} onClick={() => openPlans("trial")}>
-              {plan.notLooking ? "See plans" : keepCta(plan)}
-            </button>
-          )}
-          {plan.cancelAt && plan.subscribed && (
-            <button type="button" className="btn btn-pine" disabled={!!busy} aria-busy={busy === "keep"} onClick={() => run("keep", {}, refresh)}>
-              Keep {paidOf(plan)}
-            </button>
-          )}
-          {plan.pause && plan.subscribed && (
-            <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "resume"} onClick={() => run("resume", {}, refresh)}>
-              End the pause
-            </button>
-          )}
-        </div>
-      </section>
-
-      {plan.ai && <AiUsageCard ai={plan.ai} />}
+    <>
+      {ai && plan.ai && <AiUsageCard ai={plan.ai} />}
       {plan.aiPackKept && (
         <section className="tp-card bl-ai" aria-labelledby="bl-ai-kept-h" data-ai-kept>
           <h2 className="tp-card-h" id="bl-ai-kept-h">
@@ -1043,8 +1049,8 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
       )}
 
       {plan.aiPack && (
-        <section className="tp-card" aria-labelledby="bl-ai-h">
-          <h2 className="tp-card-h" id="bl-ai-h">
+        <section className="tp-card" aria-labelledby="bl-aipack-h">
+          <h2 className="tp-card-h" id="bl-aipack-h">
             AI usage
           </h2>
           <AiPackLine plan={plan} />
@@ -1065,7 +1071,7 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
           <h2 className="tp-card-h" id="bl-portal-h">
             Card and invoices
           </h2>
-          <p className="cr-note">Change your card, download invoices, or switch between monthly and yearly. It opens Stripe, where your payments are kept. Merlin never sees your card.</p>
+          <p className="cr-note">Change your card, see your invoices, or switch between monthly and yearly. It opens Stripe, where your payments are kept. Merlin never sees your card.</p>
           <div className="bl-acts">
             <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "portal"} onClick={() => run("portal")}>
               {busy === "portal" ? "Opening" : "Manage billing"}
@@ -1073,6 +1079,24 @@ export function BillingPage({ view, refresh }: { view: View; refresh: () => Prom
           </div>
         </section>
       )}
+    </>
+  );
+}
+
+export function BillingPage({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
+  const plan = view.me?.plan;
+  useStripeReturn(plan, refresh);
+  if (!plan) return null;
+  return (
+    <div className="page-narrow bl-page">
+      {/* Pro is the door with the saffron lining; a trial is its calendar. */}
+      <PageHead
+        title="Plan and billing"
+        art={plan.name === "pro" ? <Prop name="doorOpen" pro height={72} on="bg" /> : plan.name === "trial" ? <Prop name="calendar" height={72} on="bg" ember={!plan.ending} /> : <Prop name="doorAjar" pro height={72} on="bg" />}
+      />
+
+      <PlanStatusCard plan={plan} refresh={refresh} />
+      <PlanManageCards plan={plan} refresh={refresh} />
 
       <section className="tp-card bl-what" aria-labelledby="bl-what-h">
         <h2 className="tp-card-h" id="bl-what-h">

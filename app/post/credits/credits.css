@@ -1,0 +1,789 @@
+/*
+ * Credits and usage (cnu-, credits/CreditsUsage.tsx), after Credits.dc.html. Pine for actions and
+ * the tab underline, mint for soft highlights, volt only on what earns (earned amounts, the earn
+ * pills, the Earned bars), ember only on a low balance.
+ */
+.cnu-host {
+  padding-top: 20px !important;
+}
+.cnu-page {
+  max-width: 1320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--body-ink);
+  min-width: 0;
+}
+.cnu-lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.cnu-card {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  min-width: 0;
+}
+.cnu-pad {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cnu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 14px 16px 12px;
+}
+.cnu-head-flat {
+  padding: 0;
+}
+.cnu-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cnu-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.cnu-sp {
+  flex: 1 1 0;
+}
+.cnu-note {
+  margin: 0;
+  padding: 0 16px 14px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.cnu-pad .cnu-note {
+  padding: 0;
+}
+.cnu-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* the four tiles */
+.cnu-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.cnu-tile {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cnu-tile-bal {
+  border-color: var(--pine);
+  box-shadow: inset 0 0 0 1px var(--pine);
+}
+.cnu-k {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--body-ink);
+}
+.cnu-big {
+  font-family: var(--font-num);
+  font-size: 40px;
+  line-height: 44px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cnu-big.cnu-low {
+  color: var(--ember-ink);
+}
+.cnu-of {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cnu-of strong {
+  font-family: var(--font-num);
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cnu-s {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.cnu-tile-go {
+  margin-top: auto;
+  align-self: flex-start;
+}
+.cnu-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.cnu-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--pine);
+  border-radius: 4px;
+}
+.cnu-pips {
+  display: flex;
+  gap: 3px;
+}
+.cnu-pips span {
+  flex: 1;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.cnu-pips span.on {
+  background: #0b6b45;
+}
+
+/* credits in three lines */
+.cnu-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  padding: 12px 16px;
+  background: var(--ws-mint, #e8f3ee);
+  border: 1px solid var(--ws-mint-line, #b9d9ca);
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.cnu-three-l {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.cnu-three-l > strong {
+  flex: 0 0 auto;
+  min-width: 40px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--pine);
+  font-weight: 800;
+}
+.cnu-limitsnow {
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14px;
+}
+.cnu-limitsnow p {
+  margin: 0;
+}
+
+/* tabs */
+.cnu-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 80px;
+}
+.cnu-tabs button {
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--body-ink);
+  cursor: pointer;
+}
+.cnu-tabs button.on {
+  color: var(--ink);
+  font-weight: 800;
+  border-bottom-color: var(--pine);
+}
+.cnu-tab-n {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cnu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* segmented buttons */
+.cnu-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cnu-seg button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-input, #cdd4d0);
+  background: var(--surface);
+  color: var(--body-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cnu-seg button.on {
+  border-color: var(--pine);
+  background: var(--ws-mint, #e8f3ee);
+  color: var(--pine);
+  font-weight: 700;
+}
+.cnu-filters {
+  padding: 0 16px 12px;
+}
+
+/* the chart */
+.cnu-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.cnu-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.cnu-key-e {
+  background: var(--volt);
+  border: 1px solid #0b6b45;
+}
+.cnu-key-s {
+  background: var(--pine);
+}
+.cnu-bars {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 16px 12px;
+  min-height: 170px;
+  overflow-x: auto;
+}
+.cnu-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 52px;
+}
+.cnu-pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+}
+.cnu-b {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 100%;
+}
+.cnu-bt {
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cnu-be,
+.cnu-bs {
+  display: block;
+  width: 22px;
+  border-radius: 4px 4px 0 0;
+}
+.cnu-be {
+  background: var(--volt);
+  border: 1px solid #0b6b45;
+  border-bottom: 0;
+}
+.cnu-bs {
+  background: var(--pine);
+}
+.cnu-bl {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.cnu-bb {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* by kind */
+.cnu-kinds {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.cnu-kinds li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.cnu-kind-t {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.cnu-kind-c {
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.cnu-kind-s {
+  font-size: 13px;
+  color: var(--muted);
+}
+.cnu-kbar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+.cnu-kbar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: #0b6b45;
+}
+.cnu-ai {
+  margin: 0 16px 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 19px;
+}
+.cnu-ai .bl-topup {
+  margin: 0;
+}
+
+/* amounts */
+.cnu-delta {
+  font-family: var(--font-num);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cnu-delta-earned {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--volt);
+  color: var(--pine);
+}
+.cnu-delta-spent {
+  color: var(--ink);
+}
+.cnu-delta-free {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ws-mint, #e8f3ee);
+  color: var(--pine);
+}
+
+/* the ledger */
+.cnu-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.cnu-ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.cnu-ledger thead th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.cnu-ledger th.num,
+.cnu-ledger td.num {
+  text-align: right;
+}
+.cnu-ledger td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.cnu-day th {
+  text-align: left;
+  padding: 10px 12px 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--surface);
+}
+.cnu-when {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  width: 84px;
+}
+.cnu-what {
+  min-width: 220px;
+}
+.cnu-what-t {
+  display: block;
+  color: var(--ink);
+}
+.cnu-what-n {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cnu-amt,
+.cnu-bal {
+  width: 76px;
+  white-space: nowrap;
+}
+.cnu-bal {
+  font-family: var(--font-num);
+  color: var(--body-ink);
+}
+.cnu-where {
+  width: 170px;
+}
+.cnu-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  min-height: 32px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.cnu-open td {
+  background: var(--surface-2);
+}
+.cnu-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 16px;
+}
+.cnu-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-input, #cdd4d0);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.cnu-search input {
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 14px;
+  min-width: 0;
+  width: 220px;
+  background: transparent;
+  color: var(--ink);
+}
+
+/* ways to earn */
+.cnu-ways {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cnu-way {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+.cnu-way-hero {
+  background: var(--ws-mint, #e8f3ee);
+}
+.cnu-rank {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pine);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+}
+.cnu-way-b {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.cnu-way-t {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.cnu-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--body-ink);
+  white-space: nowrap;
+}
+.cnu-pill-earn {
+  background: var(--volt);
+  color: var(--pine);
+}
+.cnu-way-s {
+  font-size: 14px;
+  line-height: 20px;
+}
+.cnu-way-f {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.cnu-way-st {
+  font-size: 13px;
+  color: var(--muted);
+}
+.cnu-invite {
+  width: 100%;
+  max-width: 520px;
+}
+.cnu-cap {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* the rules */
+.cnu-rules {
+  margin: 0;
+  padding: 0 16px;
+}
+.cnu-rules > div {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.cnu-rules dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.cnu-rn {
+  flex: 0 0 44px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+.cnu-rn-plus {
+  background: var(--volt);
+  color: var(--pine);
+}
+.cnu-rn-minus {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.cnu-rn-flat {
+  border: 1px solid var(--line-input, #cdd4d0);
+  color: var(--body-ink);
+}
+.cnu-limits {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* plans */
+.cnu-plan-now {
+  margin: 0;
+}
+.cnu-panel .tp-card {
+  margin: 0;
+}
+.cnu-settings {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+@media (max-width: 1100px) {
+  .cnu-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cnu-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .cnu-host {
+    padding-top: 12px !important;
+  }
+  .cnu-page {
+    gap: 12px;
+  }
+  .cnu-tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .cnu-big {
+    font-size: 34px;
+    line-height: 38px;
+  }
+  .cnu-three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cnu-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .cnu-tabs button {
+    flex: 0 0 auto;
+    padding: 0 10px;
+  }
+  .cnu-search {
+    width: 100%;
+  }
+  .cnu-search input {
+    width: 100%;
+  }
+  /* The ledger as stacked rows: what happened over its time, amount and balance on the right. */
+  .cnu-ledger thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .cnu-ledger tr:not(.cnu-day) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "what amt bal" "when where where";
+    column-gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .cnu-ledger td {
+    padding: 0;
+    border: 0;
+  }
+  .cnu-what {
+    grid-area: what;
+    min-width: 0;
+  }
+  .cnu-amt {
+    grid-area: amt;
+    width: auto;
+  }
+  .cnu-bal {
+    grid-area: bal;
+    width: auto;
+    min-width: 28px;
+  }
+  .cnu-when {
+    grid-area: when;
+    width: auto;
+  }
+  .cnu-where {
+    grid-area: where;
+    width: auto;
+    text-align: right;
+  }
+  .cnu-day {
+    display: block;
+  }
+  .cnu-day th {
+    display: block;
+  }
+  .cnu-way {
+    padding: 12px;
+  }
+  .cnu-bars {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 767px) {
+  .cnu-open {
+    background: var(--surface-2);
+  }
+  .cnu-open td {
+    background: none;
+  }
+}

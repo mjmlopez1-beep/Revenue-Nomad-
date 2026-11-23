@@ -220,3 +220,10 @@
 .ch-share-form .tp-bm-share-lead {
   margin-top: 0;
 }
+/* Merlin's range from "What should I charge" (Rate benchmarks), over the middle half. */
+.ch-range-ask {
+  fill: rgba(7, 63, 47, 0.14);
+  stroke: var(--pine);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}

@@ -34,18 +34,23 @@ const BandWords = ({ band }: { band: string }) =>
     </>
   );
 
-/** The middle half on an axis, the median as a tick, and the member's own rate as a dot. A picture of the numbers beside it, nothing more. */
-function RangeBar({ f, own, kind }: { f: Extract<Figure, { state: "range" }>; own: number | null; kind: RateKind }) {
+/**
+ * The middle half on an axis, the median as a tick, and the member's own rate as a dot. A picture of
+ * the numbers beside it, nothing more. `ask` (Rate benchmarks, "What should I charge"): the range
+ * Merlin's working suggests, drawn over the middle half.
+ */
+export function RangeBar({ f, own, kind, ask }: { f: Extract<Figure, { state: "range" }>; own: number | null; kind: RateKind; ask?: { from: number; to: number } | null }) {
   const W = 520;
   const { min, max, ticks } = axisOf(f, own, kind);
   const x = (v: number) => Math.round(((v - min) / (max - min || 1)) * W * 10) / 10;
-  const label = `The middle half runs from ${money(f.p25)} to ${money(f.p75)} ${per(kind)}, the median is ${money(f.median)}${own !== null ? `, and your rate is ${money(own)}` : ""}.`;
+  const label = `The middle half runs from ${money(f.p25)} to ${money(f.p75)} ${per(kind)}, the median is ${money(f.median)}${own !== null ? `, and your rate is ${money(own)}` : ""}${ask ? `. Merlin's range is ${money(ask.from)} to ${money(ask.to)}` : ""}.`;
   // The first and last ticks sit inside the frame.
   const anchor = (k: number) => (k === 0 ? "start" : k === ticks.length - 1 ? "end" : "middle");
   return (
     <svg className="ch-range" viewBox={`0 -22 ${W} 62`} role="img" aria-label={label} preserveAspectRatio="xMidYMid meet">
       <rect className="ch-range-track" x={0} y={6} width={W} height={8} rx={4} />
       <rect className="ch-range-mid" x={x(f.p25)} y={2} width={Math.max(4, x(f.p75) - x(f.p25))} height={16} rx={4} />
+      {ask && <rect className="ch-range-ask" x={x(ask.from)} y={0} width={Math.max(4, x(ask.to) - x(ask.from))} height={20} rx={4} />}
       <rect className="ch-range-med" x={x(f.median) - 1.5} y={-3} width={3} height={26} rx={1.5} />
       <text className="ch-range-lbl" x={Math.min(W - 24, Math.max(24, x(f.median)))} y={-9} textAnchor="middle">
         Median
