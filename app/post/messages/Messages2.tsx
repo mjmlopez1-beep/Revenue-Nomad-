@@ -244,6 +244,8 @@ export function Messages2() {
     setPassing(null);
     if (phone) setPhoneOpen(true);
     setDraft(me.id, "new", { text: draftMessage(composeFacts(rr, p), voice), merlin: "template", auto: true });
+    // The draft is in the message box below the reasons: bring it into view.
+    setTimeout(() => document.querySelector<HTMLElement>(".ms2-compose .ms2-composer")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
   };
   const pickTo = (i: number) => {
     const p = picks[i];

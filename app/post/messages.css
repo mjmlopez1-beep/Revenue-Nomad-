@@ -1214,11 +1214,12 @@ button.ms2-co-name:hover {
   flex: 1 1 220px;
 }
 
-/* ----- writing a new one ----- */
-.ms2-compose-in {
-  flex: 1;
-  min-height: 0;
+/* ----- writing a new one: the reasons and the message box scroll as one ----- */
+.ms2-center.ms2-compose {
   overflow-y: auto;
+}
+.ms2-compose-in {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1760,4 +1761,41 @@ button.ms2-co-name:hover {
 .ms2-layer .ms2-merlin,
 .ms2-layer .ms2-send {
   flex: 1 1 auto;
+}
+
+.ms2-phone .ms2-grow {
+  display: none;
+}
+.ms2-phone .ms2-new {
+  flex: 0 0 auto;
+}
+.ms2-layer .ms2-head {
+  align-items: flex-start;
+}
+.ms2-layer .ms2-head .ms2-av-l {
+  display: none;
+}
+.ms2-layer .ms2-head-main {
+  flex: 1 1 calc(100% - 60px);
+}
+.ms2-layer .ms2-head > .ms2-btn,
+.ms2-layer .ms2-head > .ms2-plain {
+  margin-left: 52px;
+}
+.ms2-layer .ms2-head > .ms2-btn + .ms2-plain {
+  margin-left: 0;
+}
+/* With the tab bar at the bottom (no side rail), the columns end above it. */
+@media (max-width: 1180px) {
+  .tp-navbar .ms2-list,
+  .tp-navbar .ms2-center {
+    height: calc(100vh - 56px - 53px - 108px);
+  }
+}
+.ms2-phone .ms2-list {
+  height: auto;
+  min-height: 0;
+}
+.ms2-phone .ms2-list-foot {
+  margin-top: 0;
 }
