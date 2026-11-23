@@ -195,6 +195,12 @@ run close-merge npx tsx scripts/test-close-merge.mts
 run qa6 npx tsx scripts/test-qa6.mts
 # Saved views: rename, the same view twice, remove and Undo, on the server and through the connector, on a made-up seed.
 run views npx tsx scripts/test-views.mts
+# Alerts (Stage 7a, lib/inbox.ts, lib/notify/events.ts afterWatch): the alert fields on saved lists, the plan's gates, the bell's inbox and the alert log, a seat ended, a new leader, a fact, funding, Companies you follow, Someone you know changed jobs, the locked naming rule, one-click turn-off, export and purge. In process, on a made-up seed.
+run alerts npx tsx scripts/test-alerts.mts
+# Agent access (Stage 7a, lib/mcp/agentTools.ts, lib/mcp/log.ts): every connector tool on the page, switches that refuse in plain words, a log with no arguments, the daily spend limit across calls and agents, export and purge, the page. In process, on a made-up seed.
+run agent npx tsx scripts/test-agent.mts
+# The Stage 7a merge's wiring (lib/notify/knownView.ts, KnownMoves.tsx): Someone you know on Home and Warm paths from the LinkedIn file and CSV only (never Google, no Californian named, a locked company described), and the connector setting an alert's triggers and how often through the app's plan gate. In process, on a made-up seed.
+run known npx tsx scripts/test-known.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
 run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
