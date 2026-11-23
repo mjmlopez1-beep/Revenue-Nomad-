@@ -575,7 +575,8 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   notifications: { title: "Notifications", component: NotificationsP },
   rates: { title: "Rate benchmarks", component: RatesP },
   metrics: { title: "Pilot metrics", component: MetricsP, when: (c) => !!c.view.admin },
-  messages: { title: "Messages", component: MessagesP },
+  // The new look draws its three columns full width (messages/Messages2.tsx) with its own first-visit strip.
+  messages: { title: "Messages", component: MessagesP, ownStrip: true, mainClass: (c) => (c.ui2 ? "ms2-host" : "") },
   radar: { title: YOUR_FEATURE, component: RadarP, mainClass: (c) => (c.ui2 ? "wb-host cb-host" : "rd-main"), needsTable: true, ownStrip: true },
   billing: { title: "Plan and billing", component: BillingP, when: (c) => !!c.me.plan },
   peers: { title: "Peers", component: PeersP, mainClass: peersMain },
