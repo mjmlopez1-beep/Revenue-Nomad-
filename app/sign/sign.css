@@ -13,8 +13,10 @@
   gap: 12px;
   height: 56px;
   padding: 0 16px;
-  background: var(--pine);
-  color: #fff;
+  /* The new look: a white header, the mark in its own colours (ClientView.dc.html). */
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
 }
 .sg-secure {
   display: inline-flex;
@@ -23,8 +25,11 @@
   font-size: 13px;
   line-height: 20px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--body-ink);
   white-space: nowrap;
+}
+.sg-secure svg {
+  color: var(--volt-ink);
 }
 .sg-main {
   display: grid;
@@ -507,10 +512,6 @@
     background: none;
     color: var(--ink);
     border-bottom: 1px solid var(--line);
-  }
-  .sg-top img,
-  .sg-top svg {
-    filter: invert(1);
   }
   .sg-noprint,
   .sg-bar {

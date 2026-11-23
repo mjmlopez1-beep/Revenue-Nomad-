@@ -34,8 +34,8 @@ import { aiConfigured } from "./aiConfig";
 import { AI_PACK_LINK, PACK_PRICE_USD, budgetOf, usedUpWords } from "./aiUsage";
 import { pipelineEvent } from "./pipelineHook";
 import { PricingProblem, choiceRec, cleanPricing, validChoice } from "./pricing";
-import { commitSendSignature, dropStaged, readSealedPdf, readSendSignature, saveSealedPdf, stageSendSignature } from "./files";
-import { dataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
+import { commitClientSignature, commitSendSignature, dropStaged, readClientSignature, readSealedPdf, readSendSignature, saveSealedPdf, stageClientSignature, stageSendSignature } from "./files";
+import { dataUrl, pngFromDataUrl, savedSignatureOf, sha as shaOf, signatureInput, signatureViewOf } from "./memberSig";
 import { properCase } from "./startCall";
 import { prefOn, type CloseAlertKind } from "../close/types";
 import {
@@ -863,11 +863,22 @@ function viewOf(f: Found, nowMs: number, origin?: string): SignerView {
 /** The member's side of a send for a page: a drawn signature's image is added by withMemberImg (it is a file). */
 const memberOut = (x: StoredSend): SignerView["member"] =>
   x.member ? { name: x.member.name, title: x.member.title, at: x.member.at, how: x.member.how, kind: x.member.kind, typed: x.member.typed ?? null, img: null } : null;
-/** A view with the member's drawn signature as an image. */
-async function withMemberImg<V extends { member: SignerView["member"] }>(v: V, sendId: string | null | undefined): Promise<V> {
-  if (!sendId || !v.member || v.member.kind !== "drawn") return v;
-  const png = await readSendSignature(sendId).catch(() => null);
-  return png ? { ...v, member: { ...v.member, img: dataUrl(png) } } : v;
+/** A view with the member's drawn signature as an image, and the client's when they drew theirs. */
+async function withMemberImg<V extends { member: SignerView["member"]; signedImg?: string | null }>(v: V, sendId: string | null | undefined): Promise<V> {
+  if (!sendId) return v;
+  let out = v;
+  if (v.member && v.member.kind === "drawn") {
+    const png = await readSendSignature(sendId).catch(() => null);
+    if (png) out = { ...out, member: { ...v.member, img: dataUrl(png) } };
+  }
+  if (v.signedImg === undefined) {
+    const f = findSend(await loadState(), sendId);
+    if (f?.x.signed?.method === "drawn") {
+      const png = await readClientSignature(sendId).catch(() => null);
+      out = { ...out, signedImg: png && (!f.x.signed.pngSha256 || shaOf(png) === f.x.signed.pngSha256) ? dataUrl(png) : null };
+    }
+  }
+  return out;
 }
 const sendIdOf = (token: unknown) => readSignToken(token)?.sendId ?? null;
 
@@ -988,29 +999,41 @@ function choiceAtSigning(x: StoredSend, raw: unknown): Choice | null {
   return c;
 }
 
-export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown; choice?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
+export async function signProposal(token: unknown, a: { name?: unknown; consent?: unknown; hash?: unknown; choice?: unknown; method?: unknown; png?: unknown }, who: Client, origin?: string, nowMs = Date.now()): Promise<SignerView> {
   const name = cleanLine(a.name, 100);
   if (!NAME.test(name)) throw new ProposalProblem("Type your full name, first and last, as your signature.");
   if (a.consent !== true) throw new ProposalProblem("Tick the box to agree to sign electronically.");
+  // Drawn: the PNG checked, written aside, and moved into place only if this request wins the record (the documents' one-winner pattern).
+  const drawn = a.method === "drawn" ? await pngFromDataUrl(a.png) : null;
+  const sendId0 = sendIdOf(token);
+  const staged = drawn && sendId0 ? await stageClientSignature(sendId0, drawn) : null;
+  if (drawn && !staged) throw new ProposalProblem("This link isn't valid.", 404);
   const now = new Date(nowMs).toISOString();
-  const out = await T.mutate((s) => {
-    const f = resolve(s, token);
-    const st = signerStatus(f, nowMs);
-    if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
-    needCode(f.x);
-    // The document shown is the one signed: the hash the page showed must be this send's, and the content must still hash to it.
-    if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
-    const consent = consentText(f.x.doc.from.name || "the sender");
-    const picked = choiceAtSigning(f.x, a.choice);
-    const choice = picked && f.x.doc.pricing ? choiceRec(f.x.doc.pricing, picked) : undefined;
-    f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email, ...(choice ? { choice } : {}) };
-    if (picked) f.x.choice = picked;
-    ev(f.x, "signed", now, { ...who, note: `typed name "${name}"${choice ? `; chose ${choice.summary}, ${choice.total}` : ""}` });
-    touch(f.p, now);
-    // Countersign mode: the pipeline moves to Won at the member's countersignature, not here.
-    if (fullySigned(f.x)) pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
-    return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin), mail: wantsEmail(s, f.p.memberId, "countersign") };
-  });
+  let out: { x: StoredSend; memberId: string; proposalId: string; view: SignerView; mail: boolean };
+  try {
+    out = await T.mutate((s) => {
+      const f = resolve(s, token);
+      const st = signerStatus(f, nowMs);
+      if (st !== "open") throw new ProposalProblem(notOpen(st), 409);
+      needCode(f.x);
+      // The document shown is the one signed: the hash the page showed must be this send's, and the content must still hash to it.
+      if (typeof a.hash !== "string" || !same(a.hash, f.x.hash) || hashDoc(f.x.doc) !== f.x.hash) throw new ProposalProblem("This page is out of date. Reload it to read the proposal again before you sign.", 409);
+      const consent = consentText(f.x.doc.from.name || "the sender");
+      const picked = choiceAtSigning(f.x, a.choice);
+      const choice = picked && f.x.doc.pricing ? choiceRec(f.x.doc.pricing, picked) : undefined;
+      f.x.signed = { name, at: now, ip: who.ip.slice(0, 64), ua: who.ua.slice(0, 300), consent, consentVersion: CONSENT_VERSION, hash: f.x.hash, email: f.x.signer.email, ...(choice ? { choice } : {}), ...(drawn ? { method: "drawn" as const, pngSha256: shaOf(drawn) } : { method: "typed" as const }) };
+      if (picked) f.x.choice = picked;
+      ev(f.x, "signed", now, { ...who, note: `${drawn ? `drew a signature, name "${name}"` : `typed name "${name}"`}${choice ? `; chose ${choice.summary}, ${choice.total}` : ""}` });
+      touch(f.p, now);
+      // Countersign mode: the pipeline moves to Won at the member's countersignature, not here.
+      if (fullySigned(f.x)) pipelineEvent(s, f.p.memberId, f.p.companyId, "signed", now);
+      return { x: structuredClone(f.x), memberId: f.p.memberId, proposalId: f.p.id, view: viewOf(f, nowMs, origin), mail: wantsEmail(s, f.p.memberId, "countersign") };
+    });
+  } catch (e) {
+    await dropStaged(staged);
+    throw e;
+  }
+  if (staged) await commitClientSignature(out.x.id, staged);
   const seed = await loadSeed();
   const m = await memberFor(seed, out.memberId);
   const signedFacts = { sendId: out.x.id, proposalId: out.proposalId, memberId: out.memberId, by: name, title: out.x.doc.title, at: now, ...(origin ? { origin } : {}) };
@@ -1176,7 +1199,8 @@ export function ensureSeal(sendId: string, origin?: string): Promise<{ seal: imp
     const sender = { name: m?.name ?? f.x.doc.from.name, email: m?.email ?? "", title: titleOf(s, { id: f.p.memberId, title: "" } as Member) || f.x.doc.from.title };
     const [{ buildProposalPdf }, { sealRec }] = await Promise.all([import("./pdf"), import("../seal")]);
     const memberPng = f.x.member?.kind === "drawn" ? await readSendSignature(sendId) : null;
-    const fin = await buildProposalPdf({ send: f.x, sender, consentVersion: f.x.signed.consentVersion, checkUrl: checkLink(origin), memberPng });
+    const clientPng = f.x.signed.method === "drawn" ? await readClientSignature(sendId) : null;
+    const fin = await buildProposalPdf({ send: f.x, sender, consentVersion: f.x.signed.consentVersion, checkUrl: checkLink(origin), memberPng, clientPng });
     await saveSealedPdf(sendId, fin.bytes);
     const rec = sealRec(fin, fullySignedAt(f.x) ?? f.x.signed.at);
     const kept = await T.mutate((st) => {

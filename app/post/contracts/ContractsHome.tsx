@@ -197,8 +197,8 @@ export function ContractFlow({
   const kindWords = (start.kind === "read" ? start.reading.kind : savedMode ? start.saved.name : doc.title.split(" · ").pop() ?? "contract").toLowerCase();
   const myFirst = firstOf(data.me.name);
   const defaultNote = `Hi ${otherFirst === "them" ? "there" : otherFirst}, here is the ${kindWords} we talked through. It takes a few minutes to read, and you can sign on your phone. Happy to answer anything first. ${myFirst}`;
-  const [message, setMessage] = useState<string | null>(initial.message || null);
-  const note = message ?? defaultNote;
+  const [msg, setMsg] = useState<string | null>(initial.message || null);
+  const message = msg ?? defaultNote;
   const head = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     onStep?.(step);
@@ -238,7 +238,7 @@ export function ContractFlow({
       op: "update",
       id: doc.id,
       title,
-      message: note,
+      message,
       ordered,
       signers: signers.map((x) => ({ id: x.key, name: x.name.trim(), email: x.email.trim(), ...(x.title.trim() ? { title: x.title.trim() } : {}) })),
       fields: fields.map((f) => (f.kind === "text" && f.label === "Title" ? { ...f, prefill: whoOf(f.signer)?.title || undefined } : f)),
@@ -293,7 +293,7 @@ export function ContractFlow({
     if (!saved) return setBusy("");
     const off = await saveReminders(saved.id, rem);
     if (off) return setBusy(""), setErr(off);
-    const res = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: saved.id, message: note, linkDays: days });
+    const res = await dapi<{ document: DocumentRec; message: string }>({ op: "send", id: saved.id, message, linkDays: days });
     if (res.error) return setBusy(""), setErr(res.error);
     setDoc(res.document);
     onSaved(res.document);
@@ -704,7 +704,7 @@ export function ContractFlow({
                 {other && (
                   <label className="ct-label">
                     Message to {otherFirst}
-                    <textarea className="input ct-input" rows={4} maxLength={600} value={note} onChange={(e) => setMessage(e.target.value)} />
+                    <textarea className="input ct-input" rows={4} maxLength={600} value={message} onChange={(e) => setMsg(e.target.value)} />
                     <span className="ct-note">{data.voice ? "Drafted by Merlin in your saved voice. Change any of it." : "Drafted by Merlin. Change any of it."}</span>
                   </label>
                 )}

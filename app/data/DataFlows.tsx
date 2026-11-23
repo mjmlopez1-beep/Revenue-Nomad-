@@ -261,7 +261,9 @@ export function DataFlows() {
             <p className="cl-p">
               A member&apos;s saved signature (the words they typed, or a drawing) is kept privately on Merlin&apos;s own storage, for that member alone. Each time it is
               applied, to a proposal as it goes out, as a countersignature, or to a document they sign themselves, a copy goes with that signed record and the audit
-              trail says when and how. The member can replace or delete it at any time, and it is deleted with their account&apos;s personal data.
+              trail says when and how. The member can replace or delete it at any time, and it is deleted with their account&apos;s personal data. A client who
+              draws their signature on a proposal has the drawing kept with that signed proposal and stamped into its sealed PDF. A contract a member saves to
+              reuse keeps its PDF and where its fields go, never the other side&apos;s names or emails.
             </p>
             <p className="cl-p">
               On the client&apos;s page, a question is emailed to the member (its first 300 characters go on the audit trail), and a client can pass the proposal to

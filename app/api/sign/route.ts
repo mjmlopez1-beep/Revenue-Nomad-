@@ -24,7 +24,8 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
  * POST { token, op: "ask", question }             a question to the member, by email (reply-to the signer)
  * POST { token, op: "handoff", signer: { name, email, title? }, note? }   pass it to someone else to sign
  * POST { token, op: "choose", choice }            pick an option and add-ons ({ optionId, addOnIds }), until signed
- * POST { token, op: "sign", name, consent, hash, choice? } sign: the full name typed, consent true, the hash of the document shown, the option picked
+ * POST { token, op: "sign", name, consent, hash, choice?, method?, png? } sign: the full name typed, consent true, the hash of the document shown, the option picked;
+ *                                       method "drawn" with png (a data URL) when they drew their signature
  * POST { token, op: "decline", reason? }
  *
  * A document's link (a "ds_" token, lib/documents/store.ts) takes the same steps, and signs with
@@ -52,7 +53,8 @@ export const POST = guarded(async (req: NextRequest) => {
   const doc = isDocToken(token);
   // Signed or declined: the sender's alert (lib/close), after the answer is ready.
   const done = (v: unknown) => (void afterSignerStep(token, o), NextResponse.json(v, { headers: NO_STORE }));
-  if (!doc && text.length > 16 * 1024) return err("That's too much to send at once.", 413);
+  // A proposal's body is small, unless it carries a drawn signature (a PNG, up to the drawing's own cap).
+  if (!doc && text.length > (b.op === "sign" && b.method === "drawn" ? 320 * 1024 : 16 * 1024)) return err("That's too much to send at once.", 413);
   try {
     if (doc)
       switch (b.op) {
@@ -93,7 +95,7 @@ export const POST = guarded(async (req: NextRequest) => {
       case "choose":
         return NextResponse.json(await chooseOption(token, b.choice, o), { headers: NO_STORE });
       case "sign":
-        return done(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash, choice: b.choice }, who, o));
+        return done(await signProposal(token, { name: b.name, consent: b.consent, hash: b.hash, choice: b.choice, method: b.method, png: b.png }, who, o));
       case "decline":
         return done(await declineProposal(token, { reason: b.reason }, who, o));
       default:

@@ -56,6 +56,8 @@ export interface ProposalPdfInput {
   checkUrl: string;
   /** The member's drawn signature on this send, when they drew one. */
   memberPng?: Uint8Array | null;
+  /** The client's drawn signature, when they drew theirs. */
+  clientPng?: Uint8Array | null;
 }
 
 /** The final PDF, sealed. Returns its bytes, the digest printed on it and its SHA-256. */
@@ -267,13 +269,24 @@ export async function buildProposalPdf(a: ProposalPdfInput): Promise<{ bytes: Ui
   };
   const shownName = nameOk ? sig.name : x.signer.email;
   const scriptSize = Math.min(20, Math.max(10, 20 * Math.min(1, (colW - 20) / Math.max(1, widthOf(ink, script, shownName, 20)))));
+  const clientDrawn = sig.method === "drawn" && !!a.clientPng;
   cell(M, [
     { t: d.company || "The client", size: 8.5, font: body, color: MUTED },
-    { t: shownName, size: scriptSize, font: script, color: INK },
+    // A drawn signature goes in this line's place (below); typed, the name in the script face.
+    { t: clientDrawn ? " " : shownName, size: scriptSize, font: script, color: INK },
     // Who actually signed, with their title (a hand-off can put someone else here than the proposal was prepared for).
     { t: `${sig.name}${x.signer.title ? `, ${x.signer.title}` : ""}`, size: 9.5, font: bold, color: INK },
     { t: `Signed ${stampWhen(sig.at)}`, size: 8.5, font: body, color: MUTED },
   ]);
+  if (clientDrawn) {
+    try {
+      const img = await pdf.embedPng(a.clientPng!);
+      const sc = Math.min((colW - 20) / img.width, 26 / img.height);
+      page.drawImage(img, { x: M + 10, y: top - 48, width: img.width * sc, height: img.height * sc });
+    } catch {
+      /* a broken drawing: the name and date below still say who signed and when */
+    }
+  }
   const mem = x.member;
   if (mem) {
     // The member's signature beside the client's: typed in the script face, or their drawing.
