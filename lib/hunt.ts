@@ -8,7 +8,7 @@
  */
 import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, standardIndustries, stripInvisible } from "./tableFields";
 import type { Icp, SavedViewCriteria, SavedViewRec } from "./tableTypes";
-import { ALERT_MAX, cleanCriteria, countryKey, describeAlert, pickFrom, type SavedSearch } from "./mcp/alerts";
+import { ALERT_MAX, alertOf, cleanCriteria, cleanListFields, countryKey, describeAlert, pickFrom, type ListAlert, type ListKind, type SavedSearch } from "./mcp/alerts";
 import { followsHires } from "./hired";
 
 /** Problems the member can fix, as the app shows them. */
@@ -36,15 +36,47 @@ export function cleanIcp(raw: unknown): Icp | null {
   };
 }
 
-/** What a saved view looks for: everything but its id, name, date, place and email. */
+/** What a saved view looks for: everything but its id, name, date, place, email and its list fields. */
 function criteriaOfView(a: SavedSearch): SavedViewCriteria {
-  const { id: _id, name: _name, createdAt: _at, place: _place, email: _email, ...criteria } = a; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id: _id, name: _name, createdAt: _at, place: _place, email: _email, kind: _kind, cols: _cols, starter: _starter, openedAt: _opened, alert: _alert, ...criteria } = a;
   return criteria;
 }
 
-/** The views as the app gets them (Me.savedViews). */
-export function savedViewsOut(list: SavedSearch[] | undefined): SavedViewRec[] {
-  return (list ?? []).map((a) => ({ id: a.id, name: a.name, createdAt: a.createdAt, place: a.place ?? null, email: a.email !== false, criteria: criteriaOfView(a) }));
+/**
+ * A saved view as a list (F5): what Me.savedViews carries beyond SavedViewRec. The merge adds these
+ * fields to SavedViewRec in lib/tableTypes.ts; until then the app reads them with listOf.
+ */
+export interface SavedListFields {
+  kind: ListKind | null;
+  cols: string[];
+  starter: boolean;
+  openedAt: string | null;
+  alert: ListAlert;
+}
+export type SavedListRec = SavedViewRec & SavedListFields;
+
+/** The views as the app gets them (Me.savedViews), with their list fields. */
+export function savedViewsOut(list: SavedSearch[] | undefined): SavedListRec[] {
+  return (list ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    createdAt: a.createdAt,
+    place: a.place ?? null,
+    email: a.email !== false,
+    criteria: criteriaOfView(a),
+    kind: a.kind ?? null,
+    cols: a.cols ?? [],
+    starter: a.starter === true,
+    openedAt: a.openedAt ?? null,
+    alert: alertOf(a),
+  }));
+}
+
+/** A saved view read as a list, whatever server sent it (an older one leaves the list fields out). */
+export function listOf(v: SavedViewRec): SavedListRec {
+  const x = v as Partial<SavedListRec> & SavedViewRec;
+  return { ...v, kind: x.kind ?? null, cols: Array.isArray(x.cols) ? x.cols : [], starter: x.starter === true, openedAt: x.openedAt ?? null, alert: x.alert ?? alertOf({ email: v.email }) };
 }
 
 /* ---------- the same view twice ---------- */
@@ -163,8 +195,10 @@ export function savedViewAction(
     criteria?: SavedViewCriteria;
     email?: boolean;
     on?: boolean;
-    view?: { id?: unknown; name?: unknown; place?: unknown; criteria?: SavedViewCriteria; email?: unknown; createdAt?: unknown };
+    view?: { id?: unknown; name?: unknown; place?: unknown; criteria?: SavedViewCriteria; email?: unknown; createdAt?: unknown; kind?: unknown; cols?: unknown; starter?: unknown; alert?: unknown };
     at?: number;
+    /** save and list: the list's own fields (kind, columns, a starter list, its alert). */
+    list?: { kind?: unknown; cols?: unknown; starter?: unknown; alert?: unknown };
   },
   newId: () => string,
   now: string,
@@ -179,12 +213,50 @@ export function savedViewAction(
     const at = list.findIndex((x) => x.id === a.id);
     if (at < 0) throw gone();
     const next = [...list];
-    next[at] = { ...next[at], email: a.on !== false };
+    // A list with an alert: the weekly email is the alert's email, and turning it on turns the alert on.
+    const was = next[at].alert;
+    next[at] = { ...next[at], email: a.on !== false, ...(was ? { alert: { ...was, email: a.on !== false, on: a.on !== false ? true : was.slack && was.on } } : {}) };
     return {
       list: next,
       id: a.id,
       message: a.on !== false ? "We'll email you new matches each week." : "No more weekly email for this view. It stays saved.",
     };
+  }
+  if (a.op === "alert") {
+    // The alert on a list: on or off, by email, by Slack (the roles that open). The weekly email follows it.
+    const at = list.findIndex((x) => x.id === a.id);
+    if (at < 0) throw gone();
+    const cur = alertOf(list[at]);
+    const raw = (a.list?.alert ?? {}) as Record<string, unknown>;
+    const alert: ListAlert = {
+      on: typeof raw.on === "boolean" ? raw.on : a.on !== undefined ? a.on !== false : cur.on,
+      every: "weekly",
+      email: typeof raw.email === "boolean" ? raw.email : cur.email,
+      slack: typeof raw.slack === "boolean" ? raw.slack : cur.slack,
+    };
+    // An alert on with neither channel would say nothing: on means by email at least.
+    if (alert.on && !alert.email && !alert.slack) alert.email = true;
+    const next = [...list];
+    next[at] = { ...next[at], alert, email: alert.on && alert.email };
+    const how = [alert.email ? "by email each week" : "", alert.slack ? "in Slack when roles open" : ""].filter(Boolean).join(" and ");
+    return { list: next, id: a.id, message: alert.on ? `Alert on for "${next[at].name}": ${how}.` : `Alert off for "${next[at].name}". It stays saved.` };
+  }
+  if (a.op === "list") {
+    // A list's columns, kind or starter flag changed (the alert has its own op).
+    const at = list.findIndex((x) => x.id === a.id);
+    if (at < 0) throw gone();
+    const { alert: _alert, ...f } = cleanListFields(a.list); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const next = [...list];
+    next[at] = { ...next[at], ...f };
+    return { list: next, id: a.id, message: "" };
+  }
+  if (a.op === "opened") {
+    // Opened in the app: the lists table's Opened and New read it. Says nothing.
+    const at = list.findIndex((x) => x.id === a.id);
+    if (at < 0) throw gone();
+    const next = [...list];
+    next[at] = { ...next[at], openedAt: now };
+    return { list: next, id: a.id, message: "" };
   }
   if (a.op === "rename") {
     const at = list.findIndex((x) => x.id === a.id);
@@ -206,7 +278,9 @@ export function savedViewAction(
     const id = keep ? (v.id as string) : newId();
     const made = typeof v.createdAt === "string" && Number.isFinite(Date.parse(v.createdAt)) && Date.parse(v.createdAt) <= Date.parse(now) ? new Date(v.createdAt).toISOString() : now;
     const name = cleanName(v.name) || describeAlert(criteria);
-    const back: SavedSearch = { id, name, ...criteria, createdAt: made, ...(place !== undefined ? { place } : {}), ...(v.email === false ? { email: false } : {}) };
+    const fields = cleanListFields({ kind: v.kind, cols: v.cols, starter: v.starter, alert: v.alert });
+    const back: SavedSearch = { id, name, ...criteria, createdAt: made, ...(place !== undefined ? { place } : {}), ...(v.email === false ? { email: false } : {}), ...fields };
+    if (back.alert) back.email = back.alert.on && back.alert.email;
     const at = Math.max(0, Math.min(list.length, Number.isInteger(a.at) ? (a.at as number) : list.length));
     return { list: [...list.slice(0, at), back, ...list.slice(at)], id, message: `"${name}" is back.` };
   }
@@ -219,6 +293,10 @@ export function savedViewAction(
   if (list.length >= ALERT_MAX) throw new HuntError(`You have ${ALERT_MAX} saved views, which is the most. Remove one first.`);
   const name = cleanName(a.name) || describeAlert(criteria);
   const id = newId();
-  const saved: SavedSearch = { id, name, ...criteria, createdAt: now, place, ...(a.email === false ? { email: false } : {}) };
-  return { list: [...list, saved], id, message: a.email === false ? `Saved "${name}".` : `Saved "${name}". New matches come in your weekly email.` };
+  const fields = cleanListFields(a.list);
+  const saved: SavedSearch = { id, name, ...criteria, createdAt: now, place, ...(a.email === false ? { email: false } : {}), ...fields };
+  // A list saved with its alert: the weekly email is the alert's.
+  if (saved.alert) saved.email = saved.alert.on && saved.alert.email;
+  const mailed = saved.email !== false;
+  return { list: [...list, saved], id, message: !mailed ? (saved.alert?.on ? `Saved "${name}". New roles go to Slack.` : `Saved "${name}".`) : `Saved "${name}". New matches come in your weekly email.` };
 }

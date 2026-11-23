@@ -56,7 +56,7 @@ import "./home.css";
  * "3 fractionals who serve your kind of client joined this week." Asked for after Home's first
  * paint (GET ?fractionals=home, lib/fractionals.ts fractionalsHome), and nothing at all when none did.
  */
-function FractionalsJoined() {
+export function FractionalsJoined() {
   const ui = useContext(UiCtx);
   const [d, setD] = useState<FractionalsHome | null>(null);
   useEffect(() => {
@@ -92,7 +92,7 @@ function FractionalsJoined() {
 }
 
 /** Once, for a member who hasn't chosen: show them in the Fractionals directory, or keep them out. Your profile has the same switch. */
-function ShowMeAsk() {
+export function ShowMeAsk() {
   const ui = useContext(UiCtx);
   const [busy, setBusy] = useState<"yes" | "no" | "hide" | null>(null);
   if (!ui) return null;
@@ -203,7 +203,7 @@ export interface HomeProps {
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || "there";
 const ownClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 /** A link that moves in the app on a plain click. */
-function GoLink({ to, className, children, label }: { to: Go; className?: string; children: ReactNode; label?: string }) {
+export function GoLink({ to, className, children, label }: { to: Go; className?: string; children: ReactNode; label?: string }) {
   if (!to.href)
     return (
       <button type="button" className={className} onClick={to.go} aria-label={label}>
@@ -233,7 +233,7 @@ function GoLink({ to, className, children, label }: { to: Go; className?: string
  * to Home draw it all at once.
  */
 let drawnOnce = false;
-function useAfterFirstPaint() {
+export function useAfterFirstPaint() {
   const [on, setOn] = useState(drawnOnce);
   useEffect(() => {
     if (on) return;
@@ -468,7 +468,7 @@ export function HomePage(p: HomeProps) {
 /* ---------- the trial's one-time card ---------- */
 
 /** Once, when the trial starts: every Crystal Ball company opens free for its days, and the way there. */
-function TrialStarted({ days, opens, crystal, radar, onSeen }: { days: number | null; opens?: { left: number; of: number }; crystal: number; radar: Go; onSeen: () => void }) {
+export function TrialStarted({ days, opens, crystal, radar, onSeen }: { days: number | null; opens?: { left: number; of: number }; crystal: number; radar: Go; onSeen: () => void }) {
   return (
     <section className="td-trial hm-trialcard" aria-labelledby="hm-trialcard-h">
       <p className="td-trial-h" id="hm-trialcard-h">

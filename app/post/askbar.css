@@ -1,0 +1,43 @@
+/* Ask Merlin (AskBar.tsx): Home's box and Find's pane. Tokens from app/globals.css. */
+.ak { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ak-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.ak-pane .ak-label { color: var(--body-ink); font-weight: 600; }
+.ak-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.ak-text {
+  flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line-input); border-radius: 10px;
+  font: inherit; font-size: 15px; line-height: 22px; color: var(--ink); background: var(--surface); resize: vertical;
+}
+.ak-pane .ak-text { flex-basis: 100%; font-size: 14px; line-height: 20px; }
+.ak-text:focus-visible, .ak button:focus-visible { outline: 3px solid var(--volt-ink); outline-offset: 2px; }
+.ak-go {
+  height: 48px; box-sizing: border-box; padding: 0 22px; border-radius: 10px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--pine); background: var(--surface); color: var(--pine);
+}
+.ak-go.on { background: var(--pine); color: #fff; }
+.ak-go:disabled { cursor: default; }
+.ak-sugs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ak-sugs-l { flex-basis: 100%; font-size: 12px; font-weight: 700; color: var(--muted); }
+.ak-sug {
+  min-height: 36px; padding: 0 12px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--pine);
+}
+.ak-sug.on { border-color: var(--pine); background: #e8f3ee; }
+.ak-pane .ak-sugs { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.ak-pane .ak-sugs-l { flex-basis: auto; }
+.ak-pane .ak-sug { min-height: 44px; padding: 8px 12px; border-radius: 10px; color: var(--ink); font-weight: 400; line-height: 19px; }
+.ak-plan { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #e8f3ee; font-size: 14px; line-height: 20px; color: var(--ink); }
+.ak-where { margin: 0; display: flex; gap: 8px; align-items: flex-start; }
+.ak-where svg { flex: 0 0 16px; margin-top: 2px; color: var(--pine); }
+.ak-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ak-chip {
+  min-height: 32px; padding: 0 10px 0 11px; border: 0; border-radius: 999px; background: var(--pine); color: #fff;
+  font: inherit; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; text-align: left;
+}
+.ak-skip { margin: 0; font-size: 13px; color: var(--body-ink); }
+.ak-apply {
+  align-self: flex-start; min-height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--pine); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+@media (max-width: 599px) {
+  .ak-text { flex-basis: 100%; }
+  .ak-go { flex: 1 1 100%; }
+}
