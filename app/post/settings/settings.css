@@ -1256,6 +1256,17 @@
 .tp-phone .st-grid-row > span:first-child {
   padding: 8px 10px;
 }
+/* A phone's channel boxes: 44px to tap, the same 22px box to see. */
+.tp-phone .st-grid-row > span:not(:first-child) {
+  padding: 6px 4px;
+}
+.tp-phone .st-box {
+  width: 44px;
+  height: 44px;
+}
+.tp-phone .st-box::before {
+  inset: 11px;
+}
 .tp-phone .st-foot {
   padding: 10px 16px;
 }

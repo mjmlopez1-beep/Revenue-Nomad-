@@ -886,6 +886,11 @@
 
 /* phones: the table reads as cards, the builder on top */
 @media (max-width: 760px) {
+  /* Each channel and How often: 44px to tap. */
+  .al-chip,
+  .al-often-b {
+    min-height: 44px;
+  }
   .al-page {
     flex-direction: column-reverse;
     flex-wrap: nowrap;
