@@ -41,6 +41,7 @@ import { usePaths } from "./usePaths";
 import { openWay, suggestPost, useSuggest, useWarm, useWayIn, wayPost } from "./useWays";
 import { EXAMPLE_ROWS, exampleRoute } from "./warmExamples";
 import { KnownMoves } from "./KnownMoves";
+import { openSettings } from "../settings/at";
 import "../workbench/workbench.css";
 import "./warm.css";
 
@@ -1050,7 +1051,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       status: net.off ? "Not on for Merlin yet" : gOn ? "Connected" : "Not connected",
       count: gOn ? (g?.syncedAt ? `Read ${fmtDay(g.syncedAt)}` : "Reading now") : "Contacts and calendar names only.",
       meta: gOn ? "Merlin reads it again each day." : net.off ? "Your LinkedIn file or a CSV works without it." : "About 1 minute. Disconnect any time.",
-      btn: net.off ? undefined : { t: gOn ? "Open Your network" : "Connect Google", go: () => (gOn ? c.openPage("network") : onOpen("google")), primary: first && !gOn },
+      // Google's settings, Read again and Disconnect and delete are in Settings / Connections (settings/SettingsPage.tsx).
+      btn: net.off ? undefined : { t: gOn ? "Manage in Settings" : "Connect Google", go: () => (gOn ? openSettings(c.openPage, "conn", "google") : onOpen("google")), primary: first && !gOn },
       paths: gOn ? paths("google") : undefined,
     },
     {
@@ -1111,8 +1113,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
             <button type="button" className="wp-link" onClick={() => c.openPage("agent")}>
               Let your agent read your ways in
             </button>
-            <button type="button" className="wp-link" onClick={() => c.start.run("network")}>
-              Delete what you brought in
+            <button type="button" className="wp-link" onClick={() => openSettings(c.openPage, "conn")}>
+              Manage or delete in Settings
             </button>
           </span>
         )}
