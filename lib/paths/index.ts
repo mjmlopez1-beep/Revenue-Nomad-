@@ -16,6 +16,7 @@ import { ActionError, loadSeed, loadState, memberByToken, tableInternals as T, t
 import { companiesOf, selfTest } from "../google";
 import { ownSeatTest } from "../google/odds";
 import { matchDomain, matchOrg } from "../google/compute";
+import { googleConfigured } from "../google/config";
 import { networkOn, whenWords, workDomain, type MemberNetwork, type Warmth } from "../google/types";
 import { crystalCompanyIds, crystalRowsOf } from "../radar";
 import type { RadarSentRow } from "../radar/types";
@@ -29,13 +30,13 @@ import { alertMatches, type SavedSearch } from "../mcp/alerts";
 import { clientKinds, myWords } from "../partners";
 import { styleOf, type VoiceProfile } from "../voice";
 import { parseConnections, parseContacts, CSV_PROBLEM_WORDS, CONTACTS_PROBLEM_WORDS } from "./csv";
-import { findAll, leadersOfContact, type Contact, type ContactTarget, type Me } from "./find";
+import { findAll, leadersOfContact, type Contact, type ContactTarget, type Me, type World } from "./find";
 import { firstWord, personKey } from "./match";
 import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
 import { forgetSource } from "./plan";
 import {
-  AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, fromFile, lockedMatchesHidden, lockedWaysWords, waysWords,
+  AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, fromFile, lockedMatchesHidden, lockedWaysWords, namesOnlyWords, waysWords,
   type CompanyPathsView, type ContactRow, type KnownPersonView, type KnownView, type LinkedInRow, type MemberPaths, type PathsAnswer, type PathsState, type PathView, type TargetView,
 } from "./types";
 
@@ -84,11 +85,14 @@ export async function importConnections(token: string | null, text: unknown, now
     const p = (all[w.m.id] ??= {});
     if (importsToday(p, nowMs) >= IMPORTS_DAILY) throw new ActionError(`That's ${IMPORTS_DAILY} uploads today, the most in a day. Try again tomorrow.`);
     p.imports = [...(p.imports ?? []).filter((x) => nowMs - Date.parse(x) < DAY), at];
-    p.linkedin = { at, rows: r.rows, skipped: r.skipped };
+    p.linkedin = { at, rows: r.rows, skipped: r.skipped, ...(r.namesOnly ? { namesOnly: true as const } : {}) };
   });
   const answer = (await pathsView(token, nowMs))!;
   const n = r.rows.length;
-  return { answer, message: `Added ${n.toLocaleString("en-US")} ${n === 1 ? "connection" : "connections"}. Only you see them.` };
+  const added = `Added ${n.toLocaleString("en-US")} ${n === 1 ? "connection" : "connections"}. Only you see them.`;
+  // A names-only file (LinkedIn's from December 2026): said plainly, with how many its profile links placed.
+  const li = answer.on ? answer.linkedin : null;
+  return { answer, message: r.namesOnly ? `${added} ${namesOnlyWords(li?.byLink ?? 0, networkOn() && googleConfigured())}` : added };
 }
 
 /**
@@ -188,7 +192,7 @@ function messageWarmth(lastIso: string, nowMs: number): Warmth {
 }
 
 /** LinkedIn connections and Google contacts at companies on Merlin, plus the members the member has messaged. One entry a person. */
-export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): { contacts: Contact[]; matched: number; csvMatched: number } {
+export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): { contacts: Contact[]; matched: number; csvMatched: number; byLink: number } {
   const w = worldOf(seed, s, nowMs);
   const dir = directoryOf(seed, s);
   const own = new Set<string>();
@@ -280,17 +284,27 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     }
 
   // The member's LinkedIn connections. The company by the email's website first, else its exact name.
+  // A row with neither (LinkedIn's files from December 2026 have names and profile links only) is
+  // placed by its profile link alone, never by its name (linkMatch).
   const rows: LinkedInRow[] = pathsOf(s, m.id)?.linkedin?.rows ?? [];
   let matched = 0;
+  let byLink = 0;
   for (const r of rows) {
     const name = shownName(`${r.f} ${r.l}`);
     const email = r.e ?? null;
     const dom = email ? workDomain(email, own) : null;
-    const companyId = (dom ? matchDomain(dir, dom) : null) ?? matchOrg(dir, r.c);
+    let companyId = (dom ? matchDomain(dir, dom) : null) ?? matchOrg(dir, r.c);
+    let member = email ? (w.memberByEmail.get(email) ?? null) : null;
+    const link = !r.c && !email && r.u ? linkMatch(w, r.u, m.id) : null;
+    if (link) {
+      companyId = link.companyId;
+      member = link.member;
+      byLink++;
+    }
     if (companyId) matched++;
-    const member = email ? (w.memberByEmail.get(email) ?? null) : null;
     // Someone at no company on Merlin and not a member is no way in: kept in the file, left out here.
-    if (!companyId && !member) continue;
+    // One matched by their profile link to people on file at more than one company stays in: their records give the ways in.
+    if (!companyId && !member && !link) continue;
     put({
       key: `l:${r.u ?? `${name}|${r.c ?? ""}`}`, name, first: firstWord(name), nameKey: personKey(name), title: r.p ?? null, companyId, email, slug: r.u ?? null,
       linkedin: r.u ? linkedinUrl(r.u) : null, src: ["linkedin"], warmth: null, why: r.d ? `LinkedIn connection since ${r.d.slice(0, 4)}` : "LinkedIn connection", met: false,
@@ -314,7 +328,27 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
       linkedin: null, src: ["csv"], warmth: null, why: "In your contacts file", met: false, connected: null, member,
     });
   }
-  return { contacts: [...out.values()], matched, csvMatched };
+  return { contacts: [...out.values()], matched, csvMatched, byLink };
+}
+
+/**
+ * Where a connection with no company and no email is, by their profile link alone (never their
+ * name): the same LinkedIn profile as person records on file (a leader, a decision maker, who hired
+ * for a seat) or as a member's own profile. Their company when those records are at exactly one
+ * company, else none (the records still give their ways in, lib/paths/find.ts leadersOfContact);
+ * the member when the profile is a member's. Nobody in California by their own location (the
+ * world leaves their links out), never the member themself. Only the place is taken from the
+ * records: their name, title, email and LinkedIn cells keep their own locks, and the contact keeps
+ * the member's own words (the name in their file, and no title).
+ */
+export function linkMatch(w: World, slug: string, selfId: string): { companyId: string | null; member: string | null } | null {
+  if (w.caSlugs.has(slug)) return null;
+  const recs = w.leadersBySlug.get(slug) ?? [];
+  const mem = w.memberBySlug.get(slug) ?? null;
+  const member = mem && mem !== selfId ? mem : null;
+  if (!recs.length && !member) return null;
+  const at = new Set(recs.map((l) => l.companyId));
+  return { companyId: at.size === 1 ? [...at][0] : null, member };
 }
 
 /** The member's "Not a relationship" keys. */
@@ -330,6 +364,8 @@ export interface Found {
   contacts: Map<string, Contact>;
   matched: number;
   csvMatched: number;
+  /** LinkedIn connections placed by their profile link alone (linkMatch). A count only. */
+  byLink: number;
   me: Me;
   /** Locked companies (internal ids) whose ways in from the member's own files are held back (types.ts fromFile): counted, never shown. */
   lockedWays: Set<string>;
@@ -402,7 +438,7 @@ export function foundFor(seed: Seed, s: State, m: Member, nowMs: number): Found 
       const keep = files.has(k) ? l.filter((t) => me.visible(t.target)) : l;
       if (keep.length) byContact.set(k, keep);
     }
-    hit = { byCompany, byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched: got.matched, csvMatched: got.csvMatched, me, lockedWays };
+    hit = { byCompany, byContact, contacts: new Map(contacts.map((c) => [c.key, c])), matched: got.matched, csvMatched: got.csvMatched, byLink: got.byLink, me, lockedWays };
     if (per.size > 2000) per.clear();
     per.set(k, hit);
   }
@@ -595,7 +631,7 @@ export async function pathsView(token: string | null, nowMs = Date.now()): Promi
   targets.sort((a, b) => b.r - a.r || Number(b.ball) - Number(a.ball) || b.count - a.count || a.id.localeCompare(b.id));
   return {
     on: true,
-    linkedin: p?.linkedin ? { at: p.linkedin.at, rows: p.linkedin.rows.length, matched: f.matched, skipped: p.linkedin.skipped } : null,
+    linkedin: p?.linkedin ? { at: p.linkedin.at, rows: p.linkedin.rows.length, matched: f.matched, skipped: p.linkedin.skipped, namesOnly: !!p.linkedin.namesOnly, byLink: f.byLink } : null,
     csv: p?.csv ? { at: p.csv.at, rows: p.csv.rows.length, matched: f.csvMatched, skipped: p.csv.skipped } : null,
     googleOn: networkOn(),
     importsLeft: Math.max(0, IMPORTS_DAILY - importsToday(p, nowMs)),

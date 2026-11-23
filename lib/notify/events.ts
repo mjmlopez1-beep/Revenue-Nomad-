@@ -557,7 +557,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
         }
       }
       if (w.known.on && leaders.length) {
-        const people = knownPeopleOf(s, m);
+        const people = knownPeopleOf(s, m, g);
         const self = personKey(m.name);
         for (const mv of knownMoves(people, leaders, self, companyByName(g))) {
           const name = named(mv.leader.companyId);

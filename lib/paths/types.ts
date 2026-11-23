@@ -48,6 +48,8 @@ export interface LinkedInStore {
   rows: LinkedInRow[];
   /** Rows the file had that were not kept (no name, a duplicate, over the limit). A count only. */
   skipped: number;
+  /** The file has names and profile links only (LinkedIn's files from December 2026: no company, title or email). */
+  namesOnly?: true;
 }
 
 /**
@@ -198,6 +200,10 @@ export interface LinkedInInfo {
   rows: number;
   matched: number;
   skipped: number;
+  /** The file has names and profile links only (LinkedIn's files from December 2026). The LinkedIn file only. */
+  namesOnly?: boolean;
+  /** Connections placed by their profile link alone (the same profile as a person on file or a member). A count only. The LinkedIn file only. */
+  byLink?: number;
 }
 
 export interface PathsView {
@@ -276,6 +282,17 @@ export interface CompanyPathsView {
 
 /** "2 ways in through people you know": Crystal Ball's chip. */
 export const waysWords = (n: number) => `${n} ${n === 1 ? "way" : "ways"} in through people you know`;
+
+/**
+ * What Merlin says after a names-only Connections.csv goes in (signed-in pages only; the public
+ * data page never names LinkedIn). `n`: how many Merlin placed by profile link, the member's own
+ * count. `google`: Google can be connected on this Merlin.
+ */
+export const namesOnlyWords = (n: number, google: boolean) =>
+  `This file has names and profile links only: LinkedIn stopped including companies, titles and emails in December 2026. Merlin matched ${n ? n.toLocaleString("en-US") : "none"} by profile link. For more ways in, add a contacts file (from Google Contacts, Outlook, your phone or a CRM)${google ? " or connect Google" : ""}.`;
+/** The short version, where members bring the file in. */
+export const namesOnlyShort = (google: boolean) =>
+  `LinkedIn's files from December 2026 have names and profile links only, so Merlin matches them by profile link. A contacts file${google ? " or Google" : ""} finds more ways in.`;
 
 /** The three steps to LinkedIn's own export. */
 export const EXPORT_STEPS = [

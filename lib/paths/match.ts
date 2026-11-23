@@ -15,6 +15,7 @@
  * Pure: relative imports only.
  */
 import { cleanPersonName } from "../personName";
+import { profileSlug } from "./csv";
 
 /** Name words as they compare: no accents, case or punctuation, and no initials. */
 function words(n: string): string[] {
@@ -39,18 +40,17 @@ export function personKey(raw: string | null | undefined): string | null {
 /** The pair a name and a company match on. */
 export const nameCo = (nameKey: string, companyId: string) => `${nameKey}|${companyId}`;
 
-/** A LinkedIn profile's slug from a stored value (an address or a slug), lower case, or null. */
+/**
+ * A LinkedIn profile's slug from a stored value (an address or a slug), lower case, or null. The
+ * same reading as the member's own file (lib/paths/csv.ts profileSlug), so a profile link on file
+ * and one in their Connections.csv compare as one. A Sales Navigator id is never a slug.
+ */
 export function slugOf(v: string | null | undefined): string | null {
   const s = String(v ?? "").trim();
   if (!s) return null;
-  const m = /linkedin\.com\/in\/([^/?#\s]+)/i.exec(s);
-  const raw = m ? m[1] : /^[a-z0-9][a-z0-9_%-]{2,99}$/i.test(s) ? s : "";
-  if (!raw) return null;
-  try {
-    return decodeURIComponent(raw).toLowerCase();
-  } catch {
-    return raw.toLowerCase();
-  }
+  if (/linkedin\.com\/in\//i.test(s)) return profileSlug(s) ?? null;
+  if (!/^[a-z0-9][a-z0-9_%-]{2,99}$/i.test(s)) return null;
+  return profileSlug(`linkedin.com/in/${s}`) ?? null;
 }
 
 /** The first name to greet someone by. */

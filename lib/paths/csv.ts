@@ -21,6 +21,12 @@
  * Fields can be quoted, with commas, quotes ("") and line breaks inside. "Connected On" reads
  * "12 Mar 2023" (older files: "3/12/23", "2023-03-12"). Email Address is usually empty: LinkedIn
  * gives it only for people who allowed it.
+ *
+ * From December 2026 LinkedIn's file no longer has the email, the company or the position
+ * ("As of December 2026, your data download no longer includes your connections' email addresses,
+ * current companies, or job titles"): its header is First Name, Last Name, URL, Connected On. Such
+ * a file still reads (namesOnly: true), and Merlin places its people by their profile link alone
+ * (lib/paths/index.ts contactsOf), never by a name. A file uploaded before keeps what it had.
  */
 import { ROWS_MAX, type ContactRow, type LinkedInRow } from "./types";
 
@@ -28,11 +34,15 @@ export type CsvProblem = "zip" | "empty" | "not-connections" | "no-rows";
 export const CSV_PROBLEM_WORDS: Record<CsvProblem, string> = {
   zip: "That's the whole archive. Unzip it first, then pick Connections.csv from inside.",
   empty: "That file is empty. Pick Connections.csv from LinkedIn's export.",
-  "not-connections": "That doesn't look like LinkedIn's Connections.csv. It needs the First Name, Last Name and Company columns.",
+  "not-connections": "That doesn't look like LinkedIn's Connections.csv. It needs the First Name and Last Name columns, and a URL or Company column.",
   "no-rows": "Connections.csv has no connections in it.",
 };
 
-export type CsvResult = { ok: true; rows: LinkedInRow[]; skipped: number } | { ok: false; problem: CsvProblem };
+/**
+ * `namesOnly`: the file has no Company column, or no row in it has a company or an email (LinkedIn's
+ * files from December 2026): its people can be placed only by their profile link.
+ */
+export type CsvResult = { ok: true; rows: LinkedInRow[]; skipped: number; namesOnly: boolean } | { ok: false; problem: CsvProblem };
 
 /** Every record of a CSV text, as arrays of fields (RFC 4180: quotes, doubled quotes, line breaks inside quotes). `sep`: the field separator. */
 export function csvRecords(text: string, sep = ","): string[][] {
@@ -105,6 +115,9 @@ export function connectedDay(raw: string): string | undefined {
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
+/** A LinkedIn internal member id ("ACoAA..." or "ACwAA...", as Sales Navigator links carry them), not a public profile's name: never stored. */
+const SALES_ID = /^ac[ow]aa[a-z0-9_-]{20,}$/i;
+
 /** The profile's slug from its address: "https://www.linkedin.com/in/dana-reyes-12ab/" -> "dana-reyes-12ab". */
 export function profileSlug(url: string): string | undefined {
   const m = /linkedin\.com\/in\/([^/?#\s]+)/i.exec(url.trim());
@@ -116,6 +129,8 @@ export function profileSlug(url: string): string | undefined {
     /* as it is */
   }
   s = s.toLowerCase().replace(/\/+$/, "");
+  // LinkedIn's internal member ids ("ACoAA...", "ACwAA..."), as Sales Navigator links carry them, are never kept.
+  if (SALES_ID.test(s)) return undefined;
   return s && s.length <= 100 ? s : undefined;
 }
 
@@ -131,9 +146,10 @@ const EMAIL = /^[^\s@<>()",;]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
 
 /**
  * LinkedIn's Connections.csv as the rows Merlin keeps. The header is the first record that has a
- * First Name and a Last Name column; everything before it is LinkedIn's notes. A row without a
- * first or a last name is skipped (LinkedIn leaves both empty for people who hid them), and so is
- * a second row for the same profile. At most ROWS_MAX rows.
+ * First Name and a Last Name column; everything before it is LinkedIn's notes. It needs a Company
+ * or a URL column too (LinkedIn's files from December 2026 have no Company column: namesOnly). A
+ * row without a first or a last name is skipped (LinkedIn leaves both empty for people who hid
+ * them), and so is a second row for the same profile. At most ROWS_MAX rows.
  */
 export function parseConnections(text: string): CsvResult {
   if (text.startsWith("PK\u0003\u0004")) return { ok: false, problem: "zip" };
@@ -157,7 +173,7 @@ export function parseConnections(text: string): CsvResult {
     p: col("position", "title"),
     d: col("connected on"),
   };
-  if (c.c < 0) return { ok: false, problem: "not-connections" };
+  if (c.c < 0 && c.u < 0) return { ok: false, problem: "not-connections" };
   const rows: LinkedInRow[] = [];
   const seen = new Set<string>();
   let skipped = 0;
@@ -190,7 +206,7 @@ export function parseConnections(text: string): CsvResult {
     rows.push(row);
   }
   if (!rows.length) return { ok: false, problem: "no-rows" };
-  return { ok: true, rows, skipped };
+  return { ok: true, rows, skipped, namesOnly: c.c < 0 || !rows.some((x) => x.c || x.e) };
 }
 
 /* ---------- any contacts CSV ---------- */
