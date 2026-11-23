@@ -12,6 +12,35 @@ import { CompanyName, engCell, Fit, FunctionsCell, HeldBy, NameAndTitle, None, P
 import { RoleDate, datesAreStatus, statusText } from "../RoleDate";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { deciderOf } from "./columns";
+import { closestOf } from "./closest";
+import { useUi } from "../ui";
+import { openPlans } from "../Billing";
+
+/**
+ * Closest evidence (Evidence Bank, Close): the member's own case most like this company, its match
+ * word and why (closest.ts, filled by useClosest). Off Close: the Close pill, which opens the plans.
+ */
+export function ClosestCell({ id }: { id: string }) {
+  const close = useUi().me.plan?.canClose ?? true;
+  if (!close)
+    return (
+      <button type="button" className="wb-pill-gate wb-pill-btn" onClick={(e) => (e.stopPropagation(), openPlans("proposals"))} title="Evidence Bank is on the Close plan">
+        Close
+      </button>
+    );
+  const r = closestOf(id);
+  if (!r) return <None title="None of your ready Evidence Bank cases is matched to this company." label="No close case" />;
+  const why = r.same.slice(0, 2).join(" · ") || r.diff[0] || "";
+  return (
+    <span className="wb-ev" data-label={r.label}>
+      <span className="wb-ev-t">{r.title || "Your case"}</span>
+      <span className="wb-ev-why">
+        <strong>{r.label}</strong>
+        {why ? ` · ${why}` : ""}
+      </span>
+    </span>
+  );
+}
 
 const coFact = (r: Row, field: string) => <RowFact t={{ entity: "company", id: r.i.c.id, field }} cell={r.i.c.cells[field]} cover={coverOf(r.i, null, field)} own={ownCompany(r.i)} />;
 
@@ -50,6 +79,8 @@ export function companyCell(id: string, r: Row, mine: string | null): ReactNode 
       return <PeopleCell i={i} />;
     case "email":
       return <DeciderEmail r={r} />;
+    case "evidence":
+      return <ClosestCell id={i.c.id} />;
     default:
       return coFact(r, id);
   }

@@ -3,7 +3,7 @@
 /**
  * Hiring now's right drawer for one open role (HiringNow.dc.html, the role panel): the role and who
  * is hiring, the posting (one purchase with its rate and hours once the company is open), Closest
- * evidence (Evidence Bank, Close only: a placeholder until it ships), the way in, and the actions:
+ * evidence (Evidence Bank, Close only: the member's case most like it), the way in, and the actions:
  * open the company, draft a note, add to pipeline, pass to a fractional who fits better.
  *
  * Every lock here is the table's own cell (Tables.tsx RowFact, NameAndTitle) or the record's
@@ -18,6 +18,56 @@ import { NameAndTitle, engCell } from "../Tables";
 import { UnlockCompany } from "../company/sections/Unlock";
 import { bundleLead, isOpenRole, shown, type CoInfo, type Row } from "../model";
 import { fitOf, fnOf, listedOf, pastHires, rateOf, type Status, type WayIn } from "./hiringModel";
+import { useClosest } from "../useClosest";
+import { closestOf } from "../workbench/closest";
+import { useAppMaybe } from "../shell/pages";
+import { plural } from "../hooks";
+
+/**
+ * The member's Evidence Bank case most like this company (GET /api/evidence/closest), with why: it
+ * goes into the note and the Proof part of a proposal. Or the way to the first case. Close only.
+ */
+function ClosestCase({ companyId }: { companyId: string }) {
+  const { summary } = useClosest([companyId], true);
+  const app = useAppMaybe();
+  const r = closestOf(companyId);
+  const go = (label: string) =>
+    app ? (
+      <button type="button" className="tp-flink" onClick={() => app.openPage("evidence")}>
+        {label}
+      </button>
+    ) : null;
+  return (
+    <section className="hn-sec" aria-label="Closest evidence case">
+      <h3 className="hn-k">Closest evidence case</h3>
+      {!summary ? (
+        <span className="hn-sub">Looking in your Evidence Bank.</span>
+      ) : !summary.ready ? (
+        <>
+          <strong>No case yet</strong>
+          <span className="hn-sub">
+            {summary.drafts ? `${plural(summary.drafts, "draft")} from your seats ${summary.drafts === 1 ? "waits" : "wait"} in Evidence Bank. Finish one and the closest shows here.` : "Write your first case and the closest shows here."} {go(summary.drafts ? "Finish a case" : "Write a case")}
+          </span>
+        </>
+      ) : r ? (
+        <>
+          <strong>{r.title || "Your closest case"}</strong>
+          <span className="hn-sub">
+            {r.label}
+            {r.same.length ? `: ${r.same.slice(0, 2).join(", ")}` : ""}. It goes into your note and the Proof part of a proposal. {go("Open the case")}
+          </span>
+        </>
+      ) : (
+        <>
+          <strong>No close case</strong>
+          <span className="hn-sub">
+            None of your {plural(summary.ready, "ready case")} is matched to this company. {go("See your cases")}
+          </span>
+        </>
+      )}
+    </section>
+  );
+}
 
 /** Who is hiring for a role: a person on the role marked Hiring for the seat, else the company's best buyer on file. */
 export function whoIsHiring(i: CoInfo, r: Row, fn: string | null): { p: PersonRec; rel: string | null } | null {
@@ -175,14 +225,8 @@ export function RoleDrawer({
           )}
         </section>
 
-        {/* Evidence Bank is a Close feature (BUILD_PLAN part 8): its place here shows only on Close, a placeholder until it ships. */}
-        {close && (
-          <section className="hn-sec" aria-label="Closest evidence case">
-            <h3 className="hn-k">Closest evidence case</h3>
-            <strong>Evidence Bank is coming</strong>
-            <span className="hn-sub">Your seats will each start a draft case there, and the closest one shows here and goes into your note.</span>
-          </section>
-        )}
+        {/* Evidence Bank is a Close feature (BUILD_PLAN part 8): its place here shows only on Close. */}
+        {close && <ClosestCase companyId={c.id} />}
 
         <section className="hn-sec" aria-label="Your way in">
           <h3 className="hn-k">Your way in</h3>

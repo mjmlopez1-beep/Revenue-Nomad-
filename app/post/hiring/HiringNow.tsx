@@ -13,7 +13,7 @@
  *   Columns   Role, Function, Company (a locked one by its free facts), Listed, Rate ("No rate
  *             posted", or its lock: the posting, rate and hours are one purchase), Hours, Fit to
  *             you, Your way in, Status (New, Seen, Pitched); and Closest evidence (Evidence Bank,
- *             Close only, a placeholder until it ships), Size and HQ, Past fractional hires.
+ *             Close only, the member's case most like each company), Size and HQ, Past fractional hires.
  *   Drawer    a row opens the role on the right (RoleDrawer.tsx): the posting, who is hiring, the
  *             way in, and open the company, draft a note, add to pipeline, pass it on.
  *   Alert     "Save view with an alert" saves the view as a list of open roles with its alert on
@@ -51,6 +51,8 @@ import { PageStrip } from "../shell/PageStrip";
 import { askGo, useApp } from "../shell/pages";
 import { SelectionBar } from "../workbench/SelectionBar";
 import { Workbench } from "../workbench/Workbench";
+import { closestOf } from "../workbench/closest";
+import { useClosest } from "../useClosest";
 import { AlertPanel } from "./AlertPanel";
 import { RoleDrawer, roleTitle } from "./RoleDrawer";
 import {
@@ -239,6 +241,8 @@ export function HiringNow() {
   const colCtx = { me, ways, status: statusCtx, first };
   const allCols = hiringColumns(colCtx);
   const cols = allCols.filter((x) => HIRING_DEFAULT_COLS.includes(x.id) || extras.includes(x.id));
+  // Closest evidence (Evidence Bank, Close): asked for the companies on screen while its column shows.
+  const { summary: evSummary } = useClosest(close && extras.includes("evidence") ? [...new Set(shownRows.map((r) => r.i.c.id))] : [], close && extras.includes("evidence"));
   const toggleCol = (id: string) => {
     if (id === "evidence" && !close) return openPlans("proposals");
     const next = extras.includes(id) ? extras.filter((x) => x !== id) : [...extras, id];
@@ -329,15 +333,24 @@ export function HiringNow() {
           </span>
         );
       }
-      case "evidence":
-        return close ? (
+      case "evidence": {
+        if (!close) return <span className="wb-pill-gate">Close</span>;
+        const ev = closestOf(i.c.id);
+        return ev ? (
           <span className="hn-two">
-            <span className="hn-muted">Coming soon</span>
-            <span className="hn-sub">Evidence Bank</span>
+            <span>{ev.title || "Your case"}</span>
+            <span className="hn-sub">
+              {ev.label}
+              {ev.same[0] ? ` · ${ev.same[0]}` : ""}
+            </span>
           </span>
         ) : (
-          <span className="wb-pill-gate">Close</span>
+          <span className="hn-two">
+            <span className="hn-muted">No close case</span>
+            <span className="hn-sub">{evSummary && !evSummary.ready ? "No case ready yet" : "Evidence Bank"}</span>
+          </span>
         );
+      }
       case "sizeHq": {
         const s = sizeHq(i);
         return (

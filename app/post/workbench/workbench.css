@@ -916,3 +916,34 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* Closest evidence (Evidence Bank, Close) */
+.wb-ev {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.wb-ev-t {
+  font-weight: 600;
+  color: #0a1a13;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-ev-why {
+  font-size: 12px;
+  color: #5b6661;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-ev[data-label="Same"] .wb-ev-why > strong,
+.wb-ev[data-label="Close"] .wb-ev-why > strong {
+  color: #073f2f;
+}
+.wb-pill-btn {
+  cursor: pointer;
+  font-family: inherit;
+}
+.wb-pill-btn { background: transparent; color: var(--pine); }

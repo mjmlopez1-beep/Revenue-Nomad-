@@ -883,3 +883,30 @@
   flex-wrap: wrap;
   gap: 4px 16px;
 }
+
+/* Closest evidence (Evidence Bank, Close) */
+.co-ev-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.co-ev-match > strong {
+  font-weight: 700;
+  color: #073f2f;
+}
+.co-ev-chip {
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #e8f3ee;
+  border: 1px solid #b9d9ca;
+  color: #073f2f;
+  font-weight: 600;
+}
+.co-ev .btn {
+  align-self: flex-start;
+}
+.co-ev-step {
+  font-size: 12px;
+}

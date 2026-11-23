@@ -7,6 +7,8 @@
  * (workbench/cells.tsx, Tables.tsx), so a lock here says its price and spends exactly as the same
  * cell does in a list: one purchase per click, and a lock another purchase opens is quiet.
  */
+import { useClosest } from "../useClosest";
+import { closestOf } from "../workbench/closest";
 import { useRef, useState, type ReactNode } from "react";
 import type { EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { KnownPersonView } from "@/lib/paths/types";
@@ -780,18 +782,64 @@ export function AddHere({ i }: { i: CoInfo }) {
 }
 
 /**
- * Closest evidence (Evidence Bank, a Close feature, Stage 5): a placeholder on Close and the
- * trial, saying what it will do. Nothing on Free and Pro, where Evidence Bank's uses are not shown.
+ * Closest evidence (Evidence Bank, a Close feature): the member's own ready case most like this
+ * company, with its match word and why (GET /api/evidence/closest), or the way to their first case.
+ * Private: only the member sees it. Nothing on Free and Pro, where Evidence Bank's uses are not shown.
  */
-export function EvidenceCard({ onOpen }: { onOpen: () => void }) {
+export function EvidenceCard({ companyId, onOpen }: { companyId: string; onOpen: () => void }) {
+  const { summary } = useClosest([companyId], true);
+  const r = closestOf(companyId);
   return (
     <section className="co-side-card co-ev" aria-labelledby="co-ev-h">
       <span className="co-side-k">Closest evidence case · private</span>
-      <h2 id="co-ev-h">Evidence Bank is coming</h2>
-      <p className="co-sub">Your seats each start a draft case: the problem, what you did, the numbers before and after. Finished cases show here, matched to this company by size, motion and problem.</p>
-      <button type="button" className="btn btn-sm" onClick={onOpen}>
-        See Evidence Bank
-      </button>
+      {!summary ? (
+        <>
+          <h2 id="co-ev-h">Closest evidence</h2>
+          <p className="co-sub">Looking in your Evidence Bank.</p>
+        </>
+      ) : !summary.ready ? (
+        <>
+          <h2 id="co-ev-h">No finished case yet</h2>
+          <p className="co-sub">
+            {summary.drafts
+              ? `${summary.drafts === 1 ? "A draft from your seats waits" : `${plural(summary.drafts, "draft")} from your seats wait`} in Evidence Bank. Finish one and Merlin shows here how close it is to this company.`
+              : "Write your first case: the problem, what you did, the numbers before and after. Merlin then shows here how close it is to this company."}
+          </p>
+          <button type="button" className="btn btn-sm" onClick={onOpen}>
+            {summary.drafts ? "Finish your first case" : "Write your first case"}
+          </button>
+          <span className="co-sub co-ev-step">Step 6. It fills the Proof part of every proposal.</span>
+        </>
+      ) : r ? (
+        <>
+          <h2 id="co-ev-h">{r.title || "Your closest case"}</h2>
+          <span className="co-ev-match">
+            <strong>{r.label}</strong>
+            {r.same.slice(0, 3).map((w) => (
+              <span key={w} className="co-ev-chip">
+                {w}
+              </span>
+            ))}
+          </span>
+          {(r.outcome || r.diff.length > 0) && (
+            <p className="co-sub">
+              {r.outcome ? `${r.outcome}.` : ""}
+              {r.diff.length ? ` ${r.diff.slice(0, 2).join(". ")}.` : ""}
+            </p>
+          )}
+          <button type="button" className="btn btn-sm" onClick={onOpen}>
+            Open the case
+          </button>
+        </>
+      ) : (
+        <>
+          <h2 id="co-ev-h">No close case</h2>
+          <p className="co-sub">None of your {plural(summary.ready, "ready case")} is matched to this company.</p>
+          <button type="button" className="btn btn-sm" onClick={onOpen}>
+            See your cases
+          </button>
+        </>
+      )}
     </section>
   );
 }

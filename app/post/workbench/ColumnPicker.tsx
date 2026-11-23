@@ -6,10 +6,12 @@
  * and a column filled for many rows at once runs from Tools with a quote first.
  */
 import type { RecordType } from "../model";
-import { Anchored } from "../ui";
+import { Anchored, useUi } from "../ui";
 import { COLUMNS, costWords } from "./columns";
 
 export function ColumnPicker({ anchor, type, picked, onChange, onReset, onClose }: { anchor: HTMLElement; type: RecordType; picked: readonly string[]; onChange: (next: string[]) => void; onReset: () => void; onClose: () => void }) {
+  // Closest evidence is Evidence Bank's (Close): off Close it carries the Close pill (the list opens the upgrade).
+  const close = useUi().me.plan?.canClose ?? true;
   const on = new Set(picked);
   const cols = COLUMNS[type];
   return (
@@ -35,7 +37,11 @@ export function ColumnPicker({ anchor, type, picked, onChange, onReset, onClose 
                 <span className="wb-col-name">{c.label}</span>
                 {(c.needs || c.tip) && <span className="wb-col-sub">{c.needs ?? c.tip}</span>}
               </span>
-              <span className={`wb-cost ${c.cost === "free" ? "free" : "paid"}`}>{c.id === "company" ? "Opens" : costWords(c.cost)}</span>
+              {c.plan === "close" && !close ? (
+                <span className="wb-cost gate">Close</span>
+              ) : (
+                <span className={`wb-cost ${c.cost === "free" ? "free" : "paid"}`}>{c.id === "company" ? "Opens" : costWords(c.cost)}</span>
+              )}
             </label>
           </li>
         ))}

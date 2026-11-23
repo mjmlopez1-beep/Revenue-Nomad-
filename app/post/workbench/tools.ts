@@ -15,8 +15,8 @@
  * There is no Export, CSV or download anywhere: members cannot export data from Merlin (the owner's decision).
  *
  * Closest evidence and Match my evidence are Evidence Bank's, a Close feature (the owner's
- * decision): on Close and the Close trial they say Evidence Bank is coming (its store is Stage 5,
- * so the column has nothing to fill yet); on Free and Pro they show with the Close pill and open the
+ * decision): on Close and the Close trial they show the Closest evidence column (columns.ts, filled
+ * from GET /api/evidence/closest, free); on Free and Pro they show with the Close pill and open the
  * upgrade, never hidden.
  */
 import { COMPANY_PRICE, PRO_OPENS_DAILY } from "@/lib/tableFields";
@@ -167,7 +167,7 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
             id: "en-evidence",
             tab: "enrich" as const,
             label: "Closest evidence",
-            sub: ctx.close ? "Your Evidence Bank case most like each company. Coming with Evidence Bank" : "Your case most like each company, from Evidence Bank",
+            sub: ctx.close ? "Your Evidence Bank case most like each company, and why. Free" : "Your case most like each company, from Evidence Bank",
             cost: "Close",
             tone: (ctx.close ? "free" : "gate") as CostTone,
             do: { kind: "evidence" as const },
