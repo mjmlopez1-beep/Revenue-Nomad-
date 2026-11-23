@@ -8,14 +8,25 @@
  *   "roles"        "Client" and "Consultant" blocks, written as a rule with the label under it,
  *                  the names only in the contract's definitions
  *   "none"         a letter with no signature block at all
+ *   "nda"          a mutual NDA, one block under the other, the client's signer's name printed already
+ *
+ * Contracts (app/post/contracts) offers two of them as starters on a first visit: the statement
+ * of work ("two-column") and the mutual NDA ("nda"). STARTERS says which, in its words.
  */
-export type SampleLayout = "two-column" | "stacked" | "roles" | "none";
+export type SampleLayout = "two-column" | "stacked" | "roles" | "none" | "nda";
+
+/** The starter contracts a first visit offers: made-up names, and the link comes to the member's own email. */
+export const STARTERS: { layout: SampleLayout; name: string; meta: string }[] = [
+  { layout: "two-column", name: "Statement of work", meta: "2 pages · signature blocks side by side" },
+  { layout: "nda", name: "Mutual NDA", meta: "3 pages · the signer’s name printed already" },
+];
 
 export const SAMPLE_NAME: Record<SampleLayout, string> = {
   "two-column": "Cedar & Pine - SOW (Nov 2026).pdf",
   stacked: "Consulting Agreement - Cedar and Pine.pdf",
   roles: "cedar_pine_msa_draft.pdf",
   none: "Kickoff notes.pdf",
+  nda: "Mutual NDA - Cedar and Pine.pdf",
 };
 
 const BODY = [
@@ -40,11 +51,20 @@ export async function makeSamplePdf(layout: SampleLayout, opts: { member?: strin
       ? [`This Master Services Agreement is made between Cedar and Pine Software, Inc. (the "Client") and`, `${firm} (the "Consultant"), as of the Effective Date.`]
       : layout === "none"
         ? ["Notes from our kickoff with Cedar and Pine Software.", "We agreed to meet weekly on Tuesdays and to review the forecast together."]
-        : [`This ${layout === "two-column" ? "Statement of Work" : "Consulting Agreement"} is made between Cedar and Pine Software ("Company") and`, `${firm} ("Consultant").`];
-  text(page1, layout === "two-column" ? "STATEMENT OF WORK" : layout === "stacked" ? "CONSULTING AGREEMENT" : layout === "roles" ? "MASTER SERVICES AGREEMENT" : "KICKOFF NOTES", 72, 720, 14, bold);
+        : layout === "nda"
+          ? [`This Mutual Non-Disclosure Agreement is made between Cedar and Pine Software ("Company") and`, `${firm} ("Consultant"), each of which may share confidential information with the other.`]
+          : [`This ${layout === "two-column" ? "Statement of Work" : "Consulting Agreement"} is made between Cedar and Pine Software ("Company") and`, `${firm} ("Consultant").`];
+  text(page1, layout === "two-column" ? "STATEMENT OF WORK" : layout === "stacked" ? "CONSULTING AGREEMENT" : layout === "roles" ? "MASTER SERVICES AGREEMENT" : layout === "nda" ? "MUTUAL NON-DISCLOSURE AGREEMENT" : "KICKOFF NOTES", 72, 720, 14, bold);
   intro.forEach((l, i) => text(page1, l, 72, 690 - i * 16, 10));
-  ["1. Services. The Consultant will lead the revenue team two days a week.", "2. Fees. $11,000 a month, billed monthly in advance, net 15."].forEach((l, i) => text(page1, l, 72, 640 - i * 16, 10));
+  (layout === "nda"
+    ? ["1. Confidential information. Anything either party shares that is marked confidential or should", "reasonably be understood to be.", "2. Use. Each party uses the other's information only to evaluate and do the work together."]
+    : ["1. Services. The Consultant will lead the revenue team two days a week.", "2. Fees. $11,000 a month, billed monthly in advance, net 15."]
+  ).forEach((l, i) => text(page1, l, 72, 640 - i * 16, 10));
   if (layout === "none") return doc.save();
+  if (layout === "nda") {
+    const mid = doc.addPage([612, 792]);
+    ["3. Term. This agreement lasts two years from the Effective Date. The duty to keep information", "confidential lasts three years after it ends.", "4. Return. On request, each party returns or deletes the other's confidential information."].forEach((l, i) => text(mid, l, 72, 720 - i * 16, 10));
+  }
 
   const page = doc.addPage([612, 792]);
   BODY.forEach((l, i) => text(page, l, 72, 720 - i * 15, 10));
@@ -61,7 +81,7 @@ export async function makeSamplePdf(layout: SampleLayout, opts: { member?: strin
     block(72, "Cedar and Pine Software", "", "");
     block(330, firm, "", "");
     text(page, "Notices to the Company: Dana Whitfield, CEO, dana@cedarpine.example", 72, 420, 9);
-  } else if (layout === "stacked") {
+  } else if (layout === "stacked" || layout === "nda") {
     const block = (y: number, org: string, name: string) => {
       text(page, org, 72, y, 11, bold);
       text(page, `Signature: ${RULE}`, 72, y - 35, 10);

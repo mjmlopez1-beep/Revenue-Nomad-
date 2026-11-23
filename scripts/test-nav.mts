@@ -278,7 +278,7 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
       people: "/?t=people",
       hiring: "/?v=hiring&t=seats",
       find: "/?p=find",
-      contracts: "/?p=proposals&ct=1",
+      contracts: "/?p=contracts",
       page: (p) => (p === "today" ? "/" : `/?p=${p}`),
     },
     admin: false,
@@ -308,7 +308,6 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
     const search = it.href.split("?")[1] ?? "";
     if (it.page === "today") return !isHome(search);
     const p = parsePlace(me, search, new Set(), undefined, { ui2: true });
-    if (it.key === "contracts") return p.p !== "proposals" || !p.ct;
     if (it.page === "table") return p.p !== null || p.home;
     return p.p !== it.page;
   });
@@ -375,11 +374,11 @@ async function ui2Checks(nm: typeof import("../app/post/navModel"), me: import("
   }
   // An old /table?k= link is redirected to /?k= (app/table/page.tsx): Home, signed in, in both looks.
   check("old address /table?k=: Home in both looks", isHome("?k=tok-abc") && !P("?k=tok-abc", false).p && !P("?k=tok-abc", true).p && P("?k=tok-abc", true).home);
-  check("old address ?p=proposals&ct=1 (Contracts): Proposals at Contracts in the new look", P("?p=proposals&ct=1", true).p === "proposals" && !!P("?p=proposals&ct=1", true).ct && !P("?p=proposals&ct=1", false).ct);
-  check("?p=contracts in the new look: Proposals at Contracts", P("?p=contracts", true).p === "proposals" && !!P("?p=contracts", true).ct);
-  for (const k of [...UI2_PAGES, "contracts"]) {
+  check("old address ?p=proposals&ct=1 (Contracts): the Contracts page in the new look, Proposals (at its Contracts screen) in the old", P("?p=proposals&ct=1", true).p === "contracts" && P("?p=proposals&ct=1", false).p === "proposals");
+  check("?p=contracts in the new look: the Contracts page", P("?p=contracts", true).p === "contracts");
+  for (const k of UI2_PAGES) {
     const a = P(`?p=${k}`, false);
-    check(`?p=${k} with the new look off: an unknown page, as before (the table)`, a.p === null && !a.home && !a.ct, a.p);
+    check(`?p=${k} with the new look off: an unknown page, as before (the table)`, a.p === null && !a.home, a.p);
   }
   for (const k of UI2_PAGES) check(`?p=${k} in the new look opens it`, P(`?p=${k}`, true).p === k);
 

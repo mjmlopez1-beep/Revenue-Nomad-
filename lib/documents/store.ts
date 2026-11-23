@@ -29,6 +29,9 @@ import { FIELD_KINDS, type DocCopy, type DocEvent, type DocField, type DocSigner
 
 export const DOC_LIMITS = { documents: 200, signers: 10, fields: 300, title: 160, label: 60, text: 200, message: 600, reason: 1000 } as const;
 
+/** A saved contract is kept as it was saved: it is used to start a new one, never changed or sent itself. */
+export const SAVED_FIXED = "A saved contract stays as you saved it. Use it to start a new one.";
+
 const newId = (p: string) => `${p}${randomBytes(9).toString("base64url")}`;
 const { mac, same, cleanLine, cleanSigner, emailHint, base, onFree, titleOf, memberOf, memberFor, NAME } = PI;
 
@@ -114,10 +117,10 @@ export function docRec(d: StoredDocument, nowMs = Date.now(), origin?: string): 
   };
 }
 
-/** The member's own documents, newest first (Proposals lists them with the proposals). */
+/** The member's own documents, newest first (Proposals lists them with the proposals). Saved contracts (templates.ts) are not among them. */
 export const docRecsOf = (s: State, memberId: string, nowMs = Date.now(), origin?: string): DocumentRec[] =>
   (s.documents ?? [])
-    .filter((d) => d.memberId === memberId)
+    .filter((d) => d.memberId === memberId && !d.saved)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map((d) => docRec(d, nowMs, origin));
 
@@ -126,7 +129,7 @@ const ev = (d: StoredDocument, kind: DocEvent["kind"], at: string, meta: { who?:
 
 /* ---------- the member's side ---------- */
 
-const mineDoc = (s: State, memberId: string, id: unknown): StoredDocument => {
+export const mineDoc = (s: State, memberId: string, id: unknown): StoredDocument => {
   const d = (s.documents ?? []).find((x) => x.id === id && x.memberId === memberId);
   if (!d) throw new ProposalProblem("That document isn't there anymore. Open Proposals again.", 404);
   return d;
@@ -256,6 +259,7 @@ export async function updateDocument(token: string | null, id: string, a: DocPat
   return T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const d = mineDoc(s, me.id, id);
+    if (d.saved) throw new ProposalProblem(SAVED_FIXED);
     if (d.sentAt) throw new ProposalProblem("It went out for signature, so it can't change. Copy it to make a new one.");
     if (a.title !== undefined) d.title = cleanLine(a.title, DOC_LIMITS.title) || d.title;
     if (a.ordered !== undefined) d.ordered = a.ordered !== false;
@@ -293,6 +297,7 @@ export async function deleteDocument(token: string | null, id: string, nowMs = D
 export async function copyDocument(token: string | null, id: string, origin?: string, nowMs = Date.now()): Promise<DocumentRec> {
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const src = mineDoc(s0, memberOf(seed, s0, token).id, id);
+  if (src.saved) throw new ProposalProblem(SAVED_FIXED);
   const bytes = await readOriginal(src.id);
   if (!bytes) throw new ProposalProblem("The file isn't there anymore. Upload it again.", 410);
   const nid = newId("dc_");
@@ -383,6 +388,7 @@ export async function sendDocument(token: string | null, id: string, a: { messag
   await T.mutate((s) => {
     const me = memberOf(seed, s, token);
     const d = mineDoc(s, me.id, id);
+    if (d.saved) throw new ProposalProblem(SAVED_FIXED);
     if (d.sentAt) throw new ProposalProblem(live(d, nowMs) ? "It's out for signature already." : "It went out already. Copy it to send again.");
     const why = notReady(d);
     if (why) throw new ProposalProblem(why);

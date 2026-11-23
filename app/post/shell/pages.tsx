@@ -313,6 +313,7 @@ const loadCompany = () => import("../company/CompanyPage");
 const loadCrystal = () => import("../crystal/CrystalBall");
 const loadHiring = () => import("../hiring/HiringNow");
 const loadWarm = () => import("../network/WarmPaths");
+const loadContracts = () => import("../contracts/ContractsPage");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -325,8 +326,10 @@ const CrystalBall = dynamic(() => loadCrystal().then((m) => m.CrystalBallPage), 
 const HiringNowPage = dynamic(() => loadHiring().then((m) => m.HiringNow), { ssr: false, loading: pageWait });
 // Warm paths (network/WarmPaths.tsx): the map, the list, the path and the sources.
 const WarmPathsPage = dynamic(() => loadWarm().then((m) => m.WarmPaths), { ssr: false, loading: pageWait });
+// Contracts (contracts/ContractsPage.tsx): drop a PDF, the flow, the table and saved contracts.
+const ContractsPageL = dynamic(() => loadContracts().then((m) => m.ContractsPage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -571,6 +574,11 @@ function Hiring2P() {
   return <HiringNowPage />;
 }
 
+/** Contracts (contracts/ContractsPage.tsx), page key "contracts": it draws its own header (Home / Contracts / the contract) and strip. */
+function ContractsP() {
+  return <ContractsPageL />;
+}
+
 const peersMain = (c: AppCtx) => (c.shell.peersAll || c.page !== "peers" ? "fr-main" : "");
 
 /**
@@ -601,6 +609,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   alerts: { title: "Alerts and workflows", component: NotificationsP },
   agent: { title: "Agent access", component: IntegrationsP },
   settings: { title: "Settings", component: IntegrationsP },
+  contracts: { title: "Contracts", component: ContractsP, ownHeader: true, ownStrip: true, mainClass: "ct-main" },
   // Mount points for the new look's own pages (see the top of this file).
   home2: { title: "Home", component: Home2P, ownHeader: true, ownStrip: true },
   companies2: { title: "Companies", component: Companies2P, crumbs: ["today"], ownStrip: true },
