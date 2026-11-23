@@ -42,9 +42,38 @@ export type Ui2Page = (typeof UI2_PAGES)[number];
  * (?p=claude) is Agent access, Notifications is Alerts and workflows. The rest keep their page,
  * and the nav marks their new item (navModel.ts currentKey2).
  */
-export const UI2_FROM_OLD: Partial<Record<string, Ui2Page>> = { getin: "warm", integrations: "settings", claude: "agent", notifications: "alerts" };
+export const UI2_FROM_OLD: Partial<Record<string, Ui2Page>> = { getin: "warm", integrations: "settings", claude: "agent", notifications: "alerts", network: "warm" };
 /** The page an old page key opens with the new look on (itself when it has no new home). */
 export const ui2PageOf = <T extends string>(p: T): T | Ui2Page => UI2_FROM_OLD[p] ?? p;
+
+/**
+ * Settings (settings/SettingsPage.tsx) is one page with a section list. The section is in the
+ * address as `sec=` (?p=settings&sec=voice), and these old or short addresses land on theirs in the
+ * new look: ?p=integrations is Connections, and so is Google's return (?p=network&google=connected:
+ * Your network's connect and delete moved to Settings / Connections; ?p=network alone is Warm paths),
+ * and ?p=profile, ?p=voice, ?p=connections, ?p=signature, ?p=privacy, ?p=account are their sections.
+ */
+export const SETTINGS_SECTIONS = ["profile", "ideal", "voice", "conn", "notif", "sig", "priv", "agents", "plan", "data"] as const;
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+/** The ?p= keys (besides settings) that open Settings at a section in the new look. */
+export const SETTINGS_PAGE_OF: Record<string, SettingsSection> = { profile: "profile", voice: "voice", connections: "conn", signature: "sig", privacy: "priv", account: "data" };
+/** A section by its own key or a plain word (sec=connections, sec=notifications). */
+const SEC_WORDS: Record<string, SettingsSection> = {
+  ...Object.fromEntries(SETTINGS_SECTIONS.map((k) => [k, k])),
+  ...SETTINGS_PAGE_OF,
+  card: "profile", icp: "ideal", client: "ideal", integrations: "conn", google: "conn", slack: "conn", granola: "conn", network: "conn",
+  notifications: "notif", alerts: "notif", agent: "agents", plans: "plan", billing: "plan", data: "data",
+};
+/** A key of a word table, never one of Object's own ("constructor"). */
+const ownKey = <T,>(o: Record<string, T>, k: string | null): T | null => (k && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : null);
+/** The Settings section an address names (its sec=, or the old page it came from), or null for the page's own default. */
+export function settingsSecOf(search: string): SettingsSection | null {
+  const q = new URLSearchParams(search);
+  const p = q.get("p");
+  if (p === "settings") return ownKey(SEC_WORDS, (q.get("sec") ?? "").toLowerCase());
+  if (p === "integrations" || (p === "network" && q.has("google"))) return "conn";
+  return ownKey(SETTINGS_PAGE_OF, p);
+}
 
 /**
  * The Companies workbench's columns in the address (`cols=heldBy,seat,industry`, new look only): a
@@ -139,7 +168,8 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
   const raw = q.get("p");
   // Proposals' old Contracts screen (?p=proposals&ct=1) is the page Contracts in the new look, and so is a contract
   // an old link names there (?p=proposals&dc=<id>, the alerts' and emails' links): Contracts opens it (contracts/ContractsPage.tsx).
-  const asked = ui2 && raw === "proposals" && (q.get("ct") === "1" || !!q.get("dc")) ? "contracts" : raw;
+  // Google's return from connecting (?p=network&google=connected) and the short addresses (?p=voice) are Settings in the new look (settingsSecOf).
+  const asked = ui2 && raw === "proposals" && (q.get("ct") === "1" || !!q.get("dc")) ? "contracts" : ui2 && ((raw === "network" && q.has("google")) || ownKey(SETTINGS_PAGE_OF, raw)) ? "settings" : raw;
   const p0: PlacePage | Ui2Page | null = sig
     ? "radar"
     : raw === "claude"

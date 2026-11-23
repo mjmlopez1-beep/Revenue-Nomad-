@@ -61,6 +61,8 @@ import { useState } from "react";
 import type { AskPlan } from "@/lib/ask";
 import { setFindStart } from "../find/start";
 import { firstOf, ownOf } from "../firstVisit";
+// Where Settings opens: read from the address as the shell loads, before the app rewrites it (settings/at.ts).
+import "../settings/at";
 
 /* ---------- the keys ---------- */
 
@@ -317,6 +319,7 @@ const loadContracts = () => import("../contracts/ContractsPage");
 const loadEvidence = () => import("../evidence/Evidence");
 const loadAlerts = () => import("../alerts/Alerts");
 const loadAgent = () => import("../agent/AgentAccess");
+const loadSettings = () => import("../settings/SettingsPage");
 const Home2 = dynamic(() => loadHome2().then((m) => m.Home2), { ssr: false, loading: pageWait });
 const Find = dynamic(() => loadFind().then((m) => m.Find), { ssr: false, loading: pageWait });
 const WorkbenchPage = dynamic(() => loadWorkbench().then((m) => m.WorkbenchPage), { ssr: false, loading: pageWait });
@@ -337,8 +340,10 @@ const EvidencePageL = dynamic(() => loadEvidence().then((m) => m.EvidencePage), 
 const AlertsPageL = dynamic(() => loadAlerts().then((m) => m.AlertsPage), { ssr: false, loading: pageWait });
 // Agent access (agent/AgentAccess.tsx): the member's agents, the tools' switches, the daily spend limit and the log.
 const AgentAccessL = dynamic(() => loadAgent().then((m) => m.AgentAccess), { ssr: false, loading: pageWait });
+// Settings (settings/SettingsPage.tsx): the section list with Your setup, Connections, Notifications and the rest.
+const SettingsL = dynamic(() => loadSettings().then((m) => m.SettingsPage), { ssr: false, loading: pageWait });
 /** The new look's pages, fetched while the member reads. */
-export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadAlerts, loadAgent];
+export const preloadUi2 = () => [loadHome2, loadFind, loadWorkbench, loadCompany, loadPeople, loadSeatsPage, loadCrystal, loadHiring, loadWarm, loadContracts, loadEvidence, loadSettings, loadAlerts, loadAgent];
 /** Fetch the pages while the member reads: opening one is then instant. */
 export const preloadPages = (admin: boolean) => [loadIntegrations, loadBenchmarks, loadFractionals, loadPeers, ...(admin ? [loadAdmin] : [])];
 
@@ -576,6 +581,12 @@ function AgentP() {
   return c.ui2 ? <AgentAccessL /> : <IntegrationsP />;
 }
 
+/** Settings (settings/SettingsPage.tsx), page key "settings" (and ?p=integrations, Google's return) in the new look; the old look keeps Integrations. */
+function SettingsP() {
+  const c = useApp();
+  return c.ui2 ? <SettingsL /> : <IntegrationsP />;
+}
+
 /** Evidence Bank (evidence/Evidence.tsx), page key "evidence" (Close): its own header (Home / Evidence Bank / Your case library) and strip; on Free and Pro, the upgrade screen. */
 function EvidenceP() {
   return <EvidencePageL />;
@@ -587,7 +598,7 @@ const peersMain = (c: AppCtx) => (c.ui2 ? "wb-host fy-host" : c.shell.peersAll |
 /**
  * Every page by key. Old keys keep their pages; the new look's keys open the page that is their
  * home today until their own is built (Warm paths is Where you can get in, Alerts and workflows is
- * Notifications, Settings is Integrations; Agent access is its own page in the new look, Integrations in the old).
+ * Notifications; Settings and Agent access are their own pages in the new look, Integrations in the old).
  */
 export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" | "company2" | "people2" | "seats2" | "hiring2", PageDef>> = {
   credits: { title: "Your credits", component: CreditsP },
@@ -613,7 +624,7 @@ export const PAGES: Partial<Record<ShellPage | "home2" | "companies2" | "find2" 
   evidence: { title: "Evidence Bank", component: EvidenceP, ownHeader: true, ownStrip: true, mainClass: (c) => (!c.me.plan || c.me.plan.canClose ? "wb-host ev-host" : "") },
   alerts: { title: "Alerts and workflows", component: AlertsP, ownStrip: true, mainClass: (c) => (c.ui2 ? "al-host" : "") },
   agent: { title: "Agent access", component: AgentP, ownStrip: true, mainClass: (c) => (c.ui2 ? "ag-host" : "") },
-  settings: { title: "Settings", component: IntegrationsP },
+  settings: { title: "Settings", component: SettingsP, ownHeader: true, ownStrip: true, mainClass: (c) => (c.ui2 ? "st-host" : "") },
   contracts: { title: "Contracts", component: ContractsP, ownHeader: true, ownStrip: true, mainClass: "ct-main" },
   // Mount points for the new look's own pages (see the top of this file).
   home2: { title: "Home", component: Home2P, ownHeader: true, ownStrip: true },

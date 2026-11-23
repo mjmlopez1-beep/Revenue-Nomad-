@@ -110,6 +110,7 @@ const preloadLater = (admin: boolean) => {
 import "./nav.css";
 import { Spot, type SpotKind } from "../ui/fractions/lazy";
 import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, tableSlotOf, type AppCtx, type ShellPage } from "./shell/pages";
+import { atOf as settingsAtOf, openSettings } from "./settings/at";
 import { setPeopleStart } from "./people/start";
 
 export interface TradingPostProps {
@@ -312,6 +313,12 @@ function placeUrl(me: Me, x: { t: RecordType; v: Tab; s: SortKey | null; f: Filt
     const cur = new URLSearchParams(window.location.search);
     // Also a contract an old Proposals address named (?p=proposals&dc=<id>, place.ts): it opens on Contracts, kept in the address.
     if ((cur.get("p") === "contracts" || cur.get("p") === "proposals") && cur.get("dc")) q.set("dc", cur.get("dc")!);
+  }
+  // Settings keeps its section and the Connections row open in the address (settings/at.ts atOf: its own sec= and open=, or the old address it came from), so a reload reopens it.
+  if (x.p === "settings" && typeof window !== "undefined") {
+    const at = settingsAtOf(window.location.search);
+    if (at.sec) q.set("sec", at.sec);
+    if (at.open) q.set("open", at.open);
   }
   const path = typeof window === "undefined" ? "/" : window.location.pathname;
   if (x.p === "today") return path;
@@ -3625,7 +3632,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             contact={contact}
             // The account only: every page is in the sidebar (or the tab bar and More).
             items={[
-              { label: "Your profile", hint: me.function ?? undefined, onClick: () => setIcpOpen(true) },
+              // The new look: Settings at Profile and card (settings/SettingsPage.tsx); the old look keeps the profile sheet.
+              { label: "Your profile", hint: me.function ?? undefined, onClick: () => (ui2 ? openSettings(openShellPage, "profile") : setIcpOpen(true)) },
               // Every email and Slack post, and how often (the sidebar's foot has it too).
               { label: "Notifications", current: page === "notifications", onClick: () => openPage("notifications") },
               // One way to get signed in elsewhere: emailed when email is on, else the link copied.
