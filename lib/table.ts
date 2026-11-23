@@ -136,6 +136,7 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 // Your private notes on a company (the company page): each member's own (lib/companyNotes.ts).
 import { NoteProblem, addNote, editNote, forgetCompany as forgetCompanyNotes, mergeCompany as mergeCompanyNotes, notesOf, removeNote, type CompanyNote, type CompanyNotesState } from "./companyNotes";
 import { forgetMember as forgetRoutes, type RouteStats, type RoutesState } from "./paths/plan";
+import { forgetCompanyEvidence, forgetMemberEvidence, mergeCompanyEvidence, type EvidenceState } from "./evidence/types";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
 import { ACTIVATE_INVITERS_PAID, groupSeats, type SeatLink } from "./fractionalsCore";
 // Peers: leads passed, teams and circles (lib/peersCore.ts, lib/peers.ts).
@@ -638,6 +639,15 @@ export interface State extends MessagingState {
    * member's in-app notifications and alert switches (by member id). Private like proposals: never in the export.
    */
   close?: CloseState;
+  /**
+   * Evidence Bank (lib/evidence): each member's own case studies, by member id (up to 50). The
+   * client is hidden unless they name it, and its name never leaves the server then. Private to
+   * them: never in another member's view, the shared table, an admin's panel or the export;
+   * account closure's purge deletes them.
+   */
+  evidence?: EvidenceState;
+  /** When each member agreed that their case answers may go to Merlin's AI to write a case (lib/evidence/store.ts writeCase), by member id. */
+  evidenceAi?: Record<string, string>;
   /**
    * Peers (lib/peersCore.ts, lib/peers.ts): leads passed between members, teams pursuing a company
    * together, circles and their monthly threads, mutes. The text in them (a pass's note, a team's
@@ -7168,6 +7178,7 @@ export async function perform(
                 s.companies = s.companies.filter((c) => c.id !== co);
                 for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const vk of Object.keys(bag)) if (owns(vk, co)) delete bag[vk];
                 forgetCompanyNotes(s.companyNotes, co);
+                forgetCompanyEvidence(s.evidence, co);
                 for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(co)) s.follows[m] = ids.filter((id) => id !== co);
               }
             } else s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
@@ -7785,8 +7796,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // A member's Granola key (sealed, lib/granola) never leaves in the export.
   // Each member's pipeline (their deals, notes and intros) is theirs alone as well, and so are their plans for a way in (routes; the anonymous routeStats counts go).
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
-  // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well, and so is their Evidence Bank (lib/evidence) and its AI agreement.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, evidence: _evidence, evidenceAi: _evidenceAi, ...rest } = s as State & { paths?: unknown; granola?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7872,6 +7883,9 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   del(s.companyNotes);
   del(s.myTemplates);
   del(s.aiDrafts);
+  // Their Evidence Bank (lib/evidence): every case, and their agreement for Merlin's AI to write them.
+  forgetMemberEvidence(s.evidence, id);
+  del(s.evidenceAi);
   del(s.aiUsage);
   // Their proposals' reading activity, notifications and alert switches (lib/close).
   if (s.close) {
@@ -9544,6 +9558,7 @@ function foldCompany(s: State, seed: Seed, from: string, to: string, now: string
   s.companies = s.companies.filter((c) => c.id !== from);
   for (const bag of [s.values, s.unlocks, s.verifications] as Record<string, unknown>[]) for (const k of Object.keys(bag)) if (k.startsWith(`${from}.`)) delete bag[k];
   mergeCompanyNotes(s.companyNotes, from, to);
+  mergeCompanyEvidence(s.evidence, from, to);
   for (const [m, ids] of Object.entries(s.follows)) if (ids.includes(from)) s.follows[m] = [...new Set(ids.map((x) => (x === from ? to : x)))];
   return back.size;
 }

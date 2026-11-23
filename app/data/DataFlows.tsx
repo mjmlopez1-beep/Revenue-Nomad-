@@ -214,6 +214,23 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-evidence">
+            <h2 className="df-h" id="df-evidence">
+              Inside Merlin: your Evidence Bank
+            </h2>
+            <p className="cl-p">
+              On Close you can keep up to 50 case studies of your work: the client, the problem, what you did, the numbers before and after as you typed them, and
+              the type of work. The client is hidden unless you choose to name it: it reads as a short description, like a health care company of its size, and
+              its name is taken out of the words wherever a case is used. Only you see your cases. They are not in anyone else&apos;s view or in Revenue
+              Nomad&apos;s copy for admins. A case goes into one of your proposals, or onto your Fractionals card, only when you put it there.
+            </p>
+            <p className="cl-p">
+              Merlin writes a case by joining your answers. Only if you switch on writing with Merlin and agree, your answers and anything you paste go to Merlin&apos;s
+              AI service for that one request; what you paste is never kept, and no number goes into a case unless you gave it. Remove a case at any time. When
+              you close your account they stay for the 30 days you can bring it back, then they are deleted with your personal data.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-crystal">
             <h2 className="df-h" id="df-crystal">
               Inside Merlin: tuning your Crystal Ball
@@ -283,6 +300,7 @@ export function DataFlows() {
               <li>Granola: Integrations, Disconnect. Merlin deletes your key at once, and closing your account deletes it too. To switch the key off in Granola as well, revoke it there under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
+              <li>Your Evidence Bank: remove any case, hide its client, or take it off your card, on the Evidence Bank page.</li>
               <li>Crystal Ball: Reset in Tune puts every weight back, and Bring it back in Not in your ball returns a company you took out.</li>
               <li>Email: the weekly email and message emails each have a switch in Your credits. Crystal Ball emails have an unsubscribe link. Peers emails have a switch in Notifications.</li>
               <li>Peers: mute a member, or leave a circle.</li>
@@ -290,7 +308,7 @@ export function DataFlows() {
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>

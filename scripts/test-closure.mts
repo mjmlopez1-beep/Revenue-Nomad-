@@ -6,7 +6,7 @@
  *  - restore: by the emailed link within 30 days (signed in again, everything as it was), by an
  *    admin, never after the 30 days, a wrong or used key does nothing;
  *  - the scheduled delete after 30 days (lib/jobs.ts runDueJobs, purgeDue): profile, the LinkedIn
- *    import, network, the messages they wrote, proposals and documents, the AI usage log, saved
+ *    import, network, the messages they wrote, proposals and documents, the Evidence Bank, the AI usage log, saved
  *    views, plans for a way in (State.routes; the anonymous routeStats stay) and the rest go;
  *    facts they added to companies stay with no attribution; another member's data untouched;
  *    not before day 30; counts only in the log;
@@ -60,6 +60,12 @@ writeFileSync(
     proposals: [{ id: "pr_ana", memberId: "mem_ana", companyId: null, companyPub: null, companyName: "Acme Robotics", templateId: null, title: "Ana's proposal", blocks: [], fields: {}, sources: {}, notes: [], signerOnCall: null, signer: null, version: 1, createdAt: ago(DAY), updatedAt: ago(DAY), sends: [] }],
     aiUsage: { mem_ana: { month: "2026-11", usedMicros: 5, packMicros: 0, log: [{ at: ago(DAY), inTok: 1, outTok: 1, micros: 5 }] } },
     aiDrafts: { mem_ana: ago(DAY) },
+    // Evidence Bank (lib/evidence): a case each, and Ana's agreement for Merlin's AI to write them.
+    evidence: {
+      mem_ana: [{ id: "ev_ana", status: "ready", clientNamed: false, clientName: "Acme Robotics", clientLabel: "A SaaS company, $5M to $20M", title: "Ana's secret case", role: "Fractional VP Sales", fn: "Sales", start: "2025-01", end: "Ongoing", hours: "", size: "51–200", revenue: "$5M–$20M", motion: "", industry: "SaaS", soldTo: "", problems: [], workType: [], outcomes: [], workedWith: [], answers: { problem: "p", did: "d", numbers: "" }, text: "t", textBy: "template", showOnCard: false, usedIn: [], createdAt: ago(DAY), updatedAt: ago(DAY) }],
+      mem_theo: [{ id: "ev_theo", status: "draft", clientNamed: false, clientLabel: "A SaaS company", title: "Theo's case", role: "", fn: "", start: "", end: "", hours: "", size: "", revenue: "", motion: "", industry: "SaaS", soldTo: "", problems: [], workType: [], outcomes: [], workedWith: [], answers: { problem: "", did: "", numbers: "" }, text: "", textBy: "template", showOnCard: false, usedIn: [], createdAt: ago(DAY), updatedAt: ago(DAY) }],
+    },
+    evidenceAi: { mem_ana: ago(DAY) },
     connector: { clients: [], grants: [], alerts: { mem_ana: [{ id: "sv1", name: "Sales at SaaS", function: "Sales", createdAt: ago(DAY) }], mem_theo: [{ id: "sv2", name: "CMO seats", function: "Marketing", createdAt: ago(DAY) }] } },
     myTemplates: { mem_ana: [{ id: "mt_aaaaaaaaaaaa", title: "Ana's SOW", fileName: "sow.md", kind: "md", blocks: [], createdAt: ago(DAY) }] },
     pipeline: { mem_ana: { entries: [], intros: [] } },
@@ -178,6 +184,7 @@ async function main() {
   check("  its log line has counts only", logs.some((l) => /^Deleted the personal data of 1 account closed 30 days ago\.$/.test(l)) && !logs.some((l) => /Ana|mem_ana|@/.test(l)), logs);
   check("profile, LinkedIn import, network, AI usage log and agreement, saved views, templates, pipeline: gone", !s2.profiles.mem_ana && !(s2 as { paths?: Record<string, unknown> }).paths?.mem_ana && !s2.network?.mem_ana && !s2.aiUsage?.mem_ana && !s2.aiDrafts?.mem_ana && !s2.connector!.alerts.mem_ana && !s2.myTemplates?.mem_ana && !s2.pipeline?.mem_ana);
   check("her plans for a way in (State.routes): gone; Theo's stay, and the anonymous counts are untouched", !s2.routes?.mem_ana && !!s2.routes?.mem_theo?.c_birch && JSON.stringify(s2.routeStats) === JSON.stringify({ "h1|Good|d1|e40": { intro: 2, noreply: 1 } }), { routes: s2.routes, stats: s2.routeStats });
+  check("her Evidence Bank cases and her agreement for Merlin's AI: gone; Theo's case stays", !s2.evidence?.mem_ana && !s2.evidenceAi?.mem_ana && !JSON.stringify(s2).includes("Ana's secret case") && s2.evidence?.mem_theo?.length === 1, s2.evidence);
   check("proposals and documents: gone", !s2.proposals!.some((p) => p.memberId === "mem_ana") && !(s2.documents ?? []).some((d) => d.memberId === "mem_ana"));
   check("the messages she wrote: gone; Theo's reply stays", s2.conversations![0].messages.length === 1 && s2.conversations![0].messages[0].by === "mem_theo" && !JSON.stringify(s2).includes("a secret plan"));
   check("her credits history and unlocks: gone", !s2.ledger.some((l) => l.memberId === "mem_ana") && !Object.values(s2.unlocks).some((l) => l.includes("mem_ana")));

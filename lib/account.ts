@@ -48,7 +48,7 @@ export const CLOSE_WORDS = {
   title: "Close your account",
   lead: `Your account closes now: you're signed out everywhere, you leave Peers and the Fractionals directory, and Merlin stops emailing you.`,
   restore: `For ${CLOSURE_DAYS} days you can bring it back with the link we email you, or by writing to us.`,
-  after: `After ${CLOSURE_DAYS} days Merlin deletes your personal data: your profile, your Google and LinkedIn imports and network, the messages you wrote, your proposals and documents, your AI usage log and your saved views. Facts you added to companies stay, with your name taken off.`,
+  after: `After ${CLOSURE_DAYS} days Merlin deletes your personal data: your profile, your Google and LinkedIn imports and network, the messages you wrote, your proposals and documents, your Evidence Bank cases, your AI usage log and your saved views. Facts you added to companies stay, with your name taken off.`,
   plan: "A paid plan stops renewing. You keep nothing of it after the period you paid for.",
   confirm: "Close my account",
 };
