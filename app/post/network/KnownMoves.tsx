@@ -2,8 +2,8 @@
 
 /**
  * Someone you know changed jobs, on Home (a move in Today) and on Warm paths (GET /api/table?known=1,
- * lib/notify/knownView.ts). The people come from the member's own LinkedIn connections file and
- * contacts CSV only, never Google. The lines are the server's words: a Californian is never named,
+ * lib/notify/knownView.ts). The people come from the member's own LinkedIn connections file,
+ * contacts CSV and Google, for that member alone. The lines are the server's words: a Californian is never named,
  * and at a company the member hasn't opened nobody is named and the company is described by its
  * industry and size. Read once per page load and shared by both places.
  */

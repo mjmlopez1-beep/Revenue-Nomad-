@@ -523,6 +523,13 @@
   max-height: 60vh;
   overflow-y: auto;
 }
+/* A workflow's run waiting for the member's yes (lib/workflows): its two answers under the line. */
+.ws-bell-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 2px 30px;
+}
 .ws-bell-row {
   width: 100%;
   min-height: 44px;

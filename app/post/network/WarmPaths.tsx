@@ -352,7 +352,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
 
       {!first && sources}
       {/* Someone you know changed jobs: a person in the member's LinkedIn file or CSV who is a new leader elsewhere (never Google). */}
-      {!first && !ex && <KnownMoves where="warm" enabled={v.own.linkedin || v.own.csv} openCompany={(id) => c.openCompany(id)} />}
+      {!first && !ex && <KnownMoves where="warm" enabled={v.own.google || v.own.linkedin || v.own.csv} openCompany={(id) => c.openCompany(id)} />}
       {!first && <Suggestions linkedin={v.own.linkedin} csv={v.own.csv} />}
 
       <div className="wp-foot" role="status">

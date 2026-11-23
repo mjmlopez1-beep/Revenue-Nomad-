@@ -367,6 +367,8 @@ export function dispatch(memberId: string, f: AlertFacts, nowMs = Date.now()): P
     (async () => {
       const [seed, s] = await Promise.all([loadSeed(), loadState()]);
       if (!T.closeNow(s, memberId, nowMs)) return;
+      // Workflows (lib/workflows, Beta): a first open or a signature sets off the member's workflows on it, whatever the alert's switches.
+      if (f.kind === "open" || f.kind === "signed") void import("../workflows").then((w) => w.afterProposal(memberId, f, nowMs)).catch((e) => console.error("workflows: proposal event failed", e instanceof Error ? e.message : "error"));
       const prefs = s.close?.prefs?.[memberId];
       const base = baseOf(s);
       const link = emailLinker(seed, s, memberId, base, nowMs);

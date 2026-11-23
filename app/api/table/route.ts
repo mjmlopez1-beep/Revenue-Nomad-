@@ -221,17 +221,19 @@ function touchedIds(a: Action, out: ActionResult): string[] {
   return ids;
 }
 const patchless = (a: Action) =>
-  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || a.type.startsWith("inbox.") || a.type.startsWith("alerts.") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
+  !a || typeof a.type !== "string" || a.type.startsWith("message.") || a.type.startsWith("pipeline.") || a.type.startsWith("peer.") || a.type.startsWith("inbox.") || a.type.startsWith("alerts.") || (a.type.startsWith("workflow.") && (a.type as string) !== "workflow.approve") || NO_PATCH.has(a.type) || (a.type === "claimSeat" && !!a.preview) || (a.type === "signal" && a.name !== "pro_interest");
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?known=1    Someone you know changed jobs for Home and Warm paths (lib/notify/knownView.ts KnownView): the last
- *                  30 days' moves from the member's own LinkedIn file and contacts CSV, never Google. 401 signed out.
+ *                  30 days' moves from the member's own LinkedIn file, contacts CSV and Google. 401 signed out.
  * GET ?inbox=1    the bell (lib/inbox.ts InboxView): the member's inbox, newest first, and how many are unread. 401 signed out.
  *                  POST { action: { type: "inbox.read", ids? } } marks lines read.
  * GET ?alerts=1&since=ISO   the Alerts page (lib/inbox.ts AlertsView): the fixed alerts' switches, alerts sent since then,
  *                  each alert's last time. 401 signed out.
+ * GET ?workflows=1   the Workflows tab (lib/workflows WorkflowsAnswer): the member's workflows, runs, prices and plan, or
+ *                  { on: false } while RN_WORKFLOWS is off. ?workflows=drafts: the notes workflows drafted (drafts only). 401 signed out.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?preview=1&fn=F&ind=I&country=C&view=all|hiring|notyet   the landing page's "Try it" and example record: counts, sample rows with their companies, never
  *                  a person, email, phone, posting link or rate (lib/preview.ts). 400 on a value not on its list.
@@ -316,6 +318,13 @@ export const GET = guarded(async (req: NextRequest) => {
   if (req.nextUrl.searchParams.get("inbox") !== null) {
     const v = await (await import("@/lib/inbox")).inboxFor(token);
     return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err(SIGNED_OUT_ALERTS, 401);
+  }
+  // Workflows (lib/workflows, Beta): the Workflows tab, or the notes they drafted (Messages). { on: false } while RN_WORKFLOWS is off.
+  const wfq = req.nextUrl.searchParams.get("workflows");
+  if (wfq !== null) {
+    const W = await import("@/lib/workflows");
+    const v = wfq === "drafts" ? await W.draftsFor(token) : await W.workflowsFor(token);
+    return v ? NextResponse.json(v, { headers: { "cache-control": "no-store" } }) : err("You're signed out. Sign in again to see your workflows.", 401);
   }
   if (req.nextUrl.searchParams.get("known") !== null) {
     const v = await (await import("@/lib/notify/knownView")).knownFor(token);

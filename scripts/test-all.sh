@@ -201,6 +201,8 @@ run alerts npx tsx scripts/test-alerts.mts
 run agent npx tsx scripts/test-agent.mts
 # The Stage 7a merge's wiring (lib/notify/knownView.ts, KnownMoves.tsx): Someone you know on Home and Warm paths from the LinkedIn file and CSV only (never Google, no Californian named, a locked company described), and the connector setting an alert's triggers and how often through the app's plan gate. In process, on a made-up seed.
 run known npx tsx scripts/test-known.mts
+# Workflows (Stage 7b, Beta, RN_WORKFLOWS, lib/workflows): a run's estimate equals what it spends, auto-spend by default, the warning once, the cap that stops and asks (yes runs, no doesn't), Merlin's daily caps, the workflow's name on every ledger line, notes as drafts only, never a locked company or a Californian named, the flag off running nothing, the plan gates, reminders, a signed proposal's Evidence Bank draft, export and purge. In process, on a made-up seed.
+run workflows npx tsx scripts/test-workflows.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
 run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts

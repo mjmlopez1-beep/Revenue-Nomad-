@@ -1,6 +1,6 @@
 /**
  * "Someone you know changed jobs" (the owner, 2026-11-23): a person in the member's own sources
- * (their LinkedIn connections file, their contacts CSV; never Google, lib/notify/knownView.ts) who now shows as a new
+ * (their LinkedIn connections file, their contacts CSV, their Google network; lib/notify/knownView.ts) who now shows as a new
  * leader at another company Merlin holds (a leader read from the company's own website, or a person
  * a member added there). Pure: no I/O, so the watch pass (lib/notify/events.ts) and the checks share it.
  *
@@ -26,8 +26,8 @@ export interface KnownPerson {
   /** Where the source places them: a company on Merlin (internal id), and the source's own words for it. */
   companyId: string | null;
   company: string | null;
-  /** The member's LinkedIn connections file or their contacts CSV. Google never feeds this. */
-  src: "linkedin" | "csv";
+  /** The member's LinkedIn connections file, their contacts CSV, or their Google network (for that member alone). */
+  src: "linkedin" | "csv" | "google";
 }
 
 /** A new leader at a company on Merlin. */

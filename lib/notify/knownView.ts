@@ -3,10 +3,12 @@
  * where its people and its new leaders come from, shared by the watch pass (lib/notify/events.ts,
  * the alert) and by Home and Warm paths (`knownFor`, GET /api/table?known=1, the same lines as moves).
  *
- * The people are the member's own LinkedIn connections file and their own contacts CSV
- * (State.paths[memberId]), nothing else. Google (Calendar, Contacts, Gmail) and what the member's own
- * agent saved to their network never feed it: Google stays private to the member (its Limited Use
- * rules), as with Suggested additions (lib/paths/suggest.ts).
+ * The people are the member's own sources, each working on its own (owner, BUILD_PLAN part 8): their
+ * LinkedIn connections file and contacts CSV (State.paths[memberId]) and their Google network
+ * (Calendar, Contacts, Gmail: State.network[memberId]). Google stays private to the member: a line
+ * built from it goes to that member alone, is never shared, never adds anything to Merlin, and never
+ * feeds Suggested additions (lib/paths/suggest.ts). What the member's agent saved is not a source.
+ * People and companies the member said are "Not a relationship" are left out.
  *
  * The new leaders are a leader a company's own website shows now (with the name kept) and a person a
  * member added. A Californian by their own location is never named; at a company the member hasn't
@@ -16,6 +18,7 @@ import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, t
 import { personKey } from "../paths/match";
 import { shownName } from "../paths";
 import type { MemberPaths } from "../paths/types";
+import type { MemberNetwork } from "../google/types";
 import { coKey, knownLine, knownMoves, type KnownPerson, type NewLeader } from "./known";
 
 type G = ReturnType<typeof T.graph>;
@@ -27,13 +30,18 @@ export const KNOWN_MAX = 5;
 
 const filesOf = (s: State, memberId: string): MemberPaths | undefined => (s as State & { paths?: Record<string, MemberPaths> }).paths?.[memberId];
 
-/** The member has a source Someone you know reads: their LinkedIn connections file or their contacts CSV. */
+const netOf = (s: State, memberId: string): MemberNetwork | undefined => (s as State & { network?: Record<string, MemberNetwork> }).network?.[memberId];
+/** The member's Google sources Someone you know reads (never what their agent saved). */
+const googleOf = (n: MemberNetwork | undefined) => [n?.cal, n?.con, n?.gm].filter((x) => !!x);
+
+/** The member has a source Someone you know reads: their LinkedIn connections file, their contacts CSV, or Google. */
 export const hasKnownSources = (s: State, memberId: string): boolean => {
   const p = filesOf(s, memberId);
-  return !!(p?.linkedin?.rows.length || p?.csv?.rows.length);
+  if (p?.linkedin?.rows.length || p?.csv?.rows.length) return true;
+  return googleOf(netOf(s, memberId)).some((src) => Object.values(src!.companies ?? {}).some((co) => (co.people ?? []).length > 0));
 };
 
-/** The member's own people, from their LinkedIn connections file and their contacts CSV only (never Google). */
+/** The member's own people: their LinkedIn connections file, their contacts CSV and their Google network. */
 export function knownPeopleOf(s: State, m: Pick<Member, "id">): KnownPerson[] {
   const out: KnownPerson[] = [];
   const p = filesOf(s, m.id);
@@ -53,6 +61,23 @@ export function knownPeopleOf(s: State, m: Pick<Member, "id">): KnownPerson[] {
     if (nk && away.has(`c:${r.e ?? `${sn.toLowerCase()}|${(r.c ?? "").toLowerCase()}`}`)) awayNames.add(nk);
     if (nk) out.push({ name: r.n, nameKey: nk, companyId: null, company: r.c ?? null, src: "csv" });
   }
+  // Google: Calendar, Contacts and Gmail, for this member alone. A company or person set aside stays out.
+  const n = netOf(s, m.id);
+  const notCo = new Set(Object.keys(n?.notRel ?? {}));
+  const notPeople = new Set((n?.notPeople ?? []).map((k) => k.toLowerCase()));
+  for (const src of googleOf(n))
+    for (const [companyId, co] of Object.entries(src!.companies ?? {})) {
+      if (notCo.has(companyId)) continue;
+      for (const x of co.people ?? []) {
+        const nk = personKey(x.name);
+        if (!x.name || !nk) continue;
+        if (notPeople.has(x.key?.toLowerCase()) || (x.email && notPeople.has(x.email.toLowerCase())) || away.has(`g:${x.key}`)) {
+          awayNames.add(nk);
+          continue;
+        }
+        out.push({ name: x.name, nameKey: nk, companyId, company: null, src: "google" });
+      }
+    }
   return awayNames.size ? out.filter((x) => !awayNames.has(x.nameKey)) : out;
 }
 
