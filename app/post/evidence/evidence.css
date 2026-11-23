@@ -3,7 +3,9 @@
  * wb-ask, wb-selbar, wb-body, wb-table, wb-bottom). Pine for actions and the open row, mint for
  * soft highlights, volt never (nothing here earns credits), ember never.
  */
-.ev-host {
+.ev-host,
+/* The upgrade screen on Free and Pro: its header edge to edge, as on every other page. */
+.tp-main-page:has(> .ev-upg) {
   padding: 0 !important;
   max-width: none !important;
 }

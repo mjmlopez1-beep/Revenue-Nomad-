@@ -6,6 +6,11 @@
 .rt-host {
   padding-top: 20px !important;
 }
+/* The first-visit strip lines up with the page under it (the shell's strip has its own side margins). */
+.rt-page > .ws-strip {
+  margin-left: 0;
+  margin-right: 0;
+}
 .rt-page {
   max-width: 1320px;
   display: flex;
