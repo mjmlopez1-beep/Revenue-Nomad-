@@ -678,6 +678,13 @@ async function main() {
     const three = fm.startThree(d2.records, [], x);
     check("three to start with: members on Merlin who serve your kind of client, never a hidden row or you", three.length <= 3 && three.every((r) => r.onMerlin && !r.keepsOut && !r.you && !!r.memberId && r.fits));
     check("your card's name: in full when shown, short until you choose, hidden when hidden", fm.cardName({ name: "Robin Kearney", fractionals: true }).name === "Robin Kearney" && fm.cardName({ name: "Robin Kearney", fractionals: null }).name === "Robin K." && fm.cardName({ name: "Robin Kearney", fractionals: true, nameHidden: true }).name === "A fractional (name hidden)");
+    const merged = fm.withPeers(d2.records, [
+      { memberId: "m_noseat", name: "Ola Noseat", fn: "Finance", fits: true },
+      { memberId: d2.records.find((r) => r.memberId)!.memberId!, name: "Someone Else", fn: null },
+      { memberId: "", name: "Not a member", fn: null },
+    ]);
+    const ola = merged.find((r) => r.memberId === "m_noseat");
+    check("a member Peers shows with no seat on file joins the list, seatless, named as Peers names them; nobody twice", merged.length === d2.records.length + 1 && !!ola && ola.seats.length === 0 && ola.now === 0 && ola.onMerlin && ola.name === "Ola Noseat" && !merged.some((r) => r.name === "Someone Else"), ola);
     check("the Open to leads cell", fm.leadsWord({ onMerlin: true, leads: "open" }) === "Open" && fm.leadsWord({ onMerlin: true, leads: "off" }) === "Not now" && fm.leadsWord({ onMerlin: false }) === "Not yet" && fm.leadsWord({ onMerlin: true, keepsOut: true }) === "Hidden");
   }
 
