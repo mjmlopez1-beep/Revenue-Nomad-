@@ -49,7 +49,7 @@ import {
   AboutSection, CapLine, DetailsSection, FollowButton, FunctionsSection, GtmSection, OpenPosting, PeerSection, PeopleSection, RecordEnvProvider, RecordFoot, SeatsSection, recordEnv, recordPlan, summaryLine,
 } from "./sections/Record";
 import { COMPANY_ROWS, type Contact } from "./sections/env";
-import { AddHere, Activity, EvidenceCard, NextMove, Notes, PeopleTable, RolesNote, RolesTable, SeatTable, StagePicker, Timeline, factsLine } from "./parts";
+import { AddHere, Activity, DealWorth, EvidenceCard, NextMove, Notes, PeopleTable, RolesNote, RolesTable, SeatTable, StagePicker, Timeline, factsLine } from "./parts";
 import { PersonBubble, PersonNameButton, useKnownByRecord } from "../PersonBubble";
 import { TAB_NAME, TABS, dealOf, filledOf, isListedRole, isOpenRole, nextMoveOf, primaryFor, stageWord, tabFor, type TabKey } from "./companyModel";
 import "./company.css";
@@ -465,6 +465,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
               </div>
               <StagePicker i={i} deal={deal} />
             </section>
+            {!c.hidden && deal && <DealWorth deal={deal} />}
             {!c.hidden && <PipelineBlock i={i} />}
             {!c.hidden && closeOn && (
               <section className="co-card" aria-labelledby="co-prop-h">

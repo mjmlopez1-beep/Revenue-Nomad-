@@ -35,6 +35,12 @@ export const takeWantCompany = () => {
   return c;
 };
 
+/** Open Proposals with a proposal started for this company (its public id), as "Write a proposal" does. */
+export function proposalFor(ui: { openPage: (p: "proposals") => void }, companyId: string) {
+  want = companyId;
+  ui.openPage("proposals");
+}
+
 export function WriteProposal({ i }: { i: CoInfo }) {
   const ui = useUi();
   return (

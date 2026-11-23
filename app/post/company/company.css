@@ -720,6 +720,32 @@
   flex-basis: 100%;
   margin: 0;
 }
+/* What the deal is worth (parts.tsx DealWorth) */
+.co-worth-f {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: flex-end;
+}
+.co-worth-l {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.co-worth-acts {
+  display: flex;
+  gap: 8px;
+}
+.co-worth-say {
+  margin: 8px 0 0;
+}
+.co-worth-say.bad {
+  color: var(--ws-red, #b42318);
+}
 .co-panel > .pl-block,
 .co-panel > .pp-write,
 .co-panel > .ch-sec {

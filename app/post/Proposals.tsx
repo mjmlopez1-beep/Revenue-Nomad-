@@ -57,6 +57,7 @@ import { TeamBlockOffer } from "./PeerSheets";
 import { useAppMaybe } from "./shell/pages";
 import { ProposalsHome, type StartMode } from "./proposalsPage/ProposalsHome";
 import { EditorFrame, type SideTab } from "./proposalsPage/EditorFrame";
+import { openContract } from "./contracts/open";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -130,6 +131,29 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   const ui2 = !!app?.ui2;
   // The editor's right panel opens at this tab (the list's Countersign opens Send).
   const [openTab, setOpenTab] = useState<SideTab | null>(null);
+  // The new look: a contract (a document sent to sign) opens on Contracts, its own page (contracts/open.ts), from
+  // an old address (?p=proposals&dc=<id>), the bell or Home. This entry becomes Contracts', so Back skips it.
+  const toContracts = useCallback(
+    (id?: string | null) => {
+      if (!app) return;
+      if (id)
+        try {
+          const u = new URL(window.location.href);
+          for (const k of SUB_KEYS) u.searchParams.delete(k);
+          u.searchParams.set("p", "contracts");
+          u.searchParams.set("dc", id);
+          window.history.replaceState(window.history.state, "", u.pathname + u.search);
+        } catch {}
+      openContract(app, id);
+    },
+    [app],
+  );
+  useEffect(() => {
+    if (!ui2 || !openDoc) return;
+    const id = openDoc;
+    setOpenDoc(null);
+    toContracts(id);
+  }, [ui2, openDoc, toContracts]);
   const [fixFirst, setFixFirst] = useState<string[]>([]);
   const [templates, setTemplates] = useState(false);
   // "Send a document to sign": Contracts (contracts/ContractsHome.tsx), and a line for the field placer when it opens from there.
@@ -251,7 +275,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         tab={openTab}
       />
     );
-  if (doc && data)
+  if (doc && data && !ui2)
     return (
       <DocBuilder
         key={doc.id}
@@ -329,7 +353,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onStart={(x) => setStarting(x ? { companyId: starting?.companyId ?? null, mode: x.mode, templateId: x.templateId } : null)}
         startPanel={(mode, templateId) => startSheet("panel", mode, templateId)}
         onOpen={(id, tab) => (setOpenTab(tab ?? null), setFixFirst([]), setOpenId(id))}
-        onContracts={() => setContract(true)}
+        onContracts={() => toContracts()}
         onTemplates={(t) => setData((d) => (d ? { ...d, templates: t } : d))}
         onPut={put}
         onGone={(id) => setData((d) => (d ? { ...d, proposals: d.proposals.filter((x) => x.id !== id) } : d))}

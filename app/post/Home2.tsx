@@ -390,7 +390,8 @@ function Funnel({ me, infos, waiting, first, openPage, table, openFind }: { me: 
     { k: "In your market", n: c ? n(c.market) : "…", s: !c ? "" : c.hasIcp ? (first ? "Companies that fit the ideal client you gave. Already filled." : "fit your ideal client") : "Every company. Say who your ideal client is to narrow it.", tone: 0, go: openFind },
     { k: "Opened", n: c ? n(c.opened) : "…", s: !c ? "" : first || !c.opened ? `Open a company.${me.proOpens ? ` Free on your plan, up to ${me.proOpens.of} a day.` : ""}` : `${n(c.locked)} still locked`, tone: 1, go: table.go },
     { k: "With a way in", n: getIn.off ? "0" : n(way), s: getIn.off || !way ? "Add a seat you held, or bring in who you know." : "from who you know and who held seats", tone: 2, go: () => openPage("getin") },
-    { k: "In your pipeline", n: n(inPipe), s: inPipe ? "open deals" : "Add a company to your pipeline from its row.", tone: 3, go: () => openPage("pipeline") },
+    // What the open deals are worth only as the member typed it on Pipeline (PipelineEntry.value): none typed, the count alone.
+    { k: "In your pipeline", n: n(inPipe), s: inPipe ? (pipe?.openMonthly ? `${money(pipe.openMonthly)}${pipe.valued < inPipe ? `, ${pipe.valued} of ${inPipe} with a value` : ""}` : "open deals") : "Add a company to your pipeline from its row.", tone: 3, go: () => openPage("pipeline") },
     { k: "Won", n: n(won), s: won ? (pipe?.wonMonthly ? money(pipe.wonMonthly) : "Add the terms to see their value") : "Merlin marks a deal won when the client signs.", tone: 4, go: () => openPage("pipeline") },
   ];
   return (

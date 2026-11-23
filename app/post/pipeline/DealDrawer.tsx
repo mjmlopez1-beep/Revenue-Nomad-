@@ -22,6 +22,9 @@ import { openWay, useWayIn } from "../network/useWays";
 import type { Example } from "../examples";
 import { money, nextOf, toWords, wayOf, type ExampleCard, type RouteHint } from "./model";
 import { benchHint } from "./AddDeal";
+import { openItem } from "../Activity";
+import { openContract } from "../contracts/open";
+import { proposalFor } from "../WriteProposal";
 
 const FollowUpSheet = dynamic(() => import("../FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
 
@@ -69,7 +72,8 @@ export function DealDrawer({
     toast(res.message, !res.ok);
   };
   const followable = open && r.stage !== "reach";
-  // Contracts live on Proposals today (the documents in its list); Stage 4's Contracts page can take them there.
+  // The deal's proposal opens in the editor, its contract on Contracts (both at that one), else Proposals to start one.
+  const openPaper = () => (r.paper?.kind === "contract" ? openContract(c, r.paper.id) : r.paper ? openItem(c, { pr: r.paper.id }) : proposalFor(c, r.company));
   // The next move's own button: write the note (the record drafts it), draft a follow-up, sign, the terms.
   const act =
     lock
@@ -79,9 +83,9 @@ export function DealDrawer({
         : r.stage === "won"
           ? { t: r.seat ? "See the terms" : "Add the terms and your seat", go: onWin, volt: !r.seat }
           : r.paper?.tone === "you"
-            ? { t: r.paper.kind === "contract" ? "Sign the contract" : "Countersign it", go: () => c.openPage("proposals") }
+            ? { t: r.paper.kind === "contract" ? "Sign the contract" : "Countersign it", go: openPaper }
             : r.stage === "meeting" && !r.paper
-              ? { t: "Start a proposal", go: () => c.openPage("proposals") }
+              ? { t: "Start a proposal", go: openPaper }
               : followable
                 ? { t: "Draft a follow-up", go: () => setDrafting(true) }
                 : null;
@@ -186,7 +190,7 @@ export function DealDrawer({
           ) : (
             <span className="pl2-small">None yet. Merlin drafts one from your call notes or a template, then tells you when the client opens it.</span>
           )}
-          <button type="button" className="pl2-link" onClick={() => c.openPage("proposals")}>
+          <button type="button" className="pl2-link" onClick={openPaper}>
             {r.paper ? `Open the ${r.paper.kind}` : "Start a proposal"}
           </button>
         </section>

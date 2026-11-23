@@ -34,6 +34,7 @@ import { CloseBuildPrompt } from "../Proposals";
 import { ActivityPanel } from "../Activity";
 import { stamp } from "../../sign/doc";
 import { ContractFlow, readUpload, starterFile, type FlowStart } from "./ContractsHome";
+import { onOpenContract, takeContract } from "./open";
 import "../proposals.css";
 import "./contracts.css";
 
@@ -301,9 +302,12 @@ export function ContractsPage() {
   const [error, setError] = useState<string | null>(null);
   const [flow, setFlow] = useState<FlowStart | null>(null);
   const [flowStep, setFlowStep] = useState<string>("fields");
-  const [open, setOpen] = useState<{ id: string; notice?: string; place?: { kind: FieldKind; email: string } } | null>(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dc") ? { id: new URLSearchParams(window.location.search).get("dc")! } : null,
-  );
+  const [open, setOpen] = useState<{ id: string; notice?: string; place?: { kind: FieldKind; email: string } } | null>(() => {
+    // Asked for from another page (open.ts: Proposals, the bell, a deal on Pipeline), else the address's (&dc=).
+    const asked = takeContract();
+    if (asked) return { id: asked };
+    return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dc") ? { id: new URLSearchParams(window.location.search).get("dc")! } : null;
+  });
   const [busy, setBusy] = useState("");
   const [dropOn, setDropOn] = useState(false);
   const [dropErr, setDropErr] = useState<string | null>(null);
@@ -357,6 +361,23 @@ export function ContractsPage() {
       }
     } catch {}
   };
+  // Opened at a contract from another page: the address says so, so a reload reopens it.
+  useEffect(() => {
+    if (!open) return;
+    // After the shell has written this page's own address (its effect runs after this one).
+    const t = window.setTimeout(() => {
+      try {
+        const u = new URL(window.location.href);
+        if (u.searchParams.get("p") !== "contracts" || u.searchParams.get("dc")) return;
+        u.searchParams.set("dc", open.id);
+        window.history.replaceState(window.history.state, "", u.pathname + u.search);
+      } catch {}
+    }, 60);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Contracts already open and another part of the app asked for a contract (the bell): open it, or the list.
+  useEffect(() => onOpenContract((id) => (id ? openFull(id) : (setFlow(null), open && closeFull()))));
   useEffect(() => {
     const onPop = () => {
       const id = new URLSearchParams(window.location.search).get("dc");

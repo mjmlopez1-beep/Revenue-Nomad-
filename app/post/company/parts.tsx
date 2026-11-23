@@ -620,6 +620,76 @@ export function StagePicker({ i, deal }: { i: CoInfo; deal: PipelineRec | null }
   );
 }
 
+/**
+ * What the deal here is worth a month and the seat pitched, as the member typed them on Pipeline
+ * (PipelineEntry.value, pitch), changeable here too. A Won deal with terms shows its terms' month.
+ * Never a figure of Merlin's: no value typed reads as none.
+ */
+export function DealWorth({ deal }: { deal: PipelineRec }) {
+  const [edit, setEdit] = useState(false);
+  const [val, setVal] = useState(deal.value ? String(deal.value) : "");
+  const [pitch, setPitch] = useState(deal.pitch ?? "");
+  const [busy, setBusy] = useState(false);
+  const [say, setSay] = useState<{ t: string; bad: boolean } | null>(null);
+  const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const won = deal.stage === "won" && deal.won;
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    setSay(null);
+    const r = await pipelineAct({ type: "pipeline.value", id: deal.id, value: val.trim() || null, pitch: pitch.trim() || null } as never);
+    setBusy(false);
+    setSay({ t: r.message, bad: !r.ok });
+    if (r.ok) setEdit(false);
+  };
+  return (
+    <section className="co-card co-worth" aria-labelledby="co-worth-h">
+      <div className="co-card-h">
+        <h2 id="co-worth-h">What it is worth</h2>
+        <span className="co-sub">
+          {won ? `Won at ${money(deal.won!.monthly)} a month, from the terms.` : deal.value ? `${money(deal.value)} a month, as you typed it.` : "No value yet. Type what it is worth a month and Pipeline's totals count it."}
+          {deal.pitch ? ` You pitch ${deal.pitch}.` : ""}
+        </span>
+      </div>
+      {!edit ? (
+        <button type="button" className="btn btn-sm" onClick={() => (setEdit(true), setSay(null), setVal(deal.value ? String(deal.value) : ""), setPitch(deal.pitch ?? ""))}>
+          {deal.value || deal.pitch ? "Change the value or the seat" : "Add the value and the seat"}
+        </button>
+      ) : (
+        <form
+          className="co-worth-f"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label className="co-worth-l">
+            <span>Value a month, in dollars</span>
+            <input className="input" inputMode="numeric" autoComplete="off" value={val} placeholder="9000" onChange={(e) => setVal(e.target.value)} />
+          </label>
+          <label className="co-worth-l">
+            <span>Seat you are pitching</span>
+            <input className="input" autoComplete="off" maxLength={60} value={pitch} placeholder="Fractional VP Sales" onChange={(e) => setPitch(e.target.value)} />
+          </label>
+          <span className="co-worth-acts">
+            <button type="submit" className="btn btn-sm btn-pine" disabled={busy} aria-busy={busy}>
+              Save
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => (setEdit(false), setSay(null))}>
+              Cancel
+            </button>
+          </span>
+        </form>
+      )}
+      {say && (
+        <p className={`co-sub co-worth-say${say.bad ? " bad" : ""}`} role={say.bad ? "alert" : "status"}>
+          {say.t}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /* ---------- the right column ---------- */
 
 /** The one next step with this company (companyModel.ts nextMoveOf). */
