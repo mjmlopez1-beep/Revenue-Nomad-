@@ -293,6 +293,15 @@ async function main() {
   check("a member who hasn't chosen: first name and last initial", theo?.name === "Theo W." && theo.onMerlin && !JSON.stringify(theo).includes("Wrenshaw"), theo);
   check("a member's seat and a seat file's seat with his key are one record", theo.seats.length === 2 && recOf(d, "e_theo_tide")?.id === theo.id);
   check("a member who said no is left out entirely", !recOf(d, "e_ines_tide"));
+  {
+    // Out of the directory is one hidden row: no name, seats, clients, cases or member id, under an id of the viewer's own.
+    const hid = d.records.filter((r) => r.keepsOut);
+    const ines = hid.find((r) => r.fn === "Operations");
+    check("a member who said no shows only as a hidden row: function, level and seat counts", hid.length === 1 && !!ines && ines.now === 1 && ines.past === 0 && ines.level === "C-level" && ines.locked === true && ines.onMerlin, hid);
+    check("the hidden row names nobody and links to nothing", !!ines && !ines.name && !ines.first && !ines.initials && !ines.title && !ines.memberId && !ines.conversationId && !ines.invite && !ines.cases && !ines.ball && !ines.common && !ines.headline && !ines.city && !ines.leads && ines.seats.length === 0 && ines.clients === null && !/Calderwood|Ines/.test(JSON.stringify(d)), ines);
+    const mo = (await dirOf("mem_mo")).records.find((r) => r.keepsOut);
+    check("its id is the viewer's own: another member's differs, and no record carries it", !!ines && !!mo && ines.id.startsWith("h_") && mo.id !== ines.id && d.records.filter((r) => r.id === ines.id).length === 1);
+  }
   const nell = recOf(d, "e_nell_north")!;
   check("a member who never signed in reads as Not on Merlin yet, named", !!nell && !nell.onMerlin && !nell.locked && nell.name === "Nell Neversigned");
   check("a seat with nobody named makes no record", !recOf(d, "e_nobody"));
@@ -574,6 +583,102 @@ async function main() {
     await t.perform(tok("mem_dana"), { type: "settings", fractionals: false }, BASE);
     check("out of the directory: her cases go with her record", !(await danaRec("mem_robin")));
     await t.perform(tok("mem_dana"), { type: "settings", fractionals: true }, BASE);
+  }
+
+  /* ---------- Stage 6: the card, Hide my name, Open to leads, companies in common ---------- */
+  console.log("\nYour card, Hide my name and Open to leads");
+  {
+    const DANA = tok("mem_dana");
+    const danaOf = async (who: string) => (await dirOf(who)).records.find((r) => r.memberId === pub("mem_dana"));
+    check("a member in the directory is open to leads until they say no", (await danaOf("mem_robin"))?.leads === "open" && (await t.buildView(DANA)).me!.leads === true);
+    const saved = await t.perform(DANA, { type: "settings", headline: "  I rebuild   finance\nat SaaS companies  ", city: " Denver, CO " }, BASE);
+    const dr = await danaOf("mem_robin");
+    check("one line about her and where she is based: saved tidy, on her card for others", /Members see it on your card/.test(saved.message) && dr?.headline === "I rebuild finance at SaaS companies" && dr?.city === "Denver, CO", { m: saved.message, h: dr?.headline, c: dr?.city });
+    const dm = (await t.buildView(DANA)).me!;
+    check("and in her own Me, and on her own record", dm.headline === "I rebuild finance at SaaS companies" && dm.city === "Denver, CO" && (await dirOf("mem_dana")).records.find((r) => r.you)?.headline === "I rebuild finance at SaaS companies");
+    const long = await t.perform(DANA, { type: "settings", headline: "x".repeat(300) }, BASE);
+    check("the line is cut at CARD_LINE_MAX, and the page says the same number", long.message.startsWith("Saved") && (await t.buildView(DANA)).me!.headline!.length === t.CARD_LINE_MAX && fm.CARD_LINE_MAX === t.CARD_LINE_MAX && fm.CARD_CITY_MAX === t.CARD_CITY_MAX);
+    for (const bad of ["Write to dana@kite.example", "See https://kite.example", "Call +1 303 555 0100"])
+      check(`refused on the card: ${bad.split(" ")[0].toLowerCase()} ${bad.includes("@") ? "an email" : bad.includes("http") ? "a link" : "a phone number"}`, /Leave out emails, links and phone numbers/.test((await refusal(t.perform(DANA, { type: "settings", headline: bad }, BASE))) ?? ""));
+    await t.perform(DANA, { type: "settings", headline: "I rebuild finance at SaaS companies" }, BASE);
+    // Theo hasn't chosen (as he was before the switch above): his line is his own until he is in the directory.
+    await t.tableInternals.mutate((s) => {
+      delete s.profiles.mem_theo.fractionals;
+      delete s.profiles.mem_theo.partnersOff;
+    });
+    await t.perform(tok("mem_theo"), { type: "settings", headline: "Sales leader for fintech", city: "Austin, TX" }, BASE);
+    const th = (await dirOf("mem_robin")).records.find((r) => r.memberId === pub("mem_theo"));
+    check("a member who hasn't chosen: his line and city stay off his card for others", !!th && !th.headline && !th.city && !/Sales leader for fintech|Austin, TX/.test(JSON.stringify(await dirOf("mem_robin"))), th);
+    check("but he sees them on his own card", (await dirOf("mem_theo")).records.find((r) => r.you)?.headline === "Sales leader for fintech");
+    await t.perform(tok("mem_theo"), { type: "settings", headline: "", city: "" }, BASE);
+    await t.perform(tok("mem_theo"), { type: "settings", fractionals: true }, BASE);
+    check("empty takes it off", !(await t.buildView(tok("mem_theo"))).me!.headline && !(await t.buildView(tok("mem_theo"))).me!.city);
+    // Open to leads off.
+    const off = await t.perform(DANA, { type: "settings", leads: false }, BASE);
+    check("Open to leads off: others see Not now, her Me says so", /Leads are off/.test(off.message) && (await danaOf("mem_robin"))?.leads === "off" && (await t.buildView(DANA)).me!.leads === false);
+    const pe = await import("../lib/peers");
+    const passOff = await refusal(pe.performPeer(ROBIN, { type: "peer.pass", memberId: pub("mem_dana"), companyId: pub("c_kite"), note: "" } as never));
+    check("and a lead passed to her is refused", !!passOff && /not taking leads/.test(passOff), passOff);
+    const picks = await pe.peerPicks(ROBIN, pub("c_kite"), null, false);
+    const teamPicks = await pe.peerPicks(ROBIN, pub("c_kite"), null, true);
+    check("Pass a lead never offers her; Team up still may", !!picks && !picks.picks.some((x) => x.id === pub("mem_dana")) && !!teamPicks, picks?.picks.map((x) => x.name));
+    await t.perform(DANA, { type: "settings", leads: true }, BASE);
+    check("on again: open", (await danaOf("mem_robin"))?.leads === "open");
+
+    // Hide my name on my seats: out of the directory everywhere, as the directory's own rule says.
+    await t.perform(DANA, { type: "settings", nameHidden: true }, BASE);
+    const rd = await dirOf("mem_robin");
+    const hidRows = rd.records.filter((r) => r.keepsOut);
+    check("Hide my name: she is a hidden row, named nowhere in the directory", !rd.records.some((r) => r.memberId === pub("mem_dana")) && hidRows.some((r) => r.fn === "Finance" && r.now === 1 && r.past === 1) && !/Dana|Whitfield|I rebuild finance|Denver/.test(JSON.stringify(rd)), hidRows);
+    const pv = (await pe.peersView(ROBIN))!;
+    check("and in Peers: not suggested, not offered for a lead", !JSON.stringify(pv.serve).includes(pub("mem_dana")) && !JSON.stringify(pv.know).includes(pub("mem_dana")) && !((await pe.peerPicks(ROBIN, pub("c_kite"), null, false))?.picks ?? []).some((x) => x.id === pub("mem_dana")));
+    const passHid = await refusal(pe.performPeer(ROBIN, { type: "peer.pass", memberId: pub("mem_dana"), companyId: pub("c_kite"), note: "" } as never));
+    check("a lead passed to her is refused", !!passHid && /isn't in Peers right now/.test(passHid), passHid);
+    check("her own record still shows to her, marked hidden, her name on it", (await dirOf("mem_dana")).records.find((r) => r.you)?.hidden === true && (await dirOf("mem_dana")).records.find((r) => r.you)?.name === "Dana Whitfield");
+    check("Home's line never counts a hidden row", ((await fr.fractionalsHome(ROBIN))?.initials ?? []).every((x) => x !== "DW"));
+    await t.perform(DANA, { type: "settings", nameHidden: false }, BASE);
+    check("off again: back by name", (await danaOf("mem_robin"))?.name === "Dana Whitfield");
+  }
+  console.log("\nCompanies in common");
+  {
+    const dc = await dirOf("mem_cass");
+    const samC = recOf(dc, "e_sam_pollen")!;
+    const danaC = recOf(dc, "e_dana_kite")!;
+    check("in her Crystal Ball: the one she opened named, the rest counted as locked", samC.common?.why === "ball" && JSON.stringify(samC.common.names) === JSON.stringify(["Brightloom Learning"]) && samC.common.locked === 2, samC.common);
+    check("a locked company is never named in common", danaC.common?.why === "ball" && danaC.common.names.length === 0 && danaC.common.locked === 1 && !/Pollen Ledger|Vellum/.test(JSON.stringify(dc)), danaC.common);
+    check("the words: Brightloom Learning, 2 locked companies, In your Crystal Ball", JSON.stringify(fm.commonWords(samC)) === JSON.stringify({ a: "Brightloom Learning, 2 locked companies", b: "In your Crystal Ball" }), fm.commonWords(samC));
+    // Robin's pipeline at Kitebright: Pat, Cara and Dana held seats there.
+    await t.tableInternals.mutate((s) => {
+      ((s.pipeline ??= {}).mem_robin ??= { entries: [], intros: [] }).entries.push({ id: "pl_test_kite", companyId: "c_kite", stage: "reach", channel: "email", to: {}, source: "record", dates: {}, via: {}, due: null, notes: [], log: [] } as never);
+    });
+    const rr = await dirOf("mem_robin");
+    const pat = recOf(rr, "e_pat_b")!;
+    check("in her pipeline: In your pipeline, named where she sees it", pat.common?.why === "pipeline" && pat.common.names.includes("Kitebright"), pat.common);
+    const moPat = recOf(await dirOf("mem_mo"), "e_pat_b");
+    check("nobody else's directory has it", moPat?.common?.why !== "pipeline", moPat?.common);
+  }
+  console.log("\nThe page's views, chips and Ask Merlin (pure)");
+  {
+    const d2 = await dirOf("mem_robin");
+    const x = { myFn: d2.fn, hasIcp: true, know: new Map([[pub("mem_dana"), { from: "Your LinkedIn", why: "Kitebright" }]]), passed: new Set<string>() };
+    const counts = fm.fxViewCounts(d2.records, x);
+    check("views: All counts every other record, You know only the viewer's own", counts.all === d2.records.filter((r) => !r.you).length && counts.know === 1 && counts.passed === 0, counts);
+    const rows = fm.fxRows(d2.records, "all", fm.fxNone(), x);
+    check("hidden rows come last", rows.findIndex((r) => r.keepsOut) === rows.length - rows.filter((r) => r.keepsOut).length);
+    const on = fm.fxRows(d2.records, "all", fm.fxFlip(fm.fxNone(), "on"), x);
+    check("On Merlin: members you can write to, never a hidden row", on.length > 0 && on.every((r) => r.onMerlin && !r.keepsOut && !!r.memberId));
+    check("a chip turns its opposite off", JSON.stringify(fm.fxFlip(fm.fxFlip(fm.fxNone(), "on"), "off").chips) === JSON.stringify(["off"]));
+    const openN = fm.fxChipCounts(d2.records, "all", fm.fxNone(), x).open;
+    check("the Open to leads chip counts members who take leads", openN === d2.records.filter((r) => !r.you && r.leads === "open").length && openN > 0, openN);
+    const a = fm.askFx("A fractional CFO who serves fintech and takes leads", ["Fintech", "SaaS"], ["Finance", "Sales"]);
+    check("Ask Merlin: function, industry and leads from plain words", a.f.fn === "Finance" && a.f.industry === "Fintech" && a.f.chips.includes("open") && a.unknown.length === 0, a);
+    const b = fm.askFx("revops leaders for my clients and zebras", [], ["RevOps"]);
+    check("Ask Merlin: a view, and the words it didn't know said back, never guessed", b.f.fn === "RevOps" && b.view === "same" && b.unknown.includes("zebras"), b);
+    check("Ask Merlin never names a company it wasn't given", !fm.askFx("CFO at Kitebright", [], ["Finance"]).said.includes("Kitebright"));
+    const three = fm.startThree(d2.records, [], x);
+    check("three to start with: members on Merlin who serve your kind of client, never a hidden row or you", three.length <= 3 && three.every((r) => r.onMerlin && !r.keepsOut && !r.you && !!r.memberId && r.fits));
+    check("your card's name: in full when shown, short until you choose, hidden when hidden", fm.cardName({ name: "Robin Kearney", fractionals: true }).name === "Robin Kearney" && fm.cardName({ name: "Robin Kearney", fractionals: null }).name === "Robin K." && fm.cardName({ name: "Robin Kearney", fractionals: true, nameHidden: true }).name === "A fractional (name hidden)");
+    check("the Open to leads cell", fm.leadsWord({ onMerlin: true, leads: "open" }) === "Open" && fm.leadsWord({ onMerlin: true, leads: "off" }) === "Not now" && fm.leadsWord({ onMerlin: false }) === "Not yet" && fm.leadsWord({ onMerlin: true, keepsOut: true }) === "Hidden");
   }
 
   console.log(`\n${passes} passed, ${failures} failed`);

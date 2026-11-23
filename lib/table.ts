@@ -305,6 +305,9 @@ export interface LedgerEntry {
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
+/** Fractionals, the member's own card: the longest one line about them, and the longest "based in" (app/post/fractionalsModel.ts says the same). */
+export const CARD_LINE_MAX = 120;
+export const CARD_CITY_MAX = 60;
 interface Profile {
   function?: string;
   goal?: string;
@@ -326,6 +329,11 @@ interface Profile {
   partnersOff?: boolean;
   /** "Hide my name on my seats": who held their seats reads NAME_HIDDEN to everyone else, the connector included (State.namesHidden lists them). */
   nameHidden?: boolean;
+  /** Their card in Fractionals: one line about them (up to CARD_LINE_MAX) and where they are based (up to CARD_CITY_MAX). Shown to members while they are in the directory. */
+  headline?: string;
+  city?: string;
+  /** Turned "Open to leads" off on their card in Fractionals: nobody can pass them a lead (lib/peers.ts peer.pass). */
+  leadsOff?: boolean;
   /**
    * "Show me in the Fractionals directory": true shows their full name, their seats and the clients
    * they serve to every member, free; false takes them out of the directory. Absent: not chosen yet
@@ -4483,6 +4491,10 @@ async function fullView(
       fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
       // "Hide my name on my seats".
       nameHidden: !!prof.nameHidden,
+      // Their card in Fractionals: one line about them, where they are based, and Open to leads.
+      ...(prof.headline ? { headline: prof.headline } : {}),
+      ...(prof.city ? { city: prof.city } : {}),
+      leads: !prof.leadsOff,
       radar: ((x) => x.email !== "off" || x.slack)(radarPrefs(prof)),
       // Notifications: how often the Crystal Ball email comes, and whether it posts to Slack.
       radarEmail: radarPrefs(prof).email,
@@ -7369,6 +7381,34 @@ export async function perform(
                 ? `Your name is hidden on your seats. Everyone else sees "${NAME_HIDDEN}", and your seats and roles still count.`
                 : "Your name shows on your seats again.",
             };
+          }
+          // Their card in Fractionals: one line about them and where they are based. Empty takes it off.
+          if (typeof a.headline === "string" || typeof a.city === "string") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            const line = (raw: string, max: number) => stripInvisible(raw).replace(/\s+/g, " ").trim().slice(0, max).trim();
+            const vals: [keyof Pick<Profile, "headline" | "city">, string | undefined, number][] = [
+              ["headline", a.headline, CARD_LINE_MAX],
+              ["city", a.city, CARD_CITY_MAX],
+            ];
+            for (const [k, raw, max] of vals) {
+              if (typeof raw !== "string") continue;
+              const v = line(raw, max);
+              // The card never carries a way to reach them outside Merlin: members write to them in Messages.
+              if (/[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(v) || /https?:\/\/|www\./i.test(v) || /(\+?\d[\d ().-]{8,}\d)/.test(v)) throw new ActionError("Leave out emails, links and phone numbers. Members write to you in Messages.");
+              if (v) p[k] = v;
+              else delete p[k];
+            }
+            s.profiles[me.id] = p;
+            const listed = p.fractionals === true && !p.nameHidden;
+            return { message: listed ? "Saved. Members see it on your card." : "Saved. It shows on your card once you are in the Fractionals directory." };
+          }
+          // "Open to leads" on their card: off, nobody can pass them a company.
+          if (typeof a.leads === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.leads) delete p.leadsOff;
+            else p.leadsOff = true;
+            s.profiles[me.id] = p;
+            return { message: a.leads ? "You're open to leads. A company a fractional passes you opens free for you." : "Leads are off. Nobody can pass you a company until you turn them on again." };
           }
           // "Show me in the Fractionals directory" (Referral partners' switch, `partners`, is the same one now).
           const show = typeof a.fractionals === "boolean" ? a.fractionals : typeof a.partners === "boolean" ? a.partners : null;

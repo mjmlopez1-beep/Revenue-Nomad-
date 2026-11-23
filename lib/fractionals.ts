@@ -11,7 +11,9 @@
  *
  * What the viewer sees of each:
  *  - a member who said "Show me in the Fractionals directory": their full name, title, seats and the
- *    clients they state, free. One who said no is left out. One who hasn't chosen shows by first
+ *    clients they state, free (and their own line and city, Profile.headline and city). One who said
+ *    no, or hides their name on their seats, is one hidden row (keepsOut): no name, seats, clients or
+ *    member id, under an id of the viewer's own; only function, level and seat counts. One who hasn't chosen shows by first
  *    name and last initial (as Referral partners did), unless the viewer sees one of their seats.
  *  - someone not on Merlin yet: their full name, free (PEERS_FREE: fellow fractionals never cost a
  *    credit), with the role of each seat whose company the viewer can see. Names taken off with
@@ -22,6 +24,7 @@
  *    table, so a locked company there shows only its free facts.
  * Never a person key, a source id, an email, or a member's Google network.
  */
+import { createHash } from "crypto";
 import { cardCases } from "./evidenceWire";
 import { claimToken } from "./claimToken";
 import { fractionalInternals as F, inviteCode, loadSeed, normName, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
@@ -158,11 +161,34 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
   }
   // A closed account is nobody on Merlin (lib/table.ts memberIndex leaves it out): its seats never show it by name here either.
   const closedNames = new Set([...seed.members, ...s.members].filter((m) => s.closures?.[m.id]).map((m) => normName(m.name)).filter(Boolean));
+  // Companies in common: the viewer's own seats' companies, their pipeline, their Crystal Ball.
+  const mine = base.find((b) => b.member?.id === me.id);
+  const mySeatCos = new Set((mine?.seats ?? []).map((id) => g.engagements.get(id)?.companyId).filter((x): x is string => !!x));
+  const myPipe = new Set((s.pipeline?.[me.id]?.entries ?? []).map((e) => e.companyId));
   const out: FractionalRec[] = [];
   for (const b of base) {
     const you = b.member?.id === me.id;
     if (!you && closedNames.size && closedNames.has(normName(b.name ?? ""))) continue;
-    if (b.member && !you && b.on && (hiddenMember(s, b.member.id) || blocks(b.member.id, me.id) || blocks(me.id, b.member.id))) continue;
+    if (b.member && !you && b.on && (blocks(b.member.id, me.id) || blocks(me.id, b.member.id))) continue;
+    // Out of the directory: one hidden row. No name, title, clients, cases, seats or member id, and an id of the viewer's own
+    // (never the record's), so nothing links it to their seats. Their function, level and seat counts still count.
+    if (b.member && !you && b.on && hiddenMember(s, b.member.id)) {
+      out.push({
+        id: `h_${createHash("sha256").update(`${me.id}\u0000${b.rid}`).digest("base64url").slice(0, 16)}`,
+        onMerlin: true,
+        keepsOut: true,
+        locked: true,
+        fn: b.fn,
+        level: b.level,
+        fns: b.fns,
+        seats: [],
+        now: b.current.size,
+        past: b.seats.length - b.current.size,
+        clients: null,
+        fits: fitsIcp(icp, null, b.cos),
+      });
+      continue;
+    }
     const engs = b.seats.map((id) => g.engagements.get(id)!);
     const bought = !you && b.seats.some((id) => F.boughtSeat(s, me.id, g, id));
     // A name the viewer can see on one of their seats (bought, free, or their own) opens the record.
@@ -218,6 +244,23 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
       rec.memberId = T.pubId(b.member.id);
       const conv = lastWith.get(b.member.id);
       if (conv) rec.conversationId = conv.id;
+      rec.leads = prof?.leadsOff ? "off" : "open";
+    }
+    // Their card: one line about them and where they are based, while they are in the directory (and on the viewer's own).
+    if (b.member && (you || optedIn)) {
+      if (prof?.headline) rec.headline = prof.headline;
+      if (prof?.city) rec.city = prof.city;
+    }
+    // Companies in common, from the seats this record lists: both held a seat there, else the viewer's pipeline, else their Crystal Ball.
+    if (!you) {
+      const cos = [...new Set(engs.map((e) => e.companyId))];
+      for (const [why, set] of [["seat", mySeatCos], ["pipeline", myPipe], ["ball", ball]] as const) {
+        const hit = cos.filter((id) => set.has(id));
+        if (!hit.length) continue;
+        const names = hit.filter((id) => known.has(id)).map((id) => g.companies.get(id)?.name ?? "").filter(Boolean);
+        rec.common = { names: names.slice(0, 4), locked: hit.length - names.length, why };
+        break;
+      }
     }
     // Not on Merlin yet, and the viewer sees who it is: Invite to connect, by a seat whose company they can see (the link names it).
     if (!b.on && full && !you)
@@ -275,7 +318,7 @@ export async function fractionalsHome(token: string | null, nowMs = Date.now()):
   if (!me) return null;
   const icp = s.profiles[me.id]?.icp;
   if (!icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length)) return { n: 0, initials: [] };
-  const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
+  const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && !r.keepsOut && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
   return { n: fresh.length, initials: fresh.filter((r) => r.initials).slice(0, 3).map((r) => r.initials!) };
 }
 

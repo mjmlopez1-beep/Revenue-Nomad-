@@ -375,6 +375,11 @@ export interface Me {
   fractionals?: boolean | null;
   /** "Hide my name on my seats": their seats read NAME_HIDDEN to everyone else, the connector included. */
   nameHidden?: boolean;
+  /** Their card in Fractionals: one line about them and where they are based (Profile.headline, city). */
+  headline?: string;
+  city?: string;
+  /** "Open to leads" on their card in Fractionals (on unless they turned it off, Profile.leadsOff): a fellow fractional can pass them a company. */
+  leads?: boolean;
   /** Crystal Ball goes out by email or Slack at all (Notifications). */
   radar?: boolean;
   /** How often the Crystal Ball email comes, or "off" (Notifications, or the email's own link). */
@@ -1167,7 +1172,7 @@ export type Action =
    * (false), only while RN_UI2 is optin; `stripOff` dismisses a page's "what this page is for"
    * strip and `stripOn` brings it back (Profile.stripsOff).
    */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean; ui2?: boolean; stripOff?: string; stripOn?: string }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; headline?: string; city?: string; leads?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean; ui2?: boolean; stripOff?: string; stripOn?: string }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.
@@ -1467,6 +1472,23 @@ export interface FractionalRec {
   ball?: { n: number; now: boolean; names: string[] };
   /** Evidence Bank cases they chose to show on their card (Close): the title and one outcome each, the client hidden unless they named it. */
   cases?: { title: string; outcome?: string }[];
+  /**
+   * A member who keeps out of the directory (they said no, or hide their name on their seats): a row
+   * with no name, no seats, no clients and no way to reach them from here. Their function, level
+   * and how many seats they hold or held still count. The id is the viewer's own, never their record's.
+   */
+  keepsOut?: boolean;
+  /** Their one line about themselves and where they are based (Profile.headline, city): members in the directory, and the viewer's own record. */
+  headline?: string;
+  city?: string;
+  /** A member on Merlin the viewer can reach: open to leads, or not taking leads now (Profile.leadsOff). */
+  leads?: "open" | "off";
+  /**
+   * Companies the viewer has in common with them, from the seats the record lists: where both held a
+   * seat ("seat"), else ones in the viewer's pipeline ("pipeline"), else in their Crystal Ball
+   * ("ball"). Named only where the viewer sees the company; the rest are counted as locked.
+   */
+  common?: { names: string[]; locked: number; why: "seat" | "pipeline" | "ball" };
 }
 
 /** GET /api/table?fractionals=1: the directory. */
