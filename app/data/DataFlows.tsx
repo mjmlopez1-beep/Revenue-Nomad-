@@ -261,6 +261,24 @@ export function DataFlows() {
             </p>
           </section>
 
+          <section className="df-sec" aria-labelledby="df-workflows">
+            <h2 className="df-h" id="df-workflows">
+              Inside Merlin: your workflows (Beta)
+            </h2>
+            <p className="cl-p">
+              A workflow is an alert that also does the next step: add the company to your pipeline, find your way in, remind you, open the company or who
+              decides there, or draft a note. It runs on what your alerts already watch, as you, through the same actions and at the same prices as the app.
+              Each run is quoted before it spends and spends exactly that. You can set a monthly limit: past it the run waits in the bell until you say yes.
+              Every credit a workflow spends shows in your credit history with the workflow&apos;s name.
+            </p>
+            <p className="cl-p">
+              Nothing is ever sent to a client or a contact: a note is a draft in Messages, for you to copy. A run&apos;s line describes a company you
+              haven&apos;t opened, never names it, and never names someone in California. A name from your Google account stays on your own screens. Only you
+              see your workflows and their runs; Revenue Nomad&apos;s copy for admins keeps the workflows themselves and none of their runs or drafts. They are
+              deleted with your personal data when you close your account.
+            </p>
+          </section>
+
           <section className="df-sec" aria-labelledby="df-agent">
             <h2 className="df-h" id="df-agent">
               Inside Merlin: your agents

@@ -7,7 +7,8 @@
  * and its switch, with a bulk bar for the ones picked. Above it: "Since Thursday · N alerts sent",
  * where alerts go (email, Slack, a webhook, the bell; the 15-minute batch), and on a first visit a
  * gallery of starter alerts with the Slack step inline. "New alert" opens a short builder: a list,
- * what sets it off, how often and where. The Workflows tab is Stage 7b's: it says so (Beta).
+ * what sets it off, how often and where. The Workflows tab is Stage 7b's (Beta, RN_WORKFLOWS,
+ * alerts/Workflows.tsx): its table, recipes, runs and builder; off, it says Coming soon.
  *
  * Every switch members had on Notifications and Integrations is a chip or a switch here; each change
  * goes to the alert's own home (the list's alert, Me's settings, /api/integrations, Close's /api/activity,
@@ -26,6 +27,7 @@ import type { AlertsView } from "@/lib/inbox";
 import { EVERY_WORDS, TRIGGER_DETAIL, TRIGGER_WORDS, type AlertEvery, type AlertTrigger, type ListAlert } from "@/lib/mcp/alerts";
 import type { RadarEmail } from "@/lib/radar/types";
 import { alertGroups, countingWords, headLines, onFree, recipes, sinceWords, statusLine, type Chip, type Group, type Row, type StarterRef } from "./model";
+import { WorkflowBuilder, WorkflowPills, WorkflowsTab, blankBuild, useWorkflows, type WfBuild } from "./Workflows";
 import "./alerts.css";
 
 /* ---------- the server ---------- */
@@ -83,6 +85,31 @@ export function AlertsPage() {
   // Read once when the page opens: what the member turns on here doesn't swap the page under them.
   const [first] = useState(() => !(me.savedViews ?? []).some(alertOn));
   const since = c.table.since;
+  // Workflows (Beta): the tab, its builder, and the runs open on one workflow.
+  const wf = useWorkflows();
+  const [wb, setWb] = useState<WfBuild | null>(null);
+  const [wfOpen, setWfOpen] = useState<string | null>(null);
+  const [wfBusy, setWfBusy] = useState(false);
+  const openWb = (b: WfBuild) => {
+    setBuilder(null);
+    setWb(b);
+    window.setTimeout(() => document.getElementById("wf-builder")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
+  };
+  const wfAct = async (a: Record<string, unknown>) => {
+    setWfBusy(true);
+    try {
+      const ok = await wf.act(a);
+      if (ok && a.type === "workflow.approve") void c.refresh();
+      return ok;
+    } finally {
+      setWfBusy(false);
+    }
+  };
+  const saveWb = async () => {
+    if (!wb) return;
+    const { id, ...rest } = wb;
+    if (await wfAct({ type: "workflow.save", ...rest, ...(id ? { id } : {}), on: true })) setWb(null);
+  };
 
   const loadInteg = useCallback(() => void getJson<{ view: IntegrationsView }>("/api/integrations").then((r) => !isErr(r) && setInteg(r.view)), []);
   const loadClose = useCallback(() => void getJson<CloseInboxView>("/api/activity").then((r) => !isErr(r) && setClose(r)), []);
@@ -243,7 +270,7 @@ export function AlertsPage() {
   const lists = (me.savedViews ?? []).map((v) => ({ id: v.id, name: v.name, starter: false as boolean }));
   const builderLists = [...lists, ...starters.map((s) => ({ id: `starter:${s.key}`, name: s.name, starter: true }))];
   const openBuilder = (t: AlertTrigger = "role") =>
-    setBuilder({ list: builderLists[0]?.id ?? "", triggers: [t], every: free ? "daily" : "instant", email: true, slack: slackOn && !free, bell: true });
+    (setWb(null), setBuilder({ list: builderLists[0]?.id ?? "", triggers: [t], every: free ? "daily" : "instant", email: true, slack: slackOn && !free, bell: true }));
   const turnOnBuilder = async () => {
     if (!builder || !builder.list || !builder.triggers.length) return;
     const alert = { on: true, triggers: builder.triggers, every: builder.every, email: builder.email, slack: builder.slack, bell: builder.bell };
@@ -262,7 +289,7 @@ export function AlertsPage() {
   const sinceLine = av ? `${sinceWords(since, nowMs)} · ${av.sent === 1 ? "1 alert sent" : `${av.sent} alerts sent`}` : null;
 
   return (
-    <div className={`al-page${builder ? " al-with-b" : ""}`}>
+    <div className={`al-page${builder || wb ? " al-with-b" : ""}`}>
       <div className="al-main">
         {stripOn && (
           <section className={`ws-strip al-strip${watched ? " done" : ""}`} aria-label="About this page">
@@ -299,12 +326,26 @@ export function AlertsPage() {
           </section>
         )}
 
-        {!first && sinceLine && (
+        {((!first && sinceLine) || wf.view) && (
           <nav className="al-since" aria-label="Since your last visit">
-            <span>
-              <strong>{sinceWords(since, nowMs)}</strong> · {av!.sent === 1 ? "1 alert sent" : `${av!.sent} alerts sent`}
-            </span>
-            <span className="al-since-sub">{countingWords(av!.countingSince)}</span>
+            {!first && sinceLine && (
+              <>
+                <span>
+                  <strong>{sinceWords(since, nowMs)}</strong> · {av!.sent === 1 ? "1 alert sent" : `${av!.sent} alerts sent`}
+                </span>
+                <span className="al-since-sub">{countingWords(av!.countingSince)}</span>
+              </>
+            )}
+            {wf.view && (
+              <WorkflowPills
+                v={wf.view}
+                onWaiting={() => {
+                  setTab("flows");
+                  setWfOpen(wf.view!.flows.find((f) => f.waiting > 0)?.id ?? null);
+                }}
+                creditsHref={() => c.openPage(me.plan ? "billing" : "credits")}
+              />
+            )}
           </nav>
         )}
 
@@ -338,7 +379,8 @@ export function AlertsPage() {
               Alerts <span className="al-tab-n num">{rows.length}</span>
             </button>
             <button type="button" role="tab" aria-selected={tab === "flows"} className={`al-tab${tab === "flows" ? " on" : ""}`} onClick={() => setTab("flows")}>
-              Workflows <span className="al-beta">Beta</span>
+              Workflows {wf.view ? <span className="al-tab-n num">{wf.view.flows.length}</span> : null}
+              <span className="al-beta">Beta</span>
             </button>
           </div>
           <span className="al-grow" />
@@ -350,11 +392,18 @@ export function AlertsPage() {
               New alert
             </button>
           )}
+          {tab === "flows" && wf.view && (
+            <button type="button" className={`btn ${wf.view.flows.length ? "btn-pine" : "btn-outline"} al-new`} onClick={() => openWb(blankBuild(wf.view))}>
+              New workflow
+            </button>
+          )}
         </div>
 
         {destOpen && <Destinations integ={integ} email={c.view.email ? me.email : null} first={first} onOp={integOp} onTest={() => void act({ type: "alerts.test", alert: "bell" })} />}
 
-        {tab === "flows" ? (
+        {tab === "flows" && wf.view ? (
+          <WorkflowsTab v={wf.view} act={wfAct} open={wfOpen} setOpen={setWfOpen} onBuild={openWb} openCompany={(id) => c.openCompany(id)} />
+        ) : tab === "flows" ? (
           <section className="al-soon" aria-label="Workflows">
             <h2>Workflows are coming soon</h2>
             <p>A workflow is an alert that also does the next step for you: add the company to your pipeline, find your way in, draft a note in your voice. Each step shows what it costs before you turn it on, and you set a monthly limit. Messages are always drafts: a workflow never sends anything to a client.</p>
@@ -436,13 +485,30 @@ export function AlertsPage() {
         )}
 
         <div className="al-status">
-          <span>{tab === "alerts" ? status : "Workflows are part of Pro and Close, and come in a later release."}</span>
+          <span>
+            {tab === "alerts"
+              ? status
+              : wf.view
+                ? `${wf.view.flows.filter((f) => f.on).length} of ${wf.view.flows.length} workflows on. A workflow only spends credits on a step that shows a price, and stops at its monthly limit when you set one. ${wf.view.plan.tier === "free" ? "Free keeps one workflow of free steps; paid steps are part of Pro." : "Merlin's daily limits still apply."}`
+                : "Workflows are in Beta and come in a later release."}
+          </span>
           <button type="button" className="tp-flink" onClick={() => c.openPage(me.plan ? "billing" : "credits")}>
             What each plan includes
           </button>
         </div>
       </div>
 
+      {wb && wf.view && (
+        <WorkflowBuilder
+          b={wb}
+          set={setWb}
+          v={wf.view}
+          busy={wfBusy}
+          onClose={() => setWb(null)}
+          onSave={() => void saveWb()}
+          onRemove={() => void wfAct({ type: "workflow.remove", id: wb.id }).then((ok) => ok && setWb(null))}
+        />
+      )}
       {builder && (
         <Builder
           b={builder}

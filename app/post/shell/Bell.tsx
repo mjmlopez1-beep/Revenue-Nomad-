@@ -11,11 +11,14 @@
  * inbox has no unread line of their kind, so nothing is said twice. Nothing here is stored.
  *
  * The count dot is ember only when the screen's ember budget allows (two ember marks at most).
+ *
+ * A workflow's run waiting at its monthly limit (lib/workflows, Beta) shows "Say yes · N credits" and
+ * "Not now" on its line: POST { action: { type: "workflow.approve", run, yes } }. Only a yes spends.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { CloseInboxView } from "@/lib/close/types";
 import type { InboxView } from "@/lib/inbox";
-import { errorText, timeAgo } from "../../ui/shared";
+import { errorText, timeAgo, useToast } from "../../ui/shared";
 import { openItem } from "../Activity";
 import { Anchored, UiCtx } from "../ui";
 import { plural } from "../hooks";
@@ -74,6 +77,18 @@ export interface BellLine {
   go: () => void;
   /** A proposal notification: marked read on the server when opened. */
   inbox?: boolean;
+  /** A workflow's run waiting for the member's yes (lib/workflows). */
+  ask?: { run: string; credits: number };
+}
+
+async function answerAsk(run: string, yes: boolean): Promise<{ message: string } | { error: string }> {
+  try {
+    const r = await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: { type: "workflow.approve", run, yes } }) });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? { message: String(j.message ?? "") } : { error: errorText(r.status, j.error, "That didn't go through.") };
+  } catch {
+    return { error: "We couldn't reach Merlin." };
+  }
 }
 
 export interface BellCounts {
@@ -103,6 +118,8 @@ export function Bell({
   ember: boolean;
 }) {
   const ui = useContext(UiCtx);
+  const toast = useToast();
+  const [asking, setAsking] = useState<string | null>(null);
   const [v, setV] = useState<CloseInboxView | null>(null);
   const [mine, setMine] = useState<InboxView | null>(null);
   const [open, setOpen] = useState(false);
@@ -146,6 +163,7 @@ export function Bell({
       text: "",
       sub: [timeAgo(x.at), x.sub].filter(Boolean).join(" · "),
       fresh: !x.read,
+      ...(x.ask && !x.ask.answer ? { ask: { run: x.ask.run, credits: x.ask.credits } } : {}),
       go: () => {
         if (!x.read) readMine([x.id]);
         goHref(x.href, ui as never, go);
@@ -219,6 +237,42 @@ export function Bell({
                       {l.sub && <span className="ws-bell-sub">{l.sub}</span>}
                     </span>
                   </button>
+                  {l.ask && (
+                    <span className="ws-bell-ask">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-pine"
+                        disabled={asking === l.ask.run}
+                        onClick={() => {
+                          const run = l.ask!.run;
+                          setAsking(run);
+                          void answerAsk(run, true).then((r) => {
+                            setAsking(null);
+                            toast("error" in r ? r.error : r.message || "Done.", "error" in r);
+                            load();
+                          });
+                        }}
+                      >
+                        Say yes · {l.ask.credits === 1 ? "1 credit" : `${l.ask.credits} credits`}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        disabled={asking === l.ask.run}
+                        onClick={() => {
+                          const run = l.ask!.run;
+                          setAsking(run);
+                          void answerAsk(run, false).then((r) => {
+                            setAsking(null);
+                            toast("error" in r ? r.error : "Nothing was spent.", "error" in r);
+                            load();
+                          });
+                        }}
+                      >
+                        Not now
+                      </button>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
