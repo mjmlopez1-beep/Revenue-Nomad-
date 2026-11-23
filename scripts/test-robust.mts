@@ -725,6 +725,8 @@ console.log("\nThe API's routes");
     // A company's logo by its public id, as image bytes (lib/logo.ts): public on purpose, it names nothing.
     "api/logo/[id]",
     "api/mcp",
+    // Drafting a reply in Messages with Merlin's AI (lib/messagesAi.ts): the member's cookie, Close and the trial, their own conversations only; nothing stored.
+    "api/messages",
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
     // Smart ways in (lib/paths): the member's cookie, their own LinkedIn connections only.
     "api/paths",

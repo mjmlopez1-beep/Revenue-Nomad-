@@ -91,6 +91,8 @@ run digest npx tsx scripts/test-digest.ts
 # The studio pass (docs/design-system.md): every email in the new frame (the lockup and its Fractions strip on pine, never the photo banner, one pine button, dark mode), the header strips and the link preview at their sizes, monogram tiles in brand tints only, the system's components (Chip, Stat, EmptyState, PageHead, Logo, WonMoment) and where WonMoment lives, the loading shell with the lockup (over HTTP).
 serve studio npx tsx scripts/test-studio.mts
 run messages npx tsx scripts/test-messages.mjs
+# Messages in the new look (app/post/messages, lib/messagesDraft.ts, lib/messagesAi.ts, app/api/messages): kinds, filters and words, Draft with Merlin from a template in the member's voice, Merlin's AI behind its switch, Close and its own agreement, the route, purge and the export. In process, on a made-up seed.
+run messages2 npx tsx scripts/test-messages2.mts
 # Alerts in Slack and webhooks (lib/notify), with fetch and name lookups replaced: nothing leaves the machine.
 run notify npx tsx scripts/test-notify.mts
 # The radar (lib/radar; FEATURE_NAME to members): each signal, the profile and before-function matching, never twice, every signal for every member with nothing locked named, links to the day's companies, the day's view and its 2-credit unlock, instant for Pro, no nothing-days, opt-out and unsubscribe, Slack and email, follow-ups due from Your pipeline (above the companies, a day with only follow-ups still emails once, nothing locked or from Google named). Fetch replaced: nothing leaves the machine.
