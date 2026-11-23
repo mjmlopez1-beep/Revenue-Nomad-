@@ -184,7 +184,7 @@ async function main() {
   check("the counts in all add up", R.ZONES.reduce((a, z) => a + v.countsAll[z], 0) === v.total);
   check("the lines say where they sit, honestly", /^(Fit \d of 5 or more|The better fitting half)$/.test(v.lines.fit.words) && /^(Est\. success \d+% or more|Your warmer half of these ways in)$/.test(v.lines.way.words), v.lines);
   check("the warmest way in is said: the best of the marks' estimates", v.warmest === Math.max(...v.rows.map((r) => r.best ?? 0)), v.warmest);
-  check("a cold note to who decides is no way in on the map (it stays on the company's page)", v.rows.every((r) => r.src !== "direct"));
+  check("a cold note to who decides is the weakest way in, and says so", v.rows.filter((r) => r.src === "direct").every((r) => !r.locked ? /^A cold note to /.test(r.via ?? "") : true) && v.rows.some((r) => r.src === "direct"), v.rows.filter((r) => r.src === "direct").map((r) => r.via));
   check("fit is of five, and says which", v.rows.every((r) => r.fit >= 0 && r.fit <= 5 && r.fit === r.fitWords.length && r.fitWords.every((x) => ["function", "industry", "size", "revenue", "a hiring signal"].includes(x))));
   const all = JSON.stringify(v);
   check("a fellow who keeps out of the directory is never on a route and never named", !all.includes("Hugo") && !all.includes("Hiddenqa"));

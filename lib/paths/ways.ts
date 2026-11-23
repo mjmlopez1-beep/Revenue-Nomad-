@@ -1181,8 +1181,8 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
   const traits = cores.map((c) => fitTraits(cx, L, c.id, c.sig, c.odds));
   const fitC = traits.map((t) => t.length);
   const fitF = cores.map((c, i) => fitC[i] + Math.min(1, c.odds.score / 0.6) * 0.9);
-  // A way in is through someone: a cold note to who decides (Write to them yourself) stays on the company's page, never a mark's warmth.
-  const tops = cores.map((c) => c.routes.find((r) => r.src !== "direct"));
+  // The best route, as Your way in recommends it. A cold note to who decides (Write to them yourself) is the weakest way in, and says so.
+  const tops = cores.map((c) => c.top);
   const wayC = tops.map((t) => t?.view.est ?? null);
   const wayF = tops.map((t) => wayFine(t));
   const spFit = splitLine(fitC, fitF);
@@ -1210,9 +1210,13 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       : !visible
         ? top.src === "fellow"
           ? "Through a fellow fractional"
-          : "A way in. Open it to see who"
+          : top.src === "direct"
+            ? "A cold note to who decides"
+            : "A way in. Open it to see who"
         : top.view.between === 0
-          ? `You know ${p1!.label}`
+          ? top.src === "direct"
+            ? `A cold note to ${p1!.locked ? lc(p1!.label) : p1!.label}`
+            : `You know ${p1!.label}`
           : `Through ${p1!.locked ? lc(p1!.label) : p1!.label}`;
     const people = visible
       ? c.routes
@@ -1236,7 +1240,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       band: top ? top.view.links[0].band : null,
       src: top ? top.src : null,
       via,
-      person: top && people[0] ? people[0] : null,
+      person: top && top.src !== "direct" && people[0] ? people[0] : null,
       people,
       fresh,
       zone,
