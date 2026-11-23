@@ -75,7 +75,9 @@ export function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: b
                 ? v.claimed
                   ? "You claimed this"
                   : "You added this"
-                : "Added by a member";
+                : t.field === "rate"
+                  ? "Shared by a member"
+                  : "Added by a member";
   const confirmHelp = v && !v.from ? "Two confirmations earn the member who added it a credit." : "It tells other members this still holds.";
   const back = gated && !own ? " You get the credit back if we remove it." : "";
   const reportHelp = own

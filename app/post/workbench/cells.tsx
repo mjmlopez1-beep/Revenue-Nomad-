@@ -10,7 +10,7 @@ import type { Row } from "../model";
 import { coverOf, personCoverOf, personNoun, personUnseen, ADD_AFTER_NAME, PERSON_NO_ADD } from "../model";
 import { CompanyName, engCell, Fit, FunctionsCell, HeldBy, NameAndTitle, None, PeopleCell, RowFact, SeatCell, ownCompany } from "../Tables";
 import { RoleDate, datesAreStatus, statusText } from "../RoleDate";
-import { SOURCE_LABEL } from "@/lib/tableFields";
+import { sourceWithDate } from "@/lib/tableFields";
 import { deciderOf } from "./columns";
 import { closestOf, labelWords } from "./closest";
 import { useUi } from "../ui";
@@ -100,7 +100,7 @@ export function seatCell(id: string, r: Row, mine: string | null): ReactNode {
     case "operator":
       return <HeldBy e={e} cover={coverOf(i, e, "operator")} />;
     case "source":
-      return <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>;
+      return <span className="tp-src">{sourceWithDate(e.source, e.updatedAt)}</span>;
     default:
       return engCell(i, e, id);
   }

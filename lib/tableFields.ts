@@ -483,6 +483,12 @@ export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 
 /** Where a record came from. */
 export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay", "Seat scan"] as const;
+/** "Added by a member · updated Oct 2026": a record's source with its date, the same on the company page and the tables. */
+export const sourceWithDate = (source: string, updatedAt: string | null | undefined): string => {
+  const d = updatedAt ? new Date(updatedAt) : null;
+  const when = d && Number.isFinite(d.getTime()) ? ` · updated ${d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}` : "";
+  return `${SOURCE_LABEL[source] ?? source}${when}`;
+};
 /** Plain labels for sources in the UI. */
 export const SOURCE_LABEL: Record<string, string> = {
   // Two names a member can tell apart: the seat holder published it, or another member added it.

@@ -26,6 +26,8 @@ import { Head, Switch } from "./setupParts";
 import { HOURS_PICKS, LIKE_LIST_NAME, LIKE_SHOWN, factsLine, likeListAction, likeRowView, seatSource, type LikeStep } from "./setupModel";
 import { SETUP_STEPS } from "./setupModel";
 
+/** What Merlin means by a seat, said once, where the member first adds one. */
+export const SEAT_MEANS = "A seat is one fractional role you held at one client: the company, your role and the dates.";
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
 /* ---------- step 2: the seats ---------- */
@@ -185,9 +187,10 @@ export function SeatsScreen(p: {
       <Head eyebrow={`Step 2 of ${SETUP_STEPS}`} title="The seats you have held">
         {!p.ready
           ? "Finding the seats on file under your name."
-          : n
+          : `${SEAT_MEANS} ` +
+            (n
             ? `Merlin has ${plural(n, "seat", "seats")} on file that may be yours. Confirm each in a tap. Each fact you add to a seat earns a credit, and each seat becomes a way in.`
-            : "Merlin has no seat under your name yet. Add the ones you held below: each fact you add earns a credit, and each seat becomes a way in."}
+            : "Merlin has no seat under your name yet. Add the ones you held below: each fact you add earns a credit, and each seat becomes a way in.")}
       </Head>
       <div className="su-earn" aria-live="polite">
         <strong className="num">+{total}</strong>

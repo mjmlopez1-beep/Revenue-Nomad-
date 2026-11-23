@@ -1256,7 +1256,7 @@ function AddAside() {
           How Merlin checks a fact
         </h3>
         <p>
-          <strong>Two members make it verified.</strong> What you add shows as member added. When a second member confirms it, it shows as verified.
+          <strong>Two members make it confirmed.</strong> What you add shows as added by a member. When a second member confirms it, it shows as confirmed, with a tick.
         </p>
         <p>
           <strong>One report takes a name off.</strong> If a member says a name is wrong it comes off for everyone at once, and whoever paid to see it gets the credit back.

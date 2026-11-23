@@ -10,7 +10,7 @@ import { openFractionalAt } from "../../fractionalsModel";
 import { VerifyName } from "../../Verify";
 import { useRef, useState } from "react";
 import type { ActionResult, EngagementRec, PersonRec } from "@/lib/tableTypes";
-import { SOURCE_LABEL, SEAT_BUNDLE, NAME_HIDDEN } from "@/lib/tableFields";
+import { SEAT_BUNDLE, NAME_HIDDEN, sourceWithDate } from "@/lib/tableFields";
 import { IconCheck, IconExternal, IconPlus, fmtMonth, post } from "../../../ui/shared";
 import { AFTER_COMPANY, ENG_FIELDS, OPEN_ROLE_BUNDLE, seatBundled, seatMissingCount, shown } from "../../model";
 import { YourSeat, useUi } from "../../ui";
@@ -243,7 +243,7 @@ export function EngagementCard({ e, companyId, company, focus, coPeople = [], wa
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
-        {e.opened ? <RoleDate e={e} /> : <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>}
+        {e.opened ? <RoleDate e={e} /> : <span className="tp-src">{sourceWithDate(e.source, e.updatedAt)}</span>}
         {e.yours && <YourSeat id={e.id} />}
         {e.verified && (
           <span className="tp-verified">
