@@ -2,8 +2,10 @@
 
 /**
  * Granola from the browser (/api/integrations/granola/*): the status, read once per page load and
- * shared by the Integrations card, its top-row chip and the call picker; connect, disconnect, the
- * calls and one picked call's transcript. The key goes up once, on Connect, and never comes back.
+ * shared by the Integrations card, its top-row chip and the call picker; Connect Granola (the
+ * sign-in: a page load to Granola and back), connect a pasted key, disconnect, the calls and one
+ * picked call's transcript. A key goes up once, on Connect, and never comes back; tokens never
+ * reach the browser at all.
  */
 import { useEffect, useState } from "react";
 import type { CallsAnswer, GranolaStatus, GranolaTranscript } from "@/lib/granola/types";
@@ -86,6 +88,53 @@ export function fetchTranscript(noteId: string, titles: boolean): Promise<Answer
   const q = new URLSearchParams({ note: noteId });
   if (titles) q.set("titles", "1");
   return ask<GranolaTranscript>(`transcript?${q}`);
+}
+
+/**
+ * Connect Granola: off to Granola's consent page, and back to this same page (`back`: a path in the
+ * app, by default where the member is now) with ?granola=connected, denied, failed or unavailable.
+ */
+export function startGranola(back?: string): void {
+  const here = back ?? `${window.location.pathname}${window.location.search}`;
+  window.location.assign(`${BASE}/start?back=${encodeURIComponent(here)}`);
+}
+
+/** ?granola=connected|denied|failed|unavailable from the way back: read when this file loads, shown once by whichever Granola card is on screen first. */
+export type GranolaNotice = "connected" | "denied" | "failed" | "unavailable";
+export const GRANOLA_NOTICE_WORDS: Record<GranolaNotice, string> = {
+  connected: "Granola connected. Pick a call when you start a proposal.",
+  denied: "Nothing was connected. You said no at Granola. Connect whenever you like.",
+  failed: "We couldn't connect Granola, so nothing was saved. Try again in a moment.",
+  unavailable: "Connecting with Granola isn't available right now. Paste a Granola API key instead, or try again later.",
+};
+let notice: GranolaNotice | null = (() => {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("granola");
+  return v === "connected" || v === "denied" || v === "failed" || v === "unavailable" ? v : null;
+})();
+/** The notice, once, and off the address. */
+export function takeGranolaNotice(): GranolaNotice | null {
+  const n = notice;
+  notice = null;
+  if (n)
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("granola");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  return n;
+}
+/** Show the notice once, when a Granola card mounts. */
+export function useGranolaNotice(show: (words: string, err: boolean) => void): void {
+  useEffect(() => {
+    const n = takeGranolaNotice();
+    if (n) {
+      show(GRANOLA_NOTICE_WORDS[n], n !== "connected");
+      // The status changed at Granola's end: read it again.
+      void loadGranola(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 /** Tests and stories: set the shared status by hand. */

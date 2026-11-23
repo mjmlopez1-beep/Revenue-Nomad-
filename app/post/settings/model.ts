@@ -278,18 +278,18 @@ export function connRows(x: ConnInput): ConnRow[] {
       name: "Granola",
       sub: "Call notes for proposals",
       on: gr.connected,
-      status: gr.connected ? (gr.broken ? "Key stopped working" : "Connected") : "Not connected",
-      since: gr.connected ? (gr.last4 ? `Key ends ${gr.last4}` : "Connected") : "Optional",
+      status: gr.connected ? (gr.broken ? (gr.via === "oauth" ? "Needs connecting again" : "Key stopped working") : "Connected") : "Not connected",
+      since: gr.connected ? (gr.via === "oauth" ? "Your Granola account" : gr.last4 ? `Key ends ${gr.last4}` : "Connected") : "Optional",
       trouble: !!gr.broken,
-      reads: "Your recent calls, and only the one you pick, when you start a proposal.",
-      never: "Read a call you did not pick, or keep a transcript.",
+      reads: "Your recent calls when you start a proposal, and one transcript, of the call you pick, when you ask for a draft.",
+      never: "Read a call you did not pick, or store a transcript.",
       last: gr.connected && gr.connectedAt ? `Since ${day(gr.connectedAt)}` : "Nothing yet",
       feeds: [
         { label: "Proposals", why: "Draft from a call", page: "proposals" },
         { label: "Pipeline", why: "Recent calls on a deal", page: "pipeline" },
       ],
       go: gr.connected ? "Manage" : "Connect",
-      remove: gr.connected ? { ask: "Disconnect Granola? Merlin deletes your key. Proposals you already drafted stay.", yes: "Disconnect" } : null,
+      remove: gr.connected ? { ask: gr.via === "oauth" ? "Disconnect Granola? Merlin ends its access and deletes it. Proposals you already drafted stay." : "Disconnect Granola? Merlin deletes your key. Proposals you already drafted stay.", yes: "Disconnect" } : null,
     });
   }
   const apps = x.apps ?? [];

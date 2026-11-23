@@ -21,7 +21,9 @@ import { netAct, NOTICE_WORDS, type GoogleNotice } from "../network/useNetwork";
 import { loadKnown } from "../network/usePaths";
 import { CsvAct, LinkedInAct } from "../network/ConnectPanel";
 import { ConnectForm, SlackGlyph } from "../Integrations";
-import { connectKey, loadGranola } from "../granolaClient";
+import { connectKey, loadGranola, startGranola, useGranolaNotice } from "../granolaClient";
+import { GRANOLA_READS } from "../GranolaSection";
+import "../granola.css";
 import { openPlans } from "../Billing";
 import { useApp } from "../shell/pages";
 import type { ConnKey } from "./at";
@@ -418,11 +420,18 @@ function FeedsBox({ row }: { row: ConnRow }) {
   );
 }
 
-/** Granola (RN_GRANOLA): a personal API key, checked once, kept sealed; drafting from a call is Close. */
+/**
+ * Granola (RN_GRANOLA): Connect Granola (one button to Granola's consent page and back here, with
+ * "Granola connected"), or when Granola's sign-in isn't available a personal API key, checked
+ * once, kept sealed. One status and one Disconnect (the row's Remove) either way. Drafting from a
+ * call is Close.
+ */
 function GranolaDetail({ row, status, flash }: { row: ConnRow; status: GranolaStatus | null; flash: (t: string, err?: boolean) => void }) {
   const [key, setKey] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [going, setGoing] = useState(false);
+  useGranolaNotice((t, bad) => flash(t, bad));
   if (!status) return null;
   const connect = async () => {
     const k = key.trim();
@@ -436,54 +445,81 @@ function GranolaDetail({ row, status, flash }: { row: ConnRow; status: GranolaSt
     void loadGranola(true);
     flash(r.message);
   };
+  const oauth = status.via === "oauth";
+  const keyForm = (
+    <form
+      className="st-form"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!busy) void connect();
+      }}
+    >
+      <label className="st-label" htmlFor="st-granola-key">
+        Granola API key
+      </label>
+      <span className="st-inrow">
+        <input id="st-granola-key" className={`input mono${err ? " bad" : ""}`} type="password" autoComplete="off" spellCheck={false} placeholder="grn_…" value={key} aria-invalid={!!err} onChange={(e) => (setKey(e.target.value), err && setErr(null))} />
+        <button type="submit" className={`btn${status.oauth ? "" : " btn-pine"}`} disabled={busy} aria-busy={busy}>
+          {busy ? "Checking" : status.oauth ? "Connect this key" : "Connect Granola"}
+        </button>
+      </span>
+      {err && (
+        <span className="st-err" role="alert">
+          {err}
+        </span>
+      )}
+    </form>
+  );
   return (
     <div className="st-detail">
       <div className="st-detail-main">
         {status.connected ? (
           <>
             <strong className="st-detail-h">Granola is connected</strong>
-            <span>When you start a proposal, Merlin lists your recent calls with that company. It reads the one call you pick, and drafts from it. It keeps the draft, never the transcript.</span>
-            {status.broken && <span className="st-warn">Granola stopped accepting this key. Remove it, make a new key in Granola and connect that one.</span>}
+            <span>{oauth ? "Connected with your Granola account. " : ""}When you start a proposal, Merlin lists your recent calls with that company. It reads the one call you pick, and drafts from it. It keeps the draft, never the transcript.</span>
+            {status.broken && <span className="st-warn">{oauth ? "Granola stopped letting Merlin read your calls. Disconnect, then connect Granola again." : "Granola stopped accepting this key. Remove it, make a new key in Granola and connect that one."}</span>}
             {!status.canDraft && (
               <span className="st-acts">
-                <span className="st-faint">Drafting a proposal from a call is part of Close. Your key stays connected.</span>
+                <span className="st-faint">Drafting a proposal from a call is part of Close. {oauth ? "Granola stays connected." : "Your key stays connected."}</span>
                 <button type="button" className="btn btn-sm" onClick={() => openPlans("proposals")}>
                   See the Close plan
                 </button>
               </span>
             )}
           </>
+        ) : status.oauth ? (
+          <>
+            <strong className="st-detail-h">Connect Granola to draft proposals from your calls</strong>
+            <span>{GRANOLA_READS}</span>
+            <span className="gr-signin">
+              <button type="button" className="btn btn-pine" aria-busy={going} disabled={going} onClick={() => (setGoing(true), startGranola())}>
+                {going ? "Opening Granola" : "Connect Granola"}
+              </button>
+              <span className="st-faint">You say yes at Granola, then come back here.</span>
+            </span>
+            <details className="gr-keyalt">
+              <summary>Or paste a Granola API key</summary>
+              <span className="st-faint">A key from Granola, Settings, Connectors, API keys. It needs a Granola Business or Enterprise plan. Merlin checks it with one call, then keeps it sealed.</span>
+              {keyForm}
+            </details>
+          </>
         ) : (
           <>
             <strong className="st-detail-h">Connect Granola to draft proposals from your calls</strong>
             <span>Paste an API key from Granola. Merlin checks it with one call, then keeps it sealed. You only ever see its last four characters.</span>
-            <form
-              className="st-form"
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!busy) void connect();
-              }}
-            >
-              <label className="st-label" htmlFor="st-granola-key">
-                Granola API key
-              </label>
-              <span className="st-inrow">
-                <input id="st-granola-key" className={`input mono${err ? " bad" : ""}`} type="password" autoComplete="off" spellCheck={false} placeholder="grn_…" value={key} aria-invalid={!!err} onChange={(e) => (setKey(e.target.value), err && setErr(null))} />
-                <button type="submit" className="btn btn-pine" disabled={busy} aria-busy={busy}>
-                  {busy ? "Checking" : "Connect Granola"}
-                </button>
-              </span>
-              {err && (
-                <span className="st-err" role="alert">
-                  {err}
-                </span>
-              )}
-            </form>
+            {keyForm}
           </>
         )}
       </div>
-      <Facts title={status.connected ? "ON FILE NOW" : "GOOD TO KNOW"} rows={status.connected ? [["Key", status.last4 ? `Ends ${status.last4}, kept sealed` : "Kept sealed"], ["Part of", "Close"]] : [["Without it", "Paste a transcript instead"], ["Part of", "Close, yours on the trial"]]} />
+      <Facts
+        title={status.connected ? "ON FILE NOW" : "GOOD TO KNOW"}
+        rows={
+          status.connected
+            ? [[oauth ? "Access" : "Key", oauth ? "Your Granola account, kept sealed" : status.last4 ? `Ends ${status.last4}, kept sealed` : "Kept sealed"], ["Part of", "Close"]]
+            : [["Without it", "Paste a transcript instead"], ["Part of", "Close, yours on the trial"]]
+        }
+      />
       <FeedsBox row={row} />
     </div>
   );

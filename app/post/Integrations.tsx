@@ -616,7 +616,7 @@ export function Integrations({
       {/* [google network] Google Calendar and Contacts (nothing with RN_GOOGLE off). */}
       <GoogleSection onNetwork={onNetwork ?? onBack} />
 
-      {/* Granola: a personal API key, for starting a proposal from a call (nothing with RN_GRANOLA off). */}
+      {/* Granola: Connect Granola (or a personal API key as the fallback), for starting a proposal from a call (nothing with RN_GRANOLA off). */}
       <GranolaSection />
 
       {onAgent ? (

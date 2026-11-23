@@ -72,11 +72,12 @@ export function googlePick(answer: NetworkAnswer | null, failed = false): PickSt
   return { chip: "Connected", tone: "mint", line: parts.length ? listWords(parts) : undefined };
 }
 
-/** Granola: connected, with the key's last four characters. Null with Granola off (RN_GRANOLA): no card. */
+/** Granola: connected with the member's Granola account, or with a key (its last four characters). Null with Granola off (RN_GRANOLA): no card. */
 export function granolaPick(st: GranolaStatus | null, failed = false): PickStatus | null {
   if (!st) return failed ? null : LOADING;
   if (!st.on) return null;
   if (!st.connected) return NOT_SET;
+  if (st.via === "oauth") return st.broken ? { chip: "Needs connecting again", tone: "outline", line: "Your Granola account" } : { chip: "Connected", tone: "mint", line: "Your Granola account" };
   const line = st.last4 ? `Key ending ••••${st.last4}` : undefined;
   return st.broken ? { chip: "Key stopped working", tone: "outline", line } : { chip: "Connected", tone: "mint", line };
 }
