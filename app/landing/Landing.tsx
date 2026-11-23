@@ -3,7 +3,8 @@
 /**
  * Merlin landing page (signed out). In order: the hero (the live signal, the headline, one line,
  * the join form, and one real record, beside the form on a wide screen and peeking up from the
- * bottom of the first screen on a phone), "What are you looking for?" (Finder.tsx: the visitor's
+ * bottom of the first screen on a phone), "Works with" (WorksWith.tsx: the tools Merlin connects
+ * to, those the server has on), "What are you looking for?" (Finder.tsx: the visitor's
  * function and a question, answered with real counts and rows from GET /api/table?preview=1),
  * the numbers across every function in one band, what members say (Quotes.tsx, drawn only once
  * quotes.ts has a real one), what you can do with it (Features.tsx: four tinted panels by the job
@@ -38,6 +39,7 @@ import Finder, { type PreviewExample, type Totals } from "./Finder";
 import Features from "./Features";
 import Quotes from "./Quotes";
 import Pricing from "./Pricing";
+import WorksWith from "./WorksWith";
 import { Band } from "../ui/fractions/kit";
 import { Corner, FinalScene, HeroDome, HeroEdge, HeroStage, HeroStagePhone, HeroTrail } from "./scenes";
 
@@ -185,7 +187,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
 
   const supportHref = support ? mailto(support, "Merlin question") : null;
   // Which switchable features the server has on (signed out only). Until it says, neither is named.
-  const live = { workflows: !!view?.live?.workflows, google: !!view?.live?.google };
+  const live = { workflows: !!view?.live?.workflows, google: !!view?.live?.google, granola: !!view?.live?.granola };
 
   return (
     <div className="lp">
@@ -281,6 +283,9 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
             </div>
           </div>
         </section>
+
+        {/* ---------- works with: the tools Merlin connects to, only those the server has on ---------- */}
+        <WorksWith live={{ google: live.google, granola: live.granola }} />
 
         {/* ---------- what are you looking for: the visitor's function and a question, real numbers ---------- */}
         <Finder onJoin={toJoin} primary={!formInView} ctaRef={findCta} onExample={setExample} onTotals={setTotals} />

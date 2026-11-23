@@ -20,6 +20,7 @@ import type { View } from "@/lib/tableTypes";
 import { workflowsOn } from "@/lib/workflows/run";
 import { networkOn } from "@/lib/google/types";
 import { googleConfigured } from "@/lib/google/config";
+import { granolaOn } from "@/lib/granola/types";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
@@ -419,7 +420,7 @@ export const GET = guarded(async (req: NextRequest) => {
     // (expired, or from another server), the signed-out view itself, so the landing page draws without a second request
     // (app/ui/shared.tsx fetchFirst, scripts/test-firstvisit.mts).
     if (req.nextUrl.searchParams.get("first") !== null && !token) return err("You're signed out. Sign in again to see your table.", 401);
-    const view: View = { ...(await buildView(null)), live: { workflows: workflowsOn(), google: networkOn() && googleConfigured() } };
+    const view: View = { ...(await buildView(null)), live: { workflows: workflowsOn(), google: networkOn() && googleConfigured(), granola: granolaOn() } };
     return sendJson(req, view, { "x-view-version": view.version ?? "" });
   }
   // Plans (only while billing is live): a trial due to start, or a month's Pro credits, lands before the view is built. Nothing to do costs nothing.

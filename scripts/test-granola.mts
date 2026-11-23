@@ -647,7 +647,23 @@ async function main() {
   process.env.RN_GRANOLA = "0";
   const roff = await call("calls", "?recent=1");
   check("RN_GRANOLA off: the routes answer 404 and the status says off", roff.status === 404 && ((await call("status")).j.status as { on: boolean }).on === false);
+  // The signed-out answer the landing page reads (View.live): Granola is named in "Works with" only while it is on.
+  const TR = await import("../app/api/table/route.ts");
+  const liveOf = async () => {
+    const res = await (TR.GET as (r: unknown) => Promise<Response>)(new NextRequest("https://post.example.com/api/table", { headers: { "x-forwarded-for": "198.51.100.40" } }));
+    return { status: res.status, live: ((await res.json()) as { live?: { granola?: boolean } }).live };
+  };
+  const liveOff = await liveOf();
   process.env.RN_GRANOLA = "1";
+  const liveOn = await liveOf();
+  check("signed out, View.live.granola follows RN_GRANOLA (false off, true on)", liveOff.status === 200 && liveOff.live?.granola === false && liveOn.status === 200 && liveOn.live?.granola === true, { liveOff, liveOn });
+  const WWm = await import("../app/landing/WorksWith.tsx");
+  const names = (l: { google: boolean; granola: boolean }) => WWm.worksWithTools(l).map((t) => t.name).join(",");
+  check(
+    "Works with: Slack and Claude always, Google and Granola only when on, never LinkedIn",
+    names({ google: false, granola: false }) === "Slack,Claude" && names({ google: true, granola: true }) === "Google,Slack,Claude,Granola" && !/linkedin/i.test(JSON.stringify(WWm.worksWithTools({ google: true, granola: true }))),
+    names({ google: true, granola: true }),
+  );
 
   /* ---------- 9. the picker's words, the top row ---------- */
   console.log("\nThe picker's words");

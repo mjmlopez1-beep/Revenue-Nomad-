@@ -777,9 +777,10 @@ export interface View {
   demo: boolean;
   /**
    * Signed out only (app/api/table GET): which switchable features are on, so the landing page
-   * names only those. Workflows (RN_WORKFLOWS, Beta) and Google (RN_GOOGLE with a Google client).
+   * names only those. Workflows (RN_WORKFLOWS, Beta), Google (RN_GOOGLE with a Google client) and
+   * Granola (RN_GRANOLA=1). Older servers leave `granola` out.
    */
-  live?: { workflows: boolean; google: boolean };
+  live?: { workflows: boolean; google: boolean; granola?: boolean };
   /** The view is drawn in the new look (Me.ui2, lib/ui2.ts). Left out with the flag off. */
   ui2?: boolean;
   me: Me | null;
