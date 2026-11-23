@@ -104,7 +104,7 @@ export function RunConfig({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
-  const per = col === "company" ? (ui.me.proOpens && ui.me.proOpens.left > 0 ? "Free on the trial and Pro, up to 15 a day" : costWords(def?.cost ?? 1).replace("/ row", "credits a row")) : "1 credit a row";
+  const per = col === "company" ? (ui.me.proOpens && ui.me.proOpens.left > 0 ? `Free on your plan, up to ${ui.me.proOpens.of} a day` : costWords(def?.cost ?? 1).replace("/ row", "credits a row")) : "1 credit a row";
   const run = async () => {
     if (!q) return;
     setBusy("run");

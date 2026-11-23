@@ -289,7 +289,7 @@ export function hiringColumns(x: ColCtx): ColumnDef[] {
       const n = new Set(rows.map((r) => fnOf(r.e!) ?? "")).size;
       return `${n} ${n === 1 ? "function" : "functions"}`;
     }, { def: true, sort: "fn" }),
-    col("company", "Company", "minmax(180px, 1.3fr)", (rows) => `${pct(count(rows, (r) => !r.i.c.hidden), rows.length)}% open`, { def: true, fixed: true, cost: 2, tip: "Its name, website and the postings of its open roles open with the company. Free on the trial and Pro, up to 15 a day." }),
+    col("company", "Company", "minmax(180px, 1.3fr)", (rows) => `${pct(count(rows, (r) => !r.i.c.hidden), rows.length)}% open`, { def: true, fixed: true, cost: 2, tip: "Its name, website and the postings of its open roles open with the company. Free on Trial, Pro and Close, up to 15 a day." }),
     col("listed", "Listed", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => newThisWeek(r.e!, x.now))} this week`, { def: true }),
     col("rate", "Rate", "minmax(110px, 0.7fr)", (rows) => `${pct(count(rows, (r) => rateOf(r) !== "none"), rows.length)}% posted a rate`, { def: true, cost: 1, needs: "Comes with the posting", tip: "The rate the posting gave. No rate posted when it gave none." }),
     col("hours", "Hours", "minmax(70px, 0.5fr)", (rows) => `${pct(count(rows, (r) => hoursOf(r).known), rows.length)}% posted`, { def: true, num: true }),

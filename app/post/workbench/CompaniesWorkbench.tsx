@@ -282,7 +282,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
               <IconLock size={14} /> Open your first company
             </button>
             <span className="wb-hero-note">
-              <strong>{freeOpen ? "Free on the trial." : `${COMPANY_PRICE} credits.`}</strong> You see its name, its website and who held the seat.
+              <strong>{freeOpen ? "Free on your plan." : `${COMPANY_PRICE} credits.`}</strong> You see its name, its website and who held the seat.
             </span>
             <span className="wb-hero-facts">{heroRow.i.teaser}</span>
           </span>

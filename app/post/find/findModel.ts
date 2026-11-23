@@ -395,7 +395,7 @@ export function previewRow(kind: FindKind, r: Row, me: Me, like?: { why: string;
     const hours = shown(e.cells.hours);
     const when = status === "Ended" ? (end ? `Ended ${monthWords(end)}` : "Ended") : shown(e.cells.start) ? `Since ${yearOf(shown(e.cells.start))}` : status ?? "";
     const holder = r.i.c.hidden ? "Opens with the company" : e.yours ? "You" : shown(e.cells.operator) ?? (e.cells.operator?.s === "locked" ? "1 credit" : "Nobody named yet");
-    const rate = e.yours ? "Yours" : e.cells.rate?.s === "locked" ? "1 credit" : shown(e.cells.rate) ? "On file" : "No rate shared";
+    const rate = e.yours ? "Yours" : e.cells.rate?.s === "locked" ? "1 credit" : shown(e.cells.rate) ? "Shared by a member" : "No rate shared";
     return {
       key: r.key,
       companyId: r.i.c.id,
@@ -449,7 +449,7 @@ export const HEADS: Record<FindKind, [string, string, string, string]> = {
 export const NOTES: Record<FindKind, (first: boolean) => string> = {
   companies: (first) =>
     first
-      ? "Names stay hidden in the preview. Save the list, then open your first company from the table. It is free on the trial, up to 15 a day."
+      ? "Names stay hidden in the preview. Save the list, then open your first company from the table. It is free on Trial, Pro and Close, up to 15 a day."
       : "Names stay hidden in the preview. Saving the list keeps them locked until you choose what to open.",
   people: () => "A name and title open together for 1 credit, once the company is open. An email or a phone number is 1 credit each.",
   seats: () => "Function, dates and hours are free. Who held a seat opens with the company. A rate is 1 credit where a member shared one.",

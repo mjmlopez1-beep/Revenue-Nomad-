@@ -452,8 +452,8 @@ export function lockedLook(seed: string): LockedLook {
   return look;
 }
 
-/** What a screen reader hears in place of a locked company's name. */
-export const LOCKED_SAY = "Company locked, 2 credits to unlock";
+/** What a screen reader hears in place of a locked company's name. Its price is said beside it (free on Trial, Pro and Close while opens are left). */
+export const LOCKED_SAY = "Locked company";
 
 /**
  * A locked company's name: made-up letters, blurred, that nobody can select or read aloud,
