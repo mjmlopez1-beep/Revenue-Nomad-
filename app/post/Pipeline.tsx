@@ -21,10 +21,13 @@ import { pipelineAct, usePipeline } from "./pipelineStore";
 import { AskReply, FixMenu, MoveMenu, StageChip } from "./PipelineParts";
 import { WonMoment } from "../ui/WonMoment";
 import { PassButton } from "./PeerSheets";
+import { useAppMaybe } from "./shell/pages";
 import "./pipeline.css";
 
 const FollowUpSheet = dynamic(() => import("./FollowUpSheet").then((m) => m.FollowUpSheet), { ssr: false });
 const WonSheet = dynamic(() => import("./WonSheet").then((m) => m.WonSheet), { ssr: false });
+// The new look's board: its own chunk, so the old look's page carries none of it.
+const PipelineBoard = dynamic(() => import("./pipeline/Board").then((m) => m.PipelineBoard), { ssr: false, loading: () => <p className="pl-empty">Loading your pipeline</p> });
 
 const CLOSED: Stage[] = ["quiet", "lost", "notnow"];
 const EMPTY_WORDS: Partial<Record<Stage, string>> = {
@@ -36,7 +39,16 @@ const EMPTY_WORDS: Partial<Record<Stage, string>> = {
   won: "When it's signed, or you add your seat there.",
 };
 
-export function PipelinePage({ infos, openCompany, onIntegrations }: { infos: CoInfo[]; openCompany: (id: string) => void; onIntegrations: () => void }) {
+/**
+ * Your pipeline: in the new look the board (pipeline/Board.tsx, Pipeline.dc.html), loaded on its
+ * own; with RN_UI2 off, the page as it was (the rollback).
+ */
+export function PipelinePage(p: { infos: CoInfo[]; openCompany: (id: string) => void; onIntegrations: () => void }) {
+  const c = useAppMaybe();
+  return c?.ui2 ? <PipelineBoard /> : <PipelineOld {...p} />;
+}
+
+function PipelineOld({ infos, openCompany, onIntegrations }: { infos: CoInfo[]; openCompany: (id: string) => void; onIntegrations: () => void }) {
   const ui = useUi();
   const { view, failed } = usePipeline();
   const byId = useMemo(() => new Map(infos.map((x) => [x.c.id, x])), [infos]);
@@ -200,7 +212,7 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
 }
 
 /** The intros the member asked for, and the ones other members asked of them, with made or declined. */
-function Intros({ list, onOpen }: { list: IntroRec[]; onOpen: (id: string) => void }) {
+export function Intros({ list, onOpen }: { list: IntroRec[]; onOpen: (id: string) => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   if (!list.length) return null;
