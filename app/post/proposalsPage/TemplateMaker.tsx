@@ -204,7 +204,7 @@ export function TemplateMaker({ start, first, onSaved, onUse, onAnother }: { sta
             {sig.sig ? `${sig.name}${sig.title ? `, ${sig.title}` : ""}. Your saved signature, ready to add.` : "Your signature goes here once you save one."} {lib.sections} sections in all, {secs.length} shown.
           </span>
         </div>
-        {first && <span className="pz-note">Proof stays empty until Evidence Bank opens. Your case studies will fill it then.</span>}
+        {first && <span className="pz-note">Proof fills from your Evidence Bank cases, the closest to each client. With none ready it stays empty: Merlin never writes a case.</span>}
       </div>
     </div>
   );

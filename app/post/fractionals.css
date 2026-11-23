@@ -870,3 +870,24 @@
   color: var(--volt-ink);
   white-space: normal;
 }
+
+/* Case studies on a card (Evidence Bank, Close) */
+.fr-cases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fr-cases > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #e2e6e3;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 20px;
+}

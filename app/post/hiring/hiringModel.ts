@@ -20,6 +20,7 @@
  *   Status    Pitched (the member wrote to the company: their pipeline at Sent or later), New
  *             (first seen since their last visit, and not opened here yet), else Seen.
  */
+import { closestOf } from "../workbench/closest";
 import type { EngagementRec, Me, SavedViewRec } from "@/lib/tableTypes";
 import type { ColumnDef, Fill } from "../workbench/columns";
 import {
@@ -276,7 +277,7 @@ const col = (id: string, label: string, width: string, words: (rows: readonly Ro
 
 /**
  * Hiring now's columns, in the mockup's order. The nine it shows before the member adds one, then
- * three more: Closest evidence (Evidence Bank, a Close feature: a placeholder until it ships),
+ * three more: Closest evidence (Evidence Bank, a Close feature: the member's case most like each company, workbench/closest.ts),
  * Size and HQ, and Past fractional hires (both free). Each heading's line says how much of the
  * column is in the rows in view, in the column's own words.
  */
@@ -295,7 +296,7 @@ export function hiringColumns(x: ColCtx): ColumnDef[] {
     col("fit", "Fit to you", "minmax(124px, 0.8fr)", (rows) => `${pct(count(rows, (r) => fitOf(r, x.me).tier >= 2), rows.length)}% strong or good`, { def: true, sort: "best" }),
     col("way", "Your way in", "minmax(150px, 1.1fr)", (rows) => `${pct(count(rows, (r) => wayOf(r, x.ways, x.first).has), rows.length)}% have a path`, { def: true }),
     col("status", "Status", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => statusOf(r, x.status).k === "new")} new`, { def: true }),
-    col("evidence", "Closest evidence", "minmax(170px, 1fr)", () => "Evidence Bank", { tip: "Your closest case study for this role. Evidence Bank, on the Close plan." }),
+    col("evidence", "Closest evidence", "minmax(170px, 1fr)", (rows) => `${pct(count(rows, (r) => !!closestOf(r.i.c.id)), rows.length)}% matched`, { plan: "close", tip: "Your closest case study for this role. Evidence Bank, on the Close plan." }),
     col("sizeHq", "Size and HQ", "minmax(150px, 0.9fr)", (rows) => `${pct(count(rows, (r) => !!shown(r.i.c.cells.employees)), rows.length)}% on file`, { sort: "employees" }),
     col("past", "Past fractional hires", "minmax(140px, 0.8fr)", (rows) => `${pct(count(rows, (r) => r.i.c.friendly.fractional > 0), rows.length)}% hired before`),
   ];

@@ -241,7 +241,8 @@ async function main() {
   check("the header: the breadcrumb, Previous and Next with their keys, and Back (Esc)", /aria-label="Breadcrumb"/.test(notesFirst) && /title="Previous in the list \(K\)"/.test(notesFirst) && /title="Next in the list \(J\)"/.test(notesFirst) && /title="Back to the list \(Esc\)"/.test(notesFirst));
   const parts = src("app/post/company/parts.tsx");
   check("a first visit's Example note says Example and that it isn't saved, and is never sent (no action carries it)", /co-example/.test(parts) && /It isn&apos;t saved/.test(parts) && !/act\("add", \{ text: "The CEO wants/.test(parts));
-  check("Closest evidence shows on Close only (Evidence Bank is Close), as a placeholder until it ships", /\{closeOn && <EvidenceCard/.test(src("app/post/company/CompanyPage.tsx")) && /Evidence Bank is coming/.test(parts));
+  check("Closest evidence shows on Close only (Evidence Bank is Close)", /\{closeOn && <EvidenceCard companyId=\{i\.c\.id\}/.test(src("app/post/company/CompanyPage.tsx")) && !/Evidence Bank is coming/.test(parts));
+  check("…the member's closest case with its match and why, or the way to the first case (step 6)", /useClosest\(\[companyId\], true\)/.test(parts) && /Closest evidence case · private/.test(parts) && /No finished case yet/.test(parts) && /No close case/.test(parts) && /Step 6\. It fills the Proof part of every proposal\./.test(parts));
 
   /* ---------- focus and Esc order ---------- */
   console.log("\nFocus and Esc");

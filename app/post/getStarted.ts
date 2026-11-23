@@ -217,11 +217,11 @@ export function startSteps(
 export const SIX_KEYS = ["icp", "seat", "network", "open", "alert", "evidence"] as const;
 export type SixKey = (typeof SIX_KEYS)[number];
 /**
- * Evidence Bank (step 6) ships in Stage 5: until then the step is left out and the card reads "of 5".
- * It is a Close feature (owner decision): once on, the step is shown only to members with Close or
- * the Close trial (SixInput.close); everyone else counts 5 steps.
+ * Evidence Bank (step 6) is built (Stage 5). It is a Close feature (owner decision): the step is
+ * shown only to members with Close or the Close trial (SixInput.close); everyone else counts 5 steps.
+ * Done once one of the member's cases is ready (SixInput.evidenceReady).
  */
-export const EVIDENCE_ON = false;
+export const EVIDENCE_ON = true;
 
 export interface SixStep {
   key: SixKey;
@@ -264,6 +264,8 @@ export interface SixInput {
   close?: boolean;
   /** Evidence Bank is built (EVIDENCE_ON; the tests pass it). */
   evidence?: boolean;
+  /** The member's Evidence Bank cases that are ready (GET /api/evidence/closest): step 6 is done at one. */
+  evidenceReady?: number;
 }
 
 const MIN = { icp: 2, seat: 5, network: 3, open: 1, alert: 1, evidence: 10 } as const;
@@ -276,8 +278,8 @@ export const alertOn = (v: { email?: boolean; alert?: { on?: boolean } }) => (v.
  * 1 an ideal client on file (Profile.icp), 2 a seat they held, 3 Google, their LinkedIn
  * connections file or a contacts CSV brought in (Me.started.network; each works on its own, so it is
  * left out only when Google is off and the files are too: Me.started.networkOff without filesOn), 4 a company opened (a company or a seat holder unlocked, a Crystal Ball open
- * included), 5 a saved list with its alert on, 6 an evidence case ready (left out until Evidence
- * ships). Example rows are never counted: nothing here reads a list's rows.
+ * included), 5 a saved list with its alert on, 6 an evidence case ready (Close only: left out
+ * without it). Example rows are never counted: nothing here reads a list's rows.
  */
 export function sixSteps(x: SixInput): SixSteps {
   const { me } = x;
@@ -291,7 +293,7 @@ export function sixSteps(x: SixInput): SixSteps {
     { key: "network", n: 3, label: "Bring in who you know", takes: "Google contacts, your LinkedIn connections file or a contacts CSV. Merlin reads names and companies, never message text.", gives: "Warm paths: who can get you into which company.", time: "3 minutes", go: "Bring them in", done: !!me.started?.network },
     { key: "open", n: 4, label: "Open your first company", takes: "One click on a company in your list.", gives: "Its name, its website and who held the seat. It stays open for you.", time: "1 minute", go: "Go to Companies", ...(free ? { pill: me.proOpens ? "Free on your plan" : "Free today", pillKind: "free" as const } : {}), done: opened },
     { key: "alert", n: 5, label: "Save a list with an alert", takes: "Save a list and keep its email on.", gives: "Merlin watches the list and tells you when a company on it starts hiring.", time: "1 minute", go: "Go to your lists", done: (me.savedViews ?? []).some(alertOn) },
-    { key: "evidence", n: 6, label: "Write your first evidence case", takes: "The problem, what you did, and the numbers before and after. The client name stays hidden unless you show it.", gives: "It fills the Proof part of every proposal you send.", time: "10 minutes", go: "Go to Evidence Bank", done: false },
+    { key: "evidence", n: 6, label: "Write your first evidence case", takes: "The problem, what you did, and the numbers before and after. The client name stays hidden unless you show it.", gives: "It fills the Proof part of every proposal you send.", time: "10 minutes", go: "Go to Evidence Bank", done: (x.evidenceReady ?? 0) > 0 },
   ];
   const steps = all
     .filter((s) => (s.key !== "evidence" || ((x.evidence ?? EVIDENCE_ON) && !!x.close)) && (s.key !== "network" || !me.started?.networkOff || !!me.started?.filesOn || s.done))

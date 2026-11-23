@@ -222,9 +222,11 @@ export function blockState(b: ProposalBlock, p: ProposalRec, fields: Record<stri
   if (o.marked) return { text: "Changed, not saved yet", tone: "work" };
   if (o.editing) return { text: "Editing", tone: "work" };
   // Evidence Bank is a Close feature: without Close (a proposal kept read only) Proof reads as any section.
-  if (b.blockId === "proof" && o.close !== false) return { text: "Evidence Bank is coming", tone: "wait" };
+  // With it: how many of the member's cases Proof holds, or that it needs one (Merlin never writes a case).
+  if (b.blockId === "proof" && o.close !== false && !(fields.caseStudies ?? "").trim()) return { text: "Needs a case", tone: "fix" };
   const n = blanksOf([b], fields).length;
   if (n) return { text: plural(n, "blank"), tone: "fix" };
+  if (b.blockId === "proof" && o.close !== false && p.proofCases?.length) return { text: `${plural(p.proofCases.length, "case")} from Evidence Bank`, tone: "ready" };
   if (b.blockId === "investment" && p.pricing?.options.length) return { text: `${plural(p.pricing.options.length, "option")} · ${plural(p.pricing.addOns.length, "add-on")}`, tone: "ready" };
   if (b.blockId === "signature") return { text: p.memberSign === "now" ? "You sign as it goes" : p.memberSign === "after" ? "You countersign" : "No signature from you", tone: "ready" };
   return { text: "Ready", tone: "ready" };
@@ -299,7 +301,7 @@ export function previewSections(templateId: string): { title: string; from: stri
   return templateBlocks(templateId)
     .filter((b) => b.blockId !== "cover")
     .slice(0, 5)
-    .map((b) => ({ title: b.title, from: b.blockId === "proof" ? "Evidence Bank, once it opens" : b.blockId === "terms" ? "Your standing terms, kept" : b.blockId === "investment" ? "Set for each client" : /what_we_heard|why_now|the_math/.test(b.blockId) ? "Filled from the call" : "From this example" }));
+    .map((b) => ({ title: b.title, from: b.blockId === "proof" ? "Your Evidence Bank cases, closest first" : b.blockId === "terms" ? "Your standing terms, kept" : b.blockId === "investment" ? "Set for each client" : /what_we_heard|why_now|the_math/.test(b.blockId) ? "Filled from the call" : "From this example" }));
 }
 /** The text a section starts with, filled with what is known (the editor's preview of a block). */
 export const filled = (b: ProposalBlock, fields: Record<string, string>) => fill(b.body, fields);

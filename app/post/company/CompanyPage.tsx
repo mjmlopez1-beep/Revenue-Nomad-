@@ -12,7 +12,7 @@
  *   locked      what is free, what opens with the company and what it costs (free on the trial),
  *               and one button to open it
  *   tabs        Overview, Seats, People, Ways in, Open roles, Notes and activity, Deal
- *   right       the next move, Closest evidence (Close only, Evidence Bank is Stage 5), Add what you
+ *   right       the next move, Closest evidence (Close only, Evidence Bank's case most like it), Add what you
  *               know here with what it earns
  *
  * Never a locked company's name, website, logo or people: everything here reads the record as
@@ -602,7 +602,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
           </div>
           <aside className="co-side" aria-label="Your next step with this company">
             <NextMove m={move} onGo={(g) => void runGo(g)} />
-            {closeOn && <EvidenceCard onOpen={() => (app ? app.openPage("evidence") : openPage("proposals"))} />}
+            {closeOn && <EvidenceCard companyId={i.c.id} onOpen={() => (app ? app.openPage("evidence") : openPage("proposals"))} />}
             <AddHere i={i} />
           </aside>
         </div>

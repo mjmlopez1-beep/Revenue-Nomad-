@@ -15,6 +15,7 @@
 import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { CoInfo, FactRef, RecordType, Row, SortKey } from "../model";
+import { closestOf } from "./closest";
 
 /** A row's cell for a column: on file and shown, on file and locked, or not on file. */
 export type Fill = "value" | "locked" | "empty";
@@ -45,6 +46,8 @@ export interface ColumnDef {
   num?: boolean;
   /** The words under the heading in the column's own terms ("13 roles", "5 this week"), in place of "N% word". Hiring now's columns use it. */
   words?: (rows: readonly Row[]) => string;
+  /** A plan's column (Closest evidence is Evidence Bank's, Close only): off that plan it carries the plan's pill and opens the upgrade. */
+  plan?: "close";
 }
 
 const of = (c: Cell | undefined): Fill => (!c || c.s === "empty" ? "empty" : c.s === "locked" ? "locked" : "value");
@@ -184,6 +187,19 @@ export const COMPANY_COLUMNS: ColumnDef[] = [
     },
     tip: "The decision maker's email. 1 credit a row, once you see their name.",
     width: "minmax(170px, 1fr)",
+  },
+  {
+    // Evidence Bank (Close): the member's own case most like each company, from GET /api/evidence/closest (closest.ts). Free to show.
+    id: "evidence",
+    type: "companies",
+    label: "Closest evidence",
+    cost: "free",
+    plan: "close",
+    word: "matched",
+    counts: "value",
+    fill: (r) => (closestOf(r.i.c.id) ? "value" : "empty"),
+    tip: "Your Evidence Bank case most like each company, and why. Close plan.",
+    width: "minmax(190px, 1.1fr)",
   },
   co("motion", "Sales motion", "minmax(120px, 0.8fr)"),
   co("ownership", "Ownership", "minmax(110px, 0.7fr)"),

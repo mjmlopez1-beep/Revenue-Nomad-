@@ -81,7 +81,7 @@ async function pure() {
   const six = (me: Partial<SixMe>, x: Partial<Parameters<typeof gs.sixSteps>[0]> = {}) => gs.sixSteps({ me: { ...blank, ...me } as SixMe, seatsHeld: 0, ...x });
 
   const s0 = six({});
-  check("six steps: a new member, none done, of 5 while Evidence Bank isn't built", s0.done === 0 && s0.of === 5 && s0.next?.key === "icp" && s0.steps.map((x) => x.n).join() === "1,2,3,4,5", s0.steps.map((x) => x.key));
+  check("six steps: a new member without Close, none done, of 5 (step 6 is Close's)", s0.done === 0 && s0.of === 5 && s0.next?.key === "icp" && s0.steps.map((x) => x.n).join() === "1,2,3,4,5", s0.steps.map((x) => x.key));
   check("six steps: the card's words", gs.sixLine(s0) === "0 of 5 done" && s0.minutes === 12);
   check("step 1: an ideal client on file", six({ icp }).steps[0].done && !six({ icp: { industries: [], employees: [], revenue: [], countries: [] } }).steps[0].done);
   check("step 2: a seat held", six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.done && six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.pill === "Earns credits");
@@ -92,9 +92,12 @@ async function pure() {
   check("step 4 says free where it is", six({}).steps.find((x) => x.key === "open")!.pillKind === "free" && !six({ crystal: undefined, proOpens: undefined, freeCompany: false }).steps.find((x) => x.key === "open")!.pill);
   check("step 5: a saved list with its email on", six({ savedViews: [view(true)] as never }).steps.find((x) => x.key === "alert")!.done && !six({ savedViews: [view(false)] as never }).steps.find((x) => x.key === "alert")!.done);
   check("step 5 reads a list's alert switch once lists have one (F5)", !gs.alertOn({ email: true, alert: { on: false } }) && gs.alertOn({ email: false, alert: { on: true } }));
-  check("step 6 is left out until Evidence Bank is built", !gs.EVIDENCE_ON && !six({}, { close: true }).steps.some((x) => x.key === "evidence"));
+  check("step 6 is on now Evidence Bank is built, for Close only", gs.EVIDENCE_ON && six({}, { close: true }).steps.some((x) => x.key === "evidence") && !six({}, { close: false }).steps.some((x) => x.key === "evidence"));
   const ev = six({}, { close: true, evidence: true });
-  check("step 6, once built, is Close's: of 6 with Close, of 5 without", ev.of === 6 && ev.steps[5].label === "Write your first evidence case" && six({}, { close: false, evidence: true }).of === 5);
+  check("step 6 is Close's: of 6 with Close, of 5 without", ev.of === 6 && ev.steps[5].label === "Write your first evidence case" && six({}, { close: false, evidence: true }).of === 5);
+  check("step 6 is done once one case is ready, not before (a draft doesn't count)", !six({}, { close: true }).steps[5].done && !six({}, { close: true, evidenceReady: 0 }).steps[5].done && six({}, { close: true, evidenceReady: 1 }).steps[5].done);
+  check("step 6 done counts toward the card: 1 of 6", gs.sixLine(six({}, { close: true, evidenceReady: 2 })) === "1 of 6 done");
+  check("without Close a ready case never shows step 6", !six({}, { close: false, evidenceReady: 3 }).steps.some((x) => x.key === "evidence"));
   const all5 = six({ icp, companiesUnlocked: 1, savedViews: [view(true)] as never, started: { note: false, network: true } }, { seatsHeld: 2 });
   check("every step done: no next, nothing left", all5.done === 5 && all5.next === null && all5.minutes === 0);
   check("a step once done stays done in this browser (a refund never takes a tick back)", six({}, { stuck: new Set(["six:open"]) }).steps.find((x) => x.key === "open")!.done);

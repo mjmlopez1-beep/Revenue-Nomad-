@@ -6,11 +6,12 @@
  *   the top       the title (edited in place), the status, the company, the version and whether it
  *                 is saved; See it as the client will; More (Duplicate, Delete, Void); the one main
  *                 button (Send for signature, Countersign, or Sent to them)
- *   the outline   every section with its state (Ready, 2 blanks, Changed, Evidence Bank is coming),
+ *   the outline   every section with its state (Ready, 2 blanks, Changed, 2 cases from Evidence Bank),
  *                 the picked one moves up or down or goes; Add a block with why; what good looks like
  *                 for the picked one; the linked deal
  *   the document  as the client reads it: tap a section to edit it in place; the options and add-ons
- *                 after the investment; Proof says Evidence Bank is coming (it fills Proof once it opens)
+ *                 after the investment; Proof shows the Evidence Bank cases it holds, Swap case, Add a
+ *                 case and Send without Proof (ProofPanel.tsx; Close only)
  *   the right     Change it (Merlin; the versions with Compare and Bring back; what was kept from the
  *                 call), Pricing (what to charge, the options and add-ons), Send (who signs, your
  *                 signature, the link's length, reminders, alerts) or, once sent, its status and activity
@@ -28,6 +29,7 @@ import { openPlans } from "../Billing";
 import { IconChevron, IconPlus, IconX } from "../../ui/shared";
 import { blockState, firstName } from "./model";
 import { ClientPreview } from "./ClientPreview";
+import { ProofPanel } from "./ProofPanel";
 import "./proposalsPage.css";
 
 export type SideTab = "change" | "pricing" | "send";
@@ -74,6 +76,8 @@ export interface EditorFrameProps {
   act: (op: "void" | "duplicate" | "delete") => void;
   /** Make a new version of one out for signature (the old link stops working). */
   onChangeIt: () => void;
+  /** Proof holds these Evidence Bank cases now, with their lines (ProofPanel). */
+  onProof: (ids: string[], text: string) => void;
 }
 
 export function EditorFrame(x: EditorFrameProps) {
@@ -291,21 +295,7 @@ export function EditorFrame(x: EditorFrameProps) {
             {x.blocks.map((b) => (
               <div key={b.id} className="pz-blk" data-on={picked?.id === b.id || undefined} onFocusCapture={() => setSel(b.id)}>
                 {x.section(b)}
-                {b.blockId === "proof" && !x.locked && (
-                  <div className="pz-proof" role="note">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M4 5h16v14H4zM8 9h8M8 13h5" />
-                    </svg>
-                    <span>
-                      <strong>Evidence Bank is coming.</strong> Your own case studies, matched to {p.company.name || "this client"}, will fill Proof here, with the client&#39;s name hidden unless you show it. Until then, write it in your own words, or leave it out.
-                    </span>
-                    {!x.readOnly && !x.previewing && (
-                      <button type="button" className="btn btn-sm" onClick={() => x.removeBlock(b.id)}>
-                        Send without Proof
-                      </button>
-                    )}
-                  </div>
-                )}
+                {b.blockId === "proof" && !x.locked && <ProofPanel p={p} readOnly={x.readOnly || x.previewing} onPick={x.onProof} onLeaveOut={() => x.removeBlock(b.id)} />}
                 {b.blockId === "investment" && pricingCard}
               </div>
             ))}

@@ -270,6 +270,11 @@ export interface StoredProposal {
   linkDays?: LinkDays;
   /** Earlier versions kept when a change was accepted or a version restored (lib/proposals/change.ts), oldest first. */
   versions?: ProposalVersion[];
+  /**
+   * The Evidence Bank cases (the member's own, ids in lib/evidence) whose words fill Proof's
+   * {{caseStudies}}, one or two (lib/proposals/proof.ts). Absent: Proof isn't from Evidence Bank.
+   */
+  proofCases?: string[];
 }
 
 /** A version kept so it can be compared or restored: what the document said, and what changed after it. */
@@ -329,6 +334,8 @@ export interface ProposalSendRec {
 }
 
 export interface ProposalRec {
+  /** The Evidence Bank cases Proof was filled from (StoredProposal.proofCases). Absent: none. */
+  proofCases?: string[];
   id: string;
   title: string;
   company: { id: string | null; name: string };
@@ -506,3 +513,35 @@ export const consentText = (provider: string, what: "proposal" | "document" = "p
 /** What the member agrees to before sending (as Contractbook asks of its customers): the document suits e-signature, and the law where they and their client are is theirs to follow. */
 export const SENDER_DUTY =
   "You confirm this proposal can be signed electronically and that sending it this way follows the rules that apply to you and your client. Merlin records the signing; it doesn't give legal advice.";
+
+/**
+ * One of the member's ready Evidence Bank cases, as the editor's Proof shows it (lib/evidenceWire.ts
+ * caseLine): the client hidden unless the member named them, with its match to the proposal's company.
+ */
+export interface ProofCase {
+  id: string;
+  title: string;
+  client: string;
+  named: boolean;
+  story: string;
+  outs: { k: string; was: string; now: string }[];
+  label: "Same" | "Close" | "Different" | null;
+  same: string[];
+  diff: string[];
+  src: string;
+  /** Its line in Proof, as the client will read it. */
+  text: string;
+}
+
+/** POST { op: "proof", id }: Proof's cases for one proposal (Close only; `on: false` without it). */
+export interface ProofView {
+  on: boolean;
+  /** Every ready case, closest to the proposal's company first. */
+  cases: ProofCase[];
+  /** The ones Proof holds now. */
+  chosen: string[];
+  /** Cases still in draft (not usable yet), by title. */
+  drafts: { title: string }[];
+  /** The ones Merlin would pick by itself (Same or Close), for "Put Merlin's pick back". */
+  picked: string[];
+}

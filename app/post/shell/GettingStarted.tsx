@@ -4,7 +4,7 @@
  * Getting started in the new look (BUILD_PLAN F6, getStarted.ts sixSteps): the rail's card
  * ("2 of 5 done", a tick per step, "Next: Open your first company"), and the list Home shows
  * (each step with what it takes, what it gives, the time, and its button). Every tick is derived
- * from what the member has; step 6 (evidence) is left out until Evidence ships.
+ * from what the member has; step 6 (evidence) is Close only (left out without it).
  */
 import type { SixKey, SixSteps } from "../getStarted";
 import { sixLine } from "../getStarted";

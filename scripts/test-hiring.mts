@@ -195,7 +195,12 @@ async function main() {
   check("the three to add: Closest evidence, Size and HQ, Past fractional hires", JSON.stringify(cols.filter((c) => !H.HIRING_DEFAULT_COLS.includes(c.id)).map((c) => c.label)) === JSON.stringify(["Closest evidence", "Size and HQ", "Past fractional hires"]));
   const w = (id: string) => cols.find((c) => c.id === id)!.words!(open);
   check("heading words in each column's terms", w("role") === "4 roles" && w("fn") === "2 functions" && w("company") === "75% open" && w("listed") === "2 this week" && w("rate") === "75% posted a rate" && w("status") === "4 new", cols.map((c) => c.words?.(open)));
-  check("Closest evidence fills nothing yet (Evidence Bank ships later)", w("evidence") === "Evidence Bank");
+  check("Closest evidence: none matched before the member's cases come in", w("evidence") === "0% matched");
+  const CL = await import("../app/post/workbench/closest.ts");
+  CL.putClosest([open[0].i.c.id], { [open[0].i.c.id]: { label: "Close", same: ["Same size"], diff: [], caseId: "ev1", title: "Sales off the founder's desk" } });
+  check("…and the share of rows whose company has a close case once they do", w("evidence") === `${Math.round((100 * open.filter((r) => r.i.c.id === open[0].i.c.id).length) / open.length)}% matched`, w("evidence"));
+  check("…it is Close's column (the plan's pill off Close)", cols.find((c) => c.id === "evidence")!.plan === "close");
+  CL.clearClosest();
 
   /* ----- the alert (F5) ----- */
   const f0 = { ...M.EMPTY_FILTERS };
@@ -241,7 +246,9 @@ async function main() {
   const { readFileSync } = await import("node:fs");
   const drawer = readFileSync(new URL("../app/post/hiring/RoleDrawer.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../app/post/hiring/HiringNow.tsx", import.meta.url), "utf8");
-  check("the drawer's Closest evidence case shows only on Close", /\{close && \(\s*<section className="hn-sec" aria-label="Closest evidence case">/.test(drawer) && !/Part of the Close plan/.test(drawer));
+  check("the drawer's Closest evidence case shows only on Close", /\{close && <ClosestCase companyId=\{c\.id\} \/>\}/.test(drawer) && /aria-label="Closest evidence case"/.test(drawer) && !/Part of the Close plan/.test(drawer) && !/Evidence Bank is coming/.test(drawer));
+  check("…it reads the member's own closest case, with why, and goes to Evidence Bank (no placeholder)", /useClosest\(\[companyId\], true\)/.test(drawer) && /It goes into your note and the Proof part of a proposal\./.test(drawer) && /openPage\("evidence"\)/.test(drawer));
+  check("the column asks only on Close, and only while it shows", /useClosest\(close && extras\.includes\("evidence"\)/.test(page) && /if \(!close\) return <span className="wb-pill-gate">Close<\/span>;/.test(page));
   check("the Closest evidence column is added only on Close (else the plans)", /if \(id === "evidence" && !close\) return openPlans\("proposals"\);/.test(page));
   check("no export anywhere on the page or the drawer", ![drawer, page].some((x) => />[^<]*\b(Export|Download)\b/.test(x)));
 

@@ -41,6 +41,8 @@ import { Toolbar, type ViewOption } from "./Toolbar";
 import { ToolsPanel } from "./ToolsPanel";
 import type { ToolDo, ToolTab } from "./tools";
 import { Workbench } from "./Workbench";
+import { useClosest } from "../useClosest";
+import { useAppMaybe } from "../shell/pages";
 import "./workbench.css";
 
 /**
@@ -149,6 +151,8 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const [first] = useState(() => firstProp ?? !(me.companiesUnlocked ?? 0));
   // A gated item opens the plans (Billing.tsx's host), unless the shell passes its own.
   const upgrade = onUpgrade ?? ((from: "evidence" | "signals" | "proposal") => openPlans(from === "signals" ? "billing" : "proposals"));
+  const app = useAppMaybe();
+  const closeOk = live.plan?.canClose ?? true;
 
   const [type, setType] = useState<RecordType>("companies");
   // The view, the filters and the sort: the shell's (bind), else the workbench's own.
@@ -191,6 +195,8 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
     setPicked(type === "companies" && listColsKey ? listColsKey.split(",") : storedCols(me.id, type) ?? defaultCols(type));
   }, [me.id, type, listColsKey]);
   const saveCols = (next: string[]) => {
+    // Closest evidence is Evidence Bank's (Close): off Close, picking it opens the plans instead.
+    if (!closeOk && next.includes("evidence") && !picked.includes("evidence")) return upgrade("evidence");
     setPicked(next);
     store.set(colsKey(me.id, type), JSON.stringify(next));
     if (type === "companies") writeColsAddress(next);
@@ -244,6 +250,9 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   }, [all, filters, me, hasIcp, type]);
 
   const cols = visibleColumns(type, picked);
+  // Closest evidence (Evidence Bank, Close): asked for the companies on screen while its column shows; the counts always on Close.
+  const evShown = type === "companies" && cols.some((c) => c.id === "evidence");
+  const { summary: evSummary } = useClosest(evShown ? [...new Set(inView.map((r) => r.i.c.id))] : [], closeOk);
   const pickedRows = inView.filter((r) => selected.has(r.key));
   const pick = (key: string, on: boolean) =>
     setSelected((s) => {
@@ -349,8 +358,15 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
       return setSaveOpen(true);
     }
     if (d.kind === "evidence") {
-      if (!(live.plan?.canClose ?? true)) return upgrade("evidence");
-      return toast("Evidence Bank is coming. Once your first case is ready, this column fills in, free.");
+      if (!closeOk) return upgrade("evidence");
+      if (type !== "companies") setType("companies");
+      showCol("evidence");
+      setFresh(new Set(["evidence"]));
+      if (evSummary && !evSummary.ready) {
+        toast("No case is ready in your Evidence Bank yet. Finish one and this column fills in, free.");
+        return app?.openPage("evidence");
+      }
+      return toast("Closest evidence shows for each company, with why. It's free.");
     }
     if (d.kind !== "action") return;
     if (d.action === "pipeline") return needRows(() => void toPipeline())();
@@ -382,7 +398,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const filterPanel = () => <FilterPanel f={eff} setF={(f) => setFilters({ ...f, icp: false })} facets={facets} me={me} />;
   const filterN = activeCount(filters) + (eff.icp ? 1 : 0);
   const openRow = (r: Row) => openCompany(r.i.c.id, r.key);
-  const evidenceGated = !(live.plan?.canClose ?? true);
+  const evidenceGated = !closeOk;
   const toolCtx = { me: live, network, close: live.plan?.canClose ?? true };
 
   /* ----- the phone: the card list, with the view and the filters ----- */

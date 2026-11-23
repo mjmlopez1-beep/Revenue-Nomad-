@@ -29,6 +29,7 @@
  * be turned off from the account menu (WCAG 2.1.4), for speech input and for anyone who
  * types into the page by accident.
  */
+import { useClosest } from "./useClosest";
 import { okToLeave } from "./leaveGuard";
 import dynamic from "next/dynamic";
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -2699,9 +2700,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const closeOn = !me.plan || me.plan.tier === "close";
   const [stripsGone, setStripsGone] = useState<string[]>([]);
   const sixDoneKey = `tp_six_done_${me.id}`;
+  // Step 6 (Evidence Bank, Close): done once one of the member's cases is ready (GET /api/evidence/closest's count).
+  const { summary: evidence } = useClosest([], closeOn && ui2);
+  const evidenceReady = evidence?.ready ?? 0;
   const six = useMemo(
-    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
-    [me, seatStats.n, stepSeen, closeOn, sixDoneKey],
+    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, evidenceReady, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
+    [me, seatStats.n, stepSeen, closeOn, evidenceReady, sixDoneKey],
   );
   useEffect(() => {
     if (!ui2) return;
