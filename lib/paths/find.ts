@@ -81,9 +81,14 @@ export interface World {
   personOfMember: Map<string, string>;
   /** Lowercase email -> member id. */
   memberByEmail: Map<string, string>;
+  /** A member's own LinkedIn profile slug (lib/paths/operators.ts) -> member id; one member a slug, never a Californian. */
+  memberBySlug: Map<string, string>;
   leadersAt: Map<string, WLeader[]>;
+  /** Profile slug -> the person records on file with that LinkedIn profile, never one in California by their own location. */
   leadersBySlug: Map<string, WLeader[]>;
   leaderByNameCo: Map<string, WLeader[]>;
+  /** Profile slugs of people in California by their own location (lib/california.ts): nobody is ever matched by them. */
+  caSlugs: Set<string>;
 }
 
 /** Someone the member knows, merged across their own sources. */

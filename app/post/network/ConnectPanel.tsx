@@ -25,7 +25,7 @@ import { IconX, useToast } from "../../ui/shared";
 import {
   CONTACTS_PROBLEM_WORDS, CSV_PROBLEM_WORDS, mapProblem, parseConnections, pickColumns, readContacts, type ColumnMap, type ContactField, type ContactsFile,
 } from "@/lib/paths/csv";
-import { EXPORT_STEPS, FILE_MAX_BYTES, type KnownPersonView, type PathsView } from "@/lib/paths/types";
+import { EXPORT_STEPS, FILE_MAX_BYTES, namesOnlyShort, namesOnlyWords, type KnownPersonView, type LinkedInInfo, type PathsView } from "@/lib/paths/types";
 import type { Warmth } from "@/lib/google/types";
 import { GoogleG, GooglePolicyLink, startGoogle } from "./Network";
 import { useNetwork } from "./useNetwork";
@@ -50,7 +50,7 @@ export const SOURCE_TEXT: Record<SourceKey, { name: string; sub: string; reads: 
   linkedin: {
     name: "Your LinkedIn connections file",
     sub: "Connections.csv, from your own export",
-    reads: ["Name, company and position", "The date you connected"],
+    reads: ["Name, profile link and the date you connected", "Company and position, where the file has them"],
     never: ["Contact or message anyone in it", "Show it to another member", "Keep the file itself"],
     foot: "Delete the connections at any time. Only you see them.",
   },
@@ -87,6 +87,7 @@ function statusOf(k: SourceKey, paths: PathsView | null, google: { on: boolean; 
   }
   const info = k === "linkedin" ? paths?.linkedin : paths?.csv;
   if (!info) return null;
+  if (k === "linkedin" && info.namesOnly) return `${n(info.rows)} connections, ${n(info.byLink ?? 0)} matched by profile link. Added ${fmtDay(info.at)}`;
   return `${n(info.rows)} ${k === "linkedin" ? "connections" : "contacts"}, ${n(info.matched)} at companies on Merlin. Added ${fmtDay(info.at)}`;
 }
 
@@ -237,9 +238,33 @@ function GoogleAct({ google }: { google: { on: boolean; configured: boolean; con
 
 /* ---------- the LinkedIn file ---------- */
 
+/** Google can be connected here: it is on for Merlin and set up. */
+function useGoogleReady(): boolean {
+  const net = useNetwork();
+  return !net.off && !!net.view?.configured;
+}
+
+/**
+ * What the LinkedIn file holds, said plainly (LinkedIn's files from December 2026 have names and
+ * profile links only): after a names-only file, how many Merlin placed by profile link and where
+ * more ways in come from; before any file, the short version; with an older file in, that a newer
+ * one replaces it with less.
+ */
+export function NamesOnlyNote({ li, google }: { li: LinkedInInfo | null; google: boolean }) {
+  if (li?.namesOnly)
+    return (
+      <p className="cp-note cp-names" role="status">
+        {namesOnlyWords(li.byLink ?? 0, google)}
+      </p>
+    );
+  if (li) return <p className="cp-note cp-names">Your file has companies and titles. LinkedIn&apos;s files from December 2026 have names and profile links only. Bring in a newer one and Merlin keeps these companies and titles for the same people.</p>;
+  return <p className="cp-note cp-names">{namesOnlyShort(google)}</p>;
+}
+
 export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdded: () => void }) {
   const file = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const google = useGoogleReady();
   const [busy, setBusy] = useState<"read" | "delete" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ask, setAsk] = useState(false);
@@ -273,6 +298,7 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
           ))}
         </ol>
       )}
+      <NamesOnlyNote li={li} google={google} />
       {err && (
         <p className="cp-err" role="alert">
           {err}
@@ -544,6 +570,7 @@ function Found({
   onMore: () => void;
 }) {
   const info = what === "linkedin" ? paths?.linkedin : what === "csv" ? paths?.csv : null;
+  const google = useGoogleReady();
   const top = [...people].sort((a, b) => (["Hot", "Warm", "Fading", "Cold"].indexOf(a.warmth ?? "Cold") - ["Hot", "Warm", "Fading", "Cold"].indexOf(b.warmth ?? "Cold"))).slice(0, 3);
   const k = people.length;
   return (
@@ -565,6 +592,7 @@ function Found({
           : "Merlin keeps only who they are and when you last spoke."}{" "}
         {k ? "Each one is now a warm path." : "As Merlin learns more companies and people, matches show in People I know."}
       </span>
+      {what === "linkedin" && info?.namesOnly ? <NamesOnlyNote li={info} google={google} /> : null}
       {top.length > 0 && (
         <ul className="cp-top" aria-label="The warmest people you know">
           {top.map((p) => (

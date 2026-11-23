@@ -290,7 +290,7 @@ export async function watchEvents(seed: Seed, s: State, found: WatchFound, nowMs
         out.push({ memberId, key: `fact:${T.pubId(companyId)}:${nowIso.slice(0, 16)}`, trigger: "fact", at: nowIso, companyId, line: `New at ${coWords(companyId)}: ${listWords([...f.says].slice(0, 3))}`, href: href(companyId), fn: null, ...w });
       }
     if (triggers.has("known") && found.leaders.length && kv.hasKnownSources(s, m.id)) {
-      for (const mv of knownMoves(kv.knownPeopleOf(s, m), found.leaders, personKey(m.name), kv.companyByName(g))) {
+      for (const mv of knownMoves(kv.knownPeopleOf(s, m, g), found.leaders, personKey(m.name), kv.companyByName(g))) {
         const name = named(mv.leader.companyId);
         const locked = name ? null : kv.lockedWords(g, s, mv.leader.companyId);
         const line = knownLine(mv, name, locked);

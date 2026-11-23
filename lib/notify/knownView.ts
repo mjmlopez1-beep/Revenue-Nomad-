@@ -15,7 +15,8 @@
  * opened nobody is named and the company is described by its industry and size only. Server side only.
  */
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
-import { personKey } from "../paths/match";
+import { personKey, slugOf } from "../paths/match";
+import { placeCalifornian } from "../paths/world";
 import { shownName } from "../paths";
 import type { MemberPaths } from "../paths/types";
 import type { MemberNetwork } from "../google/types";
@@ -41,10 +42,40 @@ export const hasKnownSources = (s: State, memberId: string): boolean => {
   return googleOf(netOf(s, memberId)).some((src) => Object.values(src!.companies ?? {}).some((co) => (co.people ?? []).length > 0));
 };
 
-/** The member's own people: their LinkedIn connections file, their contacts CSV and their Google network. */
-export function knownPeopleOf(s: State, m: Pick<Member, "id">): KnownPerson[] {
+/**
+ * Profile slug -> the one company on Merlin where a person record with that LinkedIn profile is on
+ * file, or "" when the records are at two or more companies or the person is in California by their
+ * own location (lib/california.ts). Read with the same slug as the member's file (lib/paths/match.ts
+ * slugOf). Once per state.
+ */
+const placeMemo = new WeakMap<State, Map<string, string>>();
+function placesBySlug(s: State, g: G): Map<string, string> {
+  let hit = placeMemo.get(s);
+  if (hit) return hit;
+  hit = new Map();
+  const ca = new Set<string>();
+  for (const p of g.contacts.values()) {
+    const slug = slugOf(T.live(p, s, "linkedin"));
+    if (!slug || !g.companies.has(p.companyId)) continue;
+    if (placeCalifornian(p.seedFields)) ca.add(slug);
+    const was = hit.get(slug);
+    hit.set(slug, was === undefined || was === p.companyId ? p.companyId : "");
+  }
+  for (const x of ca) hit.set(x, "");
+  placeMemo.set(s, hit);
+  return hit;
+}
+
+/**
+ * The member's own people: their LinkedIn connections file, their contacts CSV and their Google network.
+ * With `g`, a LinkedIn row with no company and no email (LinkedIn's files from December 2026) says
+ * where the person was only when it is precise: its profile link is a person on file at exactly one
+ * company. That company is only compared (knownMoves), never shown; else the row says nothing.
+ */
+export function knownPeopleOf(s: State, m: Pick<Member, "id">, g?: G): KnownPerson[] {
   const out: KnownPerson[] = [];
   const p = filesOf(s, m.id);
+  const places = g && (p?.linkedin?.rows ?? []).some((r) => !r.c && !r.e && r.u) ? placesBySlug(s, g) : null;
   // "Not a relationship" on Warm paths keeps a person out of this too: their key as Warm paths makes it
   // (lib/paths/index.ts contactsOf), and every other row under the same name with them.
   const away = new Set(p?.away ?? []);
@@ -53,7 +84,8 @@ export function knownPeopleOf(s: State, m: Pick<Member, "id">): KnownPerson[] {
     const name = `${r.f} ${r.l}`.trim();
     const nk = personKey(name);
     if (nk && away.has(`l:${r.u ?? `${shownName(name)}|${r.c ?? ""}`}`)) awayNames.add(nk);
-    if (nk) out.push({ name, nameKey: nk, companyId: null, company: r.c ?? null, src: "linkedin" });
+    const placed = places && !r.c && !r.e && r.u ? places.get(r.u) || null : null;
+    if (nk) out.push({ name, nameKey: nk, companyId: placed, company: r.c ?? null, src: "linkedin" });
   }
   for (const r of p?.csv?.rows ?? []) {
     const nk = personKey(r.n);
@@ -162,7 +194,7 @@ export function knownOf(seed: Seed, s: State, m: Member, nowMs = Date.now(), day
   const idx = T.memberIndex(seed, s);
   const tracks = T.tracksOf(seed, s);
   const named = (companyId: string) => (T.identityHidden(g, s, idx, tracks, m, companyId) ? null : g.companies.get(companyId)?.name || null);
-  const list = knownMoves(knownPeopleOf(s, m), leaders, personKey(m.name), companyByName(g))
+  const list = knownMoves(knownPeopleOf(s, m, g), leaders, personKey(m.name), companyByName(g))
     .sort((a, b) => (a.leader.at < b.leader.at ? 1 : a.leader.at > b.leader.at ? -1 : 0))
     .slice(0, KNOWN_MAX)
     .map((mv): KnownMoveWire => {

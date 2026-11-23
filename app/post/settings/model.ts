@@ -204,9 +204,10 @@ export function connRows(x: ConnInput): ConnRow[] {
       sub: "Your own file from LinkedIn",
       on: !!li,
       status: li ? "Added" : "Not added",
-      since: li ? `${n(li.rows)} people · ${n(li.matched)} at companies on Merlin` : "Step 3 of getting started",
+      since: li ? (li.namesOnly ? `${n(li.rows)} people · ${n(li.byLink ?? 0)} matched by profile link` : `${n(li.rows)} people · ${n(li.matched)} at companies on Merlin`) : "Step 3 of getting started",
       trouble: false,
-      reads: "Names, companies and titles in the file you add, and the date you connected.",
+      // LinkedIn's files from December 2026 have names and profile links only.
+      reads: "Names, profile links and the date you connected, and companies and titles where the file has them.",
       never: "Ask for your LinkedIn sign-in, contact anyone in it, or show it to another member.",
       last: li ? `Added ${day(li.at)}` : "Nothing yet",
       feeds: [

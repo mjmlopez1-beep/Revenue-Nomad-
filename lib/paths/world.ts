@@ -14,6 +14,7 @@ import { makeDirectory, type Directory } from "../google/compute";
 import { monthIdx, type WCompany, type WLeader, type WPerson, type WSeat, type World } from "./find";
 import { nameCo, personKey, slugOf } from "./match";
 import { operatorsOf } from "./operators";
+import { californian } from "../california";
 
 const memo = new WeakMap<State, { month: number; w: World }>();
 
@@ -76,6 +77,8 @@ export function worldOf(seed: Seed, s: State, nowMs = Date.now()): World {
   const leadersAt = new Map<string, WLeader[]>();
   const leadersBySlug = new Map<string, WLeader[]>();
   const leaderByNameCo = new Map<string, WLeader[]>();
+  // A profile link that belongs to someone in California by their own location (lib/california.ts): never matched by it.
+  const caSlugs = new Set<string>();
   for (const p of g.contacts.values()) {
     if (!companies.has(p.companyId)) continue;
     const nameKey = personKey(T.live(p, s, "name"));
@@ -83,7 +86,8 @@ export function worldOf(seed: Seed, s: State, nowMs = Date.now()): World {
     if (!nameKey && !slug) continue;
     const l: WLeader = { id: p.id, companyId: p.companyId, nameKey, slug, rel: T.live(p, s, "relationship"), seat: p.engagementId ?? null };
     push(leadersAt, p.companyId, l);
-    if (slug) push(leadersBySlug, slug, l);
+    if (slug && placeCalifornian(p.seedFields)) caSlugs.add(slug);
+    else if (slug) push(leadersBySlug, slug, l);
     if (nameKey) push(leaderByNameCo, nameCo(nameKey, p.companyId), l);
   }
 
@@ -97,10 +101,34 @@ export function worldOf(seed: Seed, s: State, nowMs = Date.now()): World {
     }
   for (const e of twice) memberByEmail.delete(e);
 
-  const w: World = { nowIdx: month, companies, seats, seatsAt, persons, personByNameCo, personOfMember, memberByEmail, leadersAt, leadersBySlug, leaderByNameCo };
+  // A member's own LinkedIn profile, when the operator list has one: their profile link is theirs alone.
+  const memberBySlug = new Map<string, string>();
+  const twiceSlug = new Set<string>();
+  for (const o of ops) {
+    if (!o.memberId || !o.linkedin) continue;
+    if (californian({ location: (s.profiles[o.memberId] as { city?: string } | undefined)?.city })) {
+      caSlugs.add(o.linkedin);
+      continue;
+    }
+    if (memberBySlug.has(o.linkedin) && memberBySlug.get(o.linkedin) !== o.memberId) twiceSlug.add(o.linkedin);
+    memberBySlug.set(o.linkedin, o.memberId);
+  }
+  for (const x of twiceSlug) memberBySlug.delete(x);
+  for (const x of caSlugs) {
+    leadersBySlug.delete(x);
+    memberBySlug.delete(x);
+  }
+
+  const w: World = { nowIdx: month, companies, seats, seatsAt, persons, personByNameCo, personOfMember, memberByEmail, memberBySlug, leadersAt, leadersBySlug, leaderByNameCo, caSlugs };
   memo.set(s, { month, w });
   return w;
 }
+
+/**
+ * A person record says they are in California by their own location: a location their record
+ * carries ("San Diego, CA"), or a yes an import kept. Records rarely carry one; unknown is no.
+ */
+export const placeCalifornian = (f: Record<string, string> | undefined) => californian({ location: f?.location, california: f?.california === "true" || f?.california === "yes" });
 
 const dirs = new WeakMap<State, Directory>();
 /** Companies on Merlin by website and exact name, for matching a contact's company. */

@@ -177,7 +177,8 @@ export function DataFlows() {
             </h2>
             <p className="cl-p">
               You can bring in who you know from three places, each on its own: your Google contacts and calendar, your connections file, and any contacts
-              CSV. The two files need no Google. Merlin matches the people in them to the companies it holds, so you see who you know there and your ways in.
+              CSV. The two files need no Google. Merlin matches the people in them to the companies it holds, so you see who you know there and your ways in. A
+              connections file with names and profile links only is matched by the profile link alone, to a person on file with that same profile, never by a name.
             </p>
             <p className="cl-p">
               A contacts CSV is read in your browser first. Merlin guesses which columns are the name, company, title and email, shows you a preview, and you can

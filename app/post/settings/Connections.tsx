@@ -274,7 +274,7 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
           <strong className="st-detail-h">{k === "linkedin" ? (info ? "Your LinkedIn connections file is in" : "Add your LinkedIn connections file") : info ? "Your contacts file is in" : "Add a contacts file"}</strong>
           <span>
             {k === "linkedin"
-              ? "Your own copy of your connections, a file LinkedIn gives you. Merlin matches the people in it to companies on Merlin. It never asks for your LinkedIn sign-in. Only you see them."
+              ? "Your own copy of your connections, a file LinkedIn gives you. Merlin matches the people in it to companies on Merlin, by profile link when the file has no companies. It never asks for your LinkedIn sign-in. Only you see them."
               : "Any list with a name and a company. You match the columns and see a preview before anything is saved. Only the columns you pick reach Merlin."}
           </span>
           {k === "linkedin" ? (
@@ -285,7 +285,17 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
         </div>
         <Facts
           title={info ? "ON FILE NOW" : "WHAT MERLIN KEEPS"}
-          rows={info ? [["People in the file", info.rows.toLocaleString("en-US")], ["At companies on Merlin", info.matched.toLocaleString("en-US")], ["Added", dayWords(info.at, nowMs)], ["Seen by", "Only you"]] : [["Per person", "Name, company, title"], ["Seen by", "Only you"], ["Cost", "Free, no credits"]]}
+          rows={
+            info
+              ? [
+                  ["People in the file", info.rows.toLocaleString("en-US")],
+                  ...(info.namesOnly ? [["Matched by profile link", (info.byLink ?? 0).toLocaleString("en-US")] as [string, string]] : []),
+                  ["At companies on Merlin", info.matched.toLocaleString("en-US")],
+                  ["Added", dayWords(info.at, nowMs)],
+                  ["Seen by", "Only you"],
+                ]
+              : [["Per person", k === "linkedin" ? "Name, profile link, and company and title where the file has them" : "Name, company, title"], ["Seen by", "Only you"], ["Cost", "Free, no credits"]]
+          }
         />
         <FeedsBox row={row} />
       </div>

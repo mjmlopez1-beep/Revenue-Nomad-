@@ -131,8 +131,9 @@ export function PrivacyView({ support }: { support: string | null }) {
           <h3 className="df-h3">From your LinkedIn export, only if you upload it</h3>
           <p className="cl-p">
             You can upload the Connections.csv file from your own LinkedIn data export. Merlin keeps each connection&apos;s first and last name, company, position, the day you
-            connected, their profile address, and their email when LinkedIn included it. It is used only to show you your own ways into companies. Only you see it, and you
-            can delete it at any time.
+            connected, their profile address, and their email when LinkedIn included it. Files from December 2026 have no company, position or email: Merlin then places a
+            connection only by their profile address, when it is the same as a person on file, never by their name. It is used only to show you your own ways into
+            companies. Only you see it, and you can delete it at any time.
           </p>
           <h3 className="df-h3">From people who sign a proposal</h3>
           <p className="cl-p">
