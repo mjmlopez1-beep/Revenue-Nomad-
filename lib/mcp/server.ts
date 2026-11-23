@@ -104,7 +104,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
   const page = `${(publicBase() ?? ctx.origin).replace(/\/$/, "")}/?p=agent`;
   const register = server.registerTool.bind(server) as (name: string, config: unknown, cb: (...a: unknown[]) => Promise<CallToolResult>) => unknown;
   (server as unknown as { registerTool: typeof register }).registerTool = (name, config, cb) =>
-    register(name, config, (...a: unknown[]) => agentCall({ memberId: ctx.member.id, app: ctx.app, page }, name, a.length > 1 ? a[0] : undefined, () => cb(...a)));
+    register(name, config, (...a: unknown[]) => agentCall({ memberId: ctx.member.id, app: ctx.app, page, base: publicBase() ?? ctx.origin }, name, a.length > 1 ? a[0] : undefined, () => cb(...a)));
 
   server.registerTool(
     "search_companies",

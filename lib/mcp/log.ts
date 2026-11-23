@@ -17,12 +17,17 @@
  * reads the rows written and waiting, and holds credits a call is spending right now, so it holds
  * across calls and across agents.
  *
+ * After a call that spent credits, the answer adds one line from the credits meter (creditsLine,
+ * lib/creditsMeter.ts): "12 credits left (60% of this month's).", and at 20% or less how to get more.
+ *
  * The admin export keeps the switches and the limit (settings) and leaves the log out (the
  * member's own activity). Account closure's purge deletes both (lib/table.ts purgeMember).
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { loadState, tableInternals, type State } from "../table";
+import { loadState, meterNow, tableInternals, type State } from "../table";
+import { connectorLine } from "../creditsMeter";
+import { upgradeUrl } from "../plan";
 import { emptyConnector } from "./types";
 import {
   AGENT_GROUPS,
@@ -224,7 +229,7 @@ const errorOut = (message: string): CallToolResult => ({ content: [{ type: "text
  * Run one tool call for an agent: refuse it when switched off, give the unlock tool its spend gate,
  * and log the row. `page`: the address of Agent access, for the words.
  */
-export async function agentCall(who: { memberId: string; app?: string; page: string }, tool: string, args: unknown, work: () => Promise<CallToolResult>): Promise<CallToolResult> {
+export async function agentCall(who: { memberId: string; app?: string; page: string; base?: string }, tool: string, args: unknown, work: () => Promise<CallToolResult>): Promise<CallToolResult> {
   const prefs = prefsIn(await loadState(), who.memberId);
   const keys = keysOf(tool, args);
   const row = (o: AgentOutcome, more: Partial<AgentLogRow> = {}): AgentLogRow => ({
@@ -245,10 +250,22 @@ export async function agentCall(who: { memberId: string; app?: string; page: str
     const o: AgentOutcome = box.stopped !== null ? "limit" : res.isError ? "refused" : onlyAsked(tool, args) ? "asked" : "ok";
     // The row first, then the hold goes: what was spent is counted by one or the other at every moment.
     record(who.memberId, row(o, { ...(box.spent ? { c: box.spent } : {}), ...(box.stopped !== null ? { q: box.stopped } : {}) }));
+    // The credits meter (lib/creditsMeter.ts): after a call that spent credits, one line with what is left; low, how to get more.
+    if (box.spent > 0 && !res.isError) {
+      const line = await creditsLine(who.memberId, who.base ?? who.page.replace(/\/?\?p=agent$/, "")).catch(() => null);
+      if (line) return { ...res, content: [...(res.content ?? []), { type: "text", text: line }] };
+    }
     return res;
   } finally {
     holdFor(box, -box.held);
   }
+}
+
+/** The connector's credits line now (lib/creditsMeter.ts connectorLine), with the billing link (Ways to earn while billing is off). */
+export async function creditsLine(memberId: string, base: string): Promise<string> {
+  const { meter, buy } = await meterNow(memberId);
+  const b = base.replace(/\/$/, "");
+  return connectorLine(meter, buy, buy.plan ? upgradeUrl(b, "claude_credits") : `${b}/?p=credits&tab=earn`);
 }
 
 /* ---------- the member's own changes ---------- */

@@ -11,6 +11,7 @@ import type { MovesWire } from "./moves";
 import type { Channel, ManualStage, MoveStage, PipelineView } from "./pipeline";
 import type { PeersView } from "./peersCore";
 import type { VoiceProfile } from "./voice";
+import type { CreditsMeter } from "./creditsMeter";
 import type { ListAlert, ListKind } from "./mcp/alerts";
 
 /**
@@ -417,6 +418,12 @@ export interface Me {
   /** Onboarding's "How many clients do you have now?" (CLIENT_COUNTS), and "Are you looking for a new client?". Null when not answered. */
   clientCount?: string | null;
   looking?: boolean | null;
+  /**
+   * The credits meter (lib/creditsMeter.ts): the share of this period's credits left, a whole
+   * percent, with the balance, what was spent in the period, its start and when it resets. The
+   * period is since the latest monthly plan grant on Pro and Close, else the UTC month.
+   */
+  meter?: CreditsMeter;
   /** Their plan, only while billing is live (RN_BILLING=1 with Stripe set up). Left out otherwise: nothing is gated. */
   plan?: PlanView;
   /**

@@ -32,8 +32,9 @@ export const ALERT_LOG_DAYS = 90;
 const DAY = 86_400_000;
 
 /** What a line is about, for its mark and where it goes. */
-export type InboxKind = "roles" | "hire" | "seat" | "leader" | "fact" | "funding" | "known" | "radar" | "engaged" | "workflow" | "test";
-export const INBOX_KINDS: InboxKind[] = ["roles", "hire", "seat", "leader", "fact", "funding", "known", "radar", "engaged", "workflow", "test"];
+/** credits: the credits meter's line, once a period at 80% used and at 0 (lib/creditsMeter.ts meterBell). */
+export type InboxKind = "roles" | "hire" | "seat" | "leader" | "fact" | "funding" | "known" | "radar" | "engaged" | "workflow" | "credits" | "test";
+export const INBOX_KINDS: InboxKind[] = ["roles", "hire", "seat", "leader", "fact", "funding", "known", "radar", "engaged", "workflow", "credits", "test"];
 
 export interface InboxEntry {
   /** Unique in the member's inbox: the event's key ("seat:<seat public id>"), so the same news never comes twice. */

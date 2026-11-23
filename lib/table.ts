@@ -137,6 +137,7 @@ import { VoiceProblem, cleanVoice, type VoiceProfile } from "./voice";
 import { NoteProblem, addNote, editNote, forgetCompany as forgetCompanyNotes, mergeCompany as mergeCompanyNotes, notesOf, removeNote, type CompanyNote, type CompanyNotesState } from "./companyNotes";
 import { forgetMember as forgetRoutes, type RouteStats, type RoutesState } from "./paths/plan";
 import { forgetCompanyEvidence, forgetMemberEvidence, mergeCompanyEvidence, type EvidenceState } from "./evidence/types";
+import { creditsMeterOf, meterBell, type BuyCtx, type CreditsMeter, type MeterBellMark } from "./creditsMeter";
 import { forgetAlerts, logAlert, pushInbox, type AlertLogRow, type InboxEntry, type MemberAlertPrefs, type WatchState } from "./inbox";
 import { exportWorkflows, forgetWorkflows, type WorkflowsState } from "./workflows/types";
 // Fractionals: one record per fractional (lib/fractionalsCore.ts, lib/fractionals.ts).
@@ -313,6 +314,8 @@ export interface LedgerEntry {
 export const CARD_LINE_MAX = 120;
 export const CARD_CITY_MAX = 60;
 interface Profile {
+  /** The credits meter's bell (lib/creditsMeter.ts meterBell): the period it last spoke in and what it said (80% used, 0 left), so each comes once a period. */
+  meterBell?: MeterBellMark;
   function?: string;
   goal?: string;
   title?: string;
@@ -4484,6 +4487,7 @@ async function fullView(
       goal: prof.goal ?? null,
       onboarded: !!prof.onboarded,
       ...shownBalance(balance(s, me.id)),
+      meter: meterFor(s, me.id, nowMs),
       unlocksLeft: unlockRoom(s, me.id, nowMs).left,
       freeCompany: freeCompanyLeft(s, me.id, nowMs),
       ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)),
@@ -7793,6 +7797,8 @@ export async function perform(
     // Value in the trial's last days (a warm path unlocked: who held a seat or a person's name; an invite sent) extends it once.
     if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || l.ref.endsWith(".person") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
       valueMoment(s, me.id, nowMs);
+    // The credits meter's bell: once a period at 80% used, and at 0 (lib/creditsMeter.ts).
+    if (!opts.dryRun && !refusal.message && s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.delta < 0)) meterBellIn(s, me.id, nowMs);
     if (movedRate && out.message) out.message += " This rate replaces the one you shared privately, which already earned its credit.";
     // A dry run throws, so the batch keeps nothing it wrote (see flush).
     if (opts.dryRun) throw refusal.message ? new ActionError(refusal.message) : new DryRun({ ...out, spent: balBefore - balance(s, me.id) });
@@ -7816,7 +7822,7 @@ export async function perform(
       ...out,
       ...(opts.workflow ? { spent: balBefore - balance(s, me.id) } : {}),
       me: {
-        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
+        ...shownBalance(balance(s, me.id)), meter: meterFor(s, me.id, nowMs), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), pending: pendingFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
         unlocksLeft: unlockRoom(s, me.id, nowMs).left, freeCompany: freeCompanyLeft(s, me.id, nowMs), ...((c) => (c ? { crystal: c } : {}))(crystalOf(s, me.id, nowMs)), ...planCounts(s, g, memberIndex(seed, s), me.id, nowMs), started: startedOf(s, me.id), sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
@@ -8948,6 +8954,32 @@ function billingStats(s: State, idx: MemberIndex, nowMs: number): NonNullable<Ad
 /** The member's opaque reference at Stripe: never their id or name, and nothing that leads back without the server's key. */
 function billingRef(memberId: string): string {
   return `rn_${createHmac("sha256", ID_KEY).update(`billing:${memberId}`).digest("base64url").slice(0, 24)}`;
+}
+
+/* ---------- the credits meter (lib/creditsMeter.ts) ---------- */
+
+/** What the member can buy for more credits: their plan while billing is live, and whether the top-up is set up. */
+function buyCtxOf(s: State, memberId: string, nowMs: number): BuyCtx {
+  return { plan: billingLive() ? planOf(planRec(s, memberId), nowMs) : null, topup: !!process.env.STRIPE_PRICE_TOPUP?.trim() };
+}
+/** Me.meter: the share of this period's credits left. */
+function meterFor(s: State, memberId: string, nowMs: number): CreditsMeter {
+  const rec = planRec(s, memberId);
+  return creditsMeterOf({ rows: s.ledger, memberId, balance: balance(s, memberId), nowMs, onPaidPlan: billingLive() && planOf(rec, nowMs) === "pro", plan: rec });
+}
+/** After a spend (inside the write): the bell's line at 80% used and at 0, each once a period. */
+function meterBellIn(s: State, memberId: string, nowMs: number): void {
+  const prof = (s.profiles[memberId] ??= {});
+  const r = meterBell(meterFor(s, memberId, nowMs), prof.meterBell, buyCtxOf(s, memberId, nowMs), new Date(nowMs).toISOString());
+  if (!r.mark) return;
+  pushInbox(s, memberId, r.lines);
+  prof.meterBell = r.mark;
+}
+/** The meter now and what the member can buy (the connector's line after a spend, lib/mcp/log.ts). */
+export async function meterNow(memberId: string): Promise<{ meter: CreditsMeter; buy: BuyCtx }> {
+  const s = await loadState();
+  const nowMs = Date.now();
+  return { meter: meterFor(s, memberId, nowMs), buy: buyCtxOf(s, memberId, nowMs) };
 }
 
 /** Pro credits for a paid month (one grant per month, each ref once). Changes the draft; returns the credits granted. */
