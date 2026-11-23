@@ -14,7 +14,7 @@
  *  3. Your way into a company: the recommended route first, the others to compare, the steps, the
  *     plan kept (hop ids, never a name), Go with creating the pipeline deal, the log, persistence.
  *  4. The gates: a locked company never named, people named only by today's rules, public-profile
- *     names only on US seats (California is the person's own location, judged at import), Google and LinkedIn people never named by the
+ *     names only on US seats outside California, Google and LinkedIn people never named by the
  *     connector, no Gmail text, LinkedIn never presented as Merlin's source, another member sees
  *     nothing, the export leaves plans out, Google and LinkedIn deletion and account closure.
  *  5. Where you can get in, Home's move and the pipeline's route line.
@@ -351,9 +351,8 @@ async function main() {
   const gale = await way("c_gale");
   const dune = await way("c_dune");
   if (process.env.SHOW) for (const r of [...gale.routes, ...dune.routes]) console.log(`  ${r.est}% | ${r.chain}`);
-  // The California rule is the person's own location (lib/california.ts), judged at import: the company's state never counts, so Toni, named from public profiles (never a Californian), is named at Gale too.
-  check("a name from public profiles at a California company shows, as the table shows it: California is the person's own location, not the company's", gale.routes.some((r) => r.chain.includes("Toni Vega")), gale.routes.map((r) => r.chain));
-  check("...and at a US company outside California too", dune.routes.some((r) => r.chain.includes("Toni Vega")), dune.routes.map((r) => r.chain));
+  check("a name from public profiles at a California company is never named: their seat, said by what it is", gale.routes.some((r) => r.between >= 2) && !JSON.stringify(gale).includes("Toni") && gale.routes.some((r) => r.nodes.some((n) => n.locked && /fractional Finance/.test(n.label))), gale.routes.map((r) => r.chain));
+  check("...and at a US company outside California it is, as the table shows it", dune.routes.some((r) => r.chain.includes("Toni Vega")), dune.routes.map((r) => r.chain));
   const boHal = await way("c_halcyon", BO);
   check("another member sees nothing of Sam's: Halcyon is locked for Bo, no plan, no people", boHal.locked && boHal.plan === null && !/Casey|Ana|Rita|Mark/.test(JSON.stringify(boHal)));
   const boPlans = (await W.planLines(BO)) as { plans: unknown[] };

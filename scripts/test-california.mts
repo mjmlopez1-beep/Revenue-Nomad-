@@ -39,7 +39,8 @@ const imp = src("scripts/seat-import.mjs");
 check("seat holders' names from public profiles: never a Californian, and a rerun takes the name off", /export const inCa = \(r\) => californian\(\{ location: r\.person_location \}\)/.test(imp) && /if \(nameRowOk\(r\)\) continue;/.test(imp));
 check("  both importers skip a Californian", /if \(inCa\(r\)\)/.test(src("scripts/add-seat-names.mjs")) && /if \(inCa\(r\)\)/.test(src("scripts/add-past-seats.mjs")));
 const ways = src("lib/paths/ways.ts");
-check("ways in no longer judges by the company's state", !/region !== "California"/.test(ways) && /function publicNameOk/.test(ways));
+// Until the names already on file are checked again by the importers, ways in also keeps public names hidden at a company based in California (nothing hidden before starts to show).
+check("ways in keeps public names hidden at a California company until names on file are re-checked", /region !== "California"/.test(ways) && /function publicNameOk/.test(ways));
 check("leaders read from websites go through the helper", /const leaderMayShow = \(l: \{ california\?: true \}\) => nameMayShow\(/.test(src("lib/table.ts")));
 
 console.log(`\n${failed ? "FAILED" : "ok"}: ${passed} passed, ${failed} failed`);

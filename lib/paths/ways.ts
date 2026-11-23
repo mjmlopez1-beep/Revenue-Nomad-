@@ -120,12 +120,14 @@ const companyLabel = (cx: Cx, id: string) => (cx.f.me.visible(id) ? (cx.g.compan
 
 /**
  * Names from public profiles show only at a company in the United States. California is judged by
- * the person, not the company (lib/california.ts, the one rule): the importers never name a person
- * whose own location is California, so a name on file here is never a Californian's, whatever the
- * company's state. A ways-in name shows wherever the table shows it.
+ * the person (lib/california.ts): the importers never name a person whose own location is
+ * California. Until the names already on file have been checked again against that rule
+ * (add-seat-names.mjs, add-past-seats.mjs --names), a company based in California also keeps its
+ * public names hidden here, as before, so nothing that was hidden starts to show.
  */
 function publicNameOk(cx: Cx, companyId: string): boolean {
-  return T.geoOf(cx.g.companies.get(companyId), cx.s).country === "United States";
+  const geo = T.geoOf(cx.g.companies.get(companyId), cx.s);
+  return geo.country === "United States" && geo.region !== "California";
 }
 
 /** A seat holder's name and role, only when the member can see them (and a public-profile name only where it may show). */
