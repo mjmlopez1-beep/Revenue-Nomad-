@@ -3014,7 +3014,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     hiringN: hiringNav,
     hiringHot,
     radarN: today.data ? today.data.newCount || today.data.total || null : null,
-    pipelineN: pipelineOpen,
+    // The new look's rail counts the open deals as Pipeline's board and Home's funnel do: To reach out included.
+    pipelineN: pipe && pipelineOpen !== null ? pipelineOpen + pipe.counts.reach : pipelineOpen,
     proposalsN: liveProposals,
     unread,
     credits: me.credits,
