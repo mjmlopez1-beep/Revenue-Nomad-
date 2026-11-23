@@ -93,6 +93,12 @@ Not called: no AI model provider (except Anthropic's API for Merlin drafting or 
 - Only the member who wrote them sees them: never in another member's view, the shared table, a connector's answer, an admin's panel, an email, a Slack post or the admin export (`lib/table.ts` `exportState` leaves the whole part out). Nothing in them goes to an outside service. A company removed from Merlin takes its notes with it, and two records of one company folded into one keep both sets.
 - Deleting: remove a note from the Notes tab. Closing an account deletes all of them when its personal data is deleted 30 days on (`lib/table.ts` `purgeMember`).
 
+### Crystal Ball: what counts most, and Why not
+
+- Tuning (`lib/radar/tune.ts`, `Profile.radarTune`, action `radarTune`): for each group of signals (a role posted, a seat ended, a leader left or arrived, a fractional hire in another function, hired fractionals before, growing, no leader on the team page) Less, Normal or More. Only the groups off Normal are kept. It multiplies those signals' scores for this member alone (`lib/radar/match.ts` `scoreFor`), on the page and in their morning email; nobody else's ball changes, and with every group at Normal nothing is stored and every score is as before.
+- Why not (`lib/radar/out.ts`, `State.radar.members[memberId].out`, action `radarOut`): a company the member took out of their ball, with the reason they picked (they have a full-time leader, too small or too big, wrong kind of company, I already know them, not now) and when, or one they asked to see anyway. Keyed by the internal company id, up to 500 a member. "They have a full-time leader" also saves the existing fact (`leaderReport`), as before. Nothing in it goes to an outside service or to another member. It is in Revenue Nomad's copy for admins with the rest of the member's Crystal Ball record.
+- Deleting: Reset puts every weight back to Normal and removes `radarTune`; Bring it back removes an entry. Closing an account deletes both with the profile and Crystal Ball 30 days on (`lib/table.ts` `purgeMember`).
+
 ### Proposal readers (after a proposal or document goes out)
 
 - What the client is told, near the foot of the proposal and the signing page (`app/sign/activity.tsx` `ActivityNotice`, `lib/close/types.ts` `disclosureText`): "<sender> sees when this is opened and which sections are read. Merlin counts this with a cookie on this page, never your IP address." No hidden tracking: the page sends nothing else.
