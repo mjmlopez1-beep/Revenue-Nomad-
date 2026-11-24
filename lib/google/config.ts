@@ -53,6 +53,12 @@ export const hasGmail = (scopes: string[]) => scopes.includes(SCOPE_GMAIL);
 
 const set = (v: string | undefined) => !!v?.trim();
 export const googleConfigured = () => set(process.env.GOOGLE_CLIENT_ID) && set(process.env.GOOGLE_CLIENT_SECRET);
+/**
+ * Google finished checking Merlin's app (RN_GOOGLE_VERIFIED=1, off by default). Until then Google
+ * turns away accounts that aren't on the app's test list, so Merlin puts the LinkedIn connections
+ * file first and says, before and after Google's page, how to bring in who you know without it.
+ */
+export const googleVerified = () => /^(1|on|true|yes)$/i.test(process.env.RN_GOOGLE_VERIFIED?.trim() ?? "");
 export const gmailOwnClient = () => set(process.env.GOOGLE_GMAIL_CLIENT_ID) && set(process.env.GOOGLE_GMAIL_CLIENT_SECRET);
 
 /**

@@ -23,6 +23,7 @@ import type { IntegrationsView } from "@/lib/notify/types";
 import type { CloseInboxView } from "@/lib/close/types";
 import type { AlertsView } from "@/lib/inbox";
 import { FUNCTIONS, NAME_HIDDEN } from "@/lib/tableFields";
+import { DISPLAY_NAME_MAX, NAME_CHANGES_MAX, displayNameProblem, nameForOthers, seeLine, tidyDisplayName } from "@/lib/memberName";
 import { planName } from "@/lib/billing/rules";
 import { NEUTRAL_VOICE, VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS, greetingWords, phraseProblem, styleOf, type VoiceStyle } from "@/lib/voice";
 import { IconCheck, IconChevron, IconX, initials } from "../../ui/shared";
@@ -79,7 +80,7 @@ const Ico = ({ d, on }: { d: string; on?: boolean }) => (
 );
 
 /* ---------- drafts: what a section with a Save button holds until it is saved ---------- */
-type ProfileDraft = { title: string; headline: string; city: string };
+type ProfileDraft = { name: string; title: string; headline: string; city: string };
 type IdealDraft = { fn: string | null; icp: Icp; before: string[] | null; looking: boolean | null };
 type VoiceDraft = { v: VoiceStyle; phrases: string[] };
 type Drafts = { profile?: ProfileDraft; ideal?: IdealDraft; voice?: VoiceDraft };
@@ -171,7 +172,7 @@ export function SettingsPage() {
   });
   const nowMs = Date.now();
   const rows = connRows({
-    google: net.off || !net.view ? (net.off ? null : { configured: true, link: null, gmail: null, claude: null, syncing: false, companies: 0 }) : { configured: net.view.configured, link: g, gmail: net.view.gmail, claude: net.view.claude, syncing: net.view.syncing, companies: net.view.companies?.length ?? 0 },
+    google: net.off || !net.view ? (net.off ? null : { configured: true, link: null, gmail: null, claude: null, syncing: false, companies: 0 }) : { configured: net.view.configured, verified: net.view.verified, link: g, gmail: net.view.gmail, claude: net.view.claude, syncing: net.view.syncing, companies: net.view.companies?.length ?? 0 },
     paths: paths ? { linkedin: paths.linkedin, csv: paths.csv, ...(lixView ? { lix: lixView.info } : {}) } : null,
     integ,
     granola: gr.status,
@@ -459,12 +460,12 @@ function SaveBar({ text, note, dirty, busy, onSave, alt }: { text: string; note:
 }
 
 /** The card other members see in Fractionals, as it reads now. */
-function CardPreview({ draft }: { draft?: ProfileDraft }) {
+function CardPreview({ draft, draftName }: { draft?: ProfileDraft; draftName?: string }) {
   const c = useApp();
   const me = c.me;
   const out = me.nameHidden || me.fractionals === false;
-  const parts = me.name.trim().split(/\s+/);
-  const name = me.fractionals === true ? me.name : `${parts[0] ?? ""}${parts.length > 1 ? ` ${parts[parts.length - 1].charAt(0)}.` : ""}`;
+  // As other members see it (lib/memberName.ts), the same rule the server names them by.
+  const name = nameForOthers(draftName ?? me.name, me);
   const head = (draft?.headline ?? me.headline ?? "").trim();
   const title = (draft?.title ?? me.title ?? "").trim();
   const seats = c.shell.seats.slice(0, 2).map((s) => [shown(s.e.cells.function) ?? "Seat", s.i.c.hidden ? "a company" : s.i.c.name, shown(s.e.cells.start)?.slice(0, 4) ?? ""].filter(Boolean).join(" · "));
@@ -500,7 +501,7 @@ function CardPreview({ draft }: { draft?: ProfileDraft }) {
 
 /* ---------- Profile and card ---------- */
 
-const profileOf = (me: { title: string; headline?: string; city?: string }): ProfileDraft => ({ title: me.title && me.title !== "Member" ? me.title : "", headline: me.headline ?? "", city: me.city ?? "" });
+const profileOf = (me: { name: string; title: string; headline?: string; city?: string }): ProfileDraft => ({ name: me.name, title: me.title && me.title !== "Member" ? me.title : "", headline: me.headline ?? "", city: me.city ?? "" });
 
 function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft; setDraft: (d: ProfileDraft | undefined) => void; say: (t: string, err?: boolean) => void; onPrivacy: () => void }) {
   const c = useApp();
@@ -510,12 +511,26 @@ function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft;
   const dirty = !same(d, base);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof ProfileDraft, v: string) => setDraft({ ...d, [k]: v });
+  const nameNow = tidyDisplayName(d.name);
+  const nameChanged = nameNow !== base.name;
+  const nameErr = nameChanged ? displayNameProblem(nameNow) : null;
+  const changesLeft = me.nameChangesLeft ?? NAME_CHANGES_MAX;
   const save = async () => {
     if (!dirty) return say("Nothing to save.");
+    if (nameErr) return say(nameErr, true);
     setBusy(true);
     let ok = true;
-    if (d.title.trim() !== base.title) ok = (await c.act({ type: "profile", title: d.title.trim() }, { quiet: true, silentError: true })).ok && ok;
     let msg = "";
+    if (nameChanged) {
+      const r = await c.act({ type: "displayName", name: nameNow }, { quiet: true, silentError: true });
+      ok = r.ok;
+      msg = r.message;
+      if (!ok) {
+        setBusy(false);
+        return say(msg || "That didn't go through. Try again.", true);
+      }
+    }
+    if (d.title.trim() !== base.title) ok = (await c.act({ type: "profile", title: d.title.trim() }, { quiet: true, silentError: true })).ok && ok;
     if (ok && (d.headline !== base.headline || d.city !== base.city)) {
       const r = await c.act({ type: "settings", headline: d.headline, city: d.city }, { quiet: true, silentError: true });
       ok = r.ok;
@@ -524,7 +539,7 @@ function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft;
     setBusy(false);
     if (!ok) return say(msg || "That didn't go through. Leave out emails, links and phone numbers, then try again.", true);
     setDraft(undefined);
-    say("Profile saved. Your card is up to date.");
+    say(nameChanged && msg ? msg : "Profile saved. Your card is up to date.");
   };
   const field = (k: keyof ProfileDraft, label: string, ph: string, hint: string, max: number) => (
     <label className="st-field">
@@ -537,11 +552,26 @@ function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft;
     <div className="st-body">
       <div className="st-col">
         <div className="st-fields">
-          <div className="st-field">
+          <label className="st-field">
             <span className="st-field-l">Your name</span>
-            <span className="st-fixed">{me.name}</span>
-            <span className="st-field-h">Shown on your card and under your signature. Write to us to change it.</span>
-          </div>
+            <input
+              className="input"
+              value={d.name}
+              maxLength={DISPLAY_NAME_MAX + 10}
+              autoComplete="name"
+              placeholder="Jordan Avery"
+              disabled={changesLeft <= 0 && !nameChanged}
+              aria-invalid={nameErr ? true : undefined}
+              aria-describedby="st-name-h"
+              onChange={(e) => set("name", e.target.value)}
+            />
+            <span id="st-name-h" className={`st-field-h${nameErr ? " st-field-err" : ""}`} role={nameErr ? "alert" : undefined}>
+              {nameErr ??
+                (changesLeft <= 0
+                  ? `You changed your name ${NAME_CHANGES_MAX} times in the last 30 days. Change it again next month, or write to us.`
+                  : `On your card, your seats and under your signature. ${seeLine(nameForOthers(nameNow || me.name, me))} Letters, spaces, hyphens and apostrophes. ${changesLeft === 1 ? "1 change" : `${changesLeft} changes`} left this month.`)}
+            </span>
+          </label>
           {field("title", "Your title", "Fractional VP Sales", "Shown on your card and under your signature", 80)}
           {field("headline", "One line about you", "What you do, and for whom", `Shown on your card. Keep it under ${CARD_LINE_MAX} characters, with no email, link or phone`, CARD_LINE_MAX)}
           {field("city", "Based in", "City and state", "Shown on your card", CARD_CITY_MAX)}
@@ -554,7 +584,7 @@ function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft;
         <SaveBar text="Save profile" dirty={dirty} busy={busy} onSave={() => void save()} note={dirty ? "You have changes that are not saved yet." : me.headline ? "Nothing to save." : "Add one line about you, then save."} />
       </div>
       <Side kicker="YOUR CARD IN FRACTIONALS" label="Your card" foot="Other members see this card. Clients never do. Choose who sees it in Privacy.">
-        <CardPreview draft={d} />
+        <CardPreview draft={d} draftName={nameErr ? undefined : nameNow || undefined} />
         <SideLines
           lines={[
             { k: "Fractionals", v: "See your card in the directory", go: () => c.openPage("fractionals") },

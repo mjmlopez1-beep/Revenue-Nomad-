@@ -1,0 +1,69 @@
+/* "Are these yours?" (FoundSeats.tsx): seats found under the member's own name. */
+.fs-box {
+  margin: 16px 0 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.fs-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.fs-p {
+  max-width: 640px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.fs-list {
+  display: grid;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.fs-row + .fs-row {
+  border-top: 1px solid var(--line);
+}
+.fs-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.fs-pick input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pine);
+}
+.fs-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fs-acts .btn {
+  min-height: 44px;
+}
+.fs-err {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--ember-ink);
+}
+.fs-said {
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+/* On the Seats page's Your seats tab (the workbench), inset from its edges. */
+.fs-box.sp-found {
+  margin: 16px 24px;
+}

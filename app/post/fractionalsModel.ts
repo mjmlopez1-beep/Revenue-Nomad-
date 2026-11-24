@@ -8,6 +8,8 @@
  *    Function (Any, Different from yours, Same as yours, or one function), Level, On Merlin, Region.
  *  - The line at the top: "N fractionals serve companies like yours. M are on Merlin."
  */
+import { nameForOthers } from "@/lib/memberName";
+import { NAME_HIDDEN } from "@/lib/tableFields";
 import type { FractionalRec } from "@/lib/tableTypes";
 import { LEVELS, levelRank, shortCountry } from "@/lib/fractionalsCore";
 
@@ -420,12 +422,12 @@ export function startThree(records: FractionalRec[], peersOrder: string[], x: Fx
 
 /** What other members see as the member's name on their card: in full, short until they choose, or hidden. */
 export function cardName(me: { name: string; fractionals?: boolean | null; nameHidden?: boolean }): { name: string; state: string } {
-  if (me.nameHidden) return { name: "A fractional (name hidden)", state: "Out of the directory, and your seats show no name." };
-  if (me.fractionals === true) return { name: me.name, state: "This is what a member sees, free." };
-  if (me.fractionals === false) return { name: `${me.name}, not listed`, state: "No member sees this card. People you already talk to can still write." };
-  const parts = me.name.trim().split(/\s+/);
-  const short = parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : me.name;
-  return { name: short, state: "Until you choose, members see your first name and last initial." };
+  // One rule with the server (lib/memberName.ts nameForOthers): full only when they show in the directory.
+  const name = nameForOthers(me.name, me);
+  if (me.nameHidden) return { name: NAME_HIDDEN, state: "Out of the directory, and your seats show no name." };
+  if (me.fractionals === true) return { name, state: "This is what a member sees, free." };
+  if (me.fractionals === false) return { name: `${name}, not listed`, state: "No member sees this card. People you already talk to can still write." };
+  return { name, state: "Until you choose, members see your first name and last initial." };
 }
 
 /* ---------- Ask Merlin, by rules (BUILD_PLAN F4): words to a view and chips, the rest said back ---------- */

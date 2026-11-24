@@ -163,8 +163,20 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
   const mine = base.find((b) => b.member?.id === me.id);
   const mySeatCos = new Set((mine?.seats ?? []).map((id) => g.engagements.get(id)?.companyId).filter((x): x is string => !!x));
   const myPipe = new Set((s.pipeline?.[me.id]?.entries ?? []).map((e) => e.companyId));
+  // One fractional, one profile: a research record that is a member on Merlin (lib/table.ts foundOf) is
+  // their card, never a second one. A member with a card of their own keeps it and the research record
+  // is left out; a member with none is shown by the research record's seats, as their own card, named
+  // the way they chose. Either way they are asked "Are these yours?" (Me.foundSeats).
+  const found = F.foundOf(seed, s, g);
+  const ownCard = new Set(base.filter((b) => b.member).map((b) => b.member!.id));
   const out: FractionalRec[] = [];
-  for (const b of base) {
+  for (const b0 of base) {
+    const fm = !b0.member ? found.get(b0.gi) : undefined;
+    if (fm && ownCard.has(fm)) continue;
+    const fmm = fm ? idx.byId.get(fm) : undefined;
+    if (fm && !fmm) continue;
+    const b = fmm ? { ...b0, member: fmm, on: T.signedIn(s, idx, fmm.id), joinedAt: s.members.find((m) => m.id === fmm.id)?.at ?? null } : b0;
+    if (fmm) ownCard.add(fmm.id);
     const you = b.member?.id === me.id;
     if (!you && closedNames.size && closedNames.has(normName(b.name ?? ""))) continue;
     // Out of the directory (said no, Referral partners off before choosing, Hide my name on my seats) or a block either way:
@@ -180,7 +192,10 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
     const full = you || optedIn || seesName || (PEERS_FREE && !(b.on && !!b.member));
     // A member on Merlin who hasn't chosen: first name and last initial.
     const short = !full && b.on && !!b.member && prof?.fractionals === undefined;
-    const name = full ? b.name : short ? shortName(b.name) : null;
+    // A member on Merlin is named the way they chose (lib/memberName.ts: full only when they show in the directory,
+    // else first name and last initial), whoever looks and whatever seat of theirs the viewer sees. Their own card, in full.
+    const asMember = !!b.member && b.on;
+    const name = !(full || short) ? null : asMember ? T.memberNameFor(s, b.member!, me.id) : you ? b.name : full ? b.name : shortName(b.name);
     const stated = b.member && (optedIn || you || short) ? clientsFromIcp(prof?.icp) : null;
     const clients = stated ?? (b.cos.some((c) => c.industry || c.employees || c.revenue || c.country) ? b.fromSeats : null);
     // The title: a member's own (they said it), else their newest seat's role once the viewer sees it.

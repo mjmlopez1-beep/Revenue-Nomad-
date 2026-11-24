@@ -267,10 +267,10 @@ async function main() {
     const caraIn = async () => (await view("mem_ana")).serve.find((r) => r.name.startsWith("Cara"))?.name ?? null;
     const short = await caraIn();
     check("a member who hasn't chosen, her seat's company locked for Ana: first name and last initial, as the directory", short === "Cara D." && (await dirNameFor("mem_ana", "mem_cara")) === "Cara D.", [short, await dirNameFor("mem_ana", "mem_cara")]);
-    // Ana sees Birchway now: fellow fractionals are free (PEERS_FREE), so the directory names Cara in full, and so does Peers.
+    // Ana sees Birchway now: seeing the company never overrides Cara's own choice (lib/memberName.ts): still her first name and last initial, in Peers as in the directory.
     await t.tableInternals.mutate((st) => void (st.unlocks["c_birch.identity"] = ["mem_ana"]));
     const full = await caraIn();
-    check("once Ana sees her seat's company: her full name, in Peers as in the directory", full === "Cara Diaz" && (await dirNameFor("mem_ana", "mem_cara")) === "Cara Diaz", [full, await dirNameFor("mem_ana", "mem_cara")]);
+    check("once Ana sees her seat's company: still first name and last initial until Cara chooses, in Peers as in the directory", full === "Cara D." && (await dirNameFor("mem_ana", "mem_cara")) === "Cara D.", [full, await dirNameFor("mem_ana", "mem_cara")]);
     check("a member with no seats who hasn't chosen: first name and last initial", (await (async () => {
       await t.tableInternals.mutate((st) => void (st.profiles.mem_gus = { ...st.profiles.mem_gus, fractionals: undefined }));
       const g = [...(await view("mem_ana")).serve, ...(await view("mem_ana")).know].find((r) => r.name.startsWith("Gus"));

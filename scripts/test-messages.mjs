@@ -143,7 +143,7 @@ async function main() {
   const salSees = start.conversation;
   // Who held a seat and their role are one purchase (SEAT_BUNDLE): unlocking the holder opened the role too.
   check("Sal sees the seat as far as he unlocked it (the role that came with who held it, start year)", salSees?.about.company === "Acme Robotics" && salSees.about.seat === "Fractional VP Sales" && salSees.about.years === "2023", salSees?.about);
-  check("Sal sees Hana by name, never her email", salSees?.with.name === "Hana Holder" && salSees.with.first === "Hana" && !JSON.stringify(salSees).includes("hana.holder@"), salSees?.with);
+  check("Sal sees Hana by name, never her email", salSees?.with.name === "Hana H." /* the way Hana chose to show (lib/memberName.ts) */ && salSees.with.first === "Hana" && !JSON.stringify(salSees).includes("hana.holder@"), salSees?.with);
   const exactly = await act(SAL, { type: "message.send", conversationId: convId, text: "y".repeat(2000) });
   check("2,000 characters is fine", exactly.ok, exactly);
 

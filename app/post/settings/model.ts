@@ -107,7 +107,7 @@ export function setupMeter(x: SetupInput): { items: SetupItem[]; done: number; o
 
 export interface ConnInput {
   /** Google (RN_GOOGLE): null while it is off for Merlin, so no row. */
-  google: { configured: boolean; link: LinkView | null; gmail: LinkView | null; claude: { at: string; companies: number } | null; syncing: boolean; companies: number } | null;
+  google: { configured: boolean; /** Google finished checking Merlin (RN_GOOGLE_VERIFIED); false puts the LinkedIn file and a CSV first. */ verified?: boolean; link: LinkView | null; gmail: LinkView | null; claude: { at: string; companies: number } | null; syncing: boolean; companies: number } | null;
   /** The member's own files (RN_PATHS): null while off, so no rows. */
   paths: { linkedin: LinkedInInfo | null; csv: LinkedInInfo | null; /** The LinkedIn data export (lib/linkedin): its row shows once its answer is in (undefined: no row). */ lix?: ExportInfo | null } | null;
   /** GET /api/integrations, or null while it loads. */
@@ -340,6 +340,12 @@ export function connRows(x: ConnInput): ConnRow[] {
       ? { ask: apps.length === 1 ? `Disconnect ${apps[0].name}? Its access stops at once.` : `Disconnect all ${apps.length} apps? Their access stops at once.`, yes: apps.length === 1 ? "Disconnect" : "Disconnect all" }
       : null,
   });
+  // Until Google finishes checking Merlin (RN_GOOGLE_VERIFIED), it may turn accounts away: the member's own files come first, Google after them.
+  if (x.google && x.google.verified === false && !x.google.link) {
+    const at = rows.findIndex((r) => r.key === "google");
+    const after = rows.findIndex((r) => r.key === "csv");
+    if (at >= 0 && after > at) rows.splice(after, 0, ...rows.splice(at, 1));
+  }
   return rows;
 }
 

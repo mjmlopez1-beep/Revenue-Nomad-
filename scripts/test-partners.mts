@@ -252,12 +252,13 @@ v = await T.buildView(fresh.token);
 pg = PM.partnerGroups(M.deriveAll(v.companies), v.me!);
 const mk = pg.groups.find((x) => x.fn === "Marketing")!;
 const shownName = (s: { e: { cells: Record<string, { s: string; v?: string }> } }) => s.e.cells.operator?.v;
-check("after the unlock the names are there: a member on Merlin first, then the most recent start", JSON.stringify(mk.seats.map(shownName)) === JSON.stringify([P.mara, P.pella, P.nora]), mk.seats.map(shownName));
+// A member on Merlin is named the way they chose (lib/memberName.ts): first name and last initial until they choose.
+check("after the unlock the names are there: a member on Merlin first (by her own choice, first name and last initial), then the most recent start", JSON.stringify(mk.seats.map(shownName)) === JSON.stringify(["Mara M.", P.pella, P.nora]), mk.seats.map(shownName));
 const pellaSeat = mk.seats.find((s) => shownName(s) === P.pella)!.e;
 check("a name nobody verified can be invited (and Verified)", !!pellaSeat.invite?.path.startsWith(`/claim/${claimTok("e_pt_pella")}?ref=`) && pellaSeat.cells.operator.s === "value" && !!(pellaSeat.cells.operator as { unverified?: boolean }).unverified);
 const noraSeat = mk.seats.find((s) => shownName(s) === P.nora)!.e;
 check("a member who never signed in can be invited too", !!noraSeat.invite && !(noraSeat.cells.operator as { member?: unknown }).member);
-const maraSeat = mk.seats.find((s) => shownName(s) === P.mara)!.e;
+const maraSeat = mk.seats.find((s) => shownName(s) === "Mara M.")!.e;
 check("a member on Merlin is messaged, not invited", !maraSeat.invite && !!(maraSeat.cells.operator as { member?: unknown }).member && PM.holderIsMember(maraSeat));
 check("no profile, no partners list", PM.partnerGroups(M.deriveAll(v.companies), { icp: null, function: "Sales" }).groups.length === 0);
 
@@ -482,7 +483,7 @@ if (up) {
   const im = await ivy.messages();
   check("the inviter is told: the conversation is unread for them too", im.unread === 1 && im.conversations?.[0]?.kind === "invite" && im.conversations[0].started === true && im.conversations[0].unread === 1, { unread: im.unread, c: im.conversations?.[0] });
   const ps2 = seatOf(await ivy.view(), "e_pt_pella")!;
-  check("the seat is a member's now: Message, no more invite", !ps2.invite && !!ps2.cells.operator.member && ps2.cells.operator.v === P.pella, ps2.cells.operator);
+  check("the seat is a member's now: Message, no more invite", !ps2.invite && !!ps2.cells.operator.member && ps2.cells.operator.v === "Pella P." /* a member now: named the way she chose (lib/memberName.ts) */, ps2.cells.operator);
   r = await call("POST", "/api/table", { token: ivy.token, ip: ivy.ip, body: { action: { type: "message.read", conversationId: im.conversations[0].id } } });
   check("opening it clears it", (await ivy.messages()).unread === 0);
   r = await pella.names({ op: "claim", t: pellaTok, ref: ivyCode });
@@ -590,7 +591,7 @@ if (up) {
   r = await unlock(tw, "e_pt_lark1");
   const twAfter = await tw.view();
   const l1b = seatOf(twAfter, "e_pt_lark1")!;
-  check("over HTTP: Unlock has nothing to buy, and the name and title show", r.status === 400 && twAfter.me.credits === tw0 && l1b.cells.operator.v === LARKS[1] && l1b.cells.role.v === "Fractional Head of CS", { status: r.status, credits: [tw0, twAfter.me.credits] });
+  check("over HTTP: Unlock has nothing to buy, and the name and title show", r.status === 400 && twAfter.me.credits === tw0 && l1b.cells.operator.v === "Lark B." /* she joined: named the way she chose */ && l1b.cells.role.v === "Fractional Head of CS", { status: r.status, credits: [tw0, twAfter.me.credits] });
   check("over HTTP: nothing of the day's unlock limit is used", twAfter.me.unlocksLeft === twLeft, [twLeft, twAfter.me.unlocksLeft]);
   check("the order and the answers, with their thresholds", pz.order.some((x: { fn: string; when: string; companies: number }) => x.fn === "Marketing" && x.when === "before" && x.companies === 20) && !pz.order.some((x: { fn: string }) => x.fn === "Finance") && pz.answers?.n === 20, { order: pz.order, answers: pz.answers });
   const names = pz.members.map((m: { first: string }) => m.first);

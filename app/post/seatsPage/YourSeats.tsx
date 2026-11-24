@@ -35,6 +35,7 @@ import { load as loadNetwork, monthYear, netAct, useNetwork } from "../network/u
 import { stripGone, useApp } from "../shell/pages";
 import { earnedAt, onFileUnderName, stepWords, verificationOf, whenWords } from "./seatsModel";
 import { SeatCaseCell, seatCasesFill, seatEvidenceOn, useSeatCases } from "../evidence/SeatEvidence";
+import { FoundSeats } from "../FoundSeats";
 
 /** A guess as a row: from the member's calendar, or a seat on file under their name. */
 type Guess =
@@ -110,7 +111,9 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
   const guesses: Guess[] = useMemo(() => {
     const byId = new Map(c.infos.map((i) => [i.c.id, i]));
     const out: Guess[] = [];
-    for (const x of onFileUnderName(c.infos, me)) if (!hidden.includes(x.e.id)) out.push({ kind: "name", id: x.e.id, i: x.i, e: x.e });
+    // Seats of a record found under their name are asked together in "Are these yours?" (FoundSeats), not one by one here.
+    const found = new Set((me.foundSeats ?? []).map((f) => f.id));
+    for (const x of onFileUnderName(c.infos, me)) if (!hidden.includes(x.e.id) && !found.has(x.e.id)) out.push({ kind: "name", id: x.e.id, i: x.i, e: x.e });
     for (const g of net?.seats ?? []) if (!calDone.includes(g.id)) out.push({ kind: "cal", id: `cal:${g.id}`, g, info: byId.get(g.id) });
     return out;
   }, [c.infos, me, hidden, net?.seats, calDone]);
@@ -440,6 +443,8 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
           </button>
         </div>
       )}
+      {/* "Are these yours?": a record found under their own name, one card for them until they answer (lib/table.ts foundOf). */}
+      <FoundSeats me={me} act={ui.act} className="sp-found" />
       <div className={`sp-note${first ? " sp-note-first" : ""}`}>
         <span>
           {first ? (

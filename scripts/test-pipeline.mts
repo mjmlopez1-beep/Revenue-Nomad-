@@ -517,7 +517,7 @@ async function main() {
   // Who held the seat shows free once the company is open (PEERS_FREE): nothing to unlock.
   const ms = await act(ANA, { type: "message.start", engagementId: pub("e_salt"), text: "Hi Hana, how did the CRO seat come about?" });
   let salt = await at(ANA, "c_salt");
-  check("a message on Merlin to the seat holder: Sent, on Merlin, from Merlin messages", salt?.stage === "sent" && salt.channel === "merlin" && salt.via.sent === "message" && salt.to.name === "Hana Holder", salt);
+  check("a message on Merlin to the seat holder: Sent, on Merlin, from Merlin messages", salt?.stage === "sent" && salt.channel === "merlin" && salt.via.sent === "message" && salt.to.name === "Hana H." /* the way Hana chose to show (lib/memberName.ts) */, salt);
   check("the message text never goes into the pipeline", !JSON.stringify(salt).includes("how did the CRO seat"));
   await act(HAN, { type: "message.send", conversationId: ms.id, text: "Happy to talk, Ana." });
   salt = await at(ANA, "c_salt");
@@ -634,18 +634,18 @@ async function main() {
   const cv = await act(ANA, { type: "message.start", engagementId: pub("e_pine"), text: "Hi Cy, could you introduce me to the CEO?" });
   r = await PA.performPipeline(ANA, { type: "pipeline.intro", conversationId: cv.id } as never);
   const ask = r.pipeline!.intros.find((i) => i.conversation === cv.id);
-  check("Ana logs the ask: an intro, asked, Cy as the introducer", ask?.status === "asked" && ask.who === "Cy Introducer" && ask.member && ask.company === pub("c_pine"), ask);
+  check("Ana logs the ask: an intro, asked, Cy as the introducer", ask?.status === "asked" && ask.who === "Cy I." && ask.member && ask.company === pub("c_pine"), ask);
   const cyv = await view(CY);
   const ofCy = cyv.intros.find((i) => i.id === ask!.id);
-  check("Cy sees the ask: who asked and the company, nothing of Ana's pipeline", ofCy?.side === "of-you" && ofCy.who === "Ana Member" && cyv.entries.length === 0 && !JSON.stringify(cyv).includes("7731"), ofCy);
+  check("Cy sees the ask: who asked and the company, nothing of Ana's pipeline", ofCy?.side === "of-you" && ofCy.who === "Ana M." && cyv.entries.length === 0 && !JSON.stringify(cyv).includes("7731"), ofCy);
   check("Bo can't mark it", !!(await refused(PA.performPipeline(BO, { type: "pipeline.introMark", id: ask!.id, status: "made" } as never))));
   r = await PA.performPipeline(CY, { type: "pipeline.introMark", id: ask!.id, status: "made" } as never);
   check("Cy marks it made", /Ana sees the intro is made/.test(r.message), r.message);
   let pine = await at(ANA, "c_pine");
-  check("Ana's deal at Pinecrest comes through the intro", pine?.intro?.by === "Cy Introducer" && pine.intro.status === "made" && pine.merlinDefault, pine);
+  check("Ana's deal at Pinecrest comes through the intro", pine?.intro?.by === "Cy I." && pine.intro.status === "made" && pine.merlinDefault, pine);
   await PA.recordPipelineEvent("mem_ana", "c_pine", "signed");
   pine = await at(ANA, "c_pine");
-  check("won: the intro is credited on the win", pine?.stage === "won" && pine.intro?.by === "Cy Introducer");
+  check("won: the intro is credited on the win", pine?.stage === "won" && pine.intro?.by === "Cy I.");
   check("Cy sees that it led to a win, and no more", (await view(CY)).intros.find((i) => i.id === ask!.id)?.won === true && !JSON.stringify(await view(CY)).includes("monthly"));
   await PA.performPipeline(ANA, { type: "pipeline.sent", companyId: "an-investor-key", intro: true, to: { name: "Ivy Investor", google: true } } as never);
   check("an ask for intros in general (an investor): an intro with no company, no entry", (await view(ANA)).intros.some((i) => i.who === "Ivy Investor" && i.company === null));
@@ -704,9 +704,9 @@ async function main() {
   check("Corvid: still Meeting, without the calendar's mark, its meeting days or Priya", corv1.stage === "meeting" && !corv1.via.meeting && !corv1.seen.met && !corv1.seen.next && !corv1.to.name && !corv1.log.some((l) => /calendar/.test(l.text)), corv1);
   const dune1 = raw("c_dune")!;
   check("Dune: Gmail opened it but she added a note, so it stays, with her note, without Kit or Gmail's mark", !!dune1 && dune1.notes.some((n) => n.text.includes("4410")) && !dune1.to.name && !dune1.via.sent && dune1.source !== "gmail" && dune1.stage === stages0[pub("c_dune")].stage, dune1);
-  check("what Merlin itself knows stays: the seat holder she messaged, her own notes, the Won terms", raw("c_salt")!.to.name === "Hana Holder" && raw("c_tall")!.to.name === "Pella Quist" && raw("c_tall")!.notes.some((n) => n.text.includes("7731")) && raw("c_harb")!.won?.rate === 175 && raw("c_copp")!.to.name === "Rory Example");
+  check("what Merlin itself knows stays: the seat holder she messaged, her own notes, the Won terms", raw("c_salt")!.to.name === "Hana H." && raw("c_tall")!.to.name === "Pella Quist" && raw("c_tall")!.notes.some((n) => n.text.includes("7731")) && raw("c_harb")!.won?.rate === 175 && raw("c_copp")!.to.name === "Rory Example");
   const intros1 = (await view(ANA)).intros;
-  check("intros stay: the one through Cy as it was, the ask of someone from her Google account without their name", intros1.some((i) => i.who === "Cy Introducer" && i.status === "made") && intros1.some((i) => i.company === null && i.who === "Someone you know"), intros1.map((i) => [i.who, i.status]));
+  check("intros stay: the one through Cy as it was, the ask of someone from her Google account without their name", intros1.some((i) => i.who === "Cy I." && i.status === "made") && intros1.some((i) => i.company === null && i.who === "Someone you know"), intros1.map((i) => [i.who, i.status]));
   check("Bo's pipeline and network are untouched", (await view(BO)).entries.length === 0 && !!JSON.parse(s1).network.mem_bo.google);
 
   console.log("\nAccess removed at Google: kept 29 days, deleted at 30");

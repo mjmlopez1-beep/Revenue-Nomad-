@@ -30,7 +30,6 @@ import { publicBase } from "./links";
 import { ActionError, fractionalInternals as F, isAdmin, loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "./table";
 import { HIDDEN_COMPANY, functionOf } from "./tableFields";
 import { fractionalRecords } from "./fractionals";
-import { shortName } from "./fractionalsCore";
 import { crystalCompanyIds } from "./radar";
 import { contactsOf } from "./paths";
 import { personOfContact } from "./paths/find";
@@ -109,24 +108,12 @@ function ctxOf(seed: Seed, s: State, me: Member, nowMs: number) {
    * no block either way, and in the directory unless the two already work together.
    */
   const peerOk = (id: string) => id !== me.id && idx.byId.has(id) && !isAdmin(idx.byId.get(id)!) && T.signedIn(s, idx, id) && !blocked(id, me.id) && !blocked(me.id, id) && (!hidden(id) || related(id));
-  // The directory's own names (lib/fractionals.ts, plg's rule): fellow fractionals are free (PEERS_FREE), a member who
-  // said no stays out, and Remove my name, the US-only names rule and RN_UNVERIFIED_NAMES_UNTIL leave no name on file.
-  let dirNames: Map<string, string | null> | null = null;
-  const dirName = (id: string) => {
-    dirNames ??= new Map(fractionalRecords(seed, s, me, nowMs).filter((r) => r.memberId).map((r) => [r.memberId!, r.name ?? null] as const));
-    return dirNames.get(T.pubId(id));
-  };
   /**
-   * The name the viewer sees, by the Fractionals directory's rule: in full when they show in the
-   * directory or the two already work together, else the name the directory gives the viewer (in
-   * full where it does, first name and last initial for a member who hasn't chosen and whose seats
-   * the viewer doesn't see), else first name and last initial.
+   * The name the viewer sees: the way the member chose to show to other members (lib/memberName.ts,
+   * one rule with the directory, the seats and Messages): in full only when they show in the
+   * directory, else first name and last initial, or hidden.
    */
-  const nameOf = (id: string) => {
-    const n = idx.byId.get(id)?.name ?? "A former member";
-    if (prof(id).fractionals === true || related(id)) return n;
-    return dirName(id) ?? shortName(n);
-  };
+  const nameOf = (id: string) => T.memberNameById(seed, s, id, me.id);
   const companyKind = (companyId: string) => {
     const c = g.companies.get(companyId);
     if (!c) return null;
@@ -237,8 +224,8 @@ function peerCard(x: Ctx, memberId: string | null, rec: FractionalRec | undefine
 function leadRec(x: Ctx, q: LeadPass): LeadRec {
   const toMe = q.to === x.me.id;
   const otherId = toMe ? q.by : q.to;
-  const other = x.idx.byId.get(otherId);
-  const otherName = other?.name ?? "A former member";
+  // Named the way they chose to show to other members (lib/memberName.ts), as everywhere.
+  const otherName = x.nameOf(otherId);
   const name = x.companyName(q.companyId);
   const role = roleOf(x, q.roleId);
   const entry = q.entryId ? x.s.pipeline?.[q.to]?.entries.find((e) => e.id === q.entryId) : undefined;
@@ -271,8 +258,7 @@ function leadRec(x: Ctx, q: LeadPass): LeadRec {
 function teamRec(x: Ctx, t: TeamUp): TeamRec {
   const invited = t.by === x.me.id;
   const otherId = invited ? t.with : t.by;
-  const other = x.idx.byId.get(otherId);
-  const otherName = other?.name ?? "A former member";
+  const otherName = x.nameOf(otherId);
   const stageAt = (memberId: string) => {
     const e = entryAt(x.s.pipeline?.[memberId], t.companyId);
     return e ? STAGE_WORDS[e.stage] : null;
@@ -308,14 +294,14 @@ function circleRec(x: Ctx, c: Circle, recs: FractionalRec[]): CircleRec {
   const members = ids
     .filter((id) => x.idx.byId.has(id))
     .map((id) => {
-      const n = x.idx.byId.get(id)!.name;
+      const n = x.nameOf(id);
       return { id: T.pubId(id), name: n, first: firstOf(n), initials: initialsOf(n), title: x.titleOf(id), fn: x.fnOfMember(id), ...(id === x.me.id ? { you: true } : {}) };
     });
   const muted = new Set(x.p.mutes[x.me.id] ?? []);
   const visible = c.posts.filter((p) => (p.month === month || p.month === prev) && !muted.has(p.by) && !x.blocked(x.me.id, p.by) && !x.blocked(p.by, x.me.id));
   const read = c.readAt[x.me.id] ?? "";
   const posts = visible.map((p) => {
-    const n = x.idx.byId.get(p.by)?.name ?? "A former member";
+    const n = x.nameOf(p.by);
     return { id: p.id, mine: p.by === x.me.id, who: { name: n, first: firstOf(n), initials: initialsOf(n) }, at: p.at, text: p.removed ? "" : p.text, ...(p.removed ? { removed: true } : {}) };
   });
   // The viewer's own Crystal Ball companies where someone in the circle holds or held a seat, as the directory shows those seats to the viewer.
@@ -475,7 +461,7 @@ function viewOf(seed: Seed, s: State, me: Member, nowMs: number): PeersView {
     passesLeft: Math.max(0, PASS_DAILY - x.p.passes.filter((q) => q.by === me.id && nowMs - Date.parse(q.at) < DAY).length),
     everyone: recs.filter((r) => !r.you).length,
     sources: { linkedin: !!(s as State & { paths?: Record<string, { linkedin?: unknown }> }).paths?.[me.id]?.linkedin, google: networkOn() && !!n?.google },
-    muted: (x.p.mutes[me.id] ?? []).filter((id) => x.idx.byId.has(id)).map((id) => ({ id: T.pubId(id), name: x.idx.byId.get(id)!.name })),
+    muted: (x.p.mutes[me.id] ?? []).filter((id) => x.idx.byId.has(id)).map((id) => ({ id: T.pubId(id), name: x.nameOf(id) })),
     ...(unlisted.length ? { unlisted } : {}),
   };
 }

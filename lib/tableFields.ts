@@ -16,6 +16,7 @@
  */
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
 import { NEVER_NAME_REFUSED, neverAName } from "./nameWords";
+import { parseRate } from "./rates";
 
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
@@ -410,7 +411,7 @@ export const GROUPS: GroupDef[] = [
         label: "Rate",
         kind: "text",
         gated: true,
-        placeholder: "$8k/mo or $150/hr",
+        placeholder: "5000, $5k/mo or $150/hr",
         hint: "What the client paid. Members spend 1 credit to see it. It never says who added it.",
         say: "the rate",
       },
@@ -535,9 +536,6 @@ export const fieldDef = (entity: string, key: string): FieldDef | undefined => F
 const INVISIBLE = /[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/g;
 export const stripInvisible = (raw: unknown) =>
   String(raw ?? "").normalize("NFC").replace(/[\t\n\r\v\f]/g, " ").replace(INVISIBLE, "");
-
-const RATE_RE =
-  /[$€£]|\d\s*k\b|\/\s*(hr|h|hour|day|wk|week|mo|month|yr|year|project)\b|\bper\b|\b(hourly|daily|weekly|monthly|annual|retainer|project|usd|eur|gbp)\b/i;
 
 /** "VP", "SVP", "EVP" or "Vice President", then "of" or a comma or neither, before a function's name ("VP of Finance", "Vice President, Product"). */
 const VP = String.raw`\b(?:[se]?vp|vice[\s-]president)\b,?\s+(?:of\s+)?`;
@@ -743,7 +741,11 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
       return f.options?.includes(now) ? { value: now } : { error: "Pick one from the list." };
     }
     default:
-      if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
+      // One reader for every typed rate (lib/rates.ts parseRate): 5000, $5,000, 5k, 5000/month, $150 an hour.
+      if (f.key === "rate") {
+        const r = parseRate(v);
+        return r.ok ? { value: r.value } : { error: r.error };
+      }
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
       // A person's name that holds a greeting or a page's words ("Welcome Read", "Meet Our Team"): lib/nameWords.ts. A seat
       // holder's name is always the member's own (lib/table.ts setValue), never refused for its words.

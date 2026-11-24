@@ -750,6 +750,8 @@ export interface NetworkView {
   on: true;
   /** GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set. */
   configured: boolean;
+  /** Google finished checking Merlin's app (RN_GOOGLE_VERIFIED). Off: the LinkedIn file comes first, and Google may turn some accounts away. */
+  verified: boolean;
   google: LinkView | null;
   gmail: LinkView | null;
   /** The member may add Gmail directly (RN_GOOGLE_GMAIL=1 and on RN_GOOGLE_GMAIL_TESTERS). */

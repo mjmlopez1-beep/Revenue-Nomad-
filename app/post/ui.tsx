@@ -18,8 +18,8 @@ import type { Action, Cell, Me } from "@/lib/tableTypes";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, monoTint, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
-import { readRate } from "@/lib/rates";
-import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks";
+import { benchRead } from "@/lib/rates";
+import { atTime, fieldText, plural, type Layout } from "./hooks";
 import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
@@ -1863,8 +1863,8 @@ export function FactEditor({
     if (choose && !who) return setErr("Pick who can see your rate.");
     if (choose && who === "bench") {
       // The medians need a monthly or an hourly figure. With no unit typed, the seat's pricing model decides.
-      const read = readRate(raw.trim(), ownRate?.pricing ?? null);
-      if (!read) return setErr(BENCH_RATE_HELP);
+      const read = benchRead(raw.trim(), ownRate?.pricing ?? null);
+      if (!read.ok) return setErr(read.error);
       setErr(null);
       setSaving(true);
       // Not quiet: the answer says when the rate starts to count, and about an invite bonus.

@@ -336,7 +336,13 @@ async function main() {
   check("another member signed in: refused", (await fin(BO, st2.state, "code-ana")).outcome === "failed" && !(await t.loadState()).network?.mem_bo);
   const st3 = await G.startConnect(ANA, ORIGIN);
   if (!st3.ok) throw new Error("no start");
-  check("Cancel at Google: denied, nothing kept", (await fin(ANA, st3.state, "", st3.state, "access_denied")).outcome === "denied" && !(await t.loadState()).network?.mem_ana);
+  // Before Google finishes checking Merlin (RN_GOOGLE_VERIFIED off), its access_denied is most often Google turning the account away: "blocked".
+  check("Google says no before its check is done: blocked, nothing kept", (await fin(ANA, st3.state, "", st3.state, "access_denied")).outcome === "blocked" && !(await t.loadState()).network?.mem_ana);
+  process.env.RN_GOOGLE_VERIFIED = "1";
+  const st3b = await G.startConnect(ANA, ORIGIN);
+  if (!st3b.ok) throw new Error("no start");
+  check("Cancel at Google (verified): denied, nothing kept", (await fin(ANA, st3b.state, "", st3b.state, "access_denied")).outcome === "denied" && !(await t.loadState()).network?.mem_ana);
+  delete process.env.RN_GOOGLE_VERIFIED;
   const st4 = await G.startConnect(ANA, ORIGIN);
   if (!st4.ok) throw new Error("no start");
   check("neither Calendar nor Contacts ticked: nothing kept, the token revoked", (await fin(ANA, st4.state, "code-none")).outcome === "scopes" && !(await t.loadState()).network?.mem_ana);

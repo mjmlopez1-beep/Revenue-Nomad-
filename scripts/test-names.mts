@@ -481,7 +481,7 @@ if (up) {
   check("the seat is theirs now, on Your seats", zMine?.yours && zMine.cells.operator?.s === "value" && zMine.cells.operator.v === P.zelda && !zMine.claimable && !zMine.cells.operator.unverified, zMine);
   check("the invite code came with the link: the inviter has one invite", (await ann.view()).me.invited === 1);
   av = await ann.view();
-  check("the member who saw it sees the claimed name, verified now", seatIn(av, "fx-a1")?.cells.operator?.v === P.zelda && !seatIn(av, "fx-a1")?.cells.operator?.unverified && !!seatIn(av, "fx-a1")?.cells.operator?.member);
+  check("the member who saw it sees the claimed name (a member now: first name and last initial until she chooses), verified now", seatIn(av, "fx-a1")?.cells.operator?.v === `${P.zelda.split(" ")[0]} ${P.zelda.split(" ").slice(-1)[0][0]}.` && !seatIn(av, "fx-a1")?.cells.operator?.unverified && !!seatIn(av, "fx-a1")?.cells.operator?.member);
   page = await call("GET", `/claim/${zTok}`);
   check("the claim page says a claimed seat is claimed", /already claimed/.test(page.text), page.text.slice(0, 200));
   page = await call("GET", `/claim/${zTok}`, { token: zTokCookie });

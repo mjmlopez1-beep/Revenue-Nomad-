@@ -256,10 +256,10 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
   }
   const gmail = gmailSees(s, me);
   const papers = papersFor(s, me.id, nowMs);
-  const introWho = (i: P.IntroRecord) => (i.introducer.memberId ? idx.byId.get(i.introducer.memberId)?.name ?? "A former member" : i.introducer.name || (i.introducer.role ? `the ${i.introducer.role}` : "Someone you know"));
+  const introWho = (i: P.IntroRecord) => (i.introducer.memberId ? T.memberNameById(seed, s, i.introducer.memberId, me.id) : i.introducer.name || (i.introducer.role ? `the ${i.introducer.role}` : "Someone you know"));
   for (const e of log.entries) {
     if (!g.companies.has(e.companyId)) continue;
-    const toName = e.to.memberId ? idx.byId.get(e.to.memberId)?.name ?? e.to.name ?? null : e.to.name ?? null;
+    const toName = e.to.memberId ? (idx.byId.has(e.to.memberId) ? T.memberNameById(seed, s, e.to.memberId, me.id) : e.to.name ?? null) : e.to.name ?? null;
     const fix: P.PipelineRec["fix"] = [];
     if (e.stage === "replied" && (e.via.replied === "gmail" || e.via.replied === "message")) fix.push("notReply");
     if (e.stage === "meeting" && e.via.meeting === "calendar") fix.push("notMeeting");
@@ -292,7 +292,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
       ...(e.won ? { won: { ...e.won, monthly: P.monthlyValue(e.won) } } : {}),
       ...(e.seatId ? { seat: T.pubId(e.seatId) } : {}),
       ...(intro ? { intro: { id: intro.id, by: introWho(intro), status: intro.status } } : {}),
-      ...(e.lead ? { lead: { id: e.lead.passId, by: idx.byId.get(e.lead.by)?.name ?? "A former member" } } : {}),
+      ...(e.lead ? { lead: { id: e.lead.passId, by: T.memberNameById(seed, s, e.lead.by, me.id) } } : {}),
       ...(teamAt.has(e.companyId) ? { team: teamAt.get(e.companyId)! } : {}),
       ...(e.route ? { route: true } : {}),
       value: e.value?.amount ?? null,
@@ -310,7 +310,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
   for (const f of P.dueFollowUps(s, me.id, nowMs)) {
     if (!g.companies.has(f.companyId)) continue;
     const e = log.entries.find((x) => x.id === f.entryId)!;
-    const toName = e.to.memberId ? idx.byId.get(e.to.memberId)?.name ?? e.to.name ?? null : e.to.name ?? null;
+    const toName = e.to.memberId ? (idx.byId.has(e.to.memberId) ? T.memberNameById(seed, s, e.to.memberId, me.id) : e.to.name ?? null) : e.to.name ?? null;
     const to = { ...f.to, name: toName };
     const words = P.followUpWords({ ...f, to }, nameOf(f.companyId), "all");
     view.due.push({ id: f.entryId, company: T.pubId(f.companyId), name: nameOf(f.companyId), stage: f.stage, channel: f.channel, who: P.whoWords(to, f.channel, "all"), title: words.title, line: words.line, sentAt: f.sentAt, due: f.due, days: f.days, follow: f.follow });
@@ -344,7 +344,7 @@ export function pipelineViewOf(seed: Seed, s: State, me: Member, nowMs = Date.no
         side: "of-you",
         company: i.companyId && g.companies.has(i.companyId) ? T.pubId(i.companyId) : null,
         name: nameOf(i.companyId),
-        who: idx.byId.get(askerId)?.name ?? "A former member",
+        who: T.memberNameById(seed, s, askerId, me.id),
         member: true,
         status: i.status,
         askedAt: i.askedAt,

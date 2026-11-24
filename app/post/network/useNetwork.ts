@@ -75,12 +75,14 @@ export function useNetCompany(id: string | null | undefined): NetCompanyView | n
   return (id && view?.companies.find((c) => c.id === id)) || null;
 }
 
-/** ?google=connected|gmail|denied|scopes|failed from the callback: read when this file loads, shown once. */
-export type GoogleNotice = "connected" | "gmail" | "denied" | "scopes" | "failed";
+/** ?google=connected|gmail|denied|blocked|scopes|failed from the callback: read when this file loads, shown once. */
+export type GoogleNotice = "connected" | "gmail" | "denied" | "blocked" | "scopes" | "failed";
+/** A notice that means nothing came in from Google: the LinkedIn file and a CSV are offered in its place. */
+export const noticeRefused = (n: GoogleNotice | null) => n === "blocked" || n === "denied" || n === "failed";
 let notice: GoogleNotice | null = (() => {
   if (typeof window === "undefined") return null;
   const v = new URLSearchParams(window.location.search).get("google");
-  return v === "connected" || v === "gmail" || v === "denied" || v === "scopes" || v === "failed" ? v : null;
+  return v === "connected" || v === "gmail" || v === "denied" || v === "blocked" || v === "scopes" || v === "failed" ? v : null;
 })();
 export function takeNotice(): GoogleNotice | null {
   const n = notice;
@@ -93,10 +95,18 @@ export function takeNotice(): GoogleNotice | null {
     } catch {}
   return n;
 }
+/** Google turned the account away (Outcome "blocked"): why, and what works meanwhile. */
+export const GOOGLE_BLOCKED =
+  "Google didn't let Merlin connect. Revenue Nomad is finishing Google's check of Merlin, and until it's done Google turns some accounts away. Meanwhile, bring in who you know with your LinkedIn connections file or a contacts CSV.";
+/** Said beside Connect Google while Google's check isn't finished (NetworkView.verified false). */
+export const GOOGLE_PENDING =
+  "Google is still checking Merlin, so it may turn your account away for now. Your LinkedIn connections file or a contacts CSV works without it.";
+
 export const NOTICE_WORDS: Record<GoogleNotice, string> = {
   connected: "Google is connected. Merlin is mapping who you know. It takes a minute or two.",
   gmail: "Gmail is added. Merlin is reading who you email with, headers only.",
   denied: "Nothing was connected. You picked Cancel at Google. Connect whenever you like.",
+  blocked: GOOGLE_BLOCKED,
   scopes: "Nothing was connected. Merlin needs Calendar or Contacts ticked on Google's page to find who you know.",
   failed: "We couldn't connect Google, so nothing was saved. Try again in a moment.",
 };

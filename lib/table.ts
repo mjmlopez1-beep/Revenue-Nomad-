@@ -64,7 +64,7 @@ import path from "path";
 import { gunzipSync } from "zlib";
 import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { iconDomains } from "./companyIcons";
-import { readRate } from "./rates";
+import { BENCH_RATE_HELP, parseRate, readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail, setMailBlock } from "./email";
 import { renderDigest } from "./digest";
@@ -95,6 +95,7 @@ import { alertMatches } from "./mcp/alerts";
 import { HuntError, cleanIcp, savedViewAction, savedViewsOut } from "./hunt";
 import { pillPlace } from "../app/onboard/place";
 import { nameKey, sameName } from "./personName";
+import { NAME_CHANGES_MAX, NAME_CHANGES_USED, displayNameProblem, nameAsSeenBy, nameForOthers, recentNameChanges, seeLine, tidyDisplayName, type NameChange } from "./memberName";
 import { neverAName } from "./nameWords";
 import { claimToken, seatForToken } from "./claimToken";
 import { cleanNote, connectText, notePitch } from "./partners";
@@ -347,6 +348,14 @@ interface Profile {
    * (Home asks once), and they show by first name and last initial.
    */
   fractionals?: boolean;
+  /**
+   * The name the member shows by, set in Settings (Profile and card) when it differs from the name
+   * they joined with. The member record keeps the name they joined with: seats matched by name and
+   * claims of seats named from public profiles go by that one (claimNameOf), so a new name never
+   * takes someone else's seats. Every change is in nameLog (lib/memberName.ts NAME_CHANGES_MAX).
+   */
+  displayName?: string;
+  nameLog?: NameChange[];
   /**
    * Before Notifications: turned Crystal Ball off by email and Slack both (Your profile, or the radar
    * email's unsubscribe link). Read through radarPrefs (lib/radar/types.ts); changing either part
@@ -1672,6 +1681,97 @@ export function holderNameHidden(s: State, node: Node | undefined, viewer?: stri
   const h = hiddenHolder(s, node, idx);
   return !!h && h !== viewer;
 }
+/* ---------- a member's name, as others see it ---------- */
+
+/** A member's name as `viewerId` sees it (lib/memberName.ts): their own in full, anyone else's by the member's own choice. */
+function memberNameFor(s: State, m: Pick<Member, "id" | "name">, viewerId: string | null | undefined): string {
+  return nameAsSeenBy(m.name, m.id, viewerId, s.profiles[m.id]);
+}
+/** The same by id, or `gone` for someone no longer on Merlin. */
+function memberNameById(seed: Seed, s: State, id: string | null | undefined, viewerId: string | null | undefined, gone = "A former member"): string {
+  const m = id ? memberIndex(seed, s).byId.get(id) : undefined;
+  return m ? memberNameFor(s, m, viewerId) : gone;
+}
+/** The member index for the state a seat's node was built in (cellOf without one). */
+function idxOfNode(s: State, node: Node | undefined): MemberIndex | null {
+  const g = node ? engGraphs.get(node) : undefined;
+  const seed = g ? graphSeeds.get(g) : undefined;
+  return seed ? memberIndex(seed, s) : null;
+}
+
+/**
+ * One fractional, one profile. A research record (seats Revenue Nomad found, named from public
+ * profiles, that no member holds) whose name is a signed-in member's own (sameName, the claim
+ * rule: the name they joined with, claimNameOf) is that member until they say otherwise: the
+ * directory shows only the member's card, their seats there show the member's name the way the
+ * member chose, and the member is asked "Are these yours?" (Me.found, the foundSeats action).
+ * Yes claims them (they join the member's record); No is "This isn't me" on each (State.notMine),
+ * and the research record shows again as someone else. Two members with that name: neither.
+ * Research names stay as the seat files give them: United States seats only, never California.
+ */
+const foundIdxs = new WeakMap<PersonIdx, Map<number, string>>();
+function foundOf(seed: Seed, s: State, g: Graph): Map<number, string> {
+  const p = personIndex(g, s);
+  const hit = foundIdxs.get(p);
+  if (hit) return hit;
+  const idx = memberIndex(seed, s);
+  const byKey = new Map<string, string[]>();
+  for (const m of idx.all) {
+    if (!signedIn(s, idx, m.id)) continue;
+    const k = nameKey(claimNameOf(seed, s, m));
+    if (k) byKey.set(k, [...(byKey.get(k) ?? []), m.id]);
+  }
+  const out = new Map<number, string>();
+  if (byKey.size)
+    p.groups.forEach((gr, gi) => {
+      if (gr.member) return;
+      const named = gr.seats.map((id) => g.engagements.get(id)).filter((e): e is EngNode => !!e && e.source === SEAT_SCAN && !!publicName(e, s));
+      if (!named.length) return;
+      const ms = byKey.get(nameKey(publicName(named[0], s)!.value)) ?? [];
+      if (ms.length !== 1) return;
+      // They said one of these isn't them: the record is someone else.
+      if (gr.seats.some((id) => (s.notMine[ms[0]] ?? []).includes(id))) return;
+      out.set(gi, ms[0]);
+    });
+  foundIdxs.set(p, out);
+  return out;
+}
+/**
+ * The member a research seat (a name from public profiles) belongs to, or null: the member its
+ * record is folded into (foundOf), or the member whose record it joined by its person key (a seat
+ * of theirs still under the name on file, say one they haven't claimed yet).
+ */
+function foundMemberOf(s: State, node: Node | undefined): Member | null {
+  const at = personOf(s, node);
+  if (!at) return null;
+  const seed = graphSeeds.get(at.g)!;
+  const id = at.gr.member ?? foundOf(seed, s, at.g).get(at.p.groupOf.get(node!.id)!);
+  return id ? memberIndex(seed, s).byId.get(id) ?? null : null;
+}
+/**
+ * "Are these yours?": the seats under this member's own name from public profiles, unclaimed and
+ * not said "This isn't me" on: a record folded into them (foundOf), and seats left on their own
+ * record by its person key (the rest of a record they claimed part of). Newest first.
+ */
+function foundSeatsOf(seed: Seed, s: State, g: Graph, memberId: string): EngNode[] {
+  const p = personIndex(g, s);
+  const m = memberIndex(seed, s).byId.get(memberId);
+  if (!m) return [];
+  const join = claimNameOf(seed, s, m);
+  const folded = foundOf(seed, s, g);
+  const no = new Set(s.notMine[memberId] ?? []);
+  const out: EngNode[] = [];
+  p.groups.forEach((gr, gi) => {
+    if (gr.member !== memberId && folded.get(gi) !== memberId) return;
+    for (const id of gr.seats) {
+      const e = g.engagements.get(id);
+      const pub = e ? publicName(e, s) : null;
+      if (e && pub && !no.has(id) && sameName(pub.value, join)) out.push(e);
+    }
+  });
+  return out.sort((a, b) => (live(b, s, "start") ?? "").localeCompare(live(a, s, "start") ?? ""));
+}
+
 /** The company of a seat is open to the member (identityHidden reads the state the seat was built in). */
 function seatCompanySeen(s: State, me: Member, node: Node): boolean {
   const g = engGraphs.get(node);
@@ -1910,8 +2010,21 @@ const firmsInReview = (seed: Seed, s: State) => new Set([...(seed.firmReview ?? 
 export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
   const m = memberByTokenRaw(seed, token, s);
   // A closed account (State.closures) is signed out everywhere at once, until it is restored.
-  return m && s?.closures?.[m.id] ? null : m;
+  return m && s?.closures?.[m.id] ? null : m && withDisplayName(m, s);
 };
+/** A member as they show: the display name they set in Settings (Profile.displayName) over the name they joined with. */
+function withDisplayName(m: Member, s?: State): Member {
+  const d = s?.profiles?.[m.id]?.displayName;
+  return d && d !== m.name ? { ...m, name: d } : m;
+}
+/**
+ * The name claims and name matches go by: the name the member joined with. A seat named from
+ * public profiles is theirs to claim at once only under that name; under a name they changed to,
+ * the claim waits for an admin (claimSeat's rule for another name).
+ */
+function claimNameOf(seed: Seed, s: State, m: Pick<Member, "id" | "name">): string {
+  return memberIndex(seed, s).joinName.get(m.id) ?? m.name;
+}
 const memberByTokenRaw = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
   if (!token) return null;
   const over = s?.tokens;
@@ -1941,7 +2054,8 @@ export async function memberByEmail(emailRaw: string): Promise<Member | null> {
   // One inbox is one account, as at join: another spelling of a member's Gmail address finds that member.
   const inbox = inboxKey(email);
   const seeded = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
-  return (seeded ? withToken(seeded, s) : null) ?? s.members.find((m) => inboxKey(m.email) === inbox) ?? null;
+  const m = (seeded ? withToken(seeded, s) : null) ?? s.members.find((m) => inboxKey(m.email) === inbox) ?? null;
+  return m && withDisplayName(m, s);
 }
 
 const inviteCodes = new Map<string, string>();
@@ -2554,20 +2668,28 @@ interface MemberIndex {
   /** Seed members, and when each joined account joined, for two members who share a name (see seatMember). */
   seedIds: Set<string>;
   joinedAt: Map<string, string>;
+  /** The name each member joined with, where they show by another one now (claimNameOf). */
+  joinName: Map<string, string>;
 }
 let memberIndexCache: { seed: Seed; s: State; idx: MemberIndex } | null = null;
 /** Every member (seed and joined), by id and by normalized name. Rebuilt when the state changes. */
 function memberIndex(seed: Seed, s: State): MemberIndex {
   if (memberIndexCache && memberIndexCache.seed === seed && memberIndexCache.s === s) return memberIndexCache.idx;
   // A closed account is nobody on Merlin while it is closed: out of Peers, the directory, every list and every email (State.closures).
-  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim() && !s.closures?.[m.id]);
+  const raw = [...seed.members, ...s.members].filter((m) => m.name?.trim() && !s.closures?.[m.id]);
+  // Each member as they show (their display name), matched to seats by the name they joined with:
+  // a name changed in Settings never takes the seats of someone who goes by it.
+  const all = raw.map((m) => withDisplayName(m, s));
   const byId = new Map(all.map((m) => [m.id, m]));
   const byName = new Map<string, Member[]>();
-  for (const m of all) {
-    const k = normName(m.name);
+  const joinName = new Map<string, string>();
+  raw.forEach((r, i) => {
+    const m = all[i];
+    if (m !== r) joinName.set(m.id, r.name);
+    const k = normName(r.name);
     byName.set(k, [...(byName.get(k) ?? []), m]);
-  }
-  const idx = { byId, byName, all, seedIds: new Set(seed.members.map((m) => m.id)), joinedAt: new Map(s.members.map((m) => [m.id, m.at])) };
+  });
+  const idx = { byId, byName, all, seedIds: new Set(seed.members.map((m) => m.id)), joinedAt: new Map(s.members.map((m) => [m.id, m.at])), joinName };
   memberIndexCache = { seed, s, idx };
   return idx;
 }
@@ -2758,7 +2880,7 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
     hits.push({ m, score: (exact ? 0 : 1) * 10 + (parts[0].startsWith(words[0]) ? 0 : 1) });
   }
   hits.sort((a, b) => a.score - b.score || a.m.name.localeCompare(b.m.name));
-  return hits.slice(0, 8).map(({ m }) => ({ id: pubId(m.id), name: m.name, title: m.title ?? "", you: m.id === me.id }));
+  return hits.slice(0, 8).map(({ m }) => ({ id: pubId(m.id), name: memberNameFor(s, m, me.id), title: m.title ?? "", you: m.id === me.id }));
 }
 
 /**
@@ -2837,6 +2959,17 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     // Only to a viewer who sees the name: it is from public profiles and nobody has verified it yet (the Verify button).
     if (key === "operator" && entity === "engagement" && v.pub && !nameVerified(s, node!.id)) out.unverified = true;
+    if (key === "operator" && entity === "engagement") {
+      // Who held it, by name: a member on Merlin shows the way they chose (lib/memberName.ts), the same
+      // in every view and the connector; a research seat that is a member (foundOf) shows as them.
+      const ix = idx ?? idxOfNode(s, node);
+      const m = ix ? seatHolder(s, ix, node!.id, v) : null;
+      if (m && ix && (m.id === me?.id || signedIn(s, ix, m.id))) out.v = memberNameFor(s, m, me?.id);
+      else if (!m && v.pub) {
+        const f = foundMemberOf(s, node);
+        if (f && f.id !== me?.id) out.v = s.namesHidden?.includes(f.id) ? NAME_HIDDEN : memberNameFor(s, f, me?.id);
+      }
+    }
     if (key === "operator" && idx) {
       // "Member" only for someone on Merlin now: a seed member we invited who never signed in is just a name.
       const m = seatHolder(s, idx, node!.id, v);
@@ -4521,6 +4654,29 @@ async function fullView(
       fractionals: prof.fractionals ?? (prof.partnersOff ? false : null),
       // "Hide my name on my seats".
       nameHidden: !!prof.nameHidden,
+      // How other members see their name, and how many name changes are left (lib/memberName.ts).
+      shownAs: memberNameFor(s, me, null),
+      nameChangesLeft: Math.max(0, NAME_CHANGES_MAX - recentNameChanges(prof.nameLog, nowMs)),
+      // "Are these yours?": a research record under their own name (foundOf). Always sent, empty once
+      // answered, so an action's Me (merged over the page's) clears it.
+      ...((list) => ({ foundSeats: list }))(
+        foundSeatsOf(seed, s, g, me.id).map((e) => {
+          const end = live(e, s, "end");
+          const status = live(e, s, "status");
+          const c = g.companies.get(e.companyId);
+          const geo = geoOf(c, s);
+          return {
+            id: pubId(e.id),
+            role: live(e, s, "role"),
+            fn: fnOf(e, s),
+            start: live(e, s, "start"),
+            end: end && end !== "Ongoing" ? end : null,
+            now: status !== "Ended" && (status === "Active" || !end || end === "Ongoing"),
+            company: identityHidden(g, s, idx, tracks, me, e.companyId) ? null : c?.name ?? null,
+            facts: [live(c, s, "industry"), live(c, s, "employees"), geo.region ?? geo.country].filter(Boolean).join(" · "),
+          };
+        }),
+      ),
       // Their card in Fractionals: one line about them, where they are based, and Open to leads.
       ...(prof.headline ? { headline: prof.headline } : {}),
       ...(prof.city ? { city: prof.city } : {}),
@@ -5193,7 +5349,8 @@ function addSignal(s: State, memberId: string, name: string, where: string, now:
 const BENCH_UNATTACHED_MAX = 3;
 /** Private rates one member can save per rolling 24 hours, counting ones removed since (each save can move a median). */
 const BENCH_DAILY_MAX = 5;
-const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
+/** A rate the benchmarks can't read (lib/rates.ts, the one reader). */
+const RATE_HELP = BENCH_RATE_HELP;
 /** A request the server doesn't know (an old tab after a release, most likely). */
 const UNKNOWN_ACTION = "That didn't go through. Refresh the page and try again.";
 
@@ -5731,7 +5888,7 @@ export async function perform(
       // Claiming a seat from the seat scan: once, by its own fractional, a few a day, and for no credit (see claimSeat).
       const scanClaim = entity === "engagement" && key === "operator" && isScanSeat(node.id) && cur?.by !== me.id;
       // A name from public profiles on it gives way to the member whose own name it is (first and last name match): the claim verifies it.
-      const pubClaim = scanClaim && !!cur?.pub && linked?.id === me.id && sameName(cur.value, me.name);
+      const pubClaim = scanClaim && !!cur?.pub && linked?.id === me.id && sameName(cur.value, claimNameOf(seed, s, me));
       if (scanClaim) {
         if (cur && !pubClaim) throw new ActionError(SEAT_TAKEN);
         if (!activating && claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
@@ -6410,7 +6567,7 @@ export async function perform(
             // A seat the Add names (Confirm on a seat guess: the claimable seat the server offered), claimed
             // by the same rules when it is still claimable; any other seat named is filled in as before (its own checks: only the seat holder adds to a seat).
             const named = wantEng ? atCompany.find((e) => e.id === wantEng) : undefined;
-            const pinned = named && selfSeat ? claimableSeats(atCompany, s, me, Object.fromEntries(engFields)).find((e) => e.id === named.id) : undefined;
+            const pinned = named && selfSeat ? claimableSeats(atCompany, s, { id: me.id, name: claimNameOf(seed, s, me) }, Object.fromEntries(engFields)).find((e) => e.id === named.id) : undefined;
             const ownMatch = wantEng
               ? (pinned ?? named)
               : (a.newEngagement ? atCompany.find((e) => isBlank(e) && mayMerge(e)) : atCompany.find((e) => madeByMe(e) && mayMerge(e))) ??
@@ -6423,7 +6580,7 @@ export async function perform(
             const scanSeat =
               (ownMatch && !pinned) || !selfSeat || (sent("type") && !FRACTIONAL_TYPES.includes(sent("type")!)) || sent("status") === "Open role"
                 ? undefined
-                : (pinned ?? claimableSeats(atCompany, s, me, Object.fromEntries(engFields))[0]);
+                : (pinned ?? claimableSeats(atCompany, s, { id: me.id, name: claimNameOf(seed, s, me) }, Object.fromEntries(engFields))[0]);
             if (scanSeat && claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX)
               throw new ActionError(`We have this seat on file already, so adding it claims it. You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours, so add it tomorrow.`);
             const existing = ownMatch ?? scanSeat;
@@ -7017,7 +7174,8 @@ export async function perform(
         }
         case "benchRate": {
           // A rate for the benchmarks only: it counts in the medians and is never on a record.
-          const r = readRate(stripInvisible(a.rate).trim().slice(0, 60), a.pricing === "Hourly" || a.pricing === "Monthly retainer" ? a.pricing : null);
+          const typed = parseRate(stripInvisible(a.rate).trim().slice(0, 60), a.pricing === "Hourly" || a.pricing === "Monthly retainer" ? a.pricing : null);
+          const r = typed.ok ? typed.read : null;
           if (!r) throw new ActionError(RATE_HELP);
           const mine = s.benchRates.filter((b) => b.by === me.id);
           // Every save writes a "fill" row for bench.<id>, paid or not, and removing the rate keeps it.
@@ -7036,7 +7194,7 @@ export async function perform(
             if (!e || !s.engagements.some((x) => x.id === engId && x.by === me.id) || !live(e, s, "role")) return false;
             if ((s.notMine[me.id] ?? []).includes(engId)) return false;
             const op = valueOf(e, s, "operator");
-            return !!op && op.status === "live" && (op.memberId ? op.memberId === me.id : normName(op.value) === normName(me.name));
+            return !!op && op.status === "live" && (op.memberId ? op.memberId === me.id : normName(op.value) === normName(claimNameOf(seed, s, me)));
           };
           let engagementId: string | null = null;
           let fn: string | null;
@@ -7098,7 +7256,7 @@ export async function perform(
           if (!opts.claimLink || a.preview) mustSee(e.companyId);
           // A name from public profiles on it: the seat is unclaimed while it is unverified, and the member it names can always claim it.
           const pub = publicName(e, s);
-          const theirs = !!pub && sameName(pub.value, me.name);
+          const theirs = !!pub && sameName(pub.value, claimNameOf(seed, s, me));
           const waiting = pendingClaimers(s, e.id).includes(me.id);
           if (a.preview) {
             // "Is this you?": the seat's title and dates, so the member checks it before claiming. Only an unclaimed seat, a few dozen a day.
@@ -7143,6 +7301,77 @@ export async function perform(
             cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
             ...(link?.conversationId ? { connected: link.conversationId } : {}),
           };
+        }
+        case "foundSeats": {
+          // "Are these yours?" (Me.foundSeats, foundOf): a research record under the member's own name.
+          // Yes claims each ticked seat as claimSeat does for a seat that names them (their name matches
+          // the one on file, so no admin wait), inside the same daily claim limit (SEAT_CLAIM_DAILY_MAX):
+          // the rest stay asked for tomorrow. The ones left unticked, or all of them on No, are "This
+          // isn't me", so the record shows again as someone else.
+          if (a.answer !== "mine" && a.answer !== "notMine") throw new ActionError(UNKNOWN_ACTION);
+          const list = foundSeatsOf(seed, s, g, me.id);
+          if (!list.length) throw new ActionError("No seats are waiting for your answer. Open Your seats again.");
+          const skip = new Set((Array.isArray(a.skip) ? a.skip : []).slice(0, 200).map((x) => String(x)));
+          const yes = a.answer === "mine" ? list.filter((e) => !skip.has(pubId(e.id))) : [];
+          const no = a.answer === "mine" ? list.filter((e) => skip.has(pubId(e.id))) : list;
+          if (a.answer === "mine" && !yes.length) throw new ActionError("Tick at least one seat that's yours, or answer None of these are me.");
+          const room = Math.max(0, SEAT_CLAIM_DAILY_MAX - claimsToday(s, me.id, nowMs));
+          if (a.answer === "mine" && !room) throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim these tomorrow: they wait here for you.`);
+          for (const e of no) {
+            if (!(s.notMine[me.id] ?? []).includes(e.id)) s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+            if (s.names) s.names.claims = s.names.claims.filter((c) => !(c.memberId === me.id && c.engagementId === e.id && c.status === "pending"));
+          }
+          let claimed = 0;
+          let later = 0;
+          const join = claimNameOf(seed, s, me);
+          for (const e of yes) {
+            const pub = publicName(e, s);
+            if (!pub || !sameName(pub.value, join)) continue;
+            if (claimed >= room) {
+              later++;
+              continue;
+            }
+            // setValue's own claim rules: the name on file is theirs, the claim is logged and counts toward the limit.
+            setValue(e, "engagement", "operator", me.name, me);
+            claimed++;
+          }
+          personIdxs.delete(g);
+          const cells = [...yes, ...no].map((e) => changed("engagement", e, "operator"));
+          if (a.answer === "notMine") return { message: "Got it. Those seats aren't yours, so we'll leave them for whoever held them.", cells };
+          const plural = (n: number, one: string, many: string) => (n === 1 ? one : `${n.toLocaleString("en-US")} ${many}`);
+          return {
+            message:
+              `${claimed === 1 ? "That seat is" : `${claimed.toLocaleString("en-US")} seats are`} on your profile now. Members see one card for you, with your name the way you chose. Fill in what you know on Your seats.` +
+              (later ? ` You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours, so ${plural(later, "the last one waits", "more wait")} here for tomorrow.` : "") +
+              (no.length ? ` We left the other ${no.length === 1 ? "one" : no.length.toLocaleString("en-US")} for whoever held ${no.length === 1 ? "it" : "them"}.` : ""),
+            cells,
+          };
+        }
+        case "displayName": {
+          // Settings, Profile and card: the name the member shows by. Their seats, card and signature take it.
+          const name = tidyDisplayName(a.name);
+          const bad = displayNameProblem(name);
+          if (bad) throw new ActionError(bad);
+          if (name === me.name) return { message: "That's your name already." };
+          if (neverAName(name)) throw new ActionError("Use the name you go by, like Jordan Avery.");
+          // Anti-impersonation: never the name another member on Merlin goes by (or joined with).
+          const ix = memberIndex(seed, s);
+          if (ix.all.some((m) => m.id !== me.id && (normName(m.name) === normName(name) || normName(ix.joinName.get(m.id) ?? "") === normName(name))))
+            throw new ActionError("Another member goes by that name. If it's yours, write to us and we'll sort it out.");
+          const p = { ...(s.profiles[me.id] ?? {}) };
+          // Anti-impersonation: a few changes a month, each logged. Claims keep going by the name they joined with (claimNameOf).
+          if (recentNameChanges(p.nameLog, nowMs) >= NAME_CHANGES_MAX) throw new ActionError(NAME_CHANGES_USED);
+          const join = claimNameOf(seed, s, me);
+          p.nameLog = [...(p.nameLog ?? []), { from: me.name, to: name, at: now }].slice(-20);
+          if (name === join) delete p.displayName;
+          else p.displayName = name;
+          s.profiles[me.id] = p;
+          // The seats they put their own name on take the new one.
+          for (const [k, v] of Object.entries(s.values)) if (k.endsWith(".operator") && v.memberId === me.id && v.status === "live" && v.value !== name) s.values[k] = { ...v, value: name };
+          memberIndexCache = null;
+          personIdxs.delete(g);
+          const left = NAME_CHANGES_MAX - recentNameChanges(p.nameLog, nowMs);
+          return { message: `Saved. ${seeLine(nameForOthers(name, p))}${left === 0 ? " That was your last change for 30 days." : ` You can change it ${left === 1 ? "once more" : `${left} more times`} in 30 days.`}` };
         }
         case "notMine": {
           personIdxs.delete(g); // who holds the seat is about to change: read the fractionals again after it
@@ -7623,7 +7852,7 @@ export async function perform(
                 taken++;
                 continue;
               }
-              if (pub && !sameName(pub.value, me.name)) {
+              if (pub && !sameName(pub.value, claimNameOf(seed, s, me))) {
                 // Someone else's name: an admin checks it first (claimSeat's rule), a few a day.
                 if (nameVerified(s, e.id) || claimsToday(s, me.id, nowMs) >= SEAT_CLAIM_DAILY_MAX) {
                   taken++;
@@ -8113,12 +8342,14 @@ export const tableInternals = {
   memberIndexReset: () => void (memberIndexCache = null),
   // "Hide my name on my seats": who held a seat is never named where it applies.
   holderNameHidden,
+  // A member's name as another member sees it (lib/memberName.ts), everywhere a member is named to someone else.
+  memberNameFor, memberNameById, foundMemberOf,
   // Suggested additions (lib/paths/suggest.ts): Remove my name's mark at a company, and what the member earned today.
   leaderOff: (s: State, companyId: string, name: string) => leaderOff(s, companyId, name), earning,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
-export const fractionalInternals = { viewGraph, personIndex, boughtSeat, personShown, invitable, knownCompanies, openByStatus, stateNow: () => stateCache };
+export const fractionalInternals = { viewGraph, personIndex, boughtSeat, personShown, invitable, knownCompanies, openByStatus, foundOf, stateNow: () => stateCache };
 
 /* ---------- claim links (/claim/<token>) and Remove my name ---------- */
 
@@ -8266,7 +8497,8 @@ function personPage(seed: Seed, s: State, g: Graph, e: EngNode, locked: boolean,
       }),
       inviter: who
         ? {
-            name: who.name,
+            // The inviter's name the way they chose to show (lib/memberName.ts).
+            name: memberNameFor(s, who, null),
             title: (prof.title || (who.title === "Member" ? "" : who.title) || "").trim(),
             since: s.members.find((m) => m.id === who.id)?.at ?? null,
             // Their note as they wrote it, without the claim link in it.

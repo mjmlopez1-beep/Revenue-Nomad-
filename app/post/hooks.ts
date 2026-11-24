@@ -126,8 +126,8 @@ export function atTime(iso: string | null | undefined): string {
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** A rate the benchmarks can't read. They need a monthly or an hourly figure (see readRate in lib/rates.ts). */
-export const BENCH_RATE_HELP = "Use a monthly or hourly rate, like $8k/mo or $150/hr.";
+/** A rate the benchmarks can't read, with the forms that work (lib/rates.ts, the one reader). */
+export { BENCH_RATE_HELP } from "@/lib/rates";
 
 /**
  * A field label in running text: each word lowercase, except words with a capital inside

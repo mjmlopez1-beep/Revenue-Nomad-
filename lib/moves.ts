@@ -26,6 +26,7 @@ import type { CompanyRec, EngagementRec, Icp, PersonRec } from "./tableTypes";
 import type { RadarBand, RadarRow } from "./radar/types";
 import { isDecisionMaker, type Warmth } from "./google/types";
 import { firstOf } from "./partners";
+import { shortName } from "./fractionalsCore";
 
 /* ---------- what the server sends ---------- */
 
@@ -255,6 +256,14 @@ function emailOnFile(people: PersonRec[], name: string): string | null {
     const m = cellV(p.cells.email);
     if (n && m && nameKey(n) === k) return m;
   }
+  // A member on Merlin shows by first name and last initial until they choose (lib/memberName.ts): the
+  // seat holder's own record on the seat, with the full name the member unlocked, is still them.
+  if (/^\S+ \S\.$/.test(name.trim()))
+    for (const p of people) {
+      const n = cellV(p.cells.name);
+      const m = cellV(p.cells.email);
+      if (n && m && cellV(p.cells.relationship) === "Seat holder" && nameKey(shortName(n)) === k) return m;
+    }
   return null;
 }
 

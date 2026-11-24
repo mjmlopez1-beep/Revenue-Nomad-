@@ -17,7 +17,7 @@ import type { PathsView } from "@/lib/paths/types";
 import type { GranolaStatus } from "@/lib/granola/types";
 import { useToast } from "../../ui/shared";
 import { GoogleG, GooglePolicyLink, startGoogle } from "../network/Network";
-import { netAct, NOTICE_WORDS, type GoogleNotice } from "../network/useNetwork";
+import { GOOGLE_PENDING, netAct, NOTICE_WORDS, type GoogleNotice } from "../network/useNetwork";
 import { loadKnown } from "../network/usePaths";
 import { CsvAct, LinkedInAct } from "../network/ConnectPanel";
 import { ExportPanel } from "../network/ExportPanel";
@@ -208,6 +208,7 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
               <li>Google shows what Merlin asks for: contacts and calendar, read only. No Gmail.</li>
               <li>The first read takes a minute or two. You can keep working.</li>
             </ol>
+            {v.configured && !v.verified ? <span className="st-faint">{GOOGLE_PENDING}</span> : null}
             {v.configured ? (
               <span className="st-acts">
                 <button type="button" className="btn btn-pine st-g" onClick={() => startGoogle()}>
