@@ -5,9 +5,10 @@
  * numbers behind them (AdminStats.health, lib/health.ts). Counts only: never a name. Every table
  * has "Copy as CSV", which copies it to the clipboard (no download).
  */
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { AdminStats } from "@/lib/tableTypes";
 import { Num } from "../ui/shared";
+import { SortHeader, useSort, type SortCol } from "../ui/sortable";
 
 type Health = NonNullable<AdminStats["health"]>;
 type Share = Health["cohorts"][number]["w1"];
@@ -85,7 +86,11 @@ function HCard({ title, span = 3, children, action }: { title: string; span?: 2 
 }
 
 /** A table with a header row, a label column and number columns, and its Copy as CSV. */
-function HTable({ title, span = 3, head, rows, csv, foot }: { title: string; span?: 3 | 6; head: string[]; rows: { label: string; cells: string[] }[]; csv: (string | number)[][]; foot?: ReactNode }) {
+function HTable({ title, span = 3, head, rows: given, csv, foot }: { title: string; span?: 3 | 6; head: string[]; rows: { label: string; cells: string[] }[]; csv: (string | number)[][]; foot?: ReactNode }) {
+  // Click a header to sort by it, both ways: the label column A to Z, the counts high to low ("–" last).
+  const cols = useMemo((): SortCol<{ label: string; cells: string[] }>[] => head.map((h, i) => (i ? { key: `c${i - 1}`, label: h, kind: "number", get: (r) => r.cells[i - 1] } : { key: "label", label: h || "Row", get: (r) => r.label })), [head]);
+  const hs = useSort(given, cols, { storageKey: `health.${title}` });
+  const rows = hs.rows;
   return (
     <HCard title={title} span={span} action={<CopyCsv what={title.toLowerCase()} csv={() => toCsv(head, csv)} />}>
       <div className="tp-pm-scroll">
@@ -93,9 +98,9 @@ function HTable({ title, span = 3, head, rows, csv, foot }: { title: string; spa
           <thead>
             <tr>
               {head.map((h, i) => (
-                <th key={h} scope="col" className={i ? "num" : undefined}>
+                <SortHeader key={h} s={hs} k={i ? `c${i - 1}` : "label"} className={i ? "num" : undefined}>
                   {h}
-                </th>
+                </SortHeader>
               ))}
             </tr>
           </thead>

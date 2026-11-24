@@ -250,8 +250,8 @@ export function SortHeader({
   /** The column's key. */
   k: string;
   children: ReactNode;
-  /** "th" for a table, "div" for a role="columnheader" grid cell. */
-  as?: "th" | "div";
+  /** "th" for a table, "div" or "span" for a role="columnheader" grid cell. */
+  as?: "th" | "div" | "span";
   className?: string;
   title?: string;
   /** Drawn after the button inside the header (a "?" tip, a link). */
@@ -275,13 +275,15 @@ export function SortHeader({
     children
   );
   const cls = `sh${sortable ? " sh-on" : ""}${on ? " sh-active" : ""}${className ? ` ${className}` : ""}`;
-  if (as === "div")
+  if (as !== "th") {
+    const Tag = as;
     return (
-      <div role="columnheader" aria-sort={aria} className={cls} title={sortable ? undefined : title} style={style}>
+      <Tag role="columnheader" aria-sort={aria} className={cls} title={sortable ? undefined : title} style={style}>
         {inner}
         {extra}
-      </div>
+      </Tag>
     );
+  }
   return (
     <th scope="col" aria-sort={aria} className={cls} title={sortable ? undefined : title} style={style} colSpan={colSpan} rowSpan={rowSpan}>
       {inner}
