@@ -82,6 +82,7 @@ import {
   type Way,
 } from "./creditsModel";
 import { CreditsMeterBar } from "./Meter";
+import { SortHeader, useSort, type SortCol, type Sorter } from "../../ui/sortable";
 import "./credits.css";
 
 const dayKey = (iso: string) => new Date(iso).toDateString();
@@ -107,14 +108,27 @@ const time = (iso: string) =>
 
 /* ---------- the ledger table (Overview's latest lines, and the Ledger tab) ---------- */
 
+type LedgerLine = { l: Line; after: number; text: string; note?: string };
+/** The ledger's columns as its headers sort them. */
+const LEDGER_SORT: SortCol<LedgerLine>[] = [
+  { key: "when", label: "When", kind: "date", get: (r) => r.l.at },
+  { key: "what", label: "What happened", get: (r) => r.text },
+  { key: "credits", label: "Credits", kind: "number", get: (r) => r.l.delta },
+  { key: "balance", label: "Balance", kind: "number", get: (r) => r.after },
+  { key: "where", label: "Where", get: (r) => r.l.company ?? null },
+];
+
 function LedgerTable({
+  sorter,
   rows,
   opening,
   starter,
   showOpening,
   openCo,
 }: {
-  rows: { l: Line; after: number; text: string; note?: string }[];
+  /** The Ledger tab's header sort; the day lines show only while it reads by time. */
+  sorter: Sorter<LedgerLine> | null;
+  rows: LedgerLine[];
   opening: number;
   starter: number;
   showOpening: boolean;
@@ -125,20 +139,21 @@ function LedgerTable({
       <table className="cnu-ledger" aria-label="Credit ledger">
         <thead>
           <tr>
-            <th scope="col">When</th>
-            <th scope="col">What happened</th>
-            <th scope="col" className="num">
+            <SortHeader s={sorter} k="when">When</SortHeader>
+            <SortHeader s={sorter} k="what">What happened</SortHeader>
+            <SortHeader s={sorter} k="credits" className="num">
               Credits
-            </th>
-            <th scope="col" className="num">
+            </SortHeader>
+            <SortHeader s={sorter} k="balance" className="num">
               Balance
-            </th>
-            <th scope="col">Where</th>
+            </SortHeader>
+            <SortHeader s={sorter} k="where">Where</SortHeader>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ l, after, text, note }, k) => {
-            const newDay = k === 0 || dayKey(rows[k - 1].l.at) !== dayKey(l.at);
+            const byTime = !sorter?.key || sorter.key === "when";
+            const newDay = byTime && (k === 0 || dayKey(rows[k - 1].l.at) !== dayKey(l.at));
             const tone = toneOf(l);
             const go = l.company ? openCo(l.company) : null;
             return [
@@ -663,7 +678,9 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
   /* ----- Ledger ----- */
   const shownLines = tab === "ledger" ? filterLedger(lines, filter, q) : lines;
   const limit = tab === "overview" ? 8 : all ? Infinity : 25;
-  const cut = shownLines.slice(0, limit);
+  // The Ledger tab sorts from its headers (Overview keeps the latest lines, newest first).
+  const ledSort = useSort(shownLines, LEDGER_SORT, { storageKey: "credits.ledger" });
+  const cut = (tab === "ledger" ? ledSort.rows : shownLines).slice(0, limit);
   const count = (f: LedgerFilter) =>
     f === "all" ? lines.length : lines.filter((r) => toneOf(r.l) === f).length;
   const ledgerCard = (
@@ -726,6 +743,7 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
         </div>
       )}
       <LedgerTable
+        sorter={tab === "ledger" ? ledSort : null}
         rows={cut}
         opening={bal.opening}
         starter={starter}

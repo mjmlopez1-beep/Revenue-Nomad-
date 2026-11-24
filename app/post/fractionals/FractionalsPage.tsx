@@ -74,6 +74,7 @@ import {
   type PeerLike,
   type FxView,
 } from "../fractionalsModel";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "../workbench/workbench.css";
 import "./fractionals2.css";
 
@@ -195,7 +196,23 @@ export function FractionalsPage() {
   }, [c.infos]);
 
   const three = useMemo(() => (first && viewNow === "same" && !fxAny(f) && bottom === "dir" ? startThree(records, (peers?.serve ?? []).map((p) => p.memberId ?? p.id), ctx) : []), [first, viewNow, f, bottom, records, peers, ctx]);
-  const rows = useMemo(() => fxRows(records, viewNow, f, ctx).filter((r) => !three.includes(r)), [records, viewNow, f, ctx, three]);
+  const listed = useMemo(() => fxRows(records, viewNow, f, ctx).filter((r) => !three.includes(r)), [records, viewNow, f, ctx, three]);
+  // Click a header to sort the directory by it, both ways; a name kept hidden sorts last.
+  const fxSortCols: SortCol<FractionalRec>[] = useMemo(
+    () => [
+      { key: "name", label: "Name", get: (r) => (r.locked ? null : r.name ?? null) },
+      { key: "fn", label: "Function", get: (r) => leadTitle(r) },
+      { key: "seats", label: "Seats held", kind: "number", get: (r) => r.now + r.past },
+      { key: "common", label: "Companies in common", kind: "number", get: (r) => (r.common ? r.common.names.length + (r.common.locked ?? 0) || null : null) },
+      { key: "ind", label: "Industries", get: (r) => industryWords(r)?.a ?? null },
+      { key: "ev", label: "Evidence shown", kind: "number", get: (r) => (r.onMerlin && r.cases?.length ? r.cases.length : null) },
+      { key: "open", label: "Open to leads", kind: "number", get: (r) => ({ Open: 2, "Not now": 1 } as Record<string, number>)[leadsWord(r)] ?? null },
+      { key: "know", label: "How you know them", get: (r) => ctx.know.get(keyOf(r))?.from ?? null },
+    ],
+    [ctx],
+  );
+  const fxSort = useSort(listed, fxSortCols, { storageKey: "fractionals" });
+  const rows = fxSort.rows;
   const counts = useMemo(() => fxViewCounts(records, ctx), [records, ctx]);
   const chipN = useMemo(() => fxChipCounts(records, viewNow, f, ctx), [records, viewNow, f, ctx]);
   const pick = useMemo(() => fxPickers(records, viewNow, ctx), [records, viewNow, ctx]);
@@ -501,9 +518,9 @@ export function FractionalsPage() {
               <span className="sr-only">Select</span>
             </th>
             {heads.map((h) => (
-              <th key={h.k} scope="col" className={`fy-th-${h.k}`}>
+              <SortHeader key={h.k} s={fxSort} k={h.k} className={`fy-th-${h.k}`}>
                 {h.name}
-              </th>
+              </SortHeader>
             ))}
           </tr>
           <tr className="wb-fill">

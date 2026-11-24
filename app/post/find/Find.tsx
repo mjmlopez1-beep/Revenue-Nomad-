@@ -41,7 +41,7 @@ import { appDeps, fetchQuote, quoteWords } from "../workbench/quote";
 import { runUnlock } from "../workbench/run";
 import { defaultSeeds, likeCriteria, profileOf, profileWords, rankLike, seedMatches, traitChips, withoutTrait, type LikeRow } from "./lookalikes";
 import type { LikeTrait } from "../model";
-import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
+import { SortHeader, sorterOf, useSortState, type SortCol, type SortStore } from "../../ui/sortable";
 import "./find.css";
 
 /** The kinds in the switcher, Lookalikes last (the owner's "reverse engineer what works into a target account list"). */
@@ -97,6 +97,8 @@ export function Find(p: FindProps) {
   const [panel, setPanel] = useState<"" | "saved">("");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("best");
+  // The preview's header sort, kept here so the Sort menu clears it (and says so while it is on).
+  const pvSort = useSortState(`find.${kind}`);
   const [lookText, setLookText] = useState("");
   const [askText, setAskText] = useState("");
   // Lookalikes: the seed companies (null: the member's seats) and the traits taken off.
@@ -313,7 +315,8 @@ export function Find(p: FindProps) {
             <input type="search" aria-label="Search these results" placeholder="Search by name, website, industry or function" value={q} onChange={(e) => setQ(e.target.value)} className="fd-search" />
             <label className="fd-sort">
               Sort
-              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              <select value={pvSort.state ? "" : sort} onChange={(e) => e.target.value && (pvSort.set(null), setSort(e.target.value as SortKey))}>
+                {pvSort.state && <option value="">By the column you clicked</option>}
                 {sortsFor(KIND_TYPE[kind]).map((s) => (
                   <option key={s.key} value={s.key}>
                     {s.label}
@@ -322,7 +325,7 @@ export function Find(p: FindProps) {
               </select>
             </label>
           </div>
-          <Preview kind={kind} run={run} me={me} ranked={ranked} openCompany={p.openCompany} openFractionals={() => p.openPage("fractionals")} />
+          <Preview kind={kind} run={run} me={me} ranked={ranked} store={pvSort} openCompany={p.openCompany} openFractionals={() => p.openPage("fractionals")} />
           {kind === "lookalikes" && !like.length && <p className="fd-note fd-pad">Pick a past client in the filters column and Merlin lists the companies most like it.</p>}
           {kind === "companies" && run && found > 0 && (
             <div className="fd-inside">
@@ -875,12 +878,12 @@ function previewSortCols(kind: FindKind, head: readonly string[]): SortCol<Previ
   ];
 }
 
-function Preview({ kind, run, me, ranked, openCompany, openFractionals }: { kind: FindKind; run: ReturnType<typeof findRun> | null; me: Me; ranked: Map<string, LikeRow> | null; openCompany: (id: string) => void; openFractionals: () => void }) {
+function Preview({ kind, run, me, ranked, store, openCompany, openFractionals }: { kind: FindKind; run: ReturnType<typeof findRun> | null; me: Me; ranked: Map<string, LikeRow> | null; store: SortStore; openCompany: (id: string) => void; openFractionals: () => void }) {
   const head = HEADS[kind];
   const raw = useMemo(() => (!run ? [] : kind === "fractionals" ? (run.fractionals ?? []).slice(0, PREVIEW).map(fractionalRow) : run.rows.slice(0, PREVIEW).map((r) => previewRow(kind, r, me, ranked?.get(r.key) ?? null))), [run, kind, me, ranked]);
   // Click a header to sort the preview by it, both ways; a locked name or a price word sorts last.
   const sortCols = useMemo(() => previewSortCols(kind, head), [kind, head]);
-  const sorter = useSort(raw, sortCols, { storageKey: `find.${kind}` });
+  const sorter = useMemo(() => sorterOf(raw, sortCols, store), [raw, sortCols, store]);
   const rows = sorter.rows;
   return (
     <div className="fd-grid-wrap">

@@ -19,8 +19,12 @@
   cursor: pointer;
   transition: background var(--t, 0.12s), color var(--t, 0.12s);
 }
-.sh-l {
+/* The header's words keep the header's look, whatever a table says about spans in its headers. */
+.sh .sh-btn .sh-l {
+  display: inline;
   min-width: 0;
+  font: inherit;
+  color: inherit;
 }
 .sh-arrow {
   flex: none;

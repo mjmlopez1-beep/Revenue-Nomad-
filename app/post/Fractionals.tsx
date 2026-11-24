@@ -31,6 +31,7 @@ import { copyText, plural, useMedia } from "./hooks";
 import { fmtStamp } from "./RoleDate";
 import { freeCompanyNow } from "./display";
 import { FR_TABS, ballChip, startPlace, takeWantSeat, choiceCounts, frDefaults, frRows, headline, leadTitle, levelLine, tabCounts, type FrFilters, type FrTab } from "./fractionalsModel";
+import { SortHeader, useSort, type SortCol } from "../ui/sortable";
 import "./fractionals.css";
 import { Prop } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
@@ -63,6 +64,13 @@ export function useFractionals(deps: unknown[]) {
 }
 
 
+const FR_SORT: SortCol<FractionalRec>[] = [
+  { key: "name", label: "Fractional", get: (r) => (r.locked ? null : r.name ?? null) },
+  { key: "fn", label: "Function and level", get: (r) => leadTitle(r) },
+  { key: "clients", label: "Clients they serve", get: (r) => r.clients?.line ?? null },
+  { key: "seats", label: "Seats", kind: "number", get: (r) => r.now + r.past },
+];
+
 export function Fractionals({ infos, waiting, different, onBack, onProfile }: { infos: CoInfo[]; waiting?: boolean; different?: boolean; onBack: () => void; onProfile: () => void }) {
   const ui = useUi();
   const me = ui.me;
@@ -90,7 +98,10 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
     return m;
   }, [infos]);
   const records = useMemo(() => data?.records ?? [], [data]);
-  const rows = useMemo(() => frRows(records, tab, f, myFn, hasIcp), [records, tab, f, myFn, hasIcp]);
+  const listed = useMemo(() => frRows(records, tab, f, myFn, hasIcp), [records, tab, f, myFn, hasIcp]);
+  // Click a header to sort, both ways; a name kept hidden sorts last.
+  const frSort = useSort(listed, FR_SORT, { storageKey: "fractionals.old" });
+  const rows = frSort.rows;
   const counts = useMemo(() => tabCounts(records, f, myFn, hasIcp), [records, f, myFn, hasIcp]);
   const choices = useMemo(() => choiceCounts(records, f, myFn, hasIcp), [records, f, myFn, hasIcp]);
   useEffect(() => setN(STEP), [tab, f]);
@@ -260,10 +271,10 @@ export function Fractionals({ infos, waiting, different, onBack, onProfile }: { 
             <table className="fr-table">
               <thead>
                 <tr>
-                  <th scope="col">Fractional</th>
-                  <th scope="col">Function and level</th>
-                  <th scope="col">Clients they serve</th>
-                  <th scope="col">Seats</th>
+                  <SortHeader s={frSort} k="name">Fractional</SortHeader>
+                  <SortHeader s={frSort} k="fn">Function and level</SortHeader>
+                  <SortHeader s={frSort} k="clients">Clients they serve</SortHeader>
+                  <SortHeader s={frSort} k="seats">Seats</SortHeader>
                   <th scope="col">
                     <span className="sr-only">Action</span>
                   </th>

@@ -35,6 +35,7 @@ import { ActivityPanel } from "../Activity";
 import { stamp } from "../../sign/doc";
 import { ContractFlow, readUpload, starterFile, type FlowStart } from "./ContractsHome";
 import { onOpenContract, takeContract } from "./open";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "../proposals.css";
 import "./contracts.css";
 
@@ -79,6 +80,19 @@ type Group = "you" | "wait" | "done";
 const GROUP: Partial<Record<St, Group>> = { sent: "wait", opened: "wait", turn: "you", declined: "you", expired: "you", draft: "you", signed: "done" };
 const CHIP: Record<St, string> = { turn: "Your turn", opened: "Opened", sent: "Sent", signed: "Signed", declined: "Declined", expired: "Link ended", draft: "Draft", void: "Voided" };
 const NEXT: Record<St, string> = { turn: "Sign it now", opened: "Follow up", sent: "See activity", signed: "Open copy", declined: "See why", expired: "New link", draft: "Finish it", void: "See activity" };
+
+/** The table's columns as its headers sort them: what each cell shows, blanks last. */
+const CT_SORT: SortCol<Row>[] = [
+  { key: "title", label: "Contract", get: (r) => r.title },
+  { key: "with", label: "With", get: (r) => r.co || r.who || null },
+  { key: "status", label: "Status", get: (r) => CHIP[r.st] },
+  { key: "sent", label: "Sent", kind: "date", get: (r) => r.sent },
+  { key: "opened", label: "Opened", kind: "date", get: (r) => r.opened },
+  { key: "signed", label: "Signed", kind: "date", get: (r) => (r.st === "signed" || r.st === "turn" ? r.signed : null) },
+  { key: "ends", label: "Link ends", kind: "date", get: (r) => r.ends },
+  { key: "sealed", label: "Sealed copy", kind: "date", get: (r) => r.sealed },
+  { key: "next", label: "Next step", get: (r) => NEXT[r.st] },
+];
 
 interface Row {
   id: string;
@@ -436,7 +450,13 @@ export function ContractsPage() {
   const first = !!firstSeen && rowsOwn.length === 0;
   const rows = first ? exampleRows(nowMs) : rowsOwn;
   const count = (g: "all" | Group) => rows.filter((r) => g === "all" || GROUP[r.st] === g).length;
-  const shown = rows.filter((r) => viewKey === "all" || GROUP[r.st] === viewKey);
+  // Click a header to sort the list by it, both ways; a blank (not sent, not signed) sorts last.
+  const ctSort = useSort(
+    useMemo(() => rows.filter((r) => viewKey === "all" || GROUP[r.st] === viewKey), [rows, viewKey]),
+    CT_SORT,
+    { storageKey: "contracts" },
+  );
+  const shown = ctSort.rows;
   const cur = rows.find((r) => r.id === sel) ?? null;
   const nSent = rows.filter((r) => r.sent).length;
   const live = (r: Row) => r.st === "sent" || r.st === "opened" || r.st === "turn";
@@ -880,47 +900,55 @@ export function ContractsPage() {
         <caption className="ct-sr">Your contracts{first ? ", examples" : ""}</caption>
         <thead>
           <tr>
-            <th scope="col">
-              Contract
+            <SortHeader s={ctSort} k="title" extra={
               <span>{first ? `${rows.length} examples` : `${rows.length} in all`}</span>
-            </th>
-            <th scope="col">
-              With
+            }>
+              Contract
+            </SortHeader>
+            <SortHeader s={ctSort} k="with" extra={
               <span>
                 {rows.filter((r) => r.linked).length} of {rows.length} on Merlin
               </span>
-            </th>
-            <th scope="col">
-              Status
+            }>
+              With
+            </SortHeader>
+            <SortHeader s={ctSort} k="status" extra={
               <span>{nYou} need you</span>
-            </th>
-            <th scope="col">
-              Sent
+            }>
+              Status
+            </SortHeader>
+            <SortHeader s={ctSort} k="sent" extra={
               <span>
                 {nSent} of {rows.length}
               </span>
-            </th>
-            <th scope="col">
-              Opened
+            }>
+              Sent
+            </SortHeader>
+            <SortHeader s={ctSort} k="opened" extra={
               <span>
                 {rows.filter((r) => r.opened).length} of {nSent}
               </span>
-            </th>
-            <th scope="col">
-              Signed
+            }>
+              Opened
+            </SortHeader>
+            <SortHeader s={ctSort} k="signed" extra={
               <span>
                 {nDone} of {nSent}
               </span>
-            </th>
-            <th scope="col">
-              Link ends
+            }>
+              Signed
+            </SortHeader>
+            <SortHeader s={ctSort} k="ends" extra={
               <span>{rows.filter(live).length} open</span>
-            </th>
-            <th scope="col">
-              Sealed copy
+            }>
+              Link ends
+            </SortHeader>
+            <SortHeader s={ctSort} k="sealed" extra={
               <span>{nDone} sealed</span>
-            </th>
-            <th scope="col">Next step</th>
+            }>
+              Sealed copy
+            </SortHeader>
+            <SortHeader s={ctSort} k="next">Next step</SortHeader>
           </tr>
         </thead>
         <tbody>

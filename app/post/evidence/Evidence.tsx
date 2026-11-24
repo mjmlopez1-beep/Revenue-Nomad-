@@ -63,6 +63,7 @@ import {
   type EvRow,
   type EvSort,
 } from "./evidenceModel";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "../workbench/workbench.css";
 import "./evidence.css";
 
@@ -199,7 +200,7 @@ function Bank() {
 
   /* ----- the rows on screen ----- */
   const sort: EvSort = matching ? "match" : sortPick ?? (first ? "drafts" : "used");
-  const vis = useMemo(() => sortRows(filterRows(rows, filters), sort, matching?.m), [rows, filters, sort, matching]);
+  const listed = useMemo(() => sortRows(filterRows(rows, filters), sort, matching?.m), [rows, filters, sort, matching]);
   const top = matching ? topOf(matching.m) : null;
   const readyN = own.filter(isReady).length;
   const draftN = own.length - readyN;
@@ -209,6 +210,27 @@ function Bank() {
   const heads = fillLine(rows, matching ? (matching.co.locked ? "a locked company" : matching.co.name) : null, matching ? matching.m.size : 0);
   const cards = phone || view === "cards";
   const isShown = (r: EvRow) => canReveal(r) && (allNames || names.has(r.key));
+  // Click a header to sort, both ways, by what each cell shows: a hidden client sorts last; the Sort button clears it.
+  const evSortCols = useMemo((): SortCol<EvRow>[] => {
+    const at = new Map(listed.map((r, k) => [r.key, k]));
+    const real = (v: string | undefined | null) => v || null;
+    return [
+      { key: "case", label: "Case", get: (r) => titleOf(r) },
+      { key: "match", label: "Match", kind: "number", get: (r) => (matching && r.kind === "case" && matching.m.has(r.c.id) ? -(at.get(r.key) ?? 0) : null) },
+      { key: "client", label: "Client", get: (r) => (isShown(r) ? real(clientWords(r, true)[0]) : null) },
+      { key: "ind", label: "Industry and size", get: (r) => real(factsOf(r).industry) },
+      { key: "motion", label: "Motion and sold to", get: (r) => real(factsOf(r).motion) },
+      { key: "probs", label: "Problems solved", kind: "number", get: (r) => problemsOf(r).length || null },
+      { key: "work", label: "Type of work", get: (r) => real(tagsOf(r)[0]) },
+      { key: "outs", label: "Before and after", kind: "number", get: (r) => outcomesOf(r).length || null },
+      { key: "with", label: "Worked with", get: (r) => (r.kind === "example" ? r.x.value.workedWith : r.kind === "case" ? real(r.c.workedWith[0]?.title) : null) },
+      { key: "used", label: "Used in", kind: "number", get: (r) => (r.kind === "case" ? r.c.usedIn.length || null : null) },
+      { key: "card", label: "On my card", kind: "number", get: (r) => (r.kind === "case" ? (r.c.showOnCard ? 1 : 0) : null) },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listed, matching, names, allNames]);
+  const evSort = useSort(listed, evSortCols, { storageKey: "evidence" });
+  const vis = evSort.rows;
   const won = (r: EvRow) => (r.kind === "case" ? r.c.usedIn.filter((id) => proposals?.find((p) => p.id === id)?.status === "signed").length : 0);
 
   const opened = openKey ? (byKey.get(openKey) as Own | undefined) ?? null : null;
@@ -570,9 +592,9 @@ function Bank() {
               #
             </th>
             {heads.map((h) => (
-              <th key={h.key} scope="col" className={h.key === "match" ? "wb-th-fresh" : h.key === "client" ? "ev-td-client" : undefined}>
+              <SortHeader key={h.key} s={evSort} k={h.key} className={h.key === "match" ? "wb-th-fresh" : h.key === "client" ? "ev-td-client" : undefined}>
                 {h.name}
-              </th>
+              </SortHeader>
             ))}
           </tr>
           <tr className="wb-fill">
@@ -732,8 +754,8 @@ function Bank() {
         <button type="button" className={`wb-tb${filtOpen ? " on" : ""}`} aria-expanded={filtOpen} onClick={() => setFiltOpen(!filtOpen)}>
           <IconFilter size={14} /> Filter · {nFilt}
         </button>
-        <button type="button" className="wb-tb" onClick={() => (setMatching(null), setSortPick(sort === "new" ? (first ? "drafts" : "used") : "new"))}>
-          {SORT_WORDS[sort]} <IconChevron size={12} dir="down" />
+        <button type="button" className="wb-tb" onClick={() => (evSort.key ? evSort.clear() : (setMatching(null), setSortPick(sort === "new" ? (first ? "drafts" : "used") : "new")))}>
+          {evSort.words ? `Sort: ${evSort.words}` : SORT_WORDS[sort]} <IconChevron size={12} dir="down" />
         </button>
         {!phone && (
           <span role="group" aria-label="Layout" className="ev-seg">
