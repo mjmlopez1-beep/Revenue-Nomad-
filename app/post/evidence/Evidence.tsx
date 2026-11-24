@@ -288,12 +288,13 @@ function Bank() {
             </label>
             <span className="ev-count num">
               {plural(withCases, "client")} · {plural(cases.length, "case study", "case studies")}
+              {cover.of > 0 && (
+                <span data-coverage title={cover.covered.join(", ")}>
+                  {" "}
+                  · Covers {cover.n} of {cover.of} categories
+                </span>
+              )}
             </span>
-            {cover.of > 0 && (
-              <span className="ev-count num" data-coverage title={cover.covered.join(", ")}>
-                · Covers {cover.n} of {cover.of} categories
-              </span>
-            )}
           </div>
           <div className="ev-table" role="table" aria-label="Your case studies by client">
             <div className="ev-thead" role="row">

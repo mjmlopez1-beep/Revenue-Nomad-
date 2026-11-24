@@ -59,7 +59,10 @@ export function Wizard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const top = useRef<HTMLDivElement>(null);
+  // The next step's first field takes the focus; the first screen leaves it alone (a phone's keyboard stays down, no seat looks picked).
+  const moved = useRef(false);
   useEffect(() => {
+    if (!moved.current) return void (moved.current = true);
     top.current?.querySelector<HTMLElement>("input:not([type=checkbox]), textarea, button.ev-seatpick")?.focus({ preventScroll: true });
   }, [step]);
 
