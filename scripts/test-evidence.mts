@@ -24,6 +24,9 @@
  *   - Merlin's AI: off by default, asks to agree, never a number the member didn't type, the
  *     paste never kept, the usage charged;
  *   - account closure's purge deletes them; a removed or merged company keeps the words;
+ *   - case studies the member's agent saves (Build this for me): From Claude, review, a draft while
+ *     a blank is left, out of proposals and the card until the member checks them; the quote's
+ *     person named only with the client named and outside California; the coverage count moves;
  *   - the data page and docs/data-flows.md say so, and the data page never names LinkedIn.
  */
 import { execFileSync } from "node:child_process";
@@ -351,6 +354,53 @@ async function main() {
   const conf = await MC.saveEvidenceTool(ctxR, { title: "A brand plan", problem: "No brand at Cedar and Pine.", what_i_did: "Wrote the brand plan.", client_name: "Cedar and Pine", industry: "SaaS", ready: true, confirm: true });
   check("  with confirm: saved, still hidden", conf.confirmed === true && (await T.loadState()).evidence?.mem_riley?.length === 1 && !JSON.stringify(conf).includes("Cedar and Pine"), conf);
 
+  console.log("\nBuild this for me: case studies the member's agent saves");
+  const PM = await import("../app/post/evidence/evidenceModel");
+  const keepTags = { categories: Tg.fitTags().categories, from: Tg.fitTagsFrom() };
+  Tg.resetFitTags(Tg.namesOnly());
+  const coverNow = async () => {
+    const l = await S.listEvidence(R, { reveal: true });
+    return PM.coverageOf(l.cases, { categories: l.tags.categories, tags: l.tags.tags });
+  };
+  const cover0 = await coverNow();
+  const ctxRC = { ...ctxR, app: "Claude" };
+  const found = { client_name: "Larkspur Learning", role: "Fractional CMO", start: "[add the start month]", end: "2025-09", problem: "Marketing brought no pipeline.", what_i_did: "Rebuilt demand generation and the website.", result: "Pipeline went from [add the starting number] to $3.4M.", how_long: "6 months", quote: "Riley rebuilt our pipeline.", quote_by: "Sam Lee", quote_title: "CEO", quote_where: "Denver, CO", ready: true };
+  const nRiley = (await T.loadState()).evidence?.mem_riley?.length ?? 0;
+  const pv = await MC.saveEvidenceTool(ctxRC, found);
+  const pvc = pv.would_save as { status: string; blanks_left: string[]; how_long: string; waiting_for_review: boolean };
+  check("the connector's preview: nothing saved, a draft while a blank is left, the blank listed, how long it took", pv.confirmed === false && ((await T.loadState()).evidence?.mem_riley?.length ?? 0) === nRiley && pvc.status === "Draft" && pvc.blanks_left.join() === "[add the starting number]" && pvc.how_long === "6 months" && pvc.waiting_for_review === true, pv);
+  const sv = await MC.saveEvidenceTool(ctxRC, { ...found, confirm: true });
+  const stored = (await T.loadState()).evidence!.mem_riley.find((c) => c.clientName === "Larkspur Learning")!;
+  check("saved by the agent: From Claude, for review, a draft (a blank is left), the blank date left out", !!stored && stored.from === "Claude" && stored.review === true && stored.status === "draft" && stored.start === "" && stored.end === "2025-09" && stored.took === "6 months" && stored.quote?.by === "Sam Lee", stored);
+  check("  it tells the agent the case study waits for the member's check and the blank", sv.confirmed === true && /marked for review/.test(String(sv.message)) && /fills the blank/.test(String(sv.message)), sv.message);
+  const rl = await S.listEvidence(R, { reveal: true });
+  const rv = rl.cases.find((c) => c.id === stored.id)!;
+  check("  the member's page reads it as From Claude · review, the blank to fill", rv.review && rv.from === "Claude" && rv.blanks.join() === "[add the starting number]" && PM.statusOf(rv).word === "From Claude · review" && rv.client.name === "Larkspur Learning");
+  const cover1 = await coverNow();
+  check("coverage: 0 of 10 categories, and saving one case study in a category (through save_evidence_case) moves it to 1 of 10", cover0.n === 0 && cover0.of === 10 && cover1.n === 1 && cover1.of === 10 && cover1.covered.join() === "Marketing", [cover0, cover1]);
+  const brand = (await T.loadState()).evidence!.mem_riley.find((c) => c.title === "A brand plan")!;
+  check("a ready case study the agent saved stays out of proposals and the card until checked", brand.status === "ready" && brand.review === true && S.proofIn(seed, await T.loadState(), riley.id, null).length === 0 && (await refused(S.toProof(R, { caseIds: [brand.id] })))?.message === Ty.IN_REVIEW && (await refused(S.setCard(R, brand.id, true)))?.message === Ty.IN_REVIEW);
+  const blanky = await refused(S.saveCase(R, { id: stored.id, status: "ready" }));
+  check("the member can't mark it ready while a blank is left", blanky?.message === Ty.HAS_BLANKS, blanky);
+  const fixed = await S.saveCase(R, { id: stored.id, answers: { numbers: "Pipeline went from $1.2M to $3.4M." }, status: "ready" });
+  check("the member fills the blank on their page and saves: ready, the review mark gone, the numbers as typed", fixed.status === "ready" && !fixed.review && fixed.blanks.length === 0 && JSON.stringify(fixed.outcomes) === JSON.stringify([{ k: "Pipeline", before: "$1.2M", after: "$3.4M" }]) && fixed.from === "Claude", fixed);
+  const ok = await S.saveCase(R, { id: brand.id });
+  check("  saving with nothing changed is the member's check too: now in proposals", !ok.review && S.proofIn(seed, await T.loadState(), riley.id, null).length === 2);
+  const pq = S.proofIn(seed, await T.loadState(), riley.id, null).find((i) => i.caseId === stored.id)!;
+  check("the quote in a proposal while the client is hidden: by title only, scrubbed", pq.quote?.text === "Riley rebuilt our pipeline." && pq.quote?.by === "The CEO" && !JSON.stringify(pq).includes("Sam Lee") && !JSON.stringify(pq).includes("Larkspur") && Ty.proofLine(pq).includes('"Riley rebuilt our pipeline." (The CEO)'), pq);
+  await S.saveCase(R, { id: stored.id, clientNamed: true });
+  const pqn = S.proofIn(seed, await T.loadState(), riley.id, null).find((i) => i.caseId === stored.id)!;
+  check("  the client named, the person outside California: named with their title", pqn.quote?.by === "Sam Lee, CEO", pqn.quote);
+  await S.saveCase(R, { id: stored.id, quote: { text: "Riley rebuilt our pipeline.", by: "Sam Lee", title: "CEO", where: "San Diego, CA" } });
+  const pqc = S.proofIn(seed, await T.loadState(), riley.id, null).find((i) => i.caseId === stored.id)!;
+  check("  the person in California: never named, even with the client named (the California rule)", pqc.quote?.by === "The CEO" && !JSON.stringify(pqc).includes("Sam Lee") && !JSON.stringify(await MC.listEvidenceTool(ctxR, {})).includes("Sam Lee"), pqc.quote);
+  check("  the member's own page still shows all of it", (await S.listEvidence(R, { reveal: true })).cases.find((c) => c.id === stored.id)!.quote?.by === "Sam Lee");
+  const badQ = await refused(S.saveCase(R, { id: stored.id, quote: { text: "x", by: "sam@larkspur.example" } }));
+  check("who said a quote is a name and a title, never an email", !!badQ, badQ);
+  check("the tool's description: blanks in square brackets, never invent a number, From you, review", /\[add the result number\]/.test(src("lib/mcp/evidence.ts")) && /never invent, round or estimate one/.test(src("lib/mcp/evidence.ts")) && /stays out of proposals until the member checks it/.test(src("lib/mcp/evidence.ts")));
+  check("the agent's name as the member reads it", Ty.agentWord("Claude") === "Claude" && Ty.agentWord("claude-code") === "Claude Code" && Ty.agentWord("ChatGPT") === "ChatGPT" && Ty.agentWord("") === "your agent");
+  Tg.resetFitTags(keepTags);
+
   console.log("\n50 at most");
   const already = (await T.loadState()).evidence!.mem_jordan.length;
   for (let i = already; i < Ty.EVIDENCE_LIMITS.cases; i++) await S.saveCase(J, { title: `Case ${i}` });
@@ -393,7 +443,7 @@ async function main() {
   await T.tableInternals.mutate((st, sd) => void T.tableInternals.purgeMember(st, sd, jordan.id, new Date().toISOString()));
   const sp = await T.loadState();
   check("purge: every case of his and his AI agreement, gone", !sp.evidence?.mem_jordan && !sp.evidenceAi?.mem_jordan && !JSON.stringify(sp).includes("forecast that holds"));
-  check("  Riley's untouched", sp.evidence?.mem_riley?.length === 1);
+  check("  Riley's untouched", sp.evidence?.mem_riley?.length === 2);
 
   console.log("\nThe words");
   const data = src("app/data/DataFlows.tsx");

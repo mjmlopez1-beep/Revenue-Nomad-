@@ -27,8 +27,15 @@ import type { Cell } from "../tableTypes";
 import { AI_CONSENT_CASE, AiCaseProblem, caseText, clientLabelOf, clientSpellings, cleanAnswer, draftTitle, numbersOk, parseOutcomes, scrubClient, whoOf, writeWithAi } from "./draft";
 import { caseMotionOf, rankCases, scoreCase, type CompanyFacts } from "./match";
 import { allTags, cleanTags, fitTags, suggestTags } from "./tags";
+import { nameMayShow } from "../california";
 import {
   CASE_MOTIONS,
+  HAS_BLANKS,
+  IN_REVIEW,
+  agentWord,
+  blanksIn,
+  caseWords,
+  type CaseQuote,
   EVIDENCE_LIMITS as L,
   EvidenceProblem,
   FULL,
@@ -147,6 +154,26 @@ const spellingsOf = (c: EvidenceCase) => clientSpellings(c.clientName, c.clientS
 /** A case's words as they may go out: as they are when the client is named, else scrubbed of its name and website. */
 export const safeText = (c: EvidenceCase, t: string) => (c.clientNamed ? t : scrubClient(t, spellingsOf(c)));
 
+/**
+ * Who said a case's quote, as others may read it: the person's name and title when the client is
+ * named and the person isn't in California by where they're based (lib/california.ts), else their
+ * title only ("The CEO"), else nothing.
+ */
+export function quoteByOut(c: Pick<EvidenceCase, "clientNamed" | "clientName" | "quote">): string {
+  const q = c.quote;
+  if (!q) return "";
+  const title = q.title.trim();
+  if (q.by.trim() && c.clientNamed && c.clientName && nameMayShow({ location: q.where })) return title ? `${q.by.trim()}, ${title}` : q.by.trim();
+  return title ? `The ${title.replace(/^the\s+/i, "")}` : "";
+}
+/** A case's quote as it may go out (scrubbed while the client is hidden), or undefined without one. */
+export function quoteOut(c: EvidenceCase): { text: string; by: string } | undefined {
+  if (!c.quote?.text) return undefined;
+  return { text: safeText(c, c.quote.text), by: safeText(c, quoteByOut(c)) };
+}
+/** Usable in proposals, matching and the card: ready, and checked by the member when their agent saved it. */
+export const usable = (c: EvidenceCase) => c.status === "ready" && !c.review;
+
 /** A case for its own member's page. `reveal`: the client's name too, for the member's own eye (never through the connector). */
 export function caseView(c: EvidenceCase, reveal = false): CaseView {
   const safe = (t: string) => safeText(c, t);
@@ -176,6 +203,11 @@ export function caseView(c: EvidenceCase, reveal = false): CaseView {
     workedWith: c.workedWith.map((w) => ({ title: out(w.title) })),
     answers: { problem: out(c.answers.problem), did: out(c.answers.did), numbers: out(c.answers.numbers) },
     answered: { problem: !!c.answers.problem, did: !!c.answers.did, numbers: !!c.answers.numbers },
+    took: out(c.took ?? ""),
+    quote: c.quote ? (reveal ? { ...c.quote } : { text: safe(c.quote.text), by: safe(quoteByOut(c)), title: c.quote.title, where: "" }) : null,
+    from: c.from ?? null,
+    review: !!c.review,
+    blanks: blanksIn(...caseWords(c)),
     text: out(c.text),
     textBy: c.textBy,
     showOnCard: c.showOnCard,
@@ -195,6 +227,7 @@ export function proofItem(c: EvidenceCase, match?: CaseMatch): ProofItem {
     text: safeText(c, c.text),
     outcomes: c.outcomes.map((o) => ({ ...o, k: safeText(c, o.k) })),
     workType: [...c.workType],
+    ...(quoteOut(c) ? { quote: quoteOut(c) } : {}),
     ...(match ? { match } : {}),
   };
 }
@@ -213,7 +246,8 @@ const list = (raw: unknown, max: number = L.list, each: number = L.item): string
 };
 const month = (raw: unknown): string => {
   const t = String(raw ?? "").trim();
-  if (!t) return "";
+  // A blank left to fill ("[add the start month]") is no month yet.
+  if (!t || /^\[[^\]]*\]$/.test(t)) return "";
   if (/^ongoing$/i.test(t)) return "Ongoing";
   if (/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(t)) return t;
   throw new EvidenceProblem("Give the month like 2024-02, or Ongoing.");
@@ -252,14 +286,26 @@ function workedWithOf(raw: unknown): { title: string }[] {
   return out;
 }
 
+function quoteOf(raw: unknown): CaseQuote | undefined {
+  if (raw === null || raw === "") return undefined;
+  const o = (raw && typeof raw === "object" ? raw : { text: raw }) as Record<string, unknown>;
+  const text = cleanAnswer(o.text, L.quote).replace(/\s*\n\s*/g, " ");
+  const by = line(o.by, L.short);
+  const title = line(o.title, L.short);
+  const where = line(o.where, L.short);
+  if (/@|https?:\/\//i.test(`${by} ${title}`)) throw new EvidenceProblem("Who said it is a name and a title only, never an email or a link.");
+  if (!text && !by && !title) return undefined;
+  return { text, by, title, where };
+}
+
 /** What a save may change. Everything else on a case is Merlin's. */
-const PATCH_KEYS = ["title", "clientNamed", "clientName", "clientLabel", "role", "fn", "start", "end", "hours", "size", "revenue", "motion", "industry", "soldTo", "problems", "workType", "outcomes", "workedWith", "answers", "text", "showOnCard", "status"] as const;
+const PATCH_KEYS = ["title", "clientNamed", "clientName", "clientLabel", "role", "fn", "start", "end", "hours", "size", "revenue", "motion", "industry", "soldTo", "problems", "workType", "outcomes", "workedWith", "answers", "took", "quote", "text", "showOnCard", "status"] as const;
 
 /** Apply a save's fields to a case (in place), keeping the rules. Throws EvidenceProblem. */
 function applyPatch(c: EvidenceCase, p: Record<string, unknown>, nowIso: string): void {
   const has = (k: string) => Object.prototype.hasOwnProperty.call(p, k) && p[k] !== undefined;
   const autoLabel = c.clientLabel === clientLabelOf(c);
-  const before = { named: c.clientNamed, name: c.clientName, label: c.clientLabel, answers: { ...c.answers }, outcomes: JSON.stringify(c.outcomes) };
+  const before = { named: c.clientNamed, name: c.clientName, label: c.clientLabel, answers: { ...c.answers }, outcomes: JSON.stringify(c.outcomes), took: c.took };
   if (has("title")) c.title = line(p.title, L.title);
   if (has("clientNamed")) c.clientNamed = p.clientNamed === true;
   if (has("clientName")) {
@@ -296,6 +342,12 @@ function applyPatch(c: EvidenceCase, p: Record<string, unknown>, nowIso: string)
     const a = (p.answers && typeof p.answers === "object" ? p.answers : {}) as Record<string, unknown>;
     for (const k of ["problem", "did", "numbers"] as const) if (a[k] !== undefined) c.answers[k] = cleanAnswer(a[k]);
   }
+  if (has("took")) c.took = line(p.took, L.short);
+  if (has("quote") || p.quote === null) {
+    const q = quoteOf(p.quote);
+    if (q) c.quote = q;
+    else delete c.quote;
+  }
   if (has("outcomes")) c.outcomes = outcomesOf(p.outcomes);
   else if (c.answers.numbers !== before.answers.numbers) c.outcomes = parseOutcomes(c.answers.numbers).outcomes;
   // How it reads while hidden: Merlin's from the facts until the member writes their own, and never with the name in it.
@@ -311,7 +363,7 @@ function applyPatch(c: EvidenceCase, p: Record<string, unknown>, nowIso: string)
     c.textBy = t ? "member" : "template";
   } else if (
     c.textBy !== "member" &&
-    (c.clientNamed !== before.named || c.clientName !== before.name || c.clientLabel !== before.label || JSON.stringify(c.answers) !== JSON.stringify(before.answers) || JSON.stringify(c.outcomes) !== before.outcomes || !c.text)
+    (c.clientNamed !== before.named || c.clientName !== before.name || c.clientLabel !== before.label || JSON.stringify(c.answers) !== JSON.stringify(before.answers) || JSON.stringify(c.outcomes) !== before.outcomes || c.took !== before.took || !c.text)
   ) {
     c.text = caseText(c);
     c.textBy = "template";
@@ -322,6 +374,7 @@ function applyPatch(c: EvidenceCase, p: Record<string, unknown>, nowIso: string)
     c.status = p.status;
   }
   if (c.status === "ready" && (!c.answers.problem || !c.answers.did)) throw new EvidenceProblem(NOT_READY);
+  if (c.status === "ready" && has("status") && blanksIn(...caseWords(c)).length) throw new EvidenceProblem(HAS_BLANKS);
   if (has("showOnCard")) c.showOnCard = p.showOnCard === true;
   if (c.showOnCard && c.status !== "ready") throw new EvidenceProblem(ONLY_READY);
   c.updatedAt = nowIso;
@@ -385,10 +438,34 @@ export async function suggestFor(token: string | null, text: unknown, o: { origi
   return { tags: suggestTags(typeof text === "string" ? text.slice(0, 4000) : "") };
 }
 
-/** Save a case: a new one (no id), or changes to one of theirs. Close. */
-export async function saveCase(token: string | null, input: Record<string, unknown>, o: { origin?: string } = {}, nowMs = Date.now()): Promise<CaseView> {
+/**
+ * Who saved it: the member on their own page (the default), or their agent through the connector
+ * (`agent`, its registered name). An agent's save is marked for review and, while a blank is left
+ * in it, kept a draft; the member's save (any save on their page, even with nothing changed) is
+ * their check, and takes the mark off.
+ */
+function markWho(c: EvidenceCase, agent: string | undefined, wantReady: boolean): void {
+  if (agent !== undefined) {
+    c.from = agentWord(agent);
+    c.review = true;
+    const blanks = blanksIn(...caseWords(c)).length > 0;
+    if (wantReady) c.status = c.answers.problem && c.answers.did && !blanks ? "ready" : "draft";
+    else if (blanks) c.status = "draft";
+    if (c.status !== "ready") c.showOnCard = false;
+  } else if (c.review) delete c.review;
+}
+/** A save's fields, and whether it asks for ready. An agent's "ready" is decided after the save (markWho): its blanks keep it a draft. */
+function patchOf(input: Record<string, unknown>, agent: string | undefined): { patch: Record<string, unknown>; wantReady: boolean } {
+  const patch: Record<string, unknown> = Object.fromEntries(PATCH_KEYS.filter((k) => k in input).map((k) => [k, input[k]]));
+  const wantReady = agent !== undefined && patch.status === "ready";
+  if (wantReady) delete patch.status;
+  return { patch, wantReady };
+}
+
+/** Save a case: a new one (no id), or changes to one of theirs. Close. `agent`: saved by the member's agent (the connector). */
+export async function saveCase(token: string | null, input: Record<string, unknown>, o: { origin?: string; agent?: string } = {}, nowMs = Date.now()): Promise<CaseView> {
   const id = typeof input.id === "string" ? input.id : "";
-  const patch = Object.fromEntries(PATCH_KEYS.filter((k) => k in input).map((k) => [k, input[k]]));
+  const { patch, wantReady } = patchOf(input, o.agent);
   return T.mutate((s, seed) => {
     const me = meOf(seed, s, token);
     gate(s, me.id, nowMs, o.origin);
@@ -401,14 +478,18 @@ export async function saveCase(token: string | null, input: Record<string, unkno
       c = blank(newId(), now(nowMs));
       const work = structuredClone(c);
       applyPatch(work, patch, now(nowMs));
+      markWho(work, o.agent, wantReady);
       mine.push(work);
-      return caseView(work);
+      return caseView(work, o.agent === undefined);
     }
     // Changed on a copy: a refusal leaves the stored case as it was.
     const work = structuredClone(c);
     applyPatch(work, patch, now(nowMs));
+    markWho(work, o.agent, wantReady);
+    if (!work.quote) delete c.quote;
+    if (!work.review) delete c.review;
     Object.assign(c, work);
-    return caseView(c);
+    return caseView(c, o.agent === undefined);
   });
 }
 
@@ -416,9 +497,9 @@ export async function saveCase(token: string | null, input: Record<string, unkno
  * What a save would make, without saving: the case as it would read (the connector's
  * save_evidence_case shows it to the member first). The same checks as saveCase. Close.
  */
-export async function previewCase(token: string | null, input: Record<string, unknown>, o: { origin?: string } = {}, nowMs = Date.now()): Promise<{ case: EvidenceCase; isNew: boolean }> {
+export async function previewCase(token: string | null, input: Record<string, unknown>, o: { origin?: string; agent?: string } = {}, nowMs = Date.now()): Promise<{ case: EvidenceCase; isNew: boolean }> {
   const id = typeof input.id === "string" ? input.id : "";
-  const patch = Object.fromEntries(PATCH_KEYS.filter((k) => k in input).map((k) => [k, input[k]]));
+  const { patch, wantReady } = patchOf(input, o.agent);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = meOf(seed, s, token);
   gate(s, me.id, nowMs, o.origin);
@@ -428,6 +509,7 @@ export async function previewCase(token: string | null, input: Record<string, un
   if (!c && mine.length >= L.cases) throw new EvidenceProblem(FULL, 409);
   const work = structuredClone(c ?? blank("ev_new", now(nowMs)));
   applyPatch(work, patch, now(nowMs));
+  markWho(work, o.agent, wantReady);
   return { case: work, isNew: !c };
 }
 
@@ -465,7 +547,7 @@ export async function draftFromSeat(token: string | null, seatId: unknown, o: { 
   const engId = pub ? mapsOf(T.graph(seed, s0)).seats.get(pub) : undefined;
   if (!engId) throw new EvidenceProblem(SEAT_NOT_YOURS, 404);
   const had = mineIn(s0, me0.id).find((x) => x.seatId === engId);
-  if (had) return caseView(had);
+  if (had) return caseView(had, true);
   // The seat as the member's own table shows it: only a seat that is theirs.
   const patch = await viewPatch(token, [pub], { asMember: true });
   const co = patch?.companies?.find((x) => x.engagements.some((e) => e.id === pub));
@@ -495,7 +577,7 @@ export async function draftFromSeat(token: string | null, seatId: unknown, o: { 
     gate(s, me.id, nowMs, o.origin);
     const mine = (allOf(s)[me.id] ??= []);
     const again = mine.find((x) => x.seatId === engId);
-    if (again) return caseView(again);
+    if (again) return caseView(again, true);
     if (mine.length >= L.cases) throw new EvidenceProblem(FULL, 409);
     const c = blank(newId(), now(nowMs));
     Object.assign(c, {
@@ -520,20 +602,22 @@ export async function draftFromSeat(token: string | null, seatId: unknown, o: { 
     if (reason) c.answers.problem = `They brought me in to ${reason.charAt(0).toLowerCase()}${reason.slice(1)}.`;
     c.text = caseText(c);
     mine.push(c);
-    return caseView(c);
+    // Its own member's page asked: the client's name shows to them.
+    return caseView(c, true);
   });
 }
 
 /* ---------- matching ---------- */
 
-const readyOf = (s: State, memberId: string) => mineIn(s, memberId).filter((c) => c.status === "ready");
+/** The member's cases that may go out: ready, and checked when their agent saved them. */
+const readyOf = (s: State, memberId: string) => mineIn(s, memberId).filter(usable);
 
 /** Ranked cases for one company (internal id), on a state in hand. Null when the company isn't on file. */
 export function matchIn(seed: Seed, s: State, memberId: string, companyId: string): MatchView | null {
   const facts = companyFactsIn(seed, s, companyId);
   if (!facts) return null;
   const all = mineIn(s, memberId);
-  const ready = all.filter((c) => c.status === "ready");
+  const ready = all.filter(usable);
   return { companyId: T.pubId(companyId), cases: rankCases(ready, facts).map((r) => ({ ...r, title: safeText(ready.find((c) => c.id === r.caseId)!, r.title) })), skipped: all.length - ready.length };
 }
 
@@ -601,6 +685,7 @@ export function readyItemsIn(s: State, memberId: string, ids: string[]): ProofIt
   const cases = ids.map((id) => mineIn(s, memberId).find((c) => c.id === id));
   if (cases.some((c) => !c)) throw new EvidenceProblem(NOT_YOURS, 404);
   if (cases.some((c) => c!.status !== "ready")) throw new EvidenceProblem(ONLY_READY);
+  if (cases.some((c) => c!.review)) throw new EvidenceProblem(IN_REVIEW);
   return cases.map((c) => proofItem(c!));
 }
 /** Every ready case of the member's as it would go into Proof, newest first (no company to match). Hidden-client-safe. */
@@ -658,6 +743,7 @@ export async function setCard(token: string | null, id: unknown, on: unknown, o:
       const c = mineIn(s, me.id).find((x) => x.id === id);
       if (!c) throw new EvidenceProblem(NOT_YOURS, 404);
       if (on === true && c.status !== "ready") throw new EvidenceProblem(ONLY_READY);
+      if (on === true && c.review) throw new EvidenceProblem(IN_REVIEW);
       c.showOnCard = on === true;
       c.updatedAt = now(nowMs);
     }

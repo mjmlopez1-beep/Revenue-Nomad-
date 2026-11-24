@@ -37,6 +37,22 @@ export interface Outcome {
   unit?: string;
 }
 
+/**
+ * Who can vouch for a case: the quote and the person who said it, as the member typed them. On the
+ * member's own page all of it shows. Wherever a case is shown to others (a proposal, the card, the
+ * connector) the person is named only when the client is named and the person isn't in California
+ * by where they're based (lib/california.ts, unknown is no); otherwise they read by their title.
+ */
+export interface CaseQuote {
+  text: string;
+  /** The person's name. */
+  by: string;
+  /** Their title ("CEO"). */
+  title: string;
+  /** Where the person is based, as typed ("Denver, CO"), only for the California rule. Never shown to others. */
+  where: string;
+}
+
 /** The three questions of "Build from a seat", as the member answered them. */
 export interface CaseAnswers {
   /** What was broken or stuck when they arrived. */
@@ -86,6 +102,17 @@ export interface EvidenceCase {
   /** Titles only, never names ("CEO", "4 account executives"). */
   workedWith: { title: string }[];
   answers: CaseAnswers;
+  /** How long the result took, in the member's words ("6 months"). */
+  took?: string;
+  /** Who can vouch: a quote and who said it. */
+  quote?: CaseQuote;
+  /**
+   * Saved by the member's own agent through the connector (save_evidence_case): the agent's name
+   * ("Claude"). With `review`, the case shows "From Claude · review" on the member's page and stays
+   * out of proposals, matching and the card until the member saves or confirms it there.
+   */
+  from?: string;
+  review?: boolean;
   /** The case as it reads. */
   text: string;
   textBy: TextBy;
@@ -118,7 +145,41 @@ export const EVIDENCE_LIMITS = {
   workedWith: 6,
   usedIn: 200,
   matchRows: 200,
+  quote: 600,
 } as const;
+
+/**
+ * A blank left to fill: square brackets around a few words, as the member's agent leaves them where
+ * it isn't sure ("[add the result number]", "[add a quote]"). A case with a blank in it stays a
+ * draft until the member fills it in.
+ */
+export const BLANK = /\[[^\[\]\n]{2,80}\]/;
+const BLANKS = /\[[^\[\]\n]{2,80}\]/g;
+/** Every blank in these words, in order, as written. */
+export const blanksIn = (...texts: (string | undefined | null)[]): string[] => texts.flatMap((t) => String(t ?? "").match(BLANKS) ?? []);
+/** The words of a case a blank may sit in. */
+export const caseWords = (c: Pick<EvidenceCase, "title" | "role" | "answers" | "took" | "quote" | "clientName" | "soldTo">): string[] => [
+  c.title,
+  c.role,
+  c.clientName ?? "",
+  c.soldTo,
+  c.answers.problem,
+  c.answers.did,
+  c.answers.numbers,
+  c.took ?? "",
+  c.quote?.text ?? "",
+  c.quote?.by ?? "",
+  c.quote?.title ?? "",
+];
+/** The agent's name as a member reads it: "Claude", "Claude Code", "ChatGPT", "Cursor", or "your agent". */
+export function agentWord(app: string | null | undefined): string {
+  const a = String(app ?? "");
+  if (/claude[\s_-]*code/i.test(a)) return "Claude Code";
+  if (/claude/i.test(a)) return "Claude";
+  if (/chatgpt|openai/i.test(a)) return "ChatGPT";
+  if (/cursor/i.test(a)) return "Cursor";
+  return "your agent";
+}
 
 /** What a client needed: the hire reasons members already pick on seats, and any words of their own. */
 export const PROBLEMS = [
@@ -143,6 +204,8 @@ export const NOT_READY = "Answer what the problem was and what you did first. Th
 export const SEAT_NOT_YOURS = "Build a case from a seat you held. That seat isn't one of yours.";
 export const ONLY_READY = "Only a ready case goes into a proposal or on your card. Finish its questions first.";
 export const HIDDEN_CLIENT = "Client hidden";
+export const HAS_BLANKS = "Fill in the blanks in square brackets first. Then the case study is ready.";
+export const IN_REVIEW = "Check this case study and save it first. Then it goes into proposals.";
 
 /** A problem to say in a sentence, with the status for the route and the upgrade link on a plan refusal. */
 export class EvidenceProblem extends Error {
@@ -185,6 +248,14 @@ export interface CaseView {
   answers: CaseAnswers;
   /** Which of the three questions have an answer. */
   answered: { problem: boolean; did: boolean; numbers: boolean };
+  took: string;
+  /** All of it, for the member's own eye (their page only). */
+  quote: CaseQuote | null;
+  /** The agent that saved it, and whether the member still has to check it. */
+  from: string | null;
+  review: boolean;
+  /** The blanks still to fill, as written. */
+  blanks: string[];
   text: string;
   textBy: TextBy;
   showOnCard: boolean;
@@ -252,6 +323,8 @@ export interface ProofItem {
   text: string;
   outcomes: Outcome[];
   workType: string[];
+  /** The quote and who said it, as others may read it (named only under the rules on CaseQuote). */
+  quote?: { text: string; by: string };
   match?: CaseMatch;
 }
 
@@ -267,7 +340,7 @@ export const outcomeLine = (o: Outcome) => `${o.k}: ${withUnit(o.before, o.unit)
  * unless named), the title, the case's words and the numbers as typed. Built from a ProofItem, so
  * the hidden client's name is already out of every part of it.
  */
-export function proofLine(i: Pick<ProofItem, "client" | "title" | "text" | "outcomes">): string {
+export function proofLine(i: Pick<ProofItem, "client" | "title" | "text" | "outcomes" | "quote">): string {
   const end = (x: string) => (/[.!?]$/.test(x) ? x : `${x}.`);
   const head = i.title && i.title !== i.client ? `${i.client}: ${i.title}` : i.client;
   // The template's own "The client: ..." opener is said by the head already.
@@ -275,7 +348,8 @@ export function proofLine(i: Pick<ProofItem, "client" | "title" | "text" | "outc
   // Numbers the case's words already carry aren't said twice.
   const has = (v: string) => !String(v ?? "").trim() || story.includes(String(v).trim());
   const outs = (i.outcomes ?? []).filter((o) => o && String(o.k ?? "").trim() && (String(o.before ?? "").trim() || String(o.after ?? "").trim()) && !(has(o.before) && has(o.after)));
-  return `${end(head)}${story ? ` ${end(story)}` : ""}${outs.length ? ` ${outs.map(outcomeLine).join("; ")}.` : ""}`.replace(/\s+/g, " ").trim();
+  const said = i.quote?.text && !story.includes(i.quote.text) ? ` "${i.quote.text.replace(/^["“]|["”]$/g, "")}"${i.quote.by ? ` (${i.quote.by})` : ""}` : "";
+  return `${end(head)}${story ? ` ${end(story)}` : ""}${outs.length ? ` ${outs.map(outcomeLine).join("; ")}.` : ""}${said}`.replace(/\s+/g, " ").trim();
 }
 
 /** "2024-02" -> "Feb 2024"; "2024" stays; "Ongoing" -> "now". */
