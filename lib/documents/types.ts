@@ -44,7 +44,7 @@ export interface DocField {
 }
 
 export interface DocEvent {
-  kind: "uploaded" | "sent" | "notified" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "completed" | "copy_sent" | "expired_open";
+  kind: "uploaded" | "sent" | "notified" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "completed" | "copy_sent" | "expired_open" | "reminded" | "cancel_sent";
   at: string;
   /** Whose step it was (a signer's email), when it was a signer's. */
   who?: string;
@@ -108,6 +108,12 @@ export interface StoredDocument {
    * time it is used. Saved contracts are not in the member's list of documents (docRecsOf).
    */
   saved?: { at: string; uses: number; lastAt?: string };
+  /**
+   * Contracts (RN_CONTRACTS2): who gets the final PDF without signing ("Send a copy to"), set on
+   * send, and when the member last tapped Remind for each signer (at most once a day each).
+   */
+  cc?: string[];
+  reminded?: Record<string, string>;
 }
 
 export type DocStatus = "draft" | "sent" | "viewed" | "signed" | "declined" | "void" | "expired";
@@ -150,6 +156,10 @@ export interface DocumentRec {
   /** The final PDF's page (signed only): the download and the hashes. */
   copyUrl: string | null;
   events: DocEvent[];
+  /** Contracts (RN_CONTRACTS2): who gets a copy of the final PDF without signing. */
+  cc?: string[];
+  /** When the member last reminded each signer by hand (signer id: ISO). */
+  reminded?: Record<string, string>;
 }
 
 /* ---------- what a signer gets ---------- */

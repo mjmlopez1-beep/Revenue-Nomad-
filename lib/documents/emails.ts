@@ -102,3 +102,18 @@ export function docDeclinedEmail(o: { member: string; signer: string; title: str
   ].join("\n");
   return { subject, text, html: mailShell({ title: subject, preheader: lead, body, link: o.app, art: "proposal", footer: f.lines }) };
 }
+
+/** To a signer who had a link, when the member cancels it (Contracts, RN_CONTRACTS2). Short: nothing more to do. */
+export function docCanceledEmail(o: { signer: string; member: string; title: string }): Mail {
+  const member = oneLine(o.member).slice(0, 80) || "The sender";
+  const title = oneLine(o.title).slice(0, 140);
+  const subject = `${member} canceled ${title}`;
+  const lead = `${member} canceled ${title}. The link to sign it no longer works, and there is nothing more to do.`;
+  const f = foot();
+  const text = [`Hi ${first(o.signer)},`, "", lead, "", ...f.text].join("\n");
+  const body = [mailP(`Hi ${escHtml(first(o.signer))},`), mailH("This was canceled"), mailP(escHtml(lead))].join("\n");
+  return { subject, text, html: mailShell({ title: subject, preheader: lead, body, art: "proposal", footer: f.lines }) };
+}
+
+/** The line above the link when the member taps Remind (Contracts, RN_CONTRACTS2). */
+export const REMIND_NOTE = "A reminder: this is waiting for your signature. It takes a few minutes, and you can sign on your phone.";

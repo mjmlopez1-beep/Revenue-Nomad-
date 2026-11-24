@@ -96,7 +96,7 @@ export interface MemberSigned {
 
 /** One event on a send's audit trail. */
 export interface AuditEvent {
-  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned" | "question" | "passed";
+  kind: "sent" | "viewed" | "code_sent" | "code_failed" | "code_verified" | "signed" | "declined" | "voided" | "expired_open" | "copy_sent" | "member_signed" | "countersigned" | "question" | "passed" | "reminded" | "cancel_sent";
   at: string;
   ip?: string;
   ua?: string;
@@ -229,6 +229,8 @@ export interface StoredSend {
   /** The member's own signature on this send (frozen at send): when, and their signature once applied. Absent: none, as before. */
   memberMode?: MemberSignMode;
   member?: MemberSigned;
+  /** Contracts (RN_CONTRACTS2): when the member last tapped Remind (at most once a day). */
+  remindedAt?: string;
   events: AuditEvent[];
 }
 

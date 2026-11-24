@@ -57,7 +57,7 @@ import { PipelinePage } from "../Pipeline";
 import { GetInPage, WayInPage } from "../network/Ways";
 import { NetworkPage } from "../network/Network"; // [google network]
 import { useNetwork } from "../network/useNetwork";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AskPlan } from "@/lib/ask";
 import { setFindStart } from "../find/start";
 import { setRatesStart } from "../pageStart";
@@ -335,6 +335,24 @@ const HiringNowPage = dynamic(() => loadHiring().then((m) => m.HiringNow), { ssr
 const WarmPathsPage = dynamic(() => loadWarm().then((m) => m.WarmPaths), { ssr: false, loading: pageWait });
 // Contracts (contracts/ContractsPage.tsx): drop a PDF, the flow, the table and saved contracts.
 const ContractsPageL = dynamic(() => loadContracts().then((m) => m.ContractsPage), { ssr: false, loading: pageWait });
+// Contracts rebuilt (contracts/Contracts2.tsx, RN_CONTRACTS2): the list, the four-step send flow and the detail. Off: the page above, as before.
+const Contracts2L = dynamic(() => import("../contracts/Contracts2").then((m) => m.Contracts2Page), { ssr: false, loading: pageWait });
+/** The address the app opened with, before the shell tidies it (?p=contracts&new=1, &dc=<id>): the rebuilt Contracts reads it once. */
+const openedWith = typeof window !== "undefined" ? window.location.search : "";
+let openedTaken = false;
+export const takeOpenedWith = (): string => {
+  if (openedTaken) return "";
+  openedTaken = true;
+  return new URLSearchParams(openedWith).get("p") === "contracts" ? openedWith : "";
+};
+/** Is the rebuilt Contracts on (GET /api/contracts?probe=1)? Asked once a page load; anything but a yes is the old page. */
+let contracts2Probe: Promise<boolean> | null = null;
+let contracts2Known: boolean | null = null;
+const probeContracts2 = () =>
+  (contracts2Probe ??= fetch("/api/contracts?probe=1", { headers: { accept: "application/json" } })
+    .then((r) => (r.ok ? r.json() : { on: false }))
+    .then((j: { on?: boolean }) => (contracts2Known = j.on === true))
+    .catch(() => (contracts2Known = false)));
 // Evidence Bank (evidence/Evidence.tsx): the case library, the build panel, matching; the upgrade screen without Close.
 const EvidencePageL = dynamic(() => loadEvidence().then((m) => m.EvidencePage), { ssr: false, loading: pageWait });
 // Alerts and workflows (alerts/Alerts.tsx): every alert in one table, where they go, the starter gallery. The old look keeps Notifications.
@@ -584,7 +602,12 @@ function Hiring2P() {
 
 /** Contracts (contracts/ContractsPage.tsx), page key "contracts": it draws its own header (Home / Contracts / the contract) and strip. */
 function ContractsP() {
-  return <ContractsPageL />;
+  const [on, setOn] = useState<boolean | null>(contracts2Known);
+  useEffect(() => {
+    if (on === null) void probeContracts2().then(setOn);
+  }, [on]);
+  if (on === null) return pageWait();
+  return on === false ? <ContractsPageL /> : <Contracts2L />;
 }
 
 /** Agent access (agent/AgentAccess.tsx), page key "agent" (and ?p=claude) in the new look; the old look keeps Integrations' Claude section. */

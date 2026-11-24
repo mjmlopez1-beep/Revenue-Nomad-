@@ -32,6 +32,13 @@ export const DOC_LIMITS = { documents: 200, signers: 10, fields: 300, title: 160
 /** A saved contract is kept as it was saved: it is used to start a new one, never changed or sent itself. */
 export const SAVED_FIXED = "A saved contract stays as you saved it. Use it to start a new one.";
 
+/** The rebuilt Contracts flow (lib/documents/contracts2.ts) is on: RN_CONTRACTS2=1. Off, every path here is as before. */
+export const contracts2On = () => /^(1|on|true)$/i.test(process.env.RN_CONTRACTS2 ?? "");
+/** A Word (or other) file in the rebuilt flow: PDF only in v1 (lib/documents/whoSigns.ts, the app says the same). */
+export { PDF_ONLY } from "./whoSigns";
+import { PDF_ONLY } from "./whoSigns";
+const EMAIL_CC = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+
 const newId = (p: string) => `${p}${randomBytes(9).toString("base64url")}`;
 const { mac, same, cleanLine, cleanSigner, emailHint, base, onFree, titleOf, memberOf, memberFor, NAME } = PI;
 
@@ -114,6 +121,8 @@ export function docRec(d: StoredDocument, nowMs = Date.now(), origin?: string): 
     finalSha256: d.completed?.sha256 ?? null,
     copyUrl: d.completed ? docCopyLink(origin, d) : null,
     events: d.events.map((e) => ({ ...e })),
+    ...(d.cc?.length ? { cc: [...d.cc] } : {}),
+    ...(d.reminded ? { reminded: { ...d.reminded } } : {}),
   };
 }
 
@@ -145,7 +154,7 @@ export async function uploadDocument(token: string | null, fileName: unknown, by
   const [seed, s0] = await Promise.all([loadSeed(), loadState()]);
   const me0 = memberOf(seed, s0, token);
   const name = cleanLine(fileName, 160).replace(/[/\\]/g, "-") || "document.pdf";
-  if (/\.(docx?|pages|odt|rtf)$/i.test(name)) throw new ProposalProblem("Upload a PDF. In Word or Google Docs: File, then Save as or Download, then PDF.");
+  if (/\.(docx?|pages|odt|rtf)$/i.test(name)) throw new ProposalProblem(contracts2On() ? PDF_ONLY : "Upload a PDF. In Word or Google Docs: File, then Save as or Download, then PDF.");
   if (!bytes.length) throw new ProposalProblem("That file is empty.");
   if (bytes.length > DOC_MAX_BYTES) throw new ProposalProblem(`That PDF is over ${Math.round(DOC_MAX_BYTES / 1024 / 1024)} MB. Upload a smaller copy.`, 413);
   if ((s0.documents ?? []).filter((d) => d.memberId === me0.id).length >= DOC_LIMITS.documents) throw new ProposalProblem(`You have ${DOC_LIMITS.documents} documents, which is the most. Delete an old draft first.`);
@@ -377,8 +386,13 @@ async function notify(docId: string, origin: string | undefined, nowMs: number):
 }
 
 /** Send it: the signers' links by email, in turn. Trial and Pro. */
-export async function sendDocument(token: string | null, id: string, a: { message?: unknown; linkDays?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string }> {
+export async function sendDocument(token: string | null, id: string, a: { message?: unknown; linkDays?: unknown; cc?: unknown } = {}, origin?: string, nowMs = Date.now()): Promise<{ document: DocumentRec; message: string; link?: string }> {
   const days = linkDaysOf(a.linkDays);
+  const v2 = contracts2On();
+  // "Send a copy to" (RN_CONTRACTS2): people who get the final PDF and never sign.
+  const cc = v2 && Array.isArray(a.cc) ? [...new Set(a.cc.map((x) => cleanLine(x, 200).toLowerCase()).filter(Boolean))] : [];
+  if (cc.some((x) => !EMAIL_CC.test(x))) throw new ProposalProblem("Check the emails under Send a copy to.");
+  if (cc.length > 5) throw new ProposalProblem("Up to 5 people get a copy.");
   const seed = await loadSeed();
   const s0 = await loadState();
   const me0 = memberOf(seed, s0, token);
@@ -393,6 +407,9 @@ export async function sendDocument(token: string | null, id: string, a: { messag
     const why = notReady(d);
     if (why) throw new ProposalProblem(why);
     if (a.message !== undefined) d.message = cleanLine(a.message, DOC_LIMITS.message);
+    if (cc.some((x) => d.signers.some((y) => y.email === x))) throw new ProposalProblem("Someone under Send a copy to signs it already.");
+    if (cc.length) d.cc = cc;
+    else delete d.cc;
     d.sentAt = now;
     d.expiresAt = expiryFor(days, nowMs);
     d.updatedAt = now;
@@ -400,7 +417,16 @@ export async function sendDocument(token: string | null, id: string, a: { messag
     const to = d.signers.find((x) => !x.sender) ?? d.signers[0];
     pipelineEvent(s, me.id, d.companyId, "proposal_sent", now, { document: { to: to ? { name: to.name, ...(to.title ? { title: to.title } : {}) } : null } });
   });
-  const sent = await notify(id, origin, nowMs);
+  // The rebuilt flow: when it is the member's own turn first (Just me, or they sign first), they sign here and now: no email to themselves.
+  const selfFirst = v2 ? await T.mutate((s) => {
+    const d = (s.documents ?? []).find((x) => x.id === id);
+    const x = d && turnOf(d).find((y) => y.sender && !y.notifiedAt);
+    if (!d || !x) return null;
+    x.notifiedAt = now;
+    ev(d, "notified", now, { who: x.email, note: "Signing now, in Merlin" });
+    return x.id;
+  }) : null;
+  const sent = (await notify(id, origin, nowMs)) + (selfFirst ? 1 : 0);
   if (!sent) {
     // Nobody got it: back to a draft, so the member can try again.
     await T.mutate((s) => {
@@ -410,6 +436,13 @@ export async function sendDocument(token: string | null, id: string, a: { messag
     throw new ProposalProblem("The email didn't go out. Try again in a moment.", 502);
   }
   const d = await getDocument(token, id, origin, nowMs);
+  if (selfFirst) {
+    const s1 = await loadState();
+    const dd = (s1.documents ?? []).find((x) => x.id === id)!;
+    const me = dd.signers.find((x) => x.id === selfFirst)!;
+    const rest = d.signers.filter((x) => !x.sender).map((x) => x.name.split(" ")[0]);
+    return { document: d, link: signLinkOf(origin, dd, me), message: rest.length ? `Sign it now. Then it goes to ${rest.join(" and ")}.` : "Sign it now." };
+  }
   const firsts = d.signers.filter((x) => x.notifiedAt).map((x) => x.name);
   return { document: d, message: `Sent to ${firsts.join(" and ")}${d.ordered && d.signers.length > 1 ? ". The others get it in turn" : ""}. ${days ? `The links work for ${days} days.` : "The links have no end date."}` };
 }
@@ -737,7 +770,12 @@ export function finish(docId: string, origin?: string): Promise<void> {
     const download = docDownloadLink(origin, d);
     const attach = fin.bytes.length <= MAX_ATTACHMENT_BYTES;
     const names = d.signers.map((x) => x.name);
-    const to = [...d.signers.filter((x) => !x.sender).map((x) => ({ email: x.email, name: x.name })), ...(m?.email ? [{ email: m.email, name: m.name }] : [])];
+    const to = [
+      ...d.signers.filter((x) => !x.sender).map((x) => ({ email: x.email, name: x.name })),
+      ...(m?.email ? [{ email: m.email, name: m.name }] : []),
+      // "Send a copy to" (RN_CONTRACTS2): the final PDF, as everyone else gets it.
+      ...(d.cc ?? []).filter((x) => !d.signers.some((y) => y.email === x) && x !== m?.email?.toLowerCase()).map((x) => ({ email: x, name: "there" })),
+    ];
     const sent: string[] = [];
     for (const r of to) {
       const mail = docDoneEmail({ name: r.name, title: d.title, signers: names, completedAt: at, copy, download, sha256: fin.sha256, attached: attach });
@@ -791,3 +829,6 @@ export async function copyFile(raw: unknown): Promise<{ bytes: Buffer; name: str
   return bytes ? { bytes, name: signedName(d) } : null;
 }
 
+
+/** For the rebuilt Contracts flow (lib/documents/contracts2.ts): the signer's own link, the trail and the email turn. */
+export const documentInternals = { signLinkOf, live, ev, notify, fromOf };

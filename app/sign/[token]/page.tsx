@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { SignView } from "../Sign";
 import { DocSignView } from "../DocSign";
+import { DocSign2 } from "../DocSign2";
+
+/** RN_CONTRACTS2, as lib/documents/store.ts contracts2On reads it (inline: this page loads no server store). */
+const contracts2On = () => /^(1|on|true)$/i.test(process.env.RN_CONTRACTS2 ?? "");
 
 export const dynamic = "force-dynamic";
 /** A personal link: never in a search index, never a preview with the proposal in it. */
@@ -16,5 +20,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 export default async function Page({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const t = String(token ?? "").slice(0, 120);
-  return /^ds_/.test(t) ? <DocSignView token={t} /> : <SignView token={t} />;
+  // Contracts rebuilt (RN_CONTRACTS2): a document's page is the one bar (Start, Next, Finish). Off: as before.
+  if (/^ds_/.test(t)) return contracts2On() ? <DocSign2 token={t} /> : <DocSignView token={t} />;
+  return <SignView token={t} />;
 }
