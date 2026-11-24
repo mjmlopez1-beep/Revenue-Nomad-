@@ -81,7 +81,8 @@ export function dateWords(day: string | null | undefined, today: string): string
 /**
  * Why two ranges count the same, when they do: Crystal Ball's picks only go back to `since`, so a
  * wider range can hold no more ("Picks go back to Nov 18, so the last 30 days hold the same
- * companies as the last 7"). Null when the counts differ or there is nothing to explain.
+ * companies as the last 7"), or every company in the wider range had news in the narrower one too
+ * (a company counts once, at its latest day). Null when the counts differ or there is nothing to explain.
  */
 export function rangesNote(ranges: { range: string; companies: number }[] | undefined, since: string | null | undefined, today: string): string | null {
   const n = (r: string) => ranges?.find((x) => x.range === r)?.companies;
@@ -89,8 +90,10 @@ export function rangesNote(ranges: { range: string; companies: number }[] | unde
   const m = n("30d");
   if (!since || w === undefined || m === undefined || w !== m || m === 0) return null;
   const days = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${since}T12:00:00Z`)) / 86_400_000);
-  if (!(days >= 0 && days < 7)) return null;
-  return `Picks go back to ${dateWords(since, today)}, so the last 30 days hold the same companies as the last 7.`;
+  if (!(days >= 0)) return null;
+  if (days < 7) return `Picks go back to ${dateWords(since, today)}, so the last 30 days hold the same companies as the last 7.`;
+  // Older days had news too, at the same companies: each company counts once, at its latest day.
+  return `Each company counts once, at its latest news. All ${m.toLocaleString("en-US")} had something in the last 7 days.`;
 }
 
 /** What the page knows about a way in at one company, from the member's own sources and the seats on file. */

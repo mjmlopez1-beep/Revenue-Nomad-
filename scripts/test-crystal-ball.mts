@@ -363,7 +363,8 @@ async function main() {
   console.log("\nThe ranges say why they agree");
   const td = ago(0);
   check("picks only from 3 days ago: the note says the last 30 days hold the same companies as the last 7", CM.rangesNote([{ range: "today", companies: 0 }, { range: "7d", companies: 124 }, { range: "30d", companies: 124 }], ago(3), td)?.includes("so the last 30 days hold the same companies as the last 7") === true);
-  check("no note when the counts differ, or when the picks go back further", CM.rangesNote([{ range: "7d", companies: 4 }, { range: "30d", companies: 9 }], ago(3), td) === null && CM.rangesNote([{ range: "7d", companies: 4 }, { range: "30d", companies: 4 }], ago(20), td) === null);
+  check("no note when the counts differ, or nothing is listed", CM.rangesNote([{ range: "7d", companies: 4 }, { range: "30d", companies: 9 }], ago(3), td) === null && CM.rangesNote([{ range: "7d", companies: 0 }, { range: "30d", companies: 0 }], ago(20), td) === null);
+  check("picks go back further, the same companies: the note says each company counts once, at its latest news", CM.rangesNote([{ range: "7d", companies: 18 }, { range: "30d", companies: 18 }], ago(30), td) === "Each company counts once, at its latest news. All 18 had something in the last 7 days.");
   const vs = await view(JOR, "30d");
   check("the view says how far back its picks go", typeof vs?.since === "string" && vs!.since! <= td && (vs!.ranges ?? []).length === 3, vs?.since);
   const cbSrc2 = readFileSync(new URL("../app/post/crystal/CrystalBall.tsx", import.meta.url), "utf8");
