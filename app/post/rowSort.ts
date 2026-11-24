@@ -7,7 +7,7 @@
  */
 import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { RN_EMPLOYEES, RN_REVENUE, SOURCE_LABEL } from "@/lib/tableFields";
-import type { SortCol, SortKind, SortVal } from "@/app/ui/sortable";
+import type { SortCol, SortKind, SortVal } from "@/app/ui/sortCore";
 import { hireOfRow, isOpenRole, type HireCtx, type Row } from "./model";
 import { deciderOf } from "./workbench/columns";
 import { closestOf } from "./workbench/closest";
