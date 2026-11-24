@@ -32,6 +32,7 @@ import { useNetwork } from "./useNetwork";
 import { pathsAct, useKnown, usePaths } from "./usePaths";
 import "./connectPanel.css";
 import { MIN as SIX_MIN } from "../getStarted";
+import { ExportPanel } from "./ExportPanel";
 
 export type SourceKey = "google" | "linkedin" | "csv";
 
@@ -268,8 +269,17 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
   const [busy, setBusy] = useState<"read" | "delete" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ask, setAsk] = useState(false);
+  // The whole export (.zip) or several of its files: read on this device, with its own consent screen (ExportPanel.tsx).
+  const [whole, setWhole] = useState<File[] | null>(null);
   const li = paths?.linkedin ?? null;
   const left = paths?.importsLeft ?? 0;
+  const pickMany = (fs: File[]) => {
+    if (fs.length > 1 || fs.some((f) => /\.zip$/i.test(f.name) || !/connections/i.test(f.name))) {
+      if (file.current) file.current.value = "";
+      return setWhole(fs);
+    }
+    void pick(fs[0]);
+  };
   const pick = async (f: File | undefined) => {
     if (!f) return;
     setErr(null);
@@ -289,6 +299,15 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
       if (file.current) file.current.value = "";
     }
   };
+  if (whole)
+    return (
+      <div className="cp-acts">
+        <ExportPanel picked={whole} onClose={() => setWhole(null)} />
+        <button type="button" className="tp-flink" onClick={() => setWhole(null)}>
+          Back to the connections file only
+        </button>
+      </div>
+    );
   return (
     <div className="cp-acts">
       {!li && (
@@ -304,7 +323,7 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
           {err}
         </p>
       )}
-      <input ref={file} type="file" accept=".csv,text/csv" className="cp-file" tabIndex={-1} aria-hidden onChange={(e) => void pick(e.target.files?.[0])} />
+      <input ref={file} type="file" multiple accept=".csv,text/csv,.zip,application/zip" className="cp-file" tabIndex={-1} aria-hidden onChange={(e) => pickMany([...(e.target.files ?? [])])} />
       {ask ? (
         <Confirm
           what="Merlin deletes your connections and every way in found from them. This can't be undone."
@@ -332,6 +351,13 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
         </div>
       )}
       {paths && left <= 0 && <p className="cp-note">That&apos;s 3 uploads today. Upload again tomorrow.</p>}
+      <span className="cp-note">
+        Have the whole export?{" "}
+        <button type="button" className="tp-flink" onClick={() => setWhole([])}>
+          Bring in the .zip
+        </button>{" "}
+        and Merlin also reads who you message and how often (never the words), your roles and who vouched for you.
+      </span>
     </div>
   );
 }

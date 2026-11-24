@@ -95,7 +95,8 @@ async function main() {
   console.log("\nNo export or download anywhere in Settings");
   const all = files.map((f) => code(f)).join("\n");
   const words = files.filter((f) => !f.endsWith(".css")).flatMap((f) => wordsOf(code(f)));
-  const bad = words.filter((w) => /\bexport|download|\.csv|\bCSV\b/i.test(w));
+  // The member's own LinkedIn data export coming in (lib/linkedin) is an import into Merlin, not an export from it.
+  const bad = words.map((w) => w.replace(/(LinkedIn data|your|newer|the|own|Your own) export\b|export brought in/gi, "")).filter((w) => /\bexport|download|\.csv|\bCSV\b/i.test(w));
   check("no word offers an export, a download or a CSV", bad.length === 0, bad.slice(0, 5));
   check("no download link, no file made in the browser", !/\bdownload[=:]|createObjectURL|new Blob\(|\.xlsx|text\/csv/.test(all));
   check("Your account has no export row (the plan's export everything is cancelled)", !/Export everything|Export my data|Export the companies/i.test(all));
@@ -128,8 +129,12 @@ async function main() {
   const fresh = model.connRows({ google: { configured: true, link: null, gmail: null, claude: null, syncing: false, companies: 0 }, paths: { linkedin: null, csv: null }, integ: null, granola: null, apps: null, nowMs: NOW });
   check("a first visit: Google and the LinkedIn file are step 3 of getting started", fresh[0].since === "Step 3 of getting started" && fresh[1].since === "Step 3 of getting started" && fresh[1].go === "Add the file");
   check("LinkedIn only as the member's own connections file", on.filter((r) => /LinkedIn/.test(`${r.name} ${r.sub} ${r.reads} ${r.never}`)).every((r) => r.name === "LinkedIn connections file") && !/Sales Navigator/i.test(all));
+  // The LinkedIn data export's row (lib/linkedin): once its answer is in, after the connections file.
+  const withLix = model.connRows({ google: null, paths: { linkedin: file, csv: null, lix: { at: d(1), uses: ["know", "warm"], files: ["connections", "messages"], counts: { connections: 40, warm: 12 } } }, integ: null, granola: null, apps: null, nowMs: NOW });
+  const lixRow = withLix.find((r) => r.key === "lix");
+  check("the LinkedIn data export has its own row after the connections file: what came in, when, and Remove", withLix.map((r) => r.key).slice(0, 3).join(",") === "linkedin,lix,csv" && !!lixRow && lixRow.since === "40 connections · warmth for 12" && lixRow.last === "Brought in yesterday" && !!lixRow.remove && /messages' words/.test(lixRow.never) && /upload the archive/.test(lixRow.never), lixRow);
   check("Google stays the member's own: only they see it", /Only you see it, and it never feeds another member/.test(code("Connections.tsx")) && /Seen by", "Only you"/.test(code("Connections.tsx")));
-  check("each Remove is that source's own delete", JSON.stringify(model.REMOVE) === JSON.stringify({ google: { via: "google", op: "disconnect" }, linkedin: { via: "paths", op: "delete" }, csv: { via: "paths", op: "deleteCsv" }, slack: { via: "integrations", body: { op: "remove", field: "slack" } }, hook: { via: "integrations", body: { op: "remove", field: "webhook" } }, granola: { via: "granola", op: "disconnect" }, agent: { via: "oauth", op: "revoke" } }));
+  check("each Remove is that source's own delete", JSON.stringify(model.REMOVE) === JSON.stringify({ google: { via: "google", op: "disconnect" }, linkedin: { via: "paths", op: "delete" }, lix: { via: "export", op: "remove" }, csv: { via: "paths", op: "deleteCsv" }, slack: { via: "integrations", body: { op: "remove", field: "slack" } }, hook: { via: "integrations", body: { op: "remove", field: "webhook" } }, granola: { via: "granola", op: "disconnect" }, agent: { via: "oauth", op: "revoke" } }));
   check("the deletes they mirror are still those (Your network, the files, Integrations, Granola, Connected apps)", /netAct\("disconnect"\)/.test(src("app/post/network/Network.tsx")) && /pathsAct\("delete"\)/.test(cp) && /pathsAct\("deleteCsv"\)/.test(cp) && /op: "remove", field: "slack"/.test(src("app/post/Integrations.tsx")) && /op: "remove", field: "webhook"/.test(src("app/post/Integrations.tsx")) && /disconnectKey\(\)/.test(src("app/post/GranolaSection.tsx")) && /revoke: app\.id/.test(src("app/post/ConnectedApps.tsx")));
   check("the table's Remove runs runRemove(REMOVE[key])", /runRemove\(REMOVE\[r\.key\], data\.apps \?\? \[\]\)/.test(code("Connections.tsx")));
   // Each Remove, run against a recorded fetch: the request each one makes.
@@ -145,6 +150,7 @@ async function main() {
   const want: Record<string, { url: string; body: unknown }[]> = {
     google: [{ url: "/api/integrations/google", body: { op: "disconnect" } }],
     linkedin: [{ url: "/api/paths", body: { op: "delete" } }],
+    lix: [{ url: "/api/paths/export", body: { op: "remove" } }],
     csv: [{ url: "/api/paths", body: { op: "deleteCsv" } }],
     slack: [{ url: "/api/integrations", body: { op: "remove", field: "slack" } }],
     hook: [{ url: "/api/integrations", body: { op: "remove", field: "webhook" } }],

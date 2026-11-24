@@ -32,6 +32,7 @@ import { PageHead } from "../ui/system";
 import { HideNameSwitch } from "./PartnersSwitch";
 import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
+import { ExportSeats } from "./network/ExportPanel";
 import { SeatCaseLine, seatEvidenceOn, useSeatCases } from "./evidence/SeatEvidence";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -1050,6 +1051,8 @@ export function Seats({
       )}
       {/* [google network] Seats the member's calendar suggests they held: Confirm or Not a seat (nothing with RN_GOOGLE off, or before they connect). */}
       <SeatGuesses infos={infos ?? []} seats={seats} onShown={setGuessing} />
+      {/* The roles in the member's own LinkedIn export (lib/linkedin): Confirm is the existing Add, Not a seat sets one aside. */}
+      <ExportSeats act={ui.act} holder={me.name} />
       {/*
         One place in the page for the search, empty or not, so a seat claimed from an empty page keeps
         its client card (the page fills in under it instead of starting the search over).

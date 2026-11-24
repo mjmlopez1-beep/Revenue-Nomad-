@@ -36,6 +36,8 @@ import { Workbench } from "../workbench/Workbench";
 import { COMPANY_COLUMNS, type ColumnDef } from "../workbench/columns";
 import { pipelineAct } from "../pipelineStore";
 import { ConnectPanel, type SourceKey } from "./ConnectPanel";
+import { ExportPanel } from "./ExportPanel";
+import { useExport } from "./useExport";
 import { useNetwork } from "./useNetwork";
 import { usePaths } from "./usePaths";
 import { openWay, suggestPost, useSuggest, useWarm, useWayIn, wayPost } from "./useWays";
@@ -163,7 +165,8 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
   // Paths through someone (not a cold note to who decides), and those through fellow fractionals.
   const through = v.rows.filter((r) => r.best !== null && r.src !== "direct").length;
   const fellowN = v.rows.filter((r) => r.src === "fellow").length;
-  const onCount = 2 + Number(v.own.google) + Number(v.own.linkedin) + Number(v.own.csv);
+  const lixIn = !!useExport().view?.info;
+  const onCount = 2 + Number(v.own.google) + Number(v.own.linkedin) + Number(v.own.csv) + Number(lixIn);
   const goSources = (k?: SourceKey) => {
     if (k) setSrc(k);
     setTimeout(() => document.getElementById("wp-sources")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
@@ -216,7 +219,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
         </span>
         <span className="wp-grow" />
         <button type="button" className="wp-srclink" onClick={() => goSources()}>
-          Sources <strong>{onCount} of 5 on</strong>
+          Sources <strong>{onCount} of 6 on</strong>
         </button>
       </div>
       <div className="wp-bar wp-bar2">
@@ -1026,6 +1029,7 @@ const ICONS: Record<string, string> = {
   google: "M4 5h16v14H4zM9 11a2 2 0 1 0 0-4a2 2 0 0 0 0 4zM6 16a3 3 0 0 1 6 0M14 9h4M14 13h3",
   linkedin: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4",
   csv: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
+  export: "M12 3v12M7 10l5 5 5-5M5 19h14",
   messages: "M5 5h14v11H10l-5 4z",
   fellow: "M7 4h10v8H7zM5 12h14v4H5zM7 16v4M17 16v4",
 };
@@ -1036,6 +1040,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
   const net = useNetwork();
   const { view: pv } = usePaths();
   const [li, setLi] = useState(false);
+  const lx = useExport().view?.info ?? null;
+  const [lxOpen, setLxOpen] = useState(false);
   const g = net.view?.google ?? null;
   const gOn = !net.off && !!g && g.status !== "reconnect";
   const paths = (k: WaySource) => {
@@ -1073,6 +1079,16 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
         : "Names and profile links. Three steps, about 10 minutes.",
       btn: { t: pv?.linkedin ? "Upload a newer file" : "Add your file", go: () => onOpen("linkedin"), primary: first && net.off },
       paths: pv?.linkedin ? paths("linkedin") : undefined,
+    },
+    {
+      // The whole LinkedIn data export (lib/linkedin): read on the member's device, warmth from who they message (never the words).
+      k: "export",
+      name: "Your LinkedIn data export",
+      on: !!lx,
+      status: lx ? `Brought in ${fmtDay(lx.at)}` : "Not added",
+      count: lx ? [lx.counts.warm ? `Warmth for ${n(lx.counts.warm)} people` : "", lx.counts.invites ? `${n(lx.counts.invites)} invited` : "", lx.counts.vouch ? `${n(lx.counts.vouch)} who vouched` : ""].filter(Boolean).join(" · ") || "Nothing ticked" : "The whole .zip from your LinkedIn.",
+      meta: lx ? "Read on your device. A message's words never leave it." : "Request it early: exports from December 2026 leave out companies and titles.",
+      btn: { t: lx ? "Manage your export" : "Bring in your export", go: () => (onOpen(null), setLxOpen(!lxOpen)) },
     },
     {
       k: "csv",
@@ -1146,7 +1162,7 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
             <span className="wp-scard-c">{x.count}</span>
             <span className="wp-sub">{x.meta}</span>
             {x.btn && (
-              <button type="button" className={cx("btn", x.btn.primary ? "btn-pine" : "btn-outline", "wp-scard-b")} aria-expanded={open === x.k} onClick={x.btn.go}>
+              <button type="button" className={cx("btn", x.btn.primary ? "btn-pine" : "btn-outline", "wp-scard-b")} aria-expanded={x.k === "export" ? lxOpen : open === x.k} onClick={x.btn.go}>
                 {x.btn.t}
               </button>
             )}
@@ -1158,6 +1174,14 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
           </div>
         ))}
       </div>
+      {lxOpen && !open && (
+        <div className="wp-src-panel">
+          <button type="button" className="wp-src-close" aria-label="Close" onClick={() => setLxOpen(false)}>
+            <IconX size={16} />
+          </button>
+          <ExportPanel onClose={() => setLxOpen(false)} />
+        </div>
+      )}
       {open && (
         <div className="wp-src-panel">
           <button type="button" className="wp-src-close" aria-label="Close" onClick={() => onOpen(null)}>

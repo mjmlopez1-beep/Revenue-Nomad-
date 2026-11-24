@@ -197,6 +197,20 @@ export function DataFlows() {
               within the daily limit. Your Google contacts are never used for this. Nobody at a company based in California or outside the United States is
               suggested, and anyone can take their name off at Remove my name.
             </p>
+            <p className="cl-p">
+              Your connections export, the whole archive: it is read in your browser, never uploaded. Merlin opens only the files it uses (connections,
+              invitations, your positions, messages, recommendations, endorsements, companies you follow, your posts and comments, and skills) and never
+              opens the rest: logins, security, receipts, phone numbers, email addresses, ads data, what the service infers about you, searches, job
+              applications, learning, events, reactions, your profile summary, education and notes. You see that list and tick what Merlin may use.
+            </p>
+            <p className="cl-p">
+              From the messages file, your browser counts only how many messages you and each person sent each other and the first and last day; the words,
+              subjects and attachments never leave your device. Pending invitations are kept as weaker ties by profile link. Recommendations and endorsements
+              mark the people who vouched for you, matched by name and company together, never a name alone. Your positions become seats you can confirm one by one,
+              and the companies you follow there become companies you can follow here: nothing is added until you tick it. If you tick them, your posts set
+              your writing voice (only the style is kept, never a post), and the recommendations you received are kept as proof in your Evidence Bank by first
+              name and company. Only you see any of it, and Remove in Settings deletes all of it.
+            </p>
           </section>
 
           <section className="df-sec" aria-labelledby="df-ways">
@@ -360,6 +374,7 @@ export function DataFlows() {
             <h3 className="df-h3">You</h3>
             <ul className="df-bullets">
               <li>Your connections file and your contacts file: People, Bring in who you know, or Your network. Each has its own Delete, and every way in found from it goes with it.</li>
+              <li>Your connections export: Settings, Connections, Remove. Everything it brought in is deleted, with the ways in found from it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added. On Agent access: Revoke an assistant, switch off its tools, or set a daily spend limit for all of them.</li>
               <li>Granola: Integrations, Disconnect (or Settings, Connections). Merlin asks Granola to end its access and deletes it at once, and closing your account does the same. If you connected a key, revoke it in Granola as well, under Settings, Connectors, API keys.</li>
@@ -373,7 +388,7 @@ export function DataFlows() {
               <li>Proposal alerts: each one on or off for Slack, email and Merlin in Notifications. Reminders to the person who signs: off for each proposal on its activity page.</li>
               <li>Your name on a seat, and an email read from your own website: take them off at Remove my name, no account needed.</li>
               <li>A fact you just added: Undo takes it back, with its credit, until someone unlocks or confirms it.</li>
-              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file and contacts file you uploaded, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, your alerts and the bell, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
+              <li>Your account: Close my account, on Your credits. It closes at once (signed out, out of Peers and the directory, no more email) and can be brought back for 30 days. After 30 days Merlin deletes your personal data: your profile, your Google connection, the connections file, connections export and contacts file you brought in, your network, your pipeline and plans for a way in, your notes on companies, your Evidence Bank, your alerts and the bell, the messages you wrote, proposals and documents, AI usage log and saved views. Facts you added to companies stay, with your name taken off.</li>
             </ul>
             <h3 className="df-h3">Revenue Nomad</h3>
             <p className="cl-p">Each part that talks to an outside service has its own server switch, and stays off until it is turned on, except where noted:</p>

@@ -20,6 +20,8 @@ import { GoogleG, GooglePolicyLink, startGoogle } from "../network/Network";
 import { netAct, NOTICE_WORDS, type GoogleNotice } from "../network/useNetwork";
 import { loadKnown } from "../network/usePaths";
 import { CsvAct, LinkedInAct } from "../network/ConnectPanel";
+import { ExportPanel } from "../network/ExportPanel";
+import type { ExportInfo } from "@/lib/linkedin/types";
 import { ConnectForm, SlackGlyph } from "../Integrations";
 import { connectKey, loadGranola, startGranola, useGranolaNotice } from "../granolaClient";
 import { GRANOLA_READS } from "../GranolaSection";
@@ -33,6 +35,8 @@ import { runRemove, send } from "./calls";
 export interface ConnData {
   net: { view: NetworkView | null; off: boolean };
   paths: PathsView | null;
+  /** The LinkedIn data export, as GET /api/paths/export has it. */
+  lix: ExportInfo | null;
   integ: IntegrationsView | null;
   setInteg: (v: IntegrationsView) => void;
   granola: GranolaStatus | null;
@@ -40,7 +44,7 @@ export interface ConnData {
   reloadApps: () => void;
 }
 
-const INITIALS: Record<ConnKey, string> = { google: "Go", linkedin: "Li", csv: "Co", slack: "Sl", hook: "Ot", granola: "Gr", agent: "Ag" };
+const INITIALS: Record<ConnKey, string> = { google: "Go", linkedin: "Li", lix: "Ex", csv: "Co", slack: "Sl", hook: "Ot", granola: "Gr", agent: "Ag" };
 
 export function Connections({ rows, open, setOpen, data, onNotif, flash }: { rows: ConnRow[]; open: ConnKey | null; setOpen: (k: ConnKey | null) => void; data: ConnData; onNotif: () => void; flash: (t: string, err?: boolean) => void }) {
   const [asking, setAsking] = useState<ConnKey | null>(null);
@@ -56,7 +60,7 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
       if (v) data.setInteg(v);
     }
     if (r.key === "agent") data.reloadApps();
-    if (r.key === "linkedin" || r.key === "csv") void loadKnown(true);
+    if (r.key === "linkedin" || r.key === "csv" || r.key === "lix") void loadKnown(true);
     flash(`${r.name} is off. What it gave Merlin is deleted.`);
   };
   return (
@@ -263,6 +267,35 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
             ["Last read", g.syncedAt ? dayWords(g.syncedAt, nowMs) : v.syncing ? "Reading now" : "Not yet"],
             ["Seen by", "Only you"],
           ]}
+        />
+        <FeedsBox row={row} />
+      </div>
+    );
+  }
+  if (k === "lix") {
+    const x = data.lix;
+    return (
+      <div className="st-detail">
+        <div className="st-detail-main">
+          <strong className="st-detail-h">{x ? "Your LinkedIn data export is in" : "Bring in your LinkedIn data export"}</strong>
+          <span>The whole .zip LinkedIn gives you, read on this device. You see which files Merlin reads and which it never opens, and tick what it may use. Only you see it.</span>
+          <ExportPanel />
+        </div>
+        <Facts
+          title={x ? "ON FILE NOW" : "WHAT MERLIN KEEPS"}
+          rows={
+            x
+              ? [
+                  ["Connections", (x.counts.connections ?? 0).toLocaleString("en-US")],
+                  ["Invited, not connected", (x.counts.invites ?? 0).toLocaleString("en-US")],
+                  ["Warmth from messages", `${(x.counts.warm ?? 0).toLocaleString("en-US")} people`],
+                  ["Who vouched", (x.counts.vouch ?? 0).toLocaleString("en-US")],
+                  ["Roles to confirm", (x.counts.positions ?? 0).toLocaleString("en-US")],
+                  ["Brought in", dayWords(x.at, nowMs)],
+                  ["Seen by", "Only you"],
+                ]
+              : [["Per person", "Profile link, name, message counts and days"], ["Never", "A message's words"], ["Seen by", "Only you"], ["Cost", "Free, no credits"]]
+          }
         />
         <FeedsBox row={row} />
       </div>
