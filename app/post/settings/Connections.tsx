@@ -31,6 +31,7 @@ import { useApp } from "../shell/pages";
 import type { ConnKey } from "./at";
 import { REMOVE, dayWords, type ConnRow, type Feed } from "./model";
 import { runRemove, send } from "./calls";
+import { FathomRow } from "./FathomRow";
 
 export interface ConnData {
   net: { view: NetworkView | null; off: boolean };
@@ -142,6 +143,8 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
             </div>
           );
         })}
+        {/* Fathom, a call recorder for the call workflows (RN_FATHOM): its own small row, beside Granola's. */}
+        <FathomRow flash={flash} />
       </div>
       <p className="st-note">Merlin never reads the text of an email or a message, through any connection. When you remove one, what it gave Merlin is deleted as its row says. Connections never spend a credit.</p>
     </>

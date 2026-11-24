@@ -13,14 +13,16 @@
  *   the builder    When this happens, Watching, Then do this, What a run costs (each step's price and the
  *                  most a run can spend, before it is on), the monthly limit and the warning
  *   drafts         Messages shows the notes workflows drafted (WorkflowDrafts): drafts only, never sent
+ *   a call ends    (RN_CALL_TRIGGERS) the call recorders connected, which calls, "only if we agreed to
+ *                  send", the template for the proposal, the transcript for Claude; a run links what it built
  * No export anywhere: nothing here downloads.
  */
 import { useCallback, useEffect, useState } from "react";
 import { errorText, IconX, useToast } from "../../ui/shared";
 import { openPlans } from "../Billing";
 import {
-  RECIPES, REMIND_DAYS, STEPS, STEP_ORDER, TRIGGERS, costWords, creditWords, runCeiling, sayFlow, sortSteps,
-  type FlowRow, type RunRow, type WfDraft, type WfScope, type WfScopeKind, type WfStep, type WfStepKey, type WfTrigger, type WorkflowsAnswer, type WorkflowsView,
+  CALL_DEFAULT, DELIVERABLES, DELIVERABLE_WORDS, RECIPES, REMIND_DAYS, STEPS, STEP_ORDER, TRIGGERS, costWords, creditWords, runCeiling, sayFlow, sortSteps,
+  type CallOptions, type Deliverable, type FlowRow, type RunRow, type WfDraft, type WfScope, type WfScopeKind, type WfStep, type WfStepKey, type WfTrigger, type WorkflowsAnswer, type WorkflowsView,
 } from "@/lib/workflows/types";
 import { whenWords } from "./model";
 import "./alerts.css";
@@ -66,7 +68,19 @@ export function useWorkflows() {
 const COST = (paid: boolean) => `wf-cost${paid ? "" : " free"}`;
 const stepLabel = (st: WfStep) => (st.key === "remind" ? `Remind me in ${st.days ?? REMIND_DAYS.default} ${(st.days ?? 2) === 1 ? "day" : "days"}` : STEPS[st.key].name);
 const scopeName = (sc: WfScope, lists: { id: string; name: string }[]) =>
-  sc.kind === "list" ? `List: ${lists.find((l) => l.id === sc.list)?.name ?? "a list you removed"}` : sc.kind === "radar" ? "Your Crystal Ball" : sc.kind === "follows" ? "Companies you follow" : sc.kind === "contacts" ? "Your own contacts" : "Every proposal you send";
+  sc.kind === "list"
+    ? `List: ${lists.find((l) => l.id === sc.list)?.name ?? "a list you removed"}`
+    : sc.kind === "radar"
+      ? "Your Crystal Ball"
+      : sc.kind === "follows"
+        ? "Companies you follow"
+        : sc.kind === "contacts"
+          ? "Your own contacts"
+          : sc.kind === "calls"
+            ? "Calls in your call recorder"
+            : "Every proposal you send";
+/** The plan a step needs beyond the member's, as the pill says it. */
+const planOfStep = (k: WfStepKey) => (STEPS[k].close || STEPS[k].proposals ? "Close" : STEPS[k].paid || STEPS[k].pro ? "Pro" : null);
 
 /** The header's pills: credits workflows spent in 30 days, runs waiting for a yes. */
 export function WorkflowPills({ v, onWaiting, creditsHref }: { v: WorkflowsView; onWaiting: () => void; creditsHref: () => void }) {
@@ -95,15 +109,16 @@ export interface WfBuild {
   steps: WfStep[];
   cap: number | null;
   warn: number | null;
+  call?: CallOptions;
 }
-export const fromRow = (f: FlowRow): WfBuild => ({ id: f.id, name: f.name, trigger: f.trigger, scope: f.scope, steps: f.steps, cap: f.cap, warn: f.warn });
+export const fromRow = (f: FlowRow): WfBuild => ({ id: f.id, name: f.name, trigger: f.trigger, scope: f.scope, steps: f.steps, cap: f.cap, warn: f.warn, ...(f.call ? { call: f.call } : {}) });
 const defaultScope = (t: WfTrigger, v: WorkflowsView | null, kind?: WfScopeKind): WfScope => {
   const k = kind && TRIGGERS[t].scopes.includes(kind) ? kind : TRIGGERS[t].scopes[0];
   return k === "list" ? { kind: "list", list: v?.lists[0]?.id ?? "" } : { kind: k };
 };
 export const fromRecipe = (key: string, v: WorkflowsView | null): WfBuild => {
   const r = RECIPES.find((x) => x.key === key) ?? RECIPES[0];
-  return { id: "", name: "", trigger: r.trigger, scope: defaultScope(r.trigger, v, r.scope), steps: r.steps, cap: null, warn: null };
+  return { id: "", name: "", trigger: r.trigger, scope: defaultScope(r.trigger, v, r.scope), steps: r.steps, cap: null, warn: null, ...(r.call ? { call: r.call } : {}) };
 };
 export const blankBuild = (v: WorkflowsView | null): WfBuild => fromRecipe("seat-pipe-way", v);
 
@@ -141,7 +156,7 @@ export function WorkflowsTab({
   const runs30 = v.flows.reduce((n, f) => n + f.runs30, 0);
   const lastAt = v.flows.map((f) => f.last).filter(Boolean).sort().pop() ?? null;
   const used = new Set(v.flows.map((f) => `${f.trigger}|${f.steps.map((s) => s.key).join(",")}`));
-  const recipes = RECIPES.filter((r) => !used.has(`${r.trigger}|${sortSteps(r.steps).map((s) => s.key).join(",")}`) && (v.funding || !TRIGGERS[r.trigger].funding));
+  const recipes = RECIPES.filter((r) => !used.has(`${r.trigger}|${sortSteps(r.steps).map((s) => s.key).join(",")}`) && (v.funding || !TRIGGERS[r.trigger].funding) && (!!v.calls || !TRIGGERS[r.trigger].calls));
   const gallery = (
     <section className="al-gallery wf-gallery" aria-labelledby="wf-gal-h">
       <div className="al-gallery-head">
@@ -151,12 +166,13 @@ export function WorkflowsTab({
       <div className="al-cards">
         {recipes.map((r) => {
           const ceiling = runCeiling(r.steps, { kind: r.scope }, v.prices).total;
-          const plan = TRIGGERS[r.trigger].plan ?? (r.steps.some((s) => STEPS[s.key].close) ? "Close" : r.steps.some((s) => STEPS[s.key].paid) ? "Pro" : null);
+          const plan = TRIGGERS[r.trigger].plan ?? (r.steps.some((s) => planOfStep(s.key) === "Close") ? "Close" : r.steps.some((s) => planOfStep(s.key) === "Pro") ? "Pro" : null);
           const held = plan === "Close" ? !v.plan.proposals : plan === "Pro" ? !v.plan.paid : false;
-          const say = sayFlow({ trigger: r.trigger, scope: { kind: r.scope }, steps: r.steps });
+          const say = r.title ?? sayFlow({ trigger: r.trigger, scope: { kind: r.scope }, steps: r.steps, call: r.call });
           return (
             <div key={r.key} className="al-card">
               <strong>{say}</strong>
+              {r.trigger === "call" && <span className="al-sub wrap wf-card-sub">{r.steps.map((x) => STEPS[x.key].sub).join(" ")}</span>}
               <span className="al-card-foot">
                 <span className="al-pill">WORKFLOW</span>
                 <span className={`al-cost${ceiling ? "" : " free"}`}>{costWords(ceiling)}</span>
@@ -301,6 +317,18 @@ export function RunLine({ r, busy, act, openCompany, nowMs }: { r: RunRow; busy:
           ))}
         </span>
         <span className="wf-run-notes">{r.steps.filter((s) => s.note).map((s) => s.note).filter((x, i, a) => a.indexOf(x) === i).slice(0, 3).join(" ")}</span>
+        {r.built && (r.built.proposal || r.built.sow || r.built.followup || r.built.deck || r.built.claude) && (
+          <span className="wf-run-built">
+            {r.built.proposal && <a href={`/?p=proposals&pr=${encodeURIComponent(r.built.proposal)}`}>Open the proposal draft</a>}
+            {r.built.sow && <a href={`/?p=proposals&pr=${encodeURIComponent(r.built.sow)}`}>Open the SOW draft</a>}
+            {(r.built.followup || r.built.deck) && <a href="/?p=messages">{r.built.followup && r.built.deck ? "The follow-up email and deck outline" : r.built.followup ? "The follow-up email" : "The deck outline"}, in Messages</a>}
+            {r.built.claude && (
+              <a href={r.built.claude} target="_blank" rel="noopener noreferrer">
+                Open in Claude
+              </a>
+            )}
+          </span>
+        )}
       </span>
       <span className="wf-run-cr">{r.spent ? creditWords(r.spent) : wait ? "Nothing yet" : "No credits"}</span>
       <span className="wf-run-act">
@@ -334,12 +362,15 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
   const fits = STEP_ORDER.filter((k) => STEPS[k].fits.includes(b.trigger));
   const has = (k: WfStepKey) => b.steps.some((s) => s.key === k);
   const ceil = runCeiling(b.steps, b.scope, v.prices);
-  const stepHeld = (k: WfStepKey) => (STEPS[k].close && !v.plan.evidence ? "Close" : STEPS[k].paid && !v.plan.paid ? "Pro" : null);
+  const stepHeld = (k: WfStepKey) => (STEPS[k].close && !v.plan.evidence ? "Close" : STEPS[k].proposals && !v.plan.proposals ? "Close" : (STEPS[k].paid || STEPS[k].pro) && !v.plan.paid ? "Pro" : null);
+  const call = b.call ?? CALL_DEFAULT;
+  const setCall = (c: Partial<CallOptions>) => set({ ...b, call: { ...call, ...c } });
   const trigHeld = (t: WfTrigger) => (TRIGGERS[t].plan === "Close" && !v.plan.proposals ? "Close" : null);
   const pick = (t: WfTrigger) => {
     if (trigHeld(t)) return openPlans("radar");
     const keep = b.steps.filter((s) => STEPS[s.key].fits.includes(t));
-    set({ ...b, trigger: t, scope: TRIGGERS[t].scopes.includes(b.scope.kind) ? b.scope : defaultScope(t, v), steps: keep.length ? keep : [{ key: "tell" }] });
+    const first: WfStep = t === "call" ? { key: v.plan.proposals ? "proposal" : v.plan.paid ? "followup" : "remind", ...(v.plan.paid ? {} : { days: REMIND_DAYS.default }) } : { key: "tell" };
+    set({ ...b, trigger: t, scope: TRIGGERS[t].scopes.includes(b.scope.kind) ? b.scope : defaultScope(t, v), steps: keep.length ? keep : [first], ...(t === "call" ? { call: b.call ?? CALL_DEFAULT } : {}) });
   };
   const flip = (k: WfStepKey) => {
     if (stepHeld(k)) return openPlans("radar");
@@ -358,9 +389,17 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
   }
   if (has("dm")) lines.push(`Who decides: ${creditWords(v.prices.person)} for their name and title. Nothing when nobody is on file, or you have them already.`);
   if (has("draft")) lines.push("A note is a template in your voice: no credits. It waits in Messages as a draft. Nothing is sent.");
+  if (b.trigger === "call")
+    lines.push(
+      v.calls?.ai
+        ? "No credits. Merlin's AI reads the call and writes the drafts, from your AI usage. The transcript is read for the run and never kept."
+        : "No credits. Merlin's own rules read the call and fill your template. The transcript is read for the run and never kept.",
+    );
   lines.push(ceil.total ? `Each run is quoted just before it spends, and spends exactly that. Merlin's daily limits still apply. You have ${creditWords(v.credits)}.` : "Every step here is free. Nothing ever spends a credit.");
-  const say = sayFlow(b, listName);
-  const ready = b.steps.length > 0 && (b.scope.kind !== "list" || !!b.scope.list) && !trigHeld(b.trigger) && !b.steps.some((s) => stepHeld(s.key)) && !(info.funding && !v.funding);
+  const say = sayFlow({ ...b, call: b.trigger === "call" ? call : null }, listName);
+  const ready = b.steps.length > 0 && (b.scope.kind !== "list" || !!b.scope.list) && !trigHeld(b.trigger) && !b.steps.some((s) => stepHeld(s.key)) && !(info.funding && !v.funding) && !(info.calls && !v.calls);
+  const recorders = v.calls?.recorders ?? [];
+  const linked = recorders.filter((r) => r.connected);
   return (
     <aside id="wf-builder" className="al-b" aria-label="Workflow builder">
       <div className="al-b-top">
@@ -378,7 +417,7 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
         </span>
         <div role="radiogroup" aria-labelledby="wf-b-w" className="al-b-tiles">
           {(Object.keys(TRIGGERS) as WfTrigger[])
-            .filter((t) => v.funding || !TRIGGERS[t].funding)
+            .filter((t) => (v.funding || !TRIGGERS[t].funding) && (!!v.calls || !TRIGGERS[t].calls))
             .map((t) => {
               const held = trigHeld(t);
               return (
@@ -395,7 +434,35 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
         <span id="wf-b-l" className="al-b-h">
           2. Watching
         </span>
-        {info.scopes.length === 1 && info.scopes[0] !== "list" ? (
+        {b.trigger === "call" ? (
+          <div className="wf-call">
+            <span className="al-sub wrap">
+              {linked.length
+                ? `Calls in ${linked.map((r) => r.name).join(" and ")}. Merlin looks every 5 minutes and matches the company by the email of who was on the call.`
+                : `Connect ${recorders.map((r) => r.name).join(" or ") || "a call recorder"} in Settings, Connections. Until then nothing sets this off.`}
+            </span>
+            <div role="radiogroup" aria-label="Which calls" className="wf-chips">
+              <span>Which calls</span>
+              {[true, false].map((sales) => (
+                <button key={String(sales)} type="button" role="radio" aria-checked={call.sales === sales} className={`al-chip${call.sales === sales ? " on" : ""}`} onClick={() => setCall({ sales })}>
+                  {sales ? "Sales and discovery calls" : "Any call with a company"}
+                </button>
+              ))}
+            </div>
+            <div role="group" aria-label="Only if we agreed to send" className="wf-chips">
+              <span>Only if we agreed to send</span>
+              {DELIVERABLES.map((d: Deliverable) => {
+                const on = call.agreed.includes(d);
+                return (
+                  <button key={d} type="button" role="checkbox" aria-checked={on} className={`al-chip${on ? " on" : ""}`} onClick={() => setCall({ agreed: on ? call.agreed.filter((x) => x !== d) : [...call.agreed, d] })}>
+                    {DELIVERABLE_WORDS[d].short}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="al-sub wrap">{call.agreed.length ? "Merlin reads the call for what you said you'd send. If none of these was agreed, the run says so and builds nothing." : "None ticked: it builds after every call that matches."}</span>
+          </div>
+        ) : info.scopes.length === 1 && info.scopes[0] !== "list" ? (
           <span className="al-sub">{info.scopes[0] === "contacts" ? (v.sources ? "Your own contacts: your LinkedIn file, contacts file and Google. They stay yours." : "Your own contacts, once you bring them in on Warm paths.") : "Every proposal and contract you send."}</span>
         ) : (
           <div role="radiogroup" aria-labelledby="wf-b-l" className="al-b-list">
@@ -464,6 +531,34 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
                   <span className="wf-b-price">{held ? <span className="al-gate">{held}</span> : <span className={COST(STEPS[k].paid && !!per)}>{price}</span>}</span>
                 </span>
               </button>
+              {k === "proposal" && on && !held && v.calls && (
+                <label className="wf-days wf-tpl">
+                  Template
+                  <select className="input" value={call.template ?? ""} onChange={(e) => setCall({ template: e.target.value || null })}>
+                    <option value="">The closest one to the call</option>
+                    {v.calls.templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.mine ? `Yours: ${t.title}` : t.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {k === "claude" && on && !held && (
+                <button type="button" role="checkbox" aria-checked={call.transcript} className={`wf-check-row wf-sub-check${call.transcript ? " on" : ""}`} onClick={() => setCall({ transcript: !call.transcript })}>
+                  <span className={`al-check${call.transcript ? " on" : ""}`} aria-hidden>
+                    {call.transcript && (
+                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12.5l4.5 4.5L19 7.5" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="wf-b-step-t">
+                    <span>Include the transcript</span>
+                    <span className="al-sub wrap">Claude reads it from your recorder when it asks. Merlin never keeps it. Off: the summary and what was agreed only.</span>
+                  </span>
+                </button>
+              )}
               {k === "remind" && on && (
                 <label className="wf-days">
                   In
@@ -516,7 +611,7 @@ export function WorkflowBuilder({ b, set, v, busy, onClose, onSave, onRemove }: 
       <div className="al-b-foot">
         <strong>{say}</strong>
         <div className="al-b-go">
-          <span className="al-sub">{ready ? (ceil.total ? `${costWords(ceil.total)}. Turn it off any time.` : "Free. Turn it off any time.") : info.funding && !v.funding ? "Funding filings aren't switched on yet." : "Pick what it watches and one thing to do."}</span>
+          <span className="al-sub">{ready ? (ceil.total ? `${costWords(ceil.total)}. Turn it off any time.` : b.trigger === "call" ? "No credits. Drafts only: nothing goes to the client." : "Free. Turn it off any time.") : info.funding && !v.funding ? "Funding filings aren't switched on yet." : "Pick what it watches and one thing to do."}</span>
           {b.id && (
             <button type="button" className="btn btn-sm wf-edit" disabled={busy} onClick={onRemove}>
               Remove
@@ -567,6 +662,7 @@ export function WorkflowDrafts({ openCompany }: { openCompany: (pub: string) => 
             <button type="button" className="wf-draft" aria-expanded={open === d.id} onClick={() => setOpen(open === d.id ? null : d.id)}>
               <span className="wf-draft-s">{d.subject}</span>
               <span className="al-sub">
+                {d.kind === "followup" ? "Follow-up email · " : d.kind === "deck" ? "Deck outline · " : ""}
                 {d.companyName} · <span className="ms2-tag">Draft</span>
               </span>
             </button>
@@ -577,9 +673,11 @@ export function WorkflowDrafts({ openCompany }: { openCompany: (pub: string) => 
                   <button type="button" className="btn btn-sm btn-pine" onClick={() => void copy(d)}>
                     Copy
                   </button>
-                  <button type="button" className="btn btn-sm wf-edit" onClick={() => openCompany(d.company)}>
-                    Open the company
-                  </button>
+                  {d.company && (
+                    <button type="button" className="btn btn-sm wf-edit" onClick={() => openCompany(d.company)}>
+                      Open the company
+                    </button>
+                  )}
                   <button type="button" className="tp-flink" onClick={() => void remove(d.id)}>
                     Remove
                   </button>
