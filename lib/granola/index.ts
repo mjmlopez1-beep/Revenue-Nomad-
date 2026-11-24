@@ -530,6 +530,79 @@ export async function granolaCalls(token: string | null | undefined, a: Paramete
   return callsFor(w.m, a, nowMs);
 }
 
+/* ---------- calls that ended, for the "A call ends" trigger (lib/calls) ---------- */
+
+/** A call from Granola for the trigger: when it started and ended, who else was on it, its title for Merlin's rules only. */
+export interface EndedGranolaCall {
+  id: string;
+  title: string;
+  startedAt: string;
+  endedAt: string;
+  /** Who else was on it (the member and the note's owner left out). */
+  with: CallPerson[];
+}
+/** A call with no length on file is taken to have run this long (the note exists once it starts). */
+const ASSUMED_MINUTES = 30;
+const endOf = (when: string, minutes: number | null) => new Date(Date.parse(when) + (minutes ?? ASSUMED_MINUTES) * 60_000).toISOString();
+
+/**
+ * The member's calls that ended in [sinceMs, nowMs], newest first, at most `max`, read the way the
+ * picker reads them (by sign-in: search_meetings over the window, then get_meetings for who was on
+ * a meeting the list gives bare; by key: the newest notes, each read once without its transcript).
+ * Nothing is kept: the scheduler's tick reads them and drops them. The title goes to Merlin's own
+ * rules (what kind of call it was) and nowhere else.
+ */
+export async function endedCallsFor(memberId: string, sinceMs: number, nowMs: number, max: number): Promise<EndedGranolaCall[]> {
+  if (!granolaOn()) throw new GranolaProblem(W.off, 404, "off");
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const m = T.memberIndex(seed, s).all.find((x) => x.id === memberId);
+  if (!m) throw new GranolaProblem("You're signed out. Sign in again.", 401, "signed_out");
+  const own = ownOf(m);
+  // A meeting started up to 12 hours before the window can end inside it.
+  const fromMs = sinceMs - 12 * 3_600_000;
+  const keep = (x: { id: string; when: string; minutes: number | null; title: string; with: CallPerson[] }): EndedGranolaCall | null => {
+    const endedAt = endOf(x.when, x.minutes);
+    const e = Date.parse(endedAt);
+    return e >= sinceMs && e <= nowMs ? { id: x.id, title: x.title, startedAt: x.when, endedAt, with: x.with } : null;
+  };
+  const done = (xs: (EndedGranolaCall | null)[]) =>
+    xs
+      .filter((x): x is EndedGranolaCall => !!x)
+      .sort((a, b) => b.endedAt.localeCompare(a.endedAt))
+      .slice(0, max);
+  return withLink(m.id, {
+    key: async (key) => {
+      const refs = (await G.listNotes(key, { createdAfterMs: fromMs })).notes.filter((n) => NOTE_ID.test(n.id)).slice(0, NOTES_READ_MAX);
+      const notes = await Promise.all(refs.map((r) => G.getNote(key, r.id).catch((e) => (e instanceof G.GranolaError && e.code === "not_found" ? null : Promise.reject(e)))));
+      return done(
+        notes.map((n, i) => {
+          const c = n ? callOf(n, refs[i], own, { kind: "recent" }, true) : null;
+          return c ? keep({ id: c.noteId, when: c.when, minutes: c.minutes, title: c.title ?? "", with: c.with }) : null;
+        }),
+      );
+    },
+    mcp: async (c) => {
+      const found = new Map<string, Meeting>();
+      const a = await tool(c, "search_meetings", { from_date: new Date(fromMs).toISOString(), to_date: new Date(nowMs).toISOString(), limit: 20, attended_only: true });
+      for (const x of readMeetings(a)) if (MEETING_ID.test(x.id) && !found.has(x.id)) found.set(x.id, x);
+      const bare = [...found.values()].filter((x) => !othersOf(x, own).length || !x.when || x.minutes === null).slice(0, 10);
+      if (bare.length) {
+        const b = await tool(c, "get_meetings", { meeting_ids: bare.map((x) => x.id), attachments: "none", max_participants: 20 });
+        for (const x of readMeetings(b)) {
+          const was = found.get(x.id);
+          if (was) found.set(x.id, { ...was, when: was.when ?? x.when, minutes: was.minutes ?? x.minutes, title: was.title || x.title, people: x.people.length ? x.people : was.people, creator: was.creator ?? x.creator });
+        }
+      }
+      return done(
+        [...found.values()].map((x) => {
+          if (!x.when) return null;
+          return keep({ id: x.id, when: x.when, minutes: x.minutes, title: x.title, with: othersOf(x, own) });
+        }),
+      );
+    },
+  });
+}
+
 /* ---------- one call's transcript, for drafting ---------- */
 
 const MAX_PAGES = 80;

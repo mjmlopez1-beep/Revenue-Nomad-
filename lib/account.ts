@@ -23,6 +23,7 @@ import { emailEnabled, escHtml, mailButton, mailH, mailP, mailShell, mailSmall, 
 import { publicBase } from "./links";
 import { billingLive } from "./plan";
 import { forgetGranolaIn } from "./granola";
+import { forgetFathomIn } from "./calls/fathom";
 import {
   ActionError,
   CLOSURE_DAYS,
@@ -121,6 +122,8 @@ export async function closeAccount(token: string | null, o: { origin?: string; m
     rotate(s, seed, id);
     // A Granola connection (lib/granola: a key, or a sign-in's tokens, revoked at Granola too) is deleted at once, not after the 30 days: restored, the member connects it again.
     forgetGranolaIn(s, id);
+    // A Fathom key (lib/calls/fathom.ts) too.
+    forgetFathomIn(s, id);
     const sub = s.billing?.members[id];
     return { email: m.email, name: m.name, id, sub: sub?.subscriptionId && !sub.cancelAt ? sub.subscriptionId : null };
   });
