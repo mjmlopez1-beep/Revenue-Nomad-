@@ -24,7 +24,7 @@ import { NOT_REL, NOT_REL_WORDS, STRENGTH_WORDS, seatConfirmFields, strengthLine
 import { fromGoogle, type KnowPerson, type Move } from "@/lib/moves";
 import type { NoteFacts } from "@/lib/moveNote";
 import { clientKinds, firstOf, myWords } from "@/lib/partners";
-import { CompanyLogo, IconChevron, initials, useToast } from "../../ui/shared";
+import { CompanyLogo, IconChevron, TileLogo, initials, useToast } from "../../ui/shared";
 import { namedFn, type CoInfo } from "../model";
 import { useUi } from "../ui";
 import { earnRoom } from "../NextMove";
@@ -160,7 +160,7 @@ function WarmRow({ c, info, onNote, onOpen }: { c: NetCompanyView; info: CoInfo 
   return (
     <li className="np-row" data-warm={c.id}>
       <div className="np-co">
-        <CompanyLogo name={c.name} domain={info?.c.iconDomain ?? info?.domain ?? c.site} size="md" />
+        <CompanyLogo name={c.name} domain={info?.c.iconDomain ?? info?.domain ?? c.site} seed={info?.c.id} size="md" />
         <div className="np-co-t">
           <button type="button" className="np-co-name" onClick={onOpen}>
             {c.name}
@@ -345,7 +345,7 @@ function ClientCard({ c, info, guess, me }: { c: NetCompanyView; info: CoInfo | 
   return (
     <li className="np-client" data-client={c.id}>
       <div className="np-co">
-        <CompanyLogo name={c.name} domain={info?.c.iconDomain ?? info?.domain ?? c.site} size="md" />
+        <CompanyLogo name={c.name} domain={info?.c.iconDomain ?? info?.domain ?? c.site} seed={info?.c.id} size="md" />
         <div className="np-co-t">
           <span className="np-co-name np-co-static">{c.name}</span>
           <span className="np-why num">
@@ -624,6 +624,7 @@ export function Everyone({ view, openCompany, filter, setFilter }: { view: Netwo
             <div className="np-co">
               <span className="nw-ini" aria-hidden>
                 {initials(c.name)}
+                <TileLogo seed={c.id} />
               </span>
               <div className="np-co-t">
                 <button type="button" className="np-co-name" onClick={() => openCompany(c.id)}>

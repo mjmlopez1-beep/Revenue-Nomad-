@@ -24,7 +24,7 @@ import type { ProposalsView } from "@/lib/proposals/types";
 import type { DocumentRec, FieldKind } from "@/lib/documents/types";
 import type { SavedContract } from "@/lib/documents/templates";
 import { STARTERS } from "@/lib/documents/samples";
-import { IconCheck, IconX, errorText, useToast } from "../../ui/shared";
+import { IconCheck, IconX, TileLogo, errorText, useToast } from "../../ui/shared";
 import { useApp } from "../shell/pages";
 import { ShellHeader } from "../shell/Header";
 import { PageStrip } from "../shell/PageStrip";
@@ -86,6 +86,8 @@ interface Row {
   file: string;
   pages: number;
   co: string;
+  /** The company's public id when linked (its logo). */
+  coId?: string | null;
   /** The company is on Merlin (linked). */
   linked: boolean;
   who: string;
@@ -138,6 +140,7 @@ function rowOf(d: DocumentRec, nowMs: number): Row {
     pages: d.pages.length,
     co: d.company.name,
     linked: !!d.company.id,
+    coId: d.company.id ?? null,
     who: other ? other.name : "Nobody yet",
     whoTitle: other?.title ?? "",
     st,
@@ -948,6 +951,7 @@ export function ContractsPage() {
                   <span className="ct-with">
                     <span className="ct-tile" style={{ background: tint(r.co || r.who) }} aria-hidden>
                       {initials(r.co || r.who)}
+                      <TileLogo seed={r.co ? r.coId : null} />
                     </span>
                     <span>
                       <span className="ct-cell-t">{r.co || "No company"}</span>

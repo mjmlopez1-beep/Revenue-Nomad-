@@ -1342,3 +1342,17 @@ span.locked-site {
   display: flex;
   border-radius: 4px;
 }
+
+/* A company's own logo over a hand-made letter tile (TileLogo). The letters stay underneath. */
+.tile-logo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 12%;
+  background: #fff;
+  border-radius: inherit;
+  box-sizing: border-box;
+}
+.fd-tile, .wp-tile, .pz-ini, .ct-tile, .nw-ini, .ms2-tile { position: relative; overflow: hidden; }

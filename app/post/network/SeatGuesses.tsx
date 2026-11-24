@@ -83,7 +83,7 @@ function GuessCard({
   return (
     <article className="sg-seat" aria-label={`A seat you might have held at ${g.name}`} data-guess={g.id}>
       <div className="sg-head">
-        <CompanyLogo name={g.name} domain={info?.c.iconDomain ?? info?.domain ?? g.site} size="lg" />
+        <CompanyLogo name={g.name} domain={info?.c.iconDomain ?? info?.domain ?? g.site} seed={info?.c.id} size="lg" />
         <div className="sg-who">
           <span className="sg-name">{g.name}</span>
           <span className="sg-line num">{guessLine(g)}</span>
@@ -211,7 +211,7 @@ export function SeatGuesses({ infos, seats, onShown }: { infos: CoInfo[]; /** Th
         return (
           <article key={d.g.id} className="sg-seat sg-seat-done" aria-label={`Your seat at ${d.g.name}`} data-confirmed={d.g.id}>
             <div className="sg-head">
-              <CompanyLogo name={d.g.name} domain={byId.get(d.g.id)?.c.iconDomain ?? byId.get(d.g.id)?.domain ?? d.g.site} size="lg" />
+              <CompanyLogo name={d.g.name} domain={byId.get(d.g.id)?.c.iconDomain ?? byId.get(d.g.id)?.domain ?? d.g.site} seed={byId.get(d.g.id)?.c.id} size="lg" />
               <div className="sg-who">
                 <span className="sg-name">{d.g.name}</span>
                 <span className="sg-line num">{guessLine(d.g)}</span>

@@ -576,7 +576,7 @@ function AskBox(p: HomeProps) {
           ))}
           {tableTop.map((r) => (
             <button key={r.key} type="button" className="hm-ask-row" onClick={() => p.openCompany(r.i.c.id)}>
-              <CompanyLogo name={r.i.c.name} domain={r.i.c.iconDomain} />
+              <CompanyLogo name={r.i.c.name} domain={r.i.c.iconDomain} seed={r.i.c.id} />
               <span className="hm-ask-co">
                 <b>{r.i.c.name}</b>
                 <span className="hm-ask-facts">{factsOf(r.i)}</span>

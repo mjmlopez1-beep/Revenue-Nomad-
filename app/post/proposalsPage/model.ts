@@ -44,6 +44,8 @@ export type NextKind = "open" | "countersign" | "follow" | "pipeline";
 export interface Row {
   id: string;
   co: string;
+  /** The company's public id when the proposal is linked to one (its logo). */
+  coId?: string | null;
   who: string;
   status: ProposalRec["status"];
   version: number;
@@ -184,6 +186,7 @@ export function rowOf(p: ProposalRec, act: ActivityLite | null, nowMs = Date.now
   return {
     id: p.id,
     co: p.company.name || "No company yet",
+    coId: p.company.id,
     who,
     status: st,
     version: p.version,

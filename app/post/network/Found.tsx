@@ -170,7 +170,7 @@ export function Found({
               const i = byId.get(c.id);
               return (
                 <li key={c.id}>
-                  <CompanyLogo name={c.name} domain={i?.c.iconDomain ?? i?.domain ?? c.site} size="lg" />
+                  <CompanyLogo name={c.name} domain={i?.c.iconDomain ?? i?.domain ?? c.site} seed={i?.c.id} size="lg" />
                   <span className="nf-six-t">
                     <span className="nf-six-n">{c.name}</span>
                     <span className="nf-six-p">

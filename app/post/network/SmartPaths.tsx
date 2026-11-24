@@ -202,7 +202,7 @@ function TargetRow({ t, info, onOpen }: { t: TargetView; info: CoInfo | undefine
   return (
     <li className="np-row sp-target" data-target={t.id}>
       <div className="np-co">
-        <CompanyLogo name={name ?? "?"} domain={name ? (info?.c.iconDomain ?? info?.domain ?? null) : null} size="md" />
+        <CompanyLogo name={name ?? "?"} domain={name ? (info?.c.iconDomain ?? info?.domain ?? null) : null} seed={name ? info?.c.id : undefined} size="md" />
         <div className="np-co-t">
           <button type="button" className="np-co-name" onClick={onOpen}>
             {name ?? "A locked company"}

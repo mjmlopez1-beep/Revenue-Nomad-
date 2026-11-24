@@ -516,6 +516,31 @@ const noLogoAt = (src: string | undefined) => {
  * mark. `noLogo`: the tile only (the landing page's blurred rows, which have no company). A company the member
  * can name with no logo (no id, no website, or a 204) gets its lettered tile.
  */
+/**
+ * A company's own logo laid over a page's hand-made letter tile (Find, Warm paths, Proposals,
+ * Contracts). The tile stays underneath: a company with no usable icon, a locked one or a bad id
+ * keeps its letters. Put it inside the tile; the tile needs `position: relative`.
+ */
+export function TileLogo({ seed, locked }: { seed?: string | null; locked?: boolean }) {
+  const src = !locked && seed && COMPANY_ID.test(seed) ? `/api/logo/${encodeURIComponent(seed)}` : null;
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [src]);
+  if (!src || bad || NO_LOGO.has(src)) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="tile-logo"
+      src={src}
+      alt=""
+      aria-hidden
+      loading="lazy"
+      decoding="async"
+      onLoad={(e) => e.currentTarget.naturalWidth < 16 && (noLogoAt(src), setBad(true))}
+      onError={() => (noLogoAt(src), setBad(true))}
+    />
+  );
+}
+
 export function CompanyLogo({
   name,
   domain,

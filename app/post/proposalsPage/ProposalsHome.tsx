@@ -23,7 +23,7 @@ import type { ProposalRec, ProposalsView, TemplateChoice } from "@/lib/proposals
 import type { ActivityView, CloseInboxView } from "@/lib/close/types";
 import { minWords } from "@/lib/close/activity";
 import { PRICES, TRIAL_DAYS, TRIAL_NAME } from "@/lib/billing/rules";
-import { errorText, useToast } from "../../ui/shared";
+import { TileLogo, errorText, useToast } from "../../ui/shared";
 import { useAppMaybe } from "../shell/pages";
 import { PageStrip } from "../shell/PageStrip";
 import { openPlans } from "../Billing";
@@ -541,6 +541,7 @@ export function ProposalsHome({
                     <span role="cell" className="pz-tc pz-co">
                       <span className="pz-ini" aria-hidden style={{ background: tile(i) }}>
                         {initials(r.co)}
+                        <TileLogo seed={r.coId} />
                       </span>
                       <span className="pz-co-t">
                         <button type="button" className="pz-co-go" onClick={() => onOpen(r.id)}>

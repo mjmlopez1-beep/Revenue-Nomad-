@@ -32,7 +32,7 @@ import { bestBuyer } from "@/lib/moves";
 import { clientKinds, seatWords } from "@/lib/partners";
 import { draftMessage, draftWords, type DraftFacts, type DraftReason } from "@/lib/messagesDraft";
 import { HIDDEN_COMPANY } from "@/lib/tableFields";
-import { IconChevron, IconPlus, IconSearch, LockedName, errorText, initials, useToast, val } from "../../ui/shared";
+import { IconChevron, IconPlus, IconSearch, LockedName, TileLogo, errorText, initials, useToast, val } from "../../ui/shared";
 import { FactCell, askSpend, needsSpendConfirm, spendWhat, useFocusTrap, useUi } from "../ui";
 import type { FactRef } from "../model";
 import { useApp } from "../shell/pages";
@@ -1254,6 +1254,7 @@ function Common({ rec, first, skip, entries, firstVisit }: { rec: FractionalRec 
           <button key={s.co} type="button" className="ms2-common" onClick={() => app.openCompany(s.co)}>
             <span className="ms2-tile" aria-hidden style={{ background: tint(info!.c.name) }}>
               {initials(info!.c.name)}
+              <TileLogo seed={s.co} />
             </span>
             <span className="ms2-common-main">
               <strong>{info!.c.name}</strong>

@@ -2180,7 +2180,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       {foundRows.map((i) => (
         <li key={i.c.id}>
           <button type="button" className="tp-found-row" onClick={() => openCompany(i.c.id)}>
-            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
+            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} seed={i.c.id} />
             <span className="tp-found-t">
               <span className="tp-found-n">{i.c.name}</span>
               <span className="tp-small muted">{[shown(i.c.cells.industry), shown(i.c.cells.employees), i.c.country].filter(Boolean).join(" · ") || i.domain}</span>

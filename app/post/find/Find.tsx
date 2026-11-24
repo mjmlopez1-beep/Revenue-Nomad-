@@ -22,7 +22,7 @@ import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { AskPlan, AskVocab } from "@/lib/ask";
 import { AskBar } from "../AskBar";
 import { useUi, type AppPage, type Ui } from "../ui";
-import { useToast, type Action, type ToastFn } from "../../ui/shared";
+import { TileLogo, useToast, type Action, type ToastFn } from "../../ui/shared";
 import { findCompany, type Found } from "../../ui/find";
 import { usePipeline } from "../pipelineStore";
 import { useGetIn } from "../network/useWays";
@@ -560,6 +560,7 @@ function Lookup({ initial, me, onBack, openCompany }: { initial: string; me: Me;
             <div className="fd-found-h">
               <span className="fd-tile" aria-hidden>
                 {c.name.slice(0, 2).toUpperCase()}
+                <TileLogo seed={c.id} />
               </span>
               <span>
                 <strong>{c.name}</strong>
@@ -893,6 +894,7 @@ function Preview({ kind, run, me, ranked, openCompany, openFractionals }: { kind
             <span role="cell" className="fd-namecell">
               <span className="fd-tile" style={{ background: r.open ? TINTS[k % 6] : "#EEF1EF" }} aria-hidden>
                 {r.open ? ini(r.name) : "?"}
+                {kind !== "people" && kind !== "fractionals" && <TileLogo seed={r.companyId} locked={!r.open} />}
               </span>
               <span className="fd-namebox">
                 {r.companyId ? (

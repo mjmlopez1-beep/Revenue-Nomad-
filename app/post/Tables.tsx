@@ -340,7 +340,7 @@ export function CompanyName({ i, following, tagged = true, quiet }: { i: CoInfo;
   if (i.c.hidden) return <HiddenCompany i={i} quiet={quiet} />;
   return (
     <span className="tp-co">
-      <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
+      <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} seed={i.c.id} />
       <span className="tp-co-text">
         <span className="tp-co-name" title={why ? `${i.c.name}. ${why}` : i.c.name}>
           <span className="tp-co-name-t">{i.c.name}</span>

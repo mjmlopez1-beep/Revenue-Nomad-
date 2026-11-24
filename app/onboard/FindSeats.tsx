@@ -303,7 +303,7 @@ export function FindSeats({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(c.id)}
               >
-                <CompanyLogo name={c.name} domain={c.iconDomain} />
+                <CompanyLogo name={c.name} domain={c.iconDomain} seed={c.id} />
                 <span className="ob-result-id">
                   <span className="ob-result-name">{c.name}</span>
                   <span className="ob-result-meta">{c.found ? FOUND_NOTE : metaOf(c) || "On Merlin"}</span>
@@ -332,7 +332,7 @@ export function FindSeats({
             return (
               <li key={id} className="ob-client">
                 <div className="ob-client-top">
-                  {c ? <CompanyLogo name={c.name} domain={c.iconDomain} /> : null}
+                  {c ? <CompanyLogo name={c.name} domain={c.iconDomain} seed={c.id} /> : null}
                   <span className="ob-client-name">{label}</span>
                   <button type="button" className="ob-client-x" aria-label={`Take ${label} off the list`} onClick={() => setClients((x) => x.filter((y) => y !== id))}>
                     <IconX size={12} />

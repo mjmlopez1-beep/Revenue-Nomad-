@@ -262,7 +262,7 @@ export function Drawer({
             </div>
           ) : (
             <div className="tp-dhead" ref={headRef}>
-              <CompanyLogo name={c.name} domain={c.iconDomain ?? i.domain} size="lg" />
+              <CompanyLogo name={c.name} domain={c.iconDomain ?? i.domain} seed={c.id} size="lg" />
               <div className="tp-dhead-t">
                 <h2 className="tp-dname" title={c.name} tabIndex={-1}>
                   {c.name}

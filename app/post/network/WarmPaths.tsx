@@ -26,7 +26,7 @@ import type { Zone } from "@/lib/paths/rank";
 import { ZONES, betweenWords } from "@/lib/paths/rank";
 import { EXPORT_STEPS, lockedWaysWords, namesOnlyShort, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
 import { gmailLink } from "@/lib/moveNote";
-import { IconX, useToast } from "../../ui/shared";
+import { IconX, TileLogo, useToast } from "../../ui/shared";
 import { useCopy } from "../Credits";
 import { useUi } from "../ui";
 import { UnlockCompany } from "../company/sections/Unlock";
@@ -404,6 +404,7 @@ function Tile({ r, size }: { r: WarmRow; size: number }) {
   return (
     <span className={cx("wp-tile", r.locked && "locked")} style={{ width: size, height: size, flex: `0 0 ${size}px`, background: r.locked ? undefined : TINTS[r.rank % 6] }} aria-hidden>
       {r.locked ? "?" : initials(label(r))}
+      <TileLogo seed={r.id} locked={r.locked} />
     </span>
   );
 }

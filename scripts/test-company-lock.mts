@@ -42,7 +42,7 @@
  * a day on Free, 100 on Pro, 50 misses); the connector's find_company; Pilot metrics' counts.
  */
 import http from "node:http";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import Module, { register } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -983,6 +983,22 @@ async function main() {
   check("the signed-out preview still names companies, as before", named.length > 0 && named.some((n) => Object.values(CO).some((c) => c.name === n)), named);
   const signedOut = await T.buildView(null);
   check("the signed-out table sends counts only", !signedOut.companies.length || leaks(signedOut, ALL).length === 0);
+
+  // Logos: a company logo is asked for by the company's public id, so every CompanyLogo that
+  // names a company passes it (seed). Without it the page draws letters even when the company's
+  // own site has a logo (owner, 2026-11-24: "lots of pages still missing logos"). The one
+  // exception is the Add modal's preview of a website being typed, which has no id yet.
+  const tsxFiles = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? tsxFiles(path.join(d, e.name)) : e.name.endsWith(".tsx") ? [path.join(d, e.name)] : []));
+  const appDir = path.join(process.cwd(), "app");
+  const noSeed: string[] = [];
+  for (const f of tsxFiles(appDir))
+    for (const [k, line] of readFileSync(f, "utf8").split("\n").entries())
+      if (line.includes("<CompanyLogo ") && !/\bseed=|\bnoLogo\b/.test(line) && !line.includes("(!linkedin && website)")) noSeed.push(`${path.relative(appDir, f)}:${k + 1}`);
+  check("every company logo is asked for by the company's id", noSeed.length === 0, noSeed);
+  const tileFiles = ["post/find/Find.tsx", "post/network/WarmPaths.tsx", "post/network/Paths.tsx", "post/proposalsPage/ProposalsHome.tsx", "post/contracts/ContractsPage.tsx", "post/messages/Messages2.tsx"];
+  const noTile = tileFiles.filter((f) => !readFileSync(path.join(appDir, f), "utf8").includes("<TileLogo "));
+  check("hand-made company letter tiles carry the company's logo over the letters", noTile.length === 0, noTile);
 
   console.log(`\n${passes} passed, ${failures} failed`);
   rmSync(dir, { recursive: true, force: true });

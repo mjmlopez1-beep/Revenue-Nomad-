@@ -1067,7 +1067,7 @@ function GapTable({ rows, onPick }: { rows: CoInfo[]; onPick: (id: string) => vo
           return (
             <div key={x.c.id} role="row" className="am2-tr">
               <span role="cell" className="am2-co">
-                <CompanyLogo name={x.c.name} domain={x.c.iconDomain ?? x.domain} />
+                <CompanyLogo name={x.c.name} domain={x.c.iconDomain ?? x.domain} seed={x.c.id} />
                 <strong>{x.c.name}</strong>
               </span>
               <span role="cell" className="am2-miss">
@@ -1559,7 +1559,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
 
   const matchRow = (m: CoInfo) => (
     <button key={m.c.id} type="button" className="tp-match" onClick={() => pick(m.c.id)}>
-      <CompanyLogo name={m.c.name} domain={m.c.iconDomain ?? m.domain} />
+      <CompanyLogo name={m.c.name} domain={m.c.iconDomain ?? m.domain} seed={m.c.id} />
       <span className="tp-match-t">
         <span className="tp-match-n">{m.c.name}</span>
         {m.domain ? <span className="mono tp-small muted">{m.domain}</span> : <span className="tp-small muted num">{plural(m.c.engagements.length, "seat")} on file</span>}
@@ -1648,7 +1648,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
               )}
               {lookup && !lookup.error && lookup.existing && (
                 <div className="tp-exists">
-                  <CompanyLogo name={lookup.existing.name} domain={lookup.existing.website ?? lookup.domain} size="lg" />
+                  <CompanyLogo name={lookup.existing.name} domain={lookup.existing.website ?? lookup.domain} seed={lookup.existing.id} size="lg" />
                   <div className="tp-exists-t">
                     <div className="tp-match-n">{lookup.existing.name}</div>
                     <div className="mono tp-small muted">{lookup.existing.website ?? lookup.domain}</div>
@@ -1685,7 +1685,7 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   );
   const headEl = i && (
           <div className="tp-picked-head">
-            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} size="lg" />
+            <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} seed={i.c.id} size="lg" />
             <div className="tp-picked-t">
               <div className="tp-match-n">{i.c.name}</div>
               <div className="tp-small muted am-sub">

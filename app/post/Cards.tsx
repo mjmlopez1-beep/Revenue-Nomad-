@@ -56,7 +56,7 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
     );
   return (
     <div className="tp-pcard-top">
-      <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
+      <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} seed={i.c.id} />
       <div className="tp-pcard-name">
         <h3 className="tp-pcard-h">
           <button type="button" className="tp-pcard-open tp-co-name" title={i.c.name} onClick={open}>
