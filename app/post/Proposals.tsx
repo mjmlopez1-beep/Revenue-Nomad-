@@ -58,6 +58,13 @@ import { useAppMaybe } from "./shell/pages";
 import { ProposalsHome, type StartMode } from "./proposalsPage/ProposalsHome";
 import { EditorFrame, type SideTab } from "./proposalsPage/EditorFrame";
 import { openContract } from "./contracts/open";
+import { Home2, type Launch } from "./proposalsPage/Home2";
+import { Rail2 } from "./proposalsPage/Rail2";
+import { SendSheetHost, noteInVoice, openSend, signersOf } from "./proposalsPage/SendSheet";
+import { useLive } from "./Live";
+import { fieldLabel as labelOf } from "@/lib/proposals/library";
+import { rateMath } from "@/lib/proposals/rates";
+import { blanksWithPlaceOf, fillWords, readyWords } from "./proposalsPage/progress";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -130,6 +137,10 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   // The new look (RN_UI2): the list page of Proposals.dc.html, the start as a panel on it, and the editor in three columns.
   const app = useAppMaybe();
   const ui2 = !!app?.ui2;
+  // The one-screen Proposals (RN_PROPOSALS2): the server says so in ProposalsView.v2; only with the new look.
+  const v2 = ui2 && !!data?.v2;
+  // A proposal opened by a tap on the home: when the tap was, and what Merlin's AI does next.
+  const [launch, setLaunch] = useState<(Launch & { id: string }) | null>(null);
   // The editor's right panel opens at this tab (the list's Countersign opens Send).
   const [openTab, setOpenTab] = useState<SideTab | null>(null);
   // The new look: a contract (a document sent to sign) opens on Contracts, its own page (contracts/open.ts), from
@@ -274,6 +285,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         onOpen={(p) => (put(p), setOpenId(p.id))}
         ui2={ui2}
         tab={openTab}
+        v2={v2}
+        launch={launch?.id === open.id ? launch : null}
       />
     );
   if (doc && data && !ui2)
@@ -344,6 +357,22 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
       <div className="pz">
         <div className="pp-skel" aria-busy="true" />
       </div>
+    );
+  if (v2 && data)
+    return (
+      <>
+        <Home2
+          data={data}
+          view={view}
+          infos={infos}
+          onOpen={(id, l) => (setLaunch(l ? { ...l, id } : null), setOpenTab(null), setFixFirst([]), setOpenId(id))}
+          onPut={put}
+          onContracts={() => toContracts()}
+          onTemplates={() => setTemplates(true)}
+          closePrompt={<CloseBuildPrompt />}
+        />
+        {templates && <TemplatesSheet data={data} onClose={() => setTemplates(false)} onChange={(t) => setData((d) => (d ? { ...d, templates: t } : d))} />}
+      </>
     );
   if (ui2 && data)
     return (
@@ -584,6 +613,8 @@ function Editor({
   onOpen,
   ui2 = false,
   tab = null,
+  v2 = false,
+  launch = null,
 }: {
   initial: ProposalRec;
   data: ProposalsView;
@@ -596,6 +627,9 @@ function Editor({
   /** The new look: three columns, the right panel's tabs (EditorFrame.tsx). The saving below is the same. */
   ui2?: boolean;
   tab?: SideTab | null;
+  /** The one-screen Proposals (RN_PROPOSALS2): the rail, the progress line, the Send sheet, and Merlin's two sections written live. */
+  v2?: boolean;
+  launch?: Launch | null;
 }) {
   const toast = useToast();
   const phone = useMedia("(max-width: 1023px)");
@@ -812,6 +846,103 @@ function Editor({
     change({ fields: f, sources: { ...p.sources, caseStudies: "evidence" }, proofCases: ids.length ? ids : undefined }, { fields: f, proofCases: ids });
   };
 
+  /* ----- the one-screen Proposals (RN_PROPOSALS2): Merlin's two sections written live, the rail, the Send sheet ----- */
+  const live = useLive();
+  /** Send for signature: one sheet, called with the shared sheet's arguments (client first, the member's row last: they countersign). */
+  const sendIt = async () => {
+    void flush();
+    const signers = signersOf(p, fields, { name: data.me.name, email: data.me.email });
+    const r = await openSend({ kind: "proposal", id: p.id, signers, message: noteInVoice(signers[0].name.split(/\s+/)[0] ?? "", view.me?.voice), title: p.title, linkDays: p.linkDays || 30, canClose: data.canSend });
+    if (r) take(r.proposal), onSaved(r.proposal), setChanging(false), toast(r.message);
+  };
+  const [readyMs, setReadyMs] = useState<number | null>(null);
+  const [aiNow, setAiNow] = useState(launch?.ai.state ?? "none");
+  const aiBlocks = launch?.ai.blocks ?? [];
+  const changeRef = useRef(change);
+  changeRef.current = change;
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  const aiStarted = useRef(false);
+  /** Merlin writes What we heard and What I recommend; each goes in where the member hasn't changed it meanwhile. */
+  const runSections = async (agree?: boolean) => {
+    aiStarted.current = true;
+    setAiNow("ready");
+    const end = await live.start({ op: "sections", id: initial.id, ...(agree ? { agree: true } : {}) });
+    if (end.ok) {
+      const r = end.result as { sections: { id: string; body: string }[]; before: Record<string, string> };
+      const cur = latest.current;
+      let n = 0;
+      const blocks = cur.blocks.map((b) => {
+        const w = r.sections.find((x) => x.id === b.id);
+        if (!w || b.body !== r.before[b.id] || w.body === b.body) return b;
+        n++;
+        return { ...b, body: w.body };
+      });
+      if (n) changeRef.current({ blocks }, { blocks }), void flushRef.current();
+    } else if (end.status !== 499) toast(end.message, true);
+    if (launch) setReadyMs(performance.now() - launch.at);
+  };
+  useEffect(() => {
+    if (!v2 || !launch || aiStarted.current) return;
+    if (launch.ai.state === "ready") void runSections();
+    else setReadyMs(performance.now() - launch.at);
+    // Once, as a tapped proposal opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const money0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+  /** A fee from the rail: the fee, and what follows from it when Merlin set it (from month 4, past the hours). */
+  const setFee = (n: number) => {
+    const f: Record<string, string> = { ...p.fields, "pricing.monthlyFee": money0(n) };
+    const ours = (k: string) => !p.fields[k] || p.sources[k] === "quick" || p.sources[k] === "rate";
+    if (ours("pricing.stepDownFee")) f["pricing.stepDownFee"] = money0(Math.round((n * 2) / 3 / 250) * 250);
+    const m = rateMath(n, f["pricing.allocation"]);
+    if (m.hourly && ours("pricing.overageRate")) f["pricing.overageRate"] = money0(Math.round(m.hourly / 5) * 5);
+    change({ fields: f, sources: { ...p.sources, "pricing.monthlyFee": "manual" } }, { fields: f });
+  };
+  const switchTemplate = async (templateId: string) => {
+    if (!(await settle())) return toast("Your last edit isn't saved yet. Try again in a moment.", true);
+    const r = await api<ProposalRec>({ op: "retemplate", id: p.id, templateId, rev: rev.current });
+    if (r.error) return toast(r.error, true);
+    take(r);
+    onSaved(r);
+    toast("Template switched. What you filled in stayed.");
+  };
+  const writingNow = v2 && live.state.status === "running";
+  const writtenText = new Map(live.state.items.filter((i) => i.kind === "section").map((i) => [i.key, i.text ?? ""]));
+  const chips = v2 ? blanksWithPlaceOf({ ...p, blocks: shown?.blocks ?? p.blocks }) : [];
+  const goBlank = (block: string) => {
+    if (!block) return;
+    if (!readOnly) setEditing(block);
+    window.requestAnimationFrame(() => document.getElementById(`sec-${block}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
+  const progressLine = v2 && (
+    <div className="p2-progress" role="status" aria-live="polite" data-ready-ms={readyMs !== null ? Math.round(readyMs) : undefined} data-writing={writingNow || undefined}>
+      {writingNow ? (
+        <p>
+          <strong>Merlin is writing What we heard and What I recommend</strong> from the call. Everything else is in.
+        </p>
+      ) : aiNow === "consent" && !aiStarted.current && !readOnly ? (
+        <p>
+          Merlin can write What we heard and What I recommend from the call. It keeps the proposal, not the transcript.{" "}
+          <button type="button" className="btn btn-sm btn-pine" onClick={() => void runSections(true)}>
+            Write them
+          </button>
+        </p>
+      ) : readOnly ? null : (
+        <p>
+          {readyMs !== null && <strong>{readyWords(readyMs)} </strong>}
+          {fillWords(chips.length)}
+          {chips.map((c) => (
+            <button key={c.key} type="button" className="p2-chip" data-blank={c.key} onClick={() => goBlank(c.block)}>
+              {labelOf(c.key)}
+            </button>
+          ))}
+        </p>
+      )}
+      {writingNow && <span className="p2-bar" aria-hidden />}
+    </div>
+  );
+
   const act = async (op: "void" | "duplicate" | "delete") => {
     if (op === "delete" && !window.confirm("Delete this proposal? It can't be undone.")) return;
     if (op === "void" && !window.confirm(`Void it? The link ${p.send?.signer.name ?? "they"} has stops working.`)) return;
@@ -899,7 +1030,7 @@ function Editor({
             </button>
           </div>
         )}
-        {!p.company.id && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev, ...proofFromServer(cur, r) })), onSaved(r))} />}
+        {!p.company.id && !v2 && <LinkCompany p={p} onLinked={(r) => ((rev.current = r.rev), setP((cur) => ({ ...cur, company: r.company, rev: r.rev, ...proofFromServer(cur, r) })), onSaved(r))} />}
         {locked && <CloseBuildPrompt />}
         {signed && (
           <div className="pp-banner pp-banner-won" role="status">
@@ -918,7 +1049,15 @@ function Editor({
         )}
       </>
     );
+    // Once sent: its status and who read it (the Send tab, or the rail's first card with RN_PROPOSALS2).
+    const sentEl = p.send && (
+      <>
+        <SendStatus p={p} onChange={(r) => (take(r), onSaved(r))} />
+        <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} quiet />
+      </>
+    );
     return (
+      <>
       <EditorFrame
         p={p}
         data={data}
@@ -937,9 +1076,32 @@ function Editor({
         onTitle={(v) => change({ title: v }, { title: v })}
         move={move}
         removeBlock={(id) => (setBlocks(p.blocks.filter((x) => x.id !== id)), editing === id && setEditing(null))}
-        section={(b) => (
-          <Section b={b} fields={shownFields} p={p} readOnly={readOnly || !!preview} mark={marked.has(b.id)} editing={editing === b.id} onEdit={() => setEditing(b.id)} onDone={() => setEditing(null)} onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))} onField={setField} />
-        )}
+        section={(b) =>
+          writingNow && aiBlocks.includes(b.id) ? (
+            <section id={`sec-${b.id}`} className="sg-block pp-sec p2-writing" data-writing>
+              <h2 className="sg-block-h">
+                {b.title} <span className="p2-pill">Merlin is writing</span>
+              </h2>
+              <div className="sg-text">
+                <DocText text={writtenText.get(b.id) || fill(b.body, shownFields)} blanks label={fieldLabel} />
+              </div>
+            </section>
+          ) : (
+            <Section
+              b={b}
+              fields={shownFields}
+              p={p}
+              readOnly={readOnly || !!preview}
+              mark={marked.has(b.id)}
+              editing={editing === b.id}
+              onEdit={() => setEditing(b.id)}
+              onDone={() => setEditing(null)}
+              onBlock={(nb) => setBlocks(p.blocks.map((x) => (x.id === b.id ? nb : x)))}
+              onField={setField}
+              onRemove={v2 ? () => (setBlocks(p.blocks.filter((x) => x.id !== b.id)), setEditing(null)) : undefined}
+            />
+          )
+        }
         guide={(b) => <Guide b={b} templateId={p.templateId} />}
         addBlock={
           <AddBlock
@@ -980,20 +1142,44 @@ function Editor({
             alerts={<AlertGrid alertsHref="/?p=alerts" />}
           />
         }
-        sentPanel={
-          p.send && (
-            <>
-              <SendStatus p={p} onChange={(r) => (take(r), onSaved(r))} />
-              <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} quiet />
-            </>
-          )
-        }
+        sentPanel={sentEl}
         tab={tab}
         onBack={leave}
         act={(op) => void act(op)}
         onChangeIt={() => setChanging(true)}
         onProof={setProof}
+        v2={
+          v2
+            ? {
+                phone,
+                progress: progressLine,
+                onSend: () => void sendIt(),
+                rail: (
+                  <Rail2
+                    p={p}
+                    view={view}
+                    templates={data.templates}
+                    readOnly={readOnly}
+                    onFee={setFee}
+                    onProof={setProof}
+                    onTemplate={(id) => void switchTemplate(id)}
+                    signing={sentEl}
+                    more={
+                      <>
+                        {!(out && !changing) && changeIt}
+                        <VersionsList p={p} onRestored={(r) => (take(r), onSaved(r), setSavedChange(null), toast(`Brought back as version ${r.version}.`))} />
+                        {(data.canBuild || p.pricing) && <PricingEditor compact value={p.pricing} readOnly={readOnly} onChange={(pricing) => change({ pricing }, { pricing })} />}
+                      </>
+                    }
+                  />
+                ),
+              }
+            : undefined
+        }
       />
+      {/* openSend's sheet (proposalsPage/SendSheet.tsx); goes when the shared one (contracts2) takes over openSend. */}
+      {v2 && <SendSheetHost memberName={data.me.name} canSend={data.canSend} email={data.email} blanks={blanks} before={settle} />}
+      </>
     );
   }
 
@@ -1220,6 +1406,7 @@ function Section({
   onDone,
   onBlock,
   onField,
+  onRemove,
 }: {
   b: ProposalBlock;
   p: ProposalRec;
@@ -1232,6 +1419,8 @@ function Section({
   onDone: () => void;
   onBlock: (b: ProposalBlock) => void;
   onField: (k: string, v: string) => void;
+  /** The one-screen Proposals: take this section out (there is no outline column there). */
+  onRemove?: () => void;
 }) {
   const text = fill(b.body, fields);
   if (!editing || readOnly)
@@ -1299,6 +1488,11 @@ function Section({
         <button type="button" className="btn btn-sm" onClick={onDone}>
           Done
         </button>
+        {onRemove && (
+          <button type="button" className="tp-flink" onClick={onRemove}>
+            Remove this section
+          </button>
+        )}
       </div>
     </section>
   );

@@ -246,6 +246,8 @@ export interface Working {
   /** The range Merlin suggests, for the chart: median to the top of the middle half. */
   band: { from: number; to: number } | null;
   answered: boolean;
+  /** The amounts behind `big` (a range, or one amount as from = to), null when unanswered: what a proposal's price reads (lib/proposals/rates.ts proposalRate). */
+  ask: { from: number; to: number } | null;
 }
 
 const people = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "person" : "people"}`;
@@ -268,7 +270,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
   add("The group", groupS);
   if (!g.shown || !g.shown.fig || g.shown.fig.state === "few") {
     add("What they were paid", `No figure in ${a.fn} yet. ${floorWords()}`);
-    return { steps, big: "Merlin cannot answer from the numbers yet", sub: "It will not guess. Share your own rate privately, and ask two peers to do the same.", lands: "the benchmark above is set to this group, and shows how many people it still needs.", band: null, answered: false };
+    return { steps, big: "Merlin cannot answer from the numbers yet", sub: "It will not guess. Share your own rate privately, and ask two peers to do the same.", lands: "the benchmark above is set to this group, and shows how many people it still needs.", band: null, answered: false, ask: null };
   }
   const f = g.shown.fig;
   const rf = g.ranged?.fig?.state === "range" ? g.ranged.fig : null;
@@ -305,6 +307,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
         lands: `${lands}.`,
         band: hi > lo ? { from: lo, to: hi } : null,
         answered: true,
+        ask: { from: lo, to: hi },
       };
     }
     add("By your hours", `${a.hours} hours a week. There is no hourly figure for this group yet, so Merlin goes by monthly retainers.`);
@@ -319,6 +322,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
       lands: `${lands}, with Merlin's range marked on the chart.`,
       band: g.ranged === g.shown ? { from: rf.median, to: rf.p75 } : null,
       answered: true,
+      ask: { from: rf.median, to: rf.p75 },
     };
   }
   add("What to ask", `Only a median here, so Merlin stays at the middle.`);
@@ -329,6 +333,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
     lands: `${lands}.`,
     band: null,
     answered: true,
+    ask: { from: f.median, to: f.median },
   };
 }
 

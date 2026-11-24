@@ -430,6 +430,8 @@ export interface Me {
   ui2Optin?: true;
   /** The "what this page is for" strips they dismissed (page keys), with the new look on. */
   stripsOff?: string[];
+  /** The one-screen Proposals is on (RN_PROPOSALS2, lib/proposals/flag.ts). Left out while it is off. */
+  proposals2?: true;
   /**
    * The fractional functions this member says usually get hired before them (onboarding's "Which
    * fractional usually gets hired before you?", and Your profile), up to 3 (BEFORE_MAX). `[]` is

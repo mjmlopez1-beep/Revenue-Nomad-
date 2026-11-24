@@ -3172,6 +3172,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       bell={bellEl}
       credits={<CreditsPill me={me} onClick={() => setPop((p) => (p === "credits" ? null : "credits"))} btnRef={creditsRef} unlockTip={unlockLimitLine(me, view.ledger)} />}
       onAdd={() => openAdd()}
+      // The one-screen Proposals (RN_PROPOSALS2): no "Add what you know" detour while writing a proposal.
+      hideAdd={!!me.proposals2 && page === "proposals"}
     />
   );
   /** The strip on a page that doesn't place its own: the rail item's key ("engagements" is Seats, "today" is Home). */

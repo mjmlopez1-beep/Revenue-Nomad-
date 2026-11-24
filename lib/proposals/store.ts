@@ -40,6 +40,7 @@ import { properCase } from "./startCall";
 import { autoProof, proofFromCases } from "../evidenceWire";
 import { forgetProposalIn, markUsedIn } from "../evidence";
 import { hasProofBlock } from "./proof";
+import { proposals2On } from "./flag";
 import { prefOn, type CloseAlertKind } from "../close/types";
 import {
   CONSENT_VERSION,
@@ -250,6 +251,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
       .map((x) => sendRec(x, nowMs, origin)),
     ...(p.versions?.length ? { versions: [...p.versions].reverse().map((v) => ({ version: v.version, at: v.at, note: v.note })) } : {}),
     ...(p.proofCases?.length ? { proofCases: [...p.proofCases] } : {}),
+    ...(p.fromCall ? { fromCall: { ...p.fromCall } } : {}),
   };
 }
 
@@ -298,6 +300,7 @@ export async function listProposals(token: string | null, origin?: string, nowMs
     email: emailEnabled(),
     voice: !!s.voice?.[me.id],
     me: { name: me.name, title: titleOf(s, me), function: fnOf(s, me), email: me.email },
+    ...(proposals2On() ? { v2: true as const } : {}),
   };
 }
 
@@ -565,7 +568,7 @@ export async function linkProposal(token: string | null, id: string, a: { compan
 /** A new proposal from a template (or blank), for a company on Merlin or one typed in. */
 export async function createProposal(
   token: string | null,
-  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string; proofCases?: unknown },
+  a: { templateId?: unknown; companyId?: unknown; companyName?: unknown; companySite?: string | null; title?: unknown; signer?: unknown; fields?: unknown; blocks?: unknown; notes?: unknown; signerOnCall?: unknown; source?: string; proofCases?: unknown; fromCall?: { recorder: string; id: string } },
   origin?: string,
   nowMs = Date.now(),
 ): Promise<ProposalRec> {
@@ -633,6 +636,7 @@ export async function createProposal(
       updatedAt: now,
       sends: [],
     };
+    if (a.fromCall && /^[a-z]{2,20}$/.test(a.fromCall.recorder) && /^[\w-]{1,80}$/.test(a.fromCall.id)) p.fromCall = { recorder: a.fromCall.recorder, id: a.fromCall.id };
     if (proof && proofOpen(p)) fillProof(p, proof);
     // What the member's own Claude brought (create_or_update_proposal): applied as a change, so it is checked the same way.
     applyPatch(p, { blocks: a.blocks, signer: a.signer, notes: a.notes, signerOnCall: a.signerOnCall, setFields: a.fields, source: a.source }, now, nowMs);
@@ -695,6 +699,7 @@ export async function duplicateProposal(token: string | null, id: string, origin
     if ((s.proposals ?? []).filter((x) => x.memberId === me.id).length >= LIMITS.proposals) throw new ProposalProblem(`You have ${LIMITS.proposals} proposals, which is the most. Delete an old draft first.`);
     const copy: StoredProposal = { ...structuredClone(p), id: newId("pr_"), title: `${p.title} (copy)`.slice(0, LIMITS.title), version: 1, sends: [], createdAt: now, updatedAt: now };
     delete copy.versions;
+    delete copy.fromCall;
     syncUsed(s, me.id, copy);
     s.proposals!.push(copy);
     return recOf(copy, nowMs, origin);

@@ -10,6 +10,9 @@ import { DRAWING_TOO_BIG } from "@/lib/proposals/memberSig";
 import { acceptChange, proposeChange, restoreVersion, versionsOf } from "@/lib/proposals/change";
 import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
 import { proofView } from "@/lib/proposals/proof";
+import { proposals2On } from "@/lib/proposals/flag";
+import { homeFor } from "@/lib/proposals/recent";
+import { quickProposal, retemplate } from "@/lib/proposals/quick";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +74,14 @@ async function answer(work: () => Promise<unknown>) {
  * POST { op: "signature_get" } | { op: "signature_set", method: "drawn" | "typed", png?, typed?, consent: true } | { op: "signature_delete" }   Their saved signature (Close).
  * GET ?countersign=due   Proposals the client signed over 24 hours ago that wait for their countersignature (Home).
  * GET ?count=live        { live }: how many of their proposals are out now, sent or opened (the new look's rail).
+ * GET ?home=1[&wait=1]   RN_PROPOSALS2 only (404 off): the one-tap starts (lib/proposals/recent.ts HomeView): recent
+ *                  calls from the member's recorders, kept in memory and refreshed in the background, and the
+ *                  companies in their pipeline. `wait`: on a first open, wait a few seconds for the calls.
+ * POST { op: "quick", call?: { recorder, id, companyId?, who?, when? }, companyId?, companyName?, templateId?, blank?, transcript?, rate?: { fee, allocation } }
+ *                  RN_PROPOSALS2 only: the document at once, filled from Merlin's data (lib/proposals/quick.ts). No
+ *                  model and no call recorder on this path. A call's draft that is there already opens instead.
+ * POST { op: "retemplate", id, templateId, rev? }   RN_PROPOSALS2: a draft's sections from another template, its
+ *                  fields and its What we heard and What I recommend kept.
  */
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
@@ -80,6 +91,10 @@ export const GET = guarded(async (req: NextRequest) => {
   const id = req.nextUrl.searchParams.get("id");
   if (req.nextUrl.searchParams.get("countersign") === "due") return answer(async () => ({ due: await countersignDue(token) }));
   if (req.nextUrl.searchParams.get("count") === "live") return answer(async () => ({ live: await liveCount(token) }));
+  if (req.nextUrl.searchParams.get("home") === "1") {
+    if (!proposals2On()) return err("That isn't switched on.", 404);
+    return answer(() => homeFor(token, { wait: req.nextUrl.searchParams.get("wait") === "1" }));
+  }
   return answer(() => (id ? getProposal(token, id, origin(req)) : listProposals(token, origin(req))));
 });
 
@@ -101,7 +116,7 @@ export const POST = guarded(async (req: NextRequest) => {
   const id = typeof b.id === "string" ? b.id : "";
   const o = origin(req);
   const who = { ip: clientIp(req), ua: (req.headers.get("user-agent") ?? "").slice(0, 300) };
-  if (b.op !== "draft" && text.length > MAX_BODY) return err(TOO_MUCH(typeof b.op === "string" ? b.op : ""), 413);
+  if (b.op !== "draft" && b.op !== "quick" && text.length > MAX_BODY) return err(TOO_MUCH(typeof b.op === "string" ? b.op : ""), 413);
   switch (b.op) {
     case "create":
       return answer(() =>
@@ -115,6 +130,13 @@ export const POST = guarded(async (req: NextRequest) => {
       // What a member may draft is their AI budget (lib/proposals/aiUsage.ts, in draftWithClaude). This only slows a burst of tries.
       if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again.", 429);
       return answer(() => draftWithClaude(token, { templateId: b.templateId, companyId: b.companyId, companyName: b.companyName, transcript: b.transcript, callDate: b.callDate, callWith: b.callWith, agree: b.agree }, o));
+    case "quick":
+      if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
+      if (limited(`prop-quick:${me.id}`, 30, 10 * 60_000)) return err("That's a lot of new proposals at once. Give it a few minutes, then try again.", 429);
+      return answer(() => quickProposal(token, { call: b.call as never, companyId: b.companyId, companyName: b.companyName, templateId: b.templateId, blank: b.blank, transcript: b.transcript, rate: b.rate as never }, o));
+    case "retemplate":
+      if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
+      return answer(() => retemplate(token, id, { templateId: b.templateId, rev: b.rev }, o));
     case "change":
       if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);
       return answer(() => proposeChange(token, id, { instruction: b.instruction, agree: b.agree }, o));

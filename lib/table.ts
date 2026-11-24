@@ -155,6 +155,7 @@ import type { StoredDocument } from "./documents/types";
 // The proposals tell the pipeline (lib/proposals/pipelineHook.ts): sent moves the member's deal there to Proposal, signed to Won, declined to Lost,
 // inside the same change that sends, signs or declines. Registered once, when the server loads this module.
 import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
+import { proposals2On } from "./proposals/flag";
 import { ui2Me, ui2Setting } from "./ui2";
 import { nameMayShow } from "./california";
 setPipelineHook(proposalToPipeline);
@@ -4913,6 +4914,8 @@ async function fullView(
       looking: typeof prof.looking === "boolean" ? prof.looking : null,
       // The new look (RN_UI2): nothing at all while the flag is off.
       ...ui2Me(prof),
+      // The one-screen Proposals (RN_PROPOSALS2): left out while it is off.
+      ...(proposals2On() ? { proposals2: true as const } : {}),
       // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
       ...(billingLive() ? { plan: planView(s, me.id, nowMs, { tracks, fnOfEng: (engId) => { const e = g.engagements.get(engId); return e ? fnOf(e, s) : null; } }) } : {}),
       // Only the viewer's own. Nobody else's private rate ever leaves the server.

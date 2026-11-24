@@ -301,6 +301,12 @@ async function draftProposal(m: Member, cx: { call: CallCtx; templateId: string 
     id = String(out.proposal_id ?? "");
     if (!id) throw new Error("no proposal");
   }
+  // The call it came from, so Proposals marks this call "Draft ready" and a tap opens this draft (RN_PROPOSALS2).
+  const made = id;
+  await T.mutate((d) => {
+    const p = (d.proposals ?? []).find((x) => x.id === made && x.memberId === m.id);
+    if (p && !p.fromCall) p.fromCall = { recorder: call.recorder, id: call.id };
+  });
   if (cx.sow) {
     const { updateProposal } = await import("../proposals/store");
     await updateProposal(m.token, id, { title: `Statement of work${call.company.name ? ` for ${call.company.name}` : ""}` }, cx.origin, cx.nowMs).catch(() => {});

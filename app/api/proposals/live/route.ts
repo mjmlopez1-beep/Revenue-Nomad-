@@ -4,6 +4,8 @@ import { limited } from "@/lib/rateLimit";
 import { memberForToken } from "@/lib/table";
 import { draftWithClaude } from "@/lib/proposals/draft";
 import { proposeChange } from "@/lib/proposals/change";
+import { proposals2On } from "@/lib/proposals/flag";
+import { writeSections } from "@/lib/proposals/quick";
 import { cancelJob, eventsAfter, follow, jobOf, startJob, type LiveEvent } from "@/lib/proposals/live";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,8 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
  *
  * POST { op: "draft", ...the draft's arguments (app/api/proposals op "draft") }   text/event-stream
  * POST { op: "change", id, instruction, agree? }                                  text/event-stream
+ * POST { op: "sections", id, agree? }   RN_PROPOSALS2: only What we heard and What I recommend, from the call's
+ *      reading (lib/proposals/quick.ts writeSections), streamed into the open document.
  *      Each event is one JSON line (`data: {...}`): first { t: "job", id }, then the job's events
  *      in order (step, section, text), and last done or error. The job runs on if the connection drops.
  * GET ?job=ID&after=N     { status, events }: the events after N (the app picks up from here, or polls).
@@ -59,6 +63,9 @@ export const POST = guarded(async (req: NextRequest) => {
   } else if (b?.op === "change") {
     if (limited(`prop-change:${me.id}`, 30, 60 * 60_000)) return err("That's a lot of changes at once. Give it a few minutes, then try again.", 429);
     job = startJob(me.id, "change", (p) => proposeChange(token, String(b.id ?? ""), { instruction: b.instruction, agree: b.agree }, o, Date.now(), p));
+  } else if (b?.op === "sections" && proposals2On()) {
+    if (limited(`prop-draft:${me.id}`, 12, 60 * 60_000)) return err("That's a lot of drafts at once. Give it a few minutes, then try again.", 429);
+    job = startJob(me.id, "sections", (p) => writeSections(token, String(b.id ?? ""), { agree: b.agree }, o, Date.now(), p));
   } else return err("That didn't go through. Refresh the page and try again.");
 
   const enc = new TextEncoder();
