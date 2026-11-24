@@ -2,6 +2,18 @@
 
 Everything needed to submit Merlin's Google sign-in for verification in Google Cloud Console, except the clicks only the owner can make. Written from the code (`lib/google`), the Privacy Policy (`/privacy`, `app/privacy/Privacy.tsx`) and the Terms of Service (`/terms`, `app/terms/Terms.tsx`). This file is in a public repository: it holds no secrets, no client ids and no member data. Keep it that way.
 
+## Why Merlin exists (paste into the app description)
+
+> Merlin helps fractional executives find the work and the people they already have relationships with, so their outreach is relevant, wanted and based on existing relationships rather than cold, high-volume email. With the member's permission, Merlin reads their own calendar and contacts to show them, privately, which companies they already know someone at and how recently they spoke. Nothing is shared with other members, sold, used for ads, or used to train AI models.
+
+Merlin was built as an alternative to cold, high-volume outreach, which Revenue Nomad does not agree with. Every Google permission serves that purpose: knowing who you already know, so the conversations you start are with people who want them.
+
+**Support email on the consent screen:** hello@revenuenomad.com (also `RN_SUPPORT_EMAIL` in production). It must be a Google Workspace user or a Google Group the submitting account manages.
+
+### gmail.send (only when Approve and send is part of the submission)
+
+> Merlin uses gmail.send only to send a note the member has written or reviewed and approved with a single tap, from their own Gmail, one message at a time, at most 50 a day. There is no bulk sending, no mailing lists and no automatic sending. Notes go to people the member already knows or has chosen to contact. Merlin was built as an alternative to cold, high-volume outreach: its purpose is to help members reach people they already have relationships with. Merlin never reads message content.
+
 ## The recommendation
 
 **Submit Calendar and Contacts now. Leave Gmail for later.**
