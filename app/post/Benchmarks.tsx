@@ -20,11 +20,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionResult, BenchRate, BenchmarkRow, RateStat, View } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
-import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, floorWords, readRate } from "@/lib/rates";
+import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, benchRead, floorWords } from "@/lib/rates";
 import { IconChevron, IconLock, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
 import { ProTag, UpgradeNote, openPlans } from "./Billing";
-import { BENCH_RATE_HELP, atTime } from "./hooks";
+import { atTime } from "./hooks";
 import "./pages.css";
 import { Prop } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
@@ -123,7 +123,8 @@ export function ShareRate({ refresh, inline, onDone, idp: idpGiven, revenue: rev
     if (busy) return;
     if (!fn) return setErr("Pick the function the rate is for.");
     if (!rate.trim()) return setErr("Add the rate.");
-    if (!readRate(rate, pricing)) return setErr(BENCH_RATE_HELP);
+    const read = benchRead(rate, pricing);
+    if (!read.ok) return setErr(read.error);
     setErr(null);
     setBusy(true);
     if (!refresh) {

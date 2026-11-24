@@ -17,7 +17,7 @@ import {
   ENGAGEMENT_TYPES, END_REASONS, FOUND_NOTE, FUNCTIONS, HIRE_REASONS, INTRO_FIELD, PERSON_NAME_RE, PRICING_MODELS, REFERRAL_BONUS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, WHY_NOW,
   cleanValue, fieldDef,
 } from "@/lib/tableFields";
-import { readRate } from "@/lib/rates";
+import { benchRead } from "@/lib/rates";
 import type { ActionResult, Cell, EngagementRec } from "@/lib/tableTypes";
 import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, monoTint, initials, post, val } from "../ui/shared";
 import { COMPANY_FILL, deriveAll, mySeats, shown, type CoInfo } from "./model";
@@ -29,7 +29,7 @@ import { confirmedWords } from "./display";
 import { SEAT_YIELD } from "./earnBack";
 import { MonthYear } from "./MonthYear";
 import { RateAsk, RateWho, reasonsFor, type RateChoice } from "./Seats";
-import { BENCH_RATE_HELP, atTime, plural, useDebounced } from "./hooks";
+import { atTime, plural, useDebounced } from "./hooks";
 import { Spot } from "../ui/fractions/lazy";
 import { pipelineAct } from "./pipelineStore";
 import { radioKeys, radioTab } from "./radioGroup";
@@ -553,8 +553,8 @@ function EngagementForm({
     if (mine && v.rate?.trim()) {
       if (!draft.who) return fail({ key: "rate", text: "Pick who can see your rate." });
       if (draft.who === "bench") {
-        const read = readRate(v.rate, v.pricing || null);
-        if (!read) return fail({ key: "rate", text: BENCH_RATE_HELP });
+        const read = benchRead(v.rate, v.pricing || null);
+        if (!read.ok) return fail({ key: "rate", text: read.error });
         bench = read;
       }
     }

@@ -43,6 +43,7 @@ import { spendGate } from "./log";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
+import { benchRead, parseRate } from "../rates";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
 import { accountPathsLine, pathsLine } from "../paths"; // [smart ways in] counts only, never who
@@ -1087,11 +1088,22 @@ function seatFields(a: SeatArgs): Record<string, string> {
   return out;
 }
 
+/** The pricing model sent with a seat, when it is one Merlin knows ("Hourly", "Monthly retainer", ...). */
+const fieldsPricing = (a: SeatArgs): string | null => (typeof a.pricing === "string" && (PRICING_MODELS as readonly string[]).includes(a.pricing.trim()) ? a.pricing.trim() : null);
+
 export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
   const mv = await memberView(ctx.member);
   const me = mv.view.me!;
   const fields = seatFields(a);
-  const rate = a.rate !== undefined && a.rate !== null && String(a.rate).trim() ? String(a.rate).trim() : null;
+  const typed = a.rate !== undefined && a.rate !== null && String(a.rate).trim() ? String(a.rate).trim() : null;
+  // One reader for every typed rate (lib/rates.ts): 5000, $5,000, 5k, $5k/mo, 5000/month, 150/hr, $150 an hour.
+  const parsed = typed ? parseRate(typed, fieldsPricing(a)) : null;
+  if (parsed && !parsed.ok) throw new ToolProblem(parsed.error);
+  const rate = parsed?.ok ? parsed.value : null;
+  if (rate && a.rate_visibility === "benchmarks_only") {
+    const b = benchRead(rate, fieldsPricing(a));
+    if (!b.ok) throw new ToolProblem(b.error);
+  }
   if (rate && !a.rate_visibility)
     throw new ToolProblem(
       'Ask the member who can see this rate, then send rate_visibility. "members": members who unlock it see it on the seat. "benchmarks_only": it only counts in the rate benchmarks and is never shown with their name or the seat.',
@@ -1106,7 +1118,8 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
   };
   const shareBench = async (engagementId: string) => {
     if (!rate || a.rate_visibility !== "benchmarks_only") return null;
-    const kind = pricing === "Hourly" || /\/\s*h(ou)?r|hourly|an hour|per hour/i.test(rate) ? "Hourly" : "Monthly retainer";
+    const b = benchRead(rate, pricing);
+    const kind = b.ok && b.kind === "hourly" ? "Hourly" : "Monthly retainer";
     const r = await act(ctx, { type: "benchRate", engagementId, pricing: kind, rate });
     return r.message;
   };

@@ -23,7 +23,14 @@ export function atOf(search: string): SettingsAt {
   const q = new URLSearchParams(search);
   const want = q.get("open");
   const open: ConnKey | null =
-    want && (CONN_KEYS as readonly string[]).includes(want) ? (want as ConnKey) : q.get("p") === "network" && q.has("google") ? "google" : q.get("p") === "integrations" && q.has("slack") ? "slack" : null;
+    want && (CONN_KEYS as readonly string[]).includes(want)
+      ? (want as ConnKey)
+      : // Google turned them away: the LinkedIn file opens, the way in that works without Google.
+        q.get("p") === "network" && q.get("google") === "blocked"
+        ? "linkedin"
+        : q.get("p") === "network" && q.has("google")
+          ? "google"
+          : q.get("p") === "integrations" && q.has("slack") ? "slack" : null;
   const sec = settingsSecOf(search);
   return { sec: open && !sec ? "conn" : sec, open };
 }

@@ -26,7 +26,7 @@ import { ServiceIcon, type Service } from "@/app/ui/ServiceIcon";
 import { ConnToggle } from "@/app/ui/ConnToggle";
 import { useOffSwitch } from "@/app/post/network/sourceSwitch";
 import { OFF_ASK, REMOVE, staysOff } from "@/app/post/settings/model";
-import { useNetwork } from "@/app/post/network/useNetwork";
+import { GOOGLE_PENDING, NOTICE_WORDS, noticeRefused, takeNotice, useNetwork, type GoogleNotice } from "@/app/post/network/useNetwork";
 import { useKnown, usePaths } from "@/app/post/network/usePaths";
 import { CsvAct, LinkedInAct, SOURCE_TEXT, type SourceKey } from "@/app/post/network/ConnectPanel";
 import { useExport } from "@/app/post/network/useExport";
@@ -59,9 +59,15 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
   const known = useKnown();
   const lix = useExport().view?.info ?? null;
   const [open, setOpen] = useState<SourceKey | null>(null);
+  // Back from Google's page (?google=...): said once. When nothing came in, the LinkedIn file and a CSV are right here.
+  const [notice, setNotice] = useState<GoogleNotice | null>(null);
+  useEffect(() => setNotice(takeNotice()), []);
   const g = net.view?.google ?? null;
   const googleOn = !net.off && !!net.view;
   const googleReady = googleOn && !!net.view?.configured;
+  // Until Google finishes checking Merlin (RN_GOOGLE_VERIFIED), the LinkedIn file comes first and Google last.
+  const verified = !!net.view?.verified;
+  const order: SourceKey[] = verified ? ["google", "linkedin", "csv"] : ["linkedin", "csv", "google"];
   const googleIn = !!g && g.status !== "reconnect";
   const people = (known.known?.people ?? []).filter((p) => !p.away && p.company);
   const ways = paths ? Object.keys(paths.counts).length : 0;
@@ -91,9 +97,24 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
           <span>{ways ? `${plural(ways, "company", "companies")} with a way in so far` : "Bring in a source and this counts up."}{known.known?.locked ? ` ${plural(known.known.locked, "more is at a locked company", "more are at locked companies")}: they show once you open it.` : ""}</span>
         </span>
       </div>
+      {notice && notice !== "connected" && notice !== "gmail" ? (
+        <div className="su-gnote" role="status">
+          <p>{NOTICE_WORDS[notice]}</p>
+          {noticeRefused(notice) || notice === "scopes" ? (
+            <span className="su-src-acts">
+              <button type="button" className="su-pine" onClick={() => (setOpen("linkedin"), setNotice(null))}>
+                Add your LinkedIn file
+              </button>
+              <button type="button" className="su-ghost" onClick={() => (setOpen("csv"), setNotice(null))}>
+                Add a contacts CSV
+              </button>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="su-sources">
-        {(["google", "linkedin", "csv"] as SourceKey[]).map((k) => (
-          <KnowCard key={k} k={k} status={status(k)} open={open === k} setOpen={(on) => setOpen(on ? k : null)} googleReady={googleReady} googleIn={googleIn} lixIn={!!lix} onLeave={onLeave} />
+        {order.map((k) => (
+          <KnowCard key={k} k={k} status={status(k)} open={open === k} setOpen={(on) => setOpen(on ? k : null)} googleReady={googleReady} googleIn={googleIn} verified={verified} lixIn={!!lix} onLeave={onLeave} />
         ))}
       </div>
       <section className="su-reads" aria-label="What Merlin reads">
@@ -129,7 +150,7 @@ const KNOW_ICON: Record<SourceKey, Service> = { google: "google", linkedin: "lin
  * export or a CSV at once. Cancelled or failed, it is back to off, said plainly. On to off: the
  * question first, then that source's own delete (settings/model.ts REMOVE).
  */
-function KnowCard({ k, status: st, open, setOpen, googleReady, googleIn, lixIn, onLeave }: { k: SourceKey; status: string | null; open: boolean; setOpen: (on: boolean) => void; googleReady: boolean; googleIn: boolean; lixIn: boolean; onLeave: () => void }) {
+function KnowCard({ k, status: st, open, setOpen, googleReady, googleIn, verified, lixIn, onLeave }: { k: SourceKey; status: string | null; open: boolean; setOpen: (on: boolean) => void; googleReady: boolean; googleIn: boolean; verified: boolean; lixIn: boolean; onLeave: () => void }) {
   const { view: paths } = usePaths();
   const t = SOURCE_TEXT[k];
   const [said, setSaid] = useState<{ t: string; bad: boolean } | null>(null);
@@ -192,7 +213,7 @@ function KnowCard({ k, status: st, open, setOpen, googleReady, googleIn, lixIn, 
         noGoogle ? (
           <span className="su-small">Google isn&apos;t on for Merlin yet. Your LinkedIn file or a CSV works without it.</span>
         ) : googleIn ? null : (
-          <span className="su-small">Turn it on and Google asks you first. You come back to this step after.</span>
+          <span className="su-small">{verified ? "Turn it on and Google asks you first. You come back to this step after." : `Turn it on and Google asks you first. You come back to this step after. ${GOOGLE_PENDING}`}</span>
         )
       ) : open ? (
         k === "linkedin" ? (

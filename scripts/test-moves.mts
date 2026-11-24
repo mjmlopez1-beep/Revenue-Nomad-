@@ -418,13 +418,13 @@ async function main() {
   let tes = await homeMoves(TES);
   const bySeat = (m: Move) => (m.way.kind === "holder" || m.way.kind === "role" ? m.way.seatId : "");
   // Fellow fractionals are free (PEERS_FREE): once the company is open, who held its seat shows at no charge.
-  check("opened: who held the seat shows free, and the move is to reach them", tes.moves[1].way.kind === "holder" && tes.moves[1].way.name === "Hana Holder" && tes.moves[1].do !== "seeHolder" && !tes.moves[1].hidden, tes.moves[1]);
+  check("opened: who held the seat shows free, and the move is to reach them", tes.moves[1].way.kind === "holder" && tes.moves[1].way.name === "Hana H." /* a member, named the way she chose */ && tes.moves[1].do !== "seeHolder" && !tes.moves[1].hidden, tes.moves[1]);
   check("opened: the open role's posting came with the company", tes.moves[0].do === "reply" && tes.moves[0].way.kind === "role" && tes.moves[0].way.posting === "https://tallgrass.example/careers/revops", tes.moves[0].way);
   check("the role's title is shown as the record has it", tes.moves[0].way.kind === "role" && tes.moves[0].way.title === "Fractional VP RevOps ($9k/mo)");
   check("seat holders cost nothing: no credit spent on them", (await credits(TES)) === before && !!bySeat(tes.moves[1]) && !!bySeat(tes.moves[2]), [before, await credits(TES)]);
   tes = await homeMoves(TES);
   const [tTall, tSalt, tCopp] = tes.moves;
-  check("a seat holder on Merlin: Message the seat holder", tSalt.do === "holderMessage" && tSalt.title === "Message the seat holder" && tSalt.way.kind === "holder" && tSalt.way.name === "Hana Holder" && tSalt.way.member, tSalt);
+  check("a seat holder on Merlin: Message the seat holder", tSalt.do === "holderMessage" && tSalt.title === "Message the seat holder" && tSalt.way.kind === "holder" && tSalt.way.name === "Hana H." && tSalt.way.member, tSalt);
   check("a seat holder not on Merlin yet: Invite them to connect, with the claim link", tCopp.do === "holderInvite" && tCopp.title === "Invite them to connect" && tCopp.way.kind === "holder" && tCopp.way.name === "Pella Quist" && !!tCopp.way.invite?.path.startsWith("/claim/"), tCopp);
   check("an open role: Reply to the open role", tTall.do === "reply" && tTall.title === "Reply to the open role" && tTall.hiring);
   check("Fen sees none of what Tess opened", same((await homeMoves(FRE)).moves, fre.moves));

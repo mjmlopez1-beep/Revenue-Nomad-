@@ -1330,3 +1330,16 @@
     margin-left: auto;
   }
 }
+/* Back from Google's page with nothing connected: why, and the LinkedIn file or a CSV right here. */
+.su-gnote {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ember-ink);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+}

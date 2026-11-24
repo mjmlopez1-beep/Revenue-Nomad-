@@ -44,13 +44,13 @@ const newId = (p: string) => `${p}${randomBytes(8).toString("hex")}`;
  * so the seat's company is in their pipeline at Sent (a later one is a follow-up there). The other
  * side's reply in this conversation moves it to Replied when Merlin next reads the pipeline.
  */
-function pipelineSent(s: State, meId: string, c: StoredConversation, holder: { id: string; name: string }, role: string | null, nowMs: number) {
+function pipelineSent(s: State, meId: string, c: StoredConversation, holder: Member, role: string | null, nowMs: number) {
   if (!c.about.companyId || c.a !== meId) return;
   openEntry(((s.pipeline ??= {})[meId] ??= emptyPipeline()), {
     id: newId("pl"),
     companyId: c.about.companyId,
     channel: "merlin",
-    to: { memberId: holder.id, name: holder.name, ...(role ? { role } : {}), ...(c.about.engagementId ? { seatId: c.about.engagementId } : {}) },
+    to: { memberId: holder.id, name: T.memberNameFor(s, holder, meId), ...(role ? { role } : {}), ...(c.about.engagementId ? { seatId: c.about.engagementId } : {}) },
     source: "message",
     via: "message",
     nowMs,
@@ -83,7 +83,8 @@ function recFor(seed: Seed, s: State, me: Member, c: StoredConversation): Conver
   const tracks = T.tracksOf(seed, s);
   const otherId = c.a === me.id ? c.b : c.a;
   const other = idx.byId.get(otherId);
-  const name = other?.name ?? "A former member";
+  // Named the way they chose to show to other members (lib/memberName.ts), never in full unless they said so.
+  const name = other ? T.memberNameFor(s, other, me.id) : "A former member";
   const e = g.engagements.get(c.about.engagementId);
   // Connect on Referral partners is about no seat: no company, no seat.
   const hidden = !!c.about.companyId && T.identityHidden(g, s, idx, tracks, me, c.about.companyId);

@@ -137,11 +137,13 @@ function holderOf(cx: Cx, seatId: string | undefined | null): { name: string | n
   const e = seatId ? cx.g.engagements.get(seatId) : undefined;
   if (!e || !cx.f.me.visible(e.companyId)) return { name: null, role: null };
   const vis = (k: string) => T.cellOf(cx.s, cx.m, e, "engagement", k, cx.idx).s === "value";
-  if (!vis("operator")) return { name: null, role: null };
+  const op = T.cellOf(cx.s, cx.m, e, "engagement", "operator", cx.idx);
+  if (op.s !== "value") return { name: null, role: null };
   if (T.valueOf(e, cx.s, "operator")?.pub && !publicNameOk(cx, e.companyId)) return { name: null, role: null };
   // A holder who hides their name on their seats is never named here.
   if (T.holderNameHidden(cx.s, e)) return { name: null, role: vis("role") ? (T.live(e, cx.s, "role") ?? null) : null };
-  return { name: shownName(T.live(e, cx.s, "operator") ?? "") || null, role: vis("role") ? (T.live(e, cx.s, "role") ?? null) : null };
+  // The name as the seat shows it to this member: a member on Merlin the way they chose (lib/memberName.ts).
+  return { name: shownName(op.v) || null, role: vis("role") ? (T.live(e, cx.s, "role") ?? null) : null };
 }
 
 /** A person on file (a leader, who hired for a seat): their name and title only when the member can see them. */

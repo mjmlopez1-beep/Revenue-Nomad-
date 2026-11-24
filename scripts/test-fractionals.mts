@@ -427,7 +427,7 @@ async function main() {
   const page = await t.claimPage(samTok, null, robinCode);
   check("a fractional with several seats: the activation page lists every seat that looks like theirs", page.status === "open" && page.person?.seats.length === 3, page);
   check("only the link's own seat names its company", page.person!.seats.filter((x) => x.company).length === 1 && page.person!.seats.find((x) => x.link)?.company === "Brightloom Learning" && !JSON.stringify(page).includes("Pollen") && !JSON.stringify(page).includes("Vellum"));
-  check("who's waiting: the member whose link it is, and how many more", page.person!.inviter?.name === "Robin Kearney" && page.person!.others === 1 && /fractional CMO/.test(page.person!.inviter?.note ?? "") && !/claim\//.test(page.person!.inviter?.note ?? ""), page.person!.inviter);
+  check("who's waiting: the member whose link it is, and how many more", page.person!.inviter?.name === "Robin K." /* named the way Robin chose (lib/memberName.ts) */ && page.person!.others === 1 && /fractional CMO/.test(page.person!.inviter?.note ?? "") && !/claim\//.test(page.person!.inviter?.note ?? ""), page.person!.inviter);
   check("never the fractional's name, and no person key", !JSON.stringify(page).includes("Brennick") && keysIn(JSON.stringify(page)).length === 0);
   const samJoin = await t.joinMember("Sam Brennick", "sam.brennick@example.net", robinCode, "10.9.9.9");
   const robin0 = await balance("mem_robin");

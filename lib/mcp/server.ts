@@ -303,7 +303,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
         why_hired: z.string().optional().describe(list(HIRE_REASONS)),
         sourced: z.string().optional().describe(list(SOURCED_VIA)),
         pricing: z.string().optional().describe(list(PRICING_MODELS)),
-        rate: z.string().optional().describe("Like $8k/mo or $150/hr."),
+        rate: z.string().optional().describe("As the member says it: 5000, $5,000, 5k, $5k/mo, 5000/month, 150/hr or $150 an hour. With no unit, 1,000 and up reads as a month, under it as an hour (or as the pricing model says)."),
         rate_visibility: z.enum(["members", "benchmarks_only"]).optional().describe("members: members who unlock it see it. benchmarks_only: it only counts in the benchmarks, never shown with their name or the seat."),
         hours: z.union([z.string(), z.number()]).optional().describe("Hours a week."),
         revenue_then: z.string().optional().describe(`The client's revenue at the time: ${list(RN_REVENUE)}`),

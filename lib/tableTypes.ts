@@ -376,6 +376,16 @@ export interface Me {
   fractionals?: boolean | null;
   /** "Hide my name on my seats": their seats read NAME_HIDDEN to everyone else, the connector included. */
   nameHidden?: boolean;
+  /** How other members see this member's name now (lib/memberName.ts nameForOthers): full, first name and last initial, or hidden. */
+  shownAs?: string;
+  /** Display name changes left in the rolling NAME_CHANGE_DAYS (Settings, Profile and card). */
+  nameChangesLeft?: number;
+  /**
+   * "Are these yours?": seats Revenue Nomad found under the member's own name (a research record
+   * that is them, lib/table.ts foundOf). The directory shows only the member's card meanwhile.
+   * The foundSeats action answers. Empty when there are none.
+   */
+  foundSeats?: FoundSeat[];
   /** Their card in Fractionals: one line about them and where they are based (Profile.headline, city). */
   headline?: string;
   city?: string;
@@ -1114,6 +1124,16 @@ export type Action =
   /** Onboarding's answers so far, after each step (null drops them). Nothing changes once the member is onboarded. */
   | { type: "onboardDraft"; draft: OnboardDraft | null }
   /**
+   * Settings, Profile and card: the name the member shows by (lib/memberName.ts displayNameProblem),
+   * at most NAME_CHANGES_MAX changes in NAME_CHANGE_DAYS, each logged. Their own seats take it.
+   */
+  | { type: "displayName"; name: string }
+  /**
+   * "Are these yours?" (Me.foundSeats): `mine` claims them (`skip`: the public ids of the ones that
+   * aren't, said "This isn't me" on), `notMine` says "This isn't me" on every one.
+   */
+  | { type: "foundSeats"; answer: "mine" | "notMine"; skip?: string[] }
+  /**
    * Saved views, in the same store as the connector's alerts. save: `place` and `criteria` from
    * the table, `name` (else one made from the criteria), `email` (on unless false). A view the
    * member already has (the same place, or for a search saved in Claude the same criteria: see
@@ -1539,3 +1559,15 @@ export const GOALS = [
   { key: "adjacent", label: "Companies that have not hired my function yet" },
   { key: "intro", label: "A fractional who held the seat and can tell me about it" },
 ] as const;
+
+/** One seat of Me.foundSeats: what the seat says, and its company only when the member can see it (else its free facts). */
+export interface FoundSeat {
+  id: string;
+  role: string | null;
+  fn: string | null;
+  start: string | null;
+  end: string | null;
+  now: boolean;
+  company: string | null;
+  facts: string;
+}

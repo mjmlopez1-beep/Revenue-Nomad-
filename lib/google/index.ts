@@ -23,7 +23,7 @@ import { crystalCompanyIds } from "../radar";
 import * as P from "../pipeline";
 import { forgetSource as forgetRouteSource } from "../paths/plan";
 import {
-  MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailScopes, gmailTester, googleConfigured, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
+  MAIN_SCOPES, SCOPE_GMAIL, gmailOwnClient, gmailScopes, gmailTester, googleConfigured, googleVerified, hasCalendar, hasCalendarList, hasContacts, hasGmail, hasOtherContacts,
 } from "./config";
 import { seal, unseal } from "./crypto";
 import * as G from "./api";
@@ -113,7 +113,8 @@ const same = (a: string, b: string) => {
   return x.length === y.length && timingSafeEqual(x, y);
 };
 
-export type Outcome = "connected" | "gmail" | "denied" | "scopes" | "failed";
+/** "blocked": Google said no while Merlin's app is still in Google's check (RN_GOOGLE_VERIFIED off), most likely an account not on its test list. */
+export type Outcome = "connected" | "gmail" | "denied" | "blocked" | "scopes" | "failed";
 
 /**
  * GET /api/integrations/google/callback. The state must be known, unexpired, the browser's own
@@ -132,7 +133,8 @@ export async function finishConnect(
   if (!got || got.exp <= Date.now() || !cookie || !same(cookie, raw) || !networkOn() || !googleConfigured()) return { outcome: "failed", from: "" };
   const w = await who(token);
   if (!w || w.m.id !== got.memberId) return { outcome: "failed", from: got.from };
-  if (q.error) return { outcome: q.error === "access_denied" ? "denied" : "failed", from: got.from };
+  // Before Google finishes checking Merlin's app, its "access_denied" is most often Google turning an account away, not the member's Cancel.
+  if (q.error) return { outcome: q.error === "access_denied" ? (googleVerified() ? "denied" : "blocked") : "failed", from: got.from };
   const code = String(q.code ?? "");
   if (!code || code.length > 1000) return { outcome: "failed", from: got.from };
   let t: G.Tokens;
@@ -936,6 +938,7 @@ export async function networkView(token: string | null, nowMs = Date.now()): Pro
   const view: NetworkView = {
     on: true,
     configured: googleConfigured(),
+    verified: googleVerified(),
     google: linkView(n?.google),
     gmail: linkView(n?.gmail),
     gmailOffered: !!n?.google && gmailTester(w.m.email, n.google.email),

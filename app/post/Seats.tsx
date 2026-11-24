@@ -17,10 +17,10 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
-import { readRate } from "@/lib/rates";
+import { benchRead } from "@/lib/rates";
 import { CompanyLogo, IconCheck, LockedName, IconChevron, IconPencil, IconPlus, fmtValue } from "../ui/shared";
 import { PRIVATE_ASK, SEAT_ASK, SEAT_CO_ASK, cellKey, shown, type CoInfo, type FactRef, type SeatInfo } from "./model";
-import { BENCH_RATE_HELP, atTime, plural, store } from "./hooks";
+import { atTime, plural, store } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
 import { RateWho, shortLabel, splitPicks, useUi, type RateChoice } from "./ui";
@@ -32,6 +32,7 @@ import { PageHead } from "../ui/system";
 import { HideNameSwitch } from "./PartnersSwitch";
 import { NAME_HIDDEN, seatNameWho } from "@/lib/tableFields";
 import { SeatGuesses } from "./network/SeatGuesses"; // [google network]
+import { FoundSeats } from "./FoundSeats";
 import { ExportSeats } from "./network/ExportPanel";
 import { SeatCaseLine, seatEvidenceOn, useSeatCases } from "./evidence/SeatEvidence";
 
@@ -272,7 +273,8 @@ export function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing:
   const earns = earnRoom(ui.me) > 0 && initial === undefined;
   const text = v.trim();
   const save = async () => {
-    if (!text || !who || busy) return;
+    if (!text || busy) return;
+    if (!who) return setErr("Pick who can see your rate.");
     if (who === "record") {
       const { value, error } = cleanValue(fieldDef("engagement", "rate")!, text);
       if (error) return setErr(error);
@@ -285,8 +287,8 @@ export function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing:
       return;
     }
     // The medians need a monthly or an hourly figure. With no unit typed, the seat's pricing model decides.
-    const read = readRate(text, pricing);
-    if (!read) return setErr(BENCH_RATE_HELP);
+    const read = benchRead(text, pricing);
+    if (!read.ok) return setErr(read.error);
     setErr(null);
     setBusy(true);
     // Not quiet: the answer says when the rate starts to count, and about an invite bonus.
@@ -306,7 +308,7 @@ export function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing:
     >
       <input
         className="input ys-input ys-rate-input"
-        placeholder="$8k/mo or $150/hr"
+        placeholder="5000, $5k/mo or $150/hr"
         aria-label="Rate"
         autoComplete="off"
         maxLength={60}
@@ -317,7 +319,7 @@ export function RateAsk({ t, pricing, initial, onSaved }: { t: FactRef; pricing:
       />
       {initial === undefined && <RateWho value={who} onChange={(w) => (setWho(w), setErr(null))} disabled={busy} />}
       <Err text={err} />
-      <button type="submit" className="btn btn-volt ys-save" disabled={!text || !who || busy || text === initial}>
+      <button type="submit" className="btn btn-volt ys-save" disabled={!text || busy || text === initial}>
         {busy ? "Saving" : initial !== undefined ? "Save" : who === "bench" ? "Share for the benchmarks" : who === "record" ? "Add to the seat" : "Save rate"}
         {earns && !busy && <span className="ys-plus num">+1</span>}
       </button>
@@ -1049,6 +1051,8 @@ export function Seats({
           </button>
         </div>
       )}
+      {/* "Are these yours?": seats found under their own name, one card for them until they answer (lib/table.ts foundOf). */}
+      <FoundSeats me={me} act={ui.act} />
       {/* [google network] Seats the member's calendar suggests they held: Confirm or Not a seat (nothing with RN_GOOGLE off, or before they connect). */}
       <SeatGuesses infos={infos ?? []} seats={seats} onShown={setGuessing} />
       {/* The roles in the member's own LinkedIn export (lib/linkedin): Confirm is the existing Add, Not a seat sets one aside. */}

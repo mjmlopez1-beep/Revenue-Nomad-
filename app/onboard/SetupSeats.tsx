@@ -20,6 +20,7 @@ import { IconCheck, IconX, fmtMonth, type Act, type View } from "../ui/shared";
 import type { Me } from "@/lib/tableTypes";
 import { NAME_HIDDEN, NAME_HIDDEN_SAY, seatNameWho } from "@/lib/tableFields";
 import { shown, type CoInfo, type LikeTrait, type SeatInfo } from "@/app/post/model";
+import { FoundSeats } from "@/app/post/FoundSeats";
 import { SEAT_YIELD } from "@/app/post/earnBack";
 import { FindSeats } from "./FindSeats";
 import { ExportSeats } from "@/app/post/network/ExportPanel";
@@ -211,6 +212,8 @@ export function SeatsScreen(p: {
       ) : (
         <div className="su-skel" aria-hidden />
       )}
+      {/* "Are these yours?": seats found under their own name (lib/table.ts foundOf), the same answer as on Your seats. */}
+      {p.ready ? <FoundSeats me={me} act={p.act} /> : null}
       {/* The roles in the member's own LinkedIn export (lib/linkedin): confirmed one by one with the existing Add. */}
       {p.ready ? <ExportSeats act={p.act} holder={me.name} /> : null}
       <section className="su-hand" aria-label="Add a seat by hand">
