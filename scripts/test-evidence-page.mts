@@ -152,7 +152,8 @@ async function main() {
   const logo = renderToStaticMarkup(h(ui.CompanyLogo, { name: "Northwind Clinics", domain: null, seed: rows[0].logoId!, hidden: false, size: "lg" }));
   const letters = renderToStaticMarkup(h(ui.CompanyLogo, { name: "Cedar and Pine", domain: null, hidden: false, size: "lg" }));
   check("column A draws the logo from /api/logo/<id>; a typed company gets its lettered tile", logo.includes('src="/api/logo/c_northwind01"') && !letters.includes("<img") && /class="logo logo-lg"[^>]*>[A-Z]{1,2}</.test(letters), [logo, letters]);
-  check("the page draws column A with the name and the logo, and column B with the tiles (no side panel)", ev.includes('<span role="columnheader">Company</span>') && ev.includes('<span role="columnheader">Case studies</span>') && /<CompanyLogo name=\{companyName\(r\)\} domain=\{null\} seed=\{r\.logoId/.test(ev) && ev.includes("<CaseTile") && !/CasePanel|MatchPanel|ev-aside/.test(ev));
+  // The two headers sort (owner, 2026-11-24: click any data table's header to sort it; app/ui/sortable.tsx).
+  check("the page draws column A with the name and the logo, and column B with the tiles (no side panel), each header sorting", /<SortHeader as="span" s=\{evSort\} k="company">\s*Company\s*<\/SortHeader>/.test(ev) && /<SortHeader as="span" s=\{evSort\} k="cases">\s*Case studies\s*<\/SortHeader>/.test(ev) && /<CompanyLogo name=\{companyName\(r\)\} domain=\{null\} seed=\{r\.logoId/.test(ev) && ev.includes("<CaseTile") && !/CasePanel|MatchPanel|ev-aside/.test(ev));
   check("no 'Client hidden' and no Show button on the page: names aren't hidden here", !files.some((f) => /Client names: hidden|>Show<|Client hidden/.test(src(join("app/post/evidence", f)))));
   check("search keeps a company by its name, or the case studies with the words", M.searchRows(rows, "cedar").map((r) => r.name).join() === "Cedar and Pine" && M.searchRows(rows, "first four").flatMap((r) => r.cases.map((c) => c.id)).join() === "a2" && M.searchRows(rows, "").length === 3);
 
@@ -292,8 +293,11 @@ async function main() {
 
   /* ----- plain words ----- */
   const all = files.map((f) => src(join("app/post/evidence", f))).join("\n");
-  const strings = (all.match(/"[^"\n]{3,}"|`[^`\n]{3,}`|>[^<>{}\n]{3,}</g) ?? []).join("\n");
-  check("no export, CSV or download anywhere on the page", !/Export|Download|\bCSV\b|\.csv|PDF/.test(strings.replace(/ExportProof|ExportPanel/g, "")), strings.match(/.*(Export|Download|CSV|PDF).*/)?.[0]);
+  // What the member reads: the code's strings and text, not its import lines (a module path such as
+  // "../network/ExportPanel", the member's own LinkedIn data export brought in, is no export from Merlin).
+  const said = all.replace(/^import [^;]*;$/gm, "");
+  const strings = (said.match(/"[^"\n]{3,}"|`[^`\n]{3,}`|>[^<>{}\n]{3,}</g) ?? []).join("\n");
+  check("no export, CSV or download anywhere on the page", !/Export|Download|\bCSV\b|\.csv|PDF/.test(strings), strings.match(/.*(Export|Download|CSV|PDF).*/)?.[0]);
   check("on a phone, Still going stays on one line beside or under the month, and no 28px box squeezes it or the two switches", /\.ev-endrow \.ev-check \{[^}]*flex-wrap: nowrap;[^}]*white-space: nowrap;/.test(src("app/post/evidence/evidence.css")) && /\.ev-endrow \.input \{[^}]*min-width: 0;/.test(src("app/post/evidence/evidence.css")) && !/\.ev-phone \.ev-check \{[^}]*width: 28px/.test(src("app/post/evidence/evidence.css")));
   check("no volt: nothing on Evidence Bank earns a credit", !all.includes("btn-volt") && !src("app/post/evidence/evidence.css").includes("--volt"));
   check("fractional words, not generic AI words", !M.NOT_OUR_WORDS.test(strings), strings.match(new RegExp(`.*${M.NOT_OUR_WORDS.source}.*`, "i"))?.[0]);
