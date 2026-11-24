@@ -212,6 +212,8 @@ run settings npx tsx scripts/test-settings.mts
 run known npx tsx scripts/test-known.mts
 # Workflows (Stage 7b, Beta, RN_WORKFLOWS, lib/workflows): a run's estimate equals what it spends, auto-spend by default, the warning once, the cap that stops and asks (yes runs, no doesn't), Merlin's daily caps, the workflow's name on every ledger line, notes as drafts only, never a locked company or a Californian named, the flag off running nothing, the plan gates, reminders, a signed proposal's Evidence Bank draft, export and purge. In process, on a made-up seed.
 run workflows npx tsx scripts/test-workflows.mts
+# A call ends (lib/calls): a fake Granola MCP server, a fake Fathom API and a fake AI endpoint, in process.
+run call-triggers npx tsx scripts/test-call-triggers.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
 run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts

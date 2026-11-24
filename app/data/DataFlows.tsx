@@ -36,8 +36,14 @@ const SERVICES: Service[] = [
   {
     who: "Granola",
     gets: "Only for a member who connects Granola: with Connect Granola, the member signs in at Granola and says yes there, and Merlin gets an access token for their calls; or, as a fallback, the member pastes their own Granola API key. When the member opens the call picker, Merlin asks Granola for their recent meetings with a company's web address or a person's email on the invite, and reads when each call was and who was on it. Only when the member picks a call does Merlin read its transcript, to draft that one proposal. Merlin never reads a call the member didn't pick. Merlin keeps the access and refresh tokens, or the key, encrypted, and nothing else from Granola: no note, title, summary or transcript.",
-    why: "Starting a proposal from a call the member recorded in Granola.",
+    why: "Starting a proposal from a call the member recorded in Granola, and the member's call workflows.",
     when: "Only while the Granola feature is on, and only for members who connect it.",
+  },
+  {
+    who: "Fathom",
+    gets: "Only for a member who pastes their own Fathom API key, sent with each request. For a member with a call workflow on, Merlin asks Fathom every few minutes for the calls that ended since it last looked, when they ended and who was invited, and reads one call's transcript for that run. Merlin keeps the key, encrypted, and nothing else from Fathom: no call, title, invitee or transcript.",
+    why: "Building what the member agreed on a call, as drafts for them.",
+    when: "Only while the Fathom feature is on, and only for members who connect it.",
   },
   {
     who: "Resend (email)",
@@ -292,6 +298,14 @@ export function DataFlows() {
               see your workflows and their runs; Revenue Nomad&apos;s copy for admins keeps the workflows themselves and none of their runs or drafts. They are
               deleted with your personal data when you close your account.
             </p>
+            <p className="cl-p">
+              A call workflow runs when a call ends in your call recorder (Granola or Fathom). Merlin matches the company by the email of who was on the
+              call, reads the transcript for that run and never keeps it, and builds what you agreed to send as drafts for you: a proposal or an SOW in
+              Proposals, a follow-up email or a deck outline in Messages, or a summary and a prompt for your own Claude. Nothing goes to your client. Where
+              Merlin&apos;s AI reads the call, the transcript goes to Anthropic for that request alone, as with a proposal draft, and it counts against your
+              AI usage. For Claude, Merlin keeps the call&apos;s summary and what was agreed for 30 days, and the transcript only reaches your Claude if you
+              tick it, read from your recorder at that moment.
+            </p>
           </section>
 
           <section className="df-sec" aria-labelledby="df-agent">
@@ -377,6 +391,7 @@ export function DataFlows() {
               <li>Your connections export: Settings, Connections, Remove. Everything it brought in is deleted, with the ways in found from it.</li>
               <li>Google: Your network, Disconnect and delete everything. Merlin revokes its access at Google and deletes what it kept about your network, and what came from Google on Your pipeline. If you remove Merlin in your Google Account instead, Merlin deletes the same 30 days later unless you reconnect.</li>
               <li>Assistants: Your credits, Connected apps, or Integrations. Disconnect any assistant you added. On Agent access: Revoke an assistant, switch off its tools, or set a daily spend limit for all of them.</li>
+              <li>Fathom: Settings, Connections, Remove. Merlin deletes your key at once, and closing your account does the same. You can revoke the key in Fathom too.</li>
               <li>Granola: Integrations, Disconnect (or Settings, Connections). Merlin asks Granola to end its access and deletes it at once, and closing your account does the same. If you connected a key, revoke it in Granola as well, under Settings, Connectors, API keys.</li>
               <li>Your way in: drop a plan from its page. Your deal stays in your pipeline.</li>
               <li>Your notes on a company: remove any note from the company&apos;s Notes and activity tab.</li>
@@ -395,6 +410,8 @@ export function DataFlows() {
             <ul className="df-bullets">
               <li>Google network: off unless turned on.</li>
               <li>Granola: off unless turned on.</li>
+              <li>Fathom: off unless turned on.</li>
+              <li>Call workflows (a call ends): off unless turned on.</li>
               <li>Leadership pages from company websites: off unless turned on.</li>
               <li>Finding company websites: off unless turned on.</li>
               <li>About texts from company websites: off unless turned on.</li>
