@@ -20,6 +20,7 @@ import {
 import { WfAnswer, approveRun, capWorkflows, monthSpent, planFor, remindersDue, runEvents, wfIn, workflowsOn, type WfEvent } from "./run";
 import { newWfId } from "./steps";
 import { hasKnownSources } from "../notify/knownView";
+import { v2Switch, watchingOf } from "./graph";
 import { callTriggersOn, callsInfo } from "../calls";
 
 export { workflowsOn, runEvents, approveRun, remindersDue, type WfEvent };
@@ -212,7 +213,8 @@ export function workflowWatchers(s: State): Map<string, Set<WfTrigger>> {
   if (!workflowsOn()) return out;
   for (const [id, w] of Object.entries(s.workflows ?? {})) {
     if (s.closures?.[id]) continue;
-    const t = new Set(w.flows.filter((f) => f.on).map((f) => f.trigger));
+    // Workflows v2 on: its live graphs watch too (watchingOf is today's flows exactly while it is off).
+    const t = new Set(watchingOf(w).map((f) => f.trigger).filter((x): x is WfTrigger => x in TRIGGERS));
     if (t.size) out.set(id, t);
   }
   return out;
@@ -255,7 +257,7 @@ export async function watchEvents(seed: Seed, s: State, found: WatchFound, nowMs
   for (const [memberId, triggers] of who) {
     const m = idx.byId.get(memberId);
     if (!m) continue;
-    const flows = s.workflows![memberId].flows.filter((f) => f.on);
+    const flows = watchingOf(s.workflows![memberId]);
     const named = (companyId: string) => (T.identityHidden(g, s, idx, tracks, m, companyId) ? null : g.companies.get(companyId)?.name || null);
     const coWords = (companyId: string) => named(companyId) ?? kv.lockedWords(g, s, companyId);
     const href = (companyId: string) => `/?c=${encodeURIComponent(T.pubId(companyId))}`;
@@ -331,12 +333,15 @@ export function afterProposal(memberId: string, f: { kind: string; item: string;
 /** Reminders that are due go to the bell. Never throws. */
 export async function workflowTick(nowMs = Date.now()): Promise<number> {
   if (!workflowsOn()) return 0;
+  let n = 0;
   try {
-    return await remindersDue(nowMs);
+    n = await remindersDue(nowMs);
   } catch (e) {
     console.error("workflows: reminders failed", e instanceof Error ? e.message : "error");
-    return 0;
   }
+  // Workflows v2 (RN_WORKFLOWS_V2): waits that are due, taps given in the outbox, schedules. Nothing while off.
+  if (v2Switch()) n += await (await import("./graphRun")).graphTick(nowMs);
+  return n;
 }
 
 export const recipeList = () => RECIPES;

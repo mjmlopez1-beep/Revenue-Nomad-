@@ -479,6 +479,53 @@ export async function queueFromAgent(member: Member, a: { to?: unknown; to_name?
   return viewOf(seed, await loadState(), m, it);
 }
 
+/* ---------- a workflow's note (lib/workflows/graphRun.ts, RN_WORKFLOWS_V2): a draft for the member's tap, nothing more ---------- */
+
+/**
+ * "Approve, then send" in a workflow: the note waits in the member's outbox as a draft, exactly as
+ * an agent's does. Only the member's tap (approve) sends it. The address is checked now and again
+ * on the tap. Returns the draft's id.
+ */
+export async function queueFromWorkflow(memberId: string, a: { key: string; to: string; toName?: string | null; subject: string; body: string; companyPub?: string | null }, nowMs = Date.now()): Promise<string> {
+  if (!sendOn()) throw new ActionError("Sending isn't on.");
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const m = memberOf(seed, s, memberId);
+  if (!m) throw new ActionError(SIGNED_OUT);
+  const subject = flat(a.subject, SUBJECT_MAX);
+  const body = String(a.body ?? "").replace(/\r\n?/g, "\n").trim().slice(0, BODY_MAX);
+  if (!subject || !body) throw new ActionError("The note needs a subject and a body.");
+  const to = cleanAddress(a.to);
+  if (!to) throw new ActionError(WORDS.badAddress);
+  const p = addressProblem(seed, s, m, to);
+  if (p) throw new ActionError(p);
+  const companyId = companyIdOf(seed, s, a.companyPub);
+  return T.mutate((d) => {
+    const b = ensureBox(d, m.id);
+    trim(b, nowMs);
+    const had = b.items.find((x) => x.key === a.key && x.status === "draft");
+    if (had) return had.id;
+    const x: OutboxItem = {
+      id: newId(), key: flat(a.key, 160), status: "draft", to, toName: a.toName ? flat(a.toName, 120) : null, subject, body, kind: "workflow", companyId, pipelineId: null,
+      effect: companyId ? { type: "pipeline.sent", companyId: T.pubId(companyId), channel: "email", from: "record" } : null, createdAt: iso(nowMs), approvedAt: null, sendAt: null, sentAt: null,
+    };
+    b.items.push(x);
+    return x.id;
+  });
+}
+/** Where a workflow's note is now: its status, or null when it is gone from the outbox. */
+export function workflowNoteStatus(s: State, memberId: string, id: string): { status: SendStatus; to: string; subject: string | null; body: string | null } | null {
+  const x = boxOf(s, memberId)?.items.find((i) => i.id === id);
+  return x ? { status: x.status, to: x.to, subject: x.subject, body: x.body } : null;
+}
+/** A workflow's note the member skipped, or that waited too long: it goes, unsent. Never once it was approved. */
+export async function dropWorkflowNote(memberId: string, id: string): Promise<void> {
+  await T.mutate((d) => {
+    const b = boxOf(d, memberId);
+    const x = b?.items.find((i) => i.id === id);
+    if (x && x.status === "draft") close(x, "cancelled", "Skipped in a workflow");
+  });
+}
+
 /* ---------- sending ---------- */
 
 const timers = new Map<string, ReturnType<typeof setTimeout>>();

@@ -755,6 +755,9 @@ console.log("\nThe API's routes");
     "api/sign/activity", "api/sign/pdf",
     // api/table/jobs: Automatic jobs (lib/jobs.ts), the card and cadence changes (an admin's cookie), and the scheduler's own look (a key only this process holds).
     "api/table", "api/table/jobs", "api/table/lookup", "api/table/names", "api/table/scan", "api/table/unsubscribe",
+    // Workflows v2 (lib/workflows/v2.ts, RN_WORKFLOWS_V2): the member's cookie and Merlin's own origin; off (404) unless switched on.
+    // ?hook=: an incoming webhook, that workflow's own secret is the only key.
+    "api/workflows2",
   ];
   eq("the API has exactly the routes Merlin uses (a new one is added to this list on purpose)", found.sort(), KNOWN);
   check("none of the old job-board routes is back (jobs, crawl, prospects, profile)", !found.some((r) => /^api\/(jobs|crawl|prospects|profile)(\/|$)/.test(r)), found);

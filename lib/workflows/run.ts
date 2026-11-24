@@ -29,6 +29,7 @@ import {
 } from "./types";
 import { companyOpen, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
 import { workflowPlan } from "../billing/rules";
+import { v2Switch } from "./graph";
 
 const DAY = 86_400_000;
 
@@ -112,6 +113,8 @@ export function runEvents(evs: WfEvent[], origin?: string, nowMs = Date.now()): 
 }
 
 async function runAll(evs: WfEvent[], origin: string | undefined, nowMs: number): Promise<number> {
+  // Workflows v2 (RN_WORKFLOWS_V2): the graph runner takes every event (today's workflows run there as straight lines). Off: below, as before.
+  if (v2Switch()) return (await import("./graphRun")).runAllV2(evs as unknown as import("./graphRun").V2Event[], origin, nowMs);
   let n = 0;
   for (const ev of evs) {
     const s0 = await loadState();
@@ -318,6 +321,14 @@ async function tell(cx: Ctx, run: WfRun, bells: Parameters<typeof pushInbox>[2])
  * then the steps that waited for the company run. No: they are skipped. Either way, once.
  */
 export async function approveRun(memberId: string, runId: string, yes: boolean, origin?: string, nowMs = Date.now()): Promise<string> {
+  // A run of Workflows v2 (RN_WORKFLOWS_V2): its own answer, the same words.
+  if (v2Switch()) {
+    const g = await import("./graphRun");
+    if (await g.isGraphRun(memberId, runId))
+      return g.answerRun(memberId, runId, yes, origin, nowMs).catch((e) => {
+        throw e instanceof g.RunAnswer ? new WfAnswer(e.message) : e;
+      });
+  }
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = T.memberIndex(seed, s).byId.get(memberId);
   const w = s.workflows?.[memberId];
