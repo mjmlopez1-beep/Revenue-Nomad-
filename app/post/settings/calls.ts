@@ -8,6 +8,7 @@ import type { CloseInboxView } from "@/lib/close/types";
 import { errorText } from "../../ui/shared";
 import { netAct } from "../network/useNetwork";
 import { pathsAct } from "../network/usePaths";
+import { exportAct } from "../network/useExport";
 import { disconnectKey } from "../granolaClient";
 import type { RemoveCall } from "./model";
 
@@ -34,6 +35,10 @@ export async function runRemove(call: RemoveCall, apps: { id: string }[] = []): 
     case "paths": {
       const r = await pathsAct(call.op);
       return r.error ? { ok: false, error: r.error } : { ok: true, message: r.message ?? "Deleted." };
+    }
+    case "export": {
+      const r = await exportAct({ op: call.op });
+      return r.error ? { ok: false, error: r.error } : { ok: true, message: r.message ?? "Removed." };
     }
     case "integrations":
       return send<{ view?: IntegrationsView }>("/api/integrations", call.body);

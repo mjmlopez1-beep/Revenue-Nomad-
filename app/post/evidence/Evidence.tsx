@@ -17,6 +17,7 @@
  * On Free and Pro the page is the upgrade screen (Upgrade.tsx). The data is Builder A's route
  * (app/api/evidence/route.ts) through api.ts; the rules are evidenceModel.ts.
  */
+import { ExportProof } from "../network/ExportPanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, useToast } from "../../ui/shared";
 import { shown as cellShown } from "../model";
@@ -95,6 +96,10 @@ export function EvidencePage() {
     <>
       {header}
       <Bank />
+      {/* The recommendations the member kept as proof from their own LinkedIn export (lib/linkedin, opt-in, Close). */}
+      <div className="lx-proof-wrap">
+        <ExportProof />
+      </div>
     </>
   );
 }

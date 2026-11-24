@@ -30,6 +30,7 @@ import { FindSeatsHere, SeatRowDetail, useSeatList, waitingSeats } from "../Seat
 import { useUi } from "../ui";
 import { setFindStart } from "../find/start";
 import { guessLine } from "../network/SeatGuesses";
+import { ExportSeats } from "../network/ExportPanel";
 import { load as loadNetwork, monthYear, netAct, useNetwork } from "../network/useNetwork";
 import { stripGone, useApp } from "../shell/pages";
 import { earnedAt, onFileUnderName, stepWords, verificationOf, whenWords } from "./seatsModel";
@@ -464,6 +465,10 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
             Connect Google for more guesses
           </button>
         )}
+      </div>
+      {/* The roles in the member's own LinkedIn export (lib/linkedin): Confirm is the existing Add, Not a seat sets one aside. */}
+      <div className="sp-lix">
+        <ExportSeats act={ui.act} holder={me.name} />
       </div>
       <div className="wb-ask sp-ask">
         <button type="button" className="wb-askchip" aria-pressed={how} onClick={() => setHow(!how)}>

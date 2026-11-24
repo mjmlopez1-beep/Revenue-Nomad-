@@ -11,6 +11,7 @@
 import type { Action } from "@/lib/tableTypes";
 import type { LinkView } from "@/lib/google/types";
 import type { LinkedInInfo } from "@/lib/paths/types";
+import type { ExportInfo } from "@/lib/linkedin/types";
 import type { DestView } from "@/lib/notify/types";
 import type { GranolaStatus } from "@/lib/granola/types";
 import { greetingWords, expandContractions, phraseSlot, asSentence, type VoiceStyle } from "@/lib/voice";
@@ -108,7 +109,7 @@ export interface ConnInput {
   /** Google (RN_GOOGLE): null while it is off for Merlin, so no row. */
   google: { configured: boolean; link: LinkView | null; gmail: LinkView | null; claude: { at: string; companies: number } | null; syncing: boolean; companies: number } | null;
   /** The member's own files (RN_PATHS): null while off, so no rows. */
-  paths: { linkedin: LinkedInInfo | null; csv: LinkedInInfo | null } | null;
+  paths: { linkedin: LinkedInInfo | null; csv: LinkedInInfo | null; /** The LinkedIn data export (lib/linkedin): its row shows once its answer is in (undefined: no row). */ lix?: ExportInfo | null } | null;
   /** GET /api/integrations, or null while it loads. */
   integ: { allowed: boolean; slackApp: boolean; slack: DestView | null; webhook: DestView | null } | null;
   /** Granola (RN_GRANOLA, off by default): no row unless it is on. */
@@ -217,6 +218,30 @@ export function connRows(x: ConnInput): ConnRow[] {
       go: li ? "Manage" : "Add the file",
       remove: li ? { ask: "Delete your LinkedIn connections? The ways in found only from them go too. This can't be undone.", yes: "Delete the file" } : null,
     });
+    // The whole LinkedIn data export (lib/linkedin): read on the member's device, only what they ticked brought in.
+    if (x.paths.lix !== undefined) {
+      const lx = x.paths.lix;
+      const c = lx?.counts ?? {};
+      rows.push({
+        key: "lix",
+        name: "LinkedIn data export",
+        sub: "Your own export, read on your device",
+        on: !!lx,
+        status: lx ? "Brought in" : "Not added",
+        since: lx ? [c.connections ? `${n(c.connections)} connections` : "", c.warm ? `warmth for ${n(c.warm)}` : "", c.positions ? `${n(c.positions)} roles` : "", c.follows ? `${n(c.follows)} to follow` : ""].filter(Boolean).join(" · ") || "Nothing ticked" : "Request it early",
+        trouble: false,
+        reads: "Connections, invitations, your roles, who you message and how often, who vouched for you, companies you follow, skills, and your posts for your voice if you tick it.",
+        never: "Read your messages' words, logins, receipts, phone numbers or ads data, upload the archive, or show any of it to another member.",
+        last: lx ? `Brought in ${day(lx.at)}` : "Nothing yet",
+        feeds: [
+          { label: "Warm paths", why: "How warm each way in is", page: "warm" },
+          { label: "People", why: "Marks the people you know", page: "people" },
+          { label: "Seats", why: "Roles to confirm as seats", page: "seats" },
+        ],
+        go: lx ? "Manage" : "Bring it in",
+        remove: lx ? { ask: "Remove what your export brought in? Its connections, invitations, warmth, who vouched, roles and proof go, with the ways in found only from them. Seats you confirmed, companies you followed and your voice stay.", yes: "Remove it" } : null,
+      });
+    }
     const cv = x.paths.csv;
     rows.push({
       key: "csv",
@@ -322,6 +347,7 @@ export function connRows(x: ConnInput): ConnRow[] {
 export type RemoveCall =
   | { via: "google"; op: "disconnect" }
   | { via: "paths"; op: "delete" | "deleteCsv" }
+  | { via: "export"; op: "remove" }
   | { via: "integrations"; body: { op: "remove"; field: "slack" | "webhook" } }
   | { via: "granola"; op: "disconnect" }
   | { via: "oauth"; op: "revoke" };
@@ -330,6 +356,8 @@ export const REMOVE: Record<ConnKey, RemoveCall> = {
   google: { via: "google", op: "disconnect" },
   // Bring in who you know's Delete (network/ConnectPanel.tsx): POST /api/paths { op: "delete" } and { op: "deleteCsv" }.
   linkedin: { via: "paths", op: "delete" },
+  // The LinkedIn data export's Remove (network/ExportPanel.tsx): POST /api/paths/export { op: "remove" }.
+  lix: { via: "export", op: "remove" },
   csv: { via: "paths", op: "deleteCsv" },
   // Integrations' Remove (Integrations.tsx): POST /api/integrations { op: "remove", field }.
   slack: { via: "integrations", body: { op: "remove", field: "slack" } },

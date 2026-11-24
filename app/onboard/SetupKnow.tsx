@@ -25,6 +25,9 @@ import { GoogleG, startGoogle } from "@/app/post/network/Network";
 import { useNetwork } from "@/app/post/network/useNetwork";
 import { useKnown, usePaths } from "@/app/post/network/usePaths";
 import { CsvAct, LinkedInAct, SOURCE_TEXT, type SourceKey } from "@/app/post/network/ConnectPanel";
+import { useExport } from "@/app/post/network/useExport";
+import { exportLine } from "@/app/post/network/ExportPanel";
+import { ASK_EARLY } from "@/lib/linkedin/types";
 import { buyerLabel, wayInSeatsOf } from "@/app/post/company/sections/WayIn";
 import type { FirstView } from "./firstView";
 import { Head } from "./setupParts";
@@ -52,6 +55,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
   const { view: paths } = usePaths();
   const net = useNetwork();
   const known = useKnown();
+  const lix = useExport().view?.info ?? null;
   const [open, setOpen] = useState<SourceKey | null>(null);
   const g = net.view?.google ?? null;
   const googleOn = !net.off && !!net.view;
@@ -62,6 +66,8 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
   const status = (k: SourceKey): string | null => {
     if (k === "google") return googleIn ? `Connected${g?.syncedAt ? `. Read ${new Date(g.syncedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}. Merlin reads it again once a day.` : null;
     const info = k === "linkedin" ? paths?.linkedin : paths?.csv;
+    // The whole data export (lib/linkedin): what it brought in, in counts.
+    if (k === "linkedin" && lix) return exportLine(lix);
     if (!info) return null;
     const read = plural(info.rows, k === "linkedin" ? "connection" : "contact", k === "linkedin" ? "connections" : "contacts");
     // A names-only LinkedIn file (December 2026 on): what its profile links placed.
@@ -89,7 +95,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
           const st = status(k);
           const off = k === "google" && !googleReady;
           return (
-            <article key={k} className={`su-src${st ? " in" : ""}`} aria-label={t.name}>
+            <article key={k} className={`su-src${st ? " in" : ""}${open === k && k === "linkedin" ? " su-src-wide" : ""}`} aria-label={t.name}>
               <span className="su-src-top">
                 <span className="su-src-i" aria-hidden>
                   {k === "google" ? (
@@ -102,7 +108,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
                 </span>
                 <span className="su-src-t">
                   <strong>{t.name}</strong>
-                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "The Connections.csv from your own LinkedIn data export. It arrives by email a few minutes after you ask for it. From December 2026 it has names and profile links only, so Merlin matches by profile link." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
+                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "Your own LinkedIn data export: the whole .zip, or just Connections.csv. Read on this device: who you message and how often (never the words), your roles and who vouched for you." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
                 </span>
               </span>
               {st ? (
@@ -137,9 +143,9 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
               ) : (
                 <span className="su-src-acts">
                   <button type="button" className={st ? "su-ghost" : "su-pine"} onClick={() => setOpen(k)}>
-                    {st ? "Manage it" : k === "linkedin" ? "Add Connections.csv" : "Add a CSV"}
+                    {st ? "Manage it" : k === "linkedin" ? "Add your export" : "Add a CSV"}
                   </button>
-                  <span className="su-small">{k === "linkedin" ? "No file yet? Skip, and add it later in Settings." : "Columns are matched for you, and you see a preview first."}</span>
+                  <span className="su-small">{k === "linkedin" ? `No export yet? ${ASK_EARLY} Skip, and add it later in Settings.` : "Columns are matched for you, and you see a preview first."}</span>
                 </span>
               )}
               {k === "google" ? (

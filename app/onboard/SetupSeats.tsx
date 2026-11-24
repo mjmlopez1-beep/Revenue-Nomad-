@@ -22,6 +22,7 @@ import { NAME_HIDDEN, NAME_HIDDEN_SAY, seatNameWho } from "@/lib/tableFields";
 import { shown, type CoInfo, type LikeTrait, type SeatInfo } from "@/app/post/model";
 import { SEAT_YIELD } from "@/app/post/earnBack";
 import { FindSeats } from "./FindSeats";
+import { ExportSeats } from "@/app/post/network/ExportPanel";
 import { Head, Switch } from "./setupParts";
 import { HOURS_PICKS, LIKE_LIST_NAME, LIKE_SHOWN, factsLine, likeListAction, likeRowView, seatSource, type LikeStep } from "./setupModel";
 import { SETUP_STEPS } from "./setupModel";
@@ -210,6 +211,8 @@ export function SeatsScreen(p: {
       ) : (
         <div className="su-skel" aria-hidden />
       )}
+      {/* The roles in the member's own LinkedIn export (lib/linkedin): confirmed one by one with the existing Add. */}
+      {p.ready ? <ExportSeats act={p.act} holder={me.name} /> : null}
       <section className="su-hand" aria-label="Add a seat by hand">
         <span className="su-glabel">
           <strong>Held one we missed? Add it by hand</strong>

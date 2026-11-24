@@ -235,7 +235,11 @@ function youEvidence(cx: Cx, c: Contact | null, directory: string | null, bridge
   else if (c.src.includes("google") || c.src.includes("csv")) ev.push({ kind: "contact" });
   if (c.msgCount) ev.push({ kind: "messages", count: c.msgCount, last: c.msgLast ?? null });
   if (c.member) ev.push({ kind: "peer" });
-  if (c.src.includes("linkedin")) ev.push({ kind: "linkedin", since: c.connected });
+  // From the member's own LinkedIn export: messages each way (never the words), a vouch, or an invitation still pending.
+  if (c.liMsg) ev.push({ kind: "limsg", count: c.liMsg.sent + c.liMsg.received, both: c.liMsg.sent > 0 && c.liMsg.received > 0, last: c.liMsg.last });
+  if (c.vouch) ev.push({ kind: "vouch", rec: /[rR]/.test(c.vouch), theirs: /[re]/.test(c.vouch) });
+  if (c.invited) ev.push({ kind: "invited", out: c.invited.out });
+  else if (c.src.includes("linkedin")) ev.push({ kind: "linkedin", since: c.connected });
   together(personOfContact(cx.w, c));
   if (c.companyId && cx.myCompanies.has(c.companyId)) {
     const x = cx.myCompanies.get(c.companyId)!;
@@ -266,7 +270,7 @@ function kindWords(c: Contact | null, ev: Evidence[], nowMs: number, kind: PathV
   if (top?.kind === "client") return "A former client";
   if (top?.kind === "together") return "Someone you worked with";
   if (c.member) return kind === "seat" ? "A peer who held the seat" : "A peer on Merlin";
-  if (top?.kind === "linkedin") return "From your LinkedIn";
+  if (top?.kind === "linkedin" || top?.kind === "limsg" || top?.kind === "vouch" || top?.kind === "invited") return "From your LinkedIn";
   return "Through someone you know";
 }
 
@@ -579,6 +583,12 @@ function clause(a: string, b: string, e: Evidence | null, at: string | null, now
       return `${b} is a peer on Merlin`;
     case "linkedin":
       return `${pair} are connected on your LinkedIn but haven't met`;
+    case "limsg":
+      return `${pair} have traded ${e.count} ${e.count === 1 ? "message" : "messages"} on LinkedIn${e.last ? `, the last ${monthDay(e.last, nowMs)}` : ""}`;
+    case "vouch":
+      return e.rec ? (e.theirs ? `${b} recommended you on LinkedIn` : `you recommended ${b} on LinkedIn`) : e.theirs ? `${b} endorsed you on LinkedIn` : `you endorsed ${b} on LinkedIn`;
+    case "invited":
+      return `${pair} aren't connected yet: an invitation is waiting on LinkedIn`;
     case "contact":
       return `${b} is in your contacts, but you haven't met`;
     case "colleague":

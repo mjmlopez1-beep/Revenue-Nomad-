@@ -1,0 +1,315 @@
+/*
+ * "Bring in your LinkedIn data export" (network/ExportPanel.tsx). Pine for actions, the pale
+ * green for what Merlin reads, volt only on Confirm this seat (it earns), no ember.
+ */
+.lx {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--body-ink, #28322d);
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 0;
+}
+.lx :is(button, a, input, label):focus-visible {
+  outline: 3px solid #0b6b45;
+  outline-offset: 2px;
+}
+.lx-h {
+  font-size: 17px;
+  line-height: 24px;
+  color: #0a1a13;
+}
+.lx-sub,
+.lx-foot,
+.lx-note {
+  margin: 0;
+  font-size: 13px;
+  color: #5b6661;
+}
+.lx-early {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f1f6f3;
+  color: #28322d;
+}
+.lx-in {
+  margin: 0;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: #0b6b45;
+  font-weight: 600;
+}
+.lx-in svg {
+  flex: 0 0 14px;
+  margin-top: 3px;
+}
+.lx-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+.lx-full {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line, #e2e6e3);
+}
+.lx-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f8f7;
+  min-width: 0;
+}
+.lx-box > strong {
+  font-size: 13px;
+  color: #0a1a13;
+}
+.lx-box ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lx-reads li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.lx-reads li svg {
+  flex: 0 0 13px;
+  margin-top: 4px;
+  color: #0b6b45;
+}
+.lx-reads b {
+  color: #0a1a13;
+  overflow-wrap: anywhere;
+}
+.lx-n {
+  margin-left: 4px;
+  font-size: 12px;
+  color: #5b6661;
+}
+.lx-takes {
+  display: block;
+  font-size: 12px;
+  line-height: 17px;
+  color: #5b6661;
+}
+.lx-never p {
+  margin: 0;
+  font-size: 13px;
+}
+.lx-never .lx-files {
+  color: #5b6661;
+  overflow-wrap: anywhere;
+}
+.lx-files span {
+  color: #28322d;
+}
+.lx-uses {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.lx-uses legend {
+  font-weight: 800;
+  font-size: 13px;
+  color: #0a1a13;
+  margin-bottom: 4px;
+}
+.lx-use {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #e2e6e3);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.lx-use input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #073f2f;
+  flex: 0 0 18px;
+}
+.lx-use > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lx-use strong {
+  color: #0a1a13;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.lx-use.off {
+  opacity: 0.6;
+  cursor: default;
+}
+.lx-count {
+  font-size: 12px;
+  color: #0b6b45;
+  font-weight: 600;
+}
+.lx-opt,
+.lx-tag,
+.lx-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eef2f0;
+  color: #073f2f;
+  white-space: nowrap;
+}
+.lx-kind {
+  background: #e8fbf2;
+  color: #0b6b45;
+}
+.lx-kind.plain {
+  background: #f1f3f2;
+  color: #5b6661;
+}
+.lx-follow li label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.lx-follow input {
+  width: 18px;
+  height: 18px;
+  accent-color: #073f2f;
+}
+.lx-follow li label > span {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.lx-follow .btn {
+  align-self: flex-start;
+  min-height: 40px;
+}
+
+/* These look like your seats */
+.lx-seats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line, #e2e6e3);
+  border-radius: 14px;
+  background: #fff;
+}
+.lx-seats-h {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  color: #0a1a13;
+}
+.lx-seat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #e2e6e3);
+  border-radius: 10px;
+}
+.lx-seat.done {
+  background: #f1f6f3;
+}
+.lx-seat-t {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.lx-seat-t strong {
+  color: #0a1a13;
+  overflow-wrap: anywhere;
+}
+.lx-seat-t span {
+  font-size: 13px;
+  color: #5b6661;
+}
+.lx-seat-acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lx-seat-acts .btn {
+  min-height: 40px;
+}
+
+/* Evidence Bank */
+.lx-proof {
+  margin: 0 0 16px;
+  background: #fff;
+  border: 1px solid var(--line, #e2e6e3);
+}
+.lx-proof li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line, #e2e6e3);
+}
+.lx-proof blockquote {
+  margin: 0;
+  color: #28322d;
+}
+.lx-proof-by {
+  font-size: 13px;
+  font-weight: 700;
+  color: #073f2f;
+}
+.lx-proof .btn {
+  align-self: flex-start;
+}
+.lx-proof-wrap {
+  padding: 0 24px 24px;
+  max-width: 980px;
+}
+.lx-proof-wrap:empty {
+  display: none;
+}
+@media (max-width: 720px) {
+  .lx-proof-wrap {
+    padding: 0 16px 16px;
+  }
+}
+
+/* The set-up's Who you know: the LinkedIn card takes the row's width while its export is open. */
+.su-sources > .su-src-wide {
+  grid-column: 1 / -1;
+}
+.sp-lix {
+  padding: 12px 16px 0;
+}
+.sp-lix:empty {
+  display: none;
+}
+.lx-follow li label > span.lx-tag {
+  flex: 0 0 auto;
+}

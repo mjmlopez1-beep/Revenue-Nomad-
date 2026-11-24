@@ -34,6 +34,7 @@ import { BeforeFields, EMPTY_ICP, IcpFields, countriesByCount, industriesByCount
 import { icpEmpty, icpMatch, isFirm, isOpenRole, shown } from "../model";
 import { useNetwork, takeNotice } from "../network/useNetwork";
 import { usePaths } from "../network/usePaths";
+import { useExport } from "../network/useExport";
 import { ClaudeNetworkPrompt } from "../network/Network";
 import { useGranola } from "../granolaClient";
 import { VOICE_PROMPT, VoicePrompt } from "../Voice";
@@ -145,6 +146,7 @@ export function SettingsPage() {
   /* ---- what the meter and Connections read ---- */
   const net = useNetwork();
   const { view: paths } = usePaths();
+  const lixView = useExport().view;
   const gr = useGranola();
   const [integ, setInteg] = useState<IntegrationsView | null>(null);
   const [apps, setApps] = useState<ConnData["apps"]>(null);
@@ -157,7 +159,7 @@ export function SettingsPage() {
   const canClose = me.plan?.canClose ?? true;
   const [sigSt, setSig] = useMySignature();
   const g = net.view?.google ?? null;
-  const source = (!!g && g.status !== "reconnect") || !!paths?.linkedin || !!paths?.csv || !!me.started?.network;
+  const source = (!!g && g.status !== "reconnect") || !!paths?.linkedin || !!paths?.csv || !!lixView?.info || !!me.started?.network;
   const meter = setupMeter({
     headline: !!me.headline?.trim(),
     icp: !icpEmpty(me.icp) && !!me.function,
@@ -170,7 +172,7 @@ export function SettingsPage() {
   const nowMs = Date.now();
   const rows = connRows({
     google: net.off || !net.view ? (net.off ? null : { configured: true, link: null, gmail: null, claude: null, syncing: false, companies: 0 }) : { configured: net.view.configured, link: g, gmail: net.view.gmail, claude: net.view.claude, syncing: net.view.syncing, companies: net.view.companies?.length ?? 0 },
-    paths: paths ? { linkedin: paths.linkedin, csv: paths.csv } : null,
+    paths: paths ? { linkedin: paths.linkedin, csv: paths.csv, ...(lixView ? { lix: lixView.info } : {}) } : null,
     integ,
     granola: gr.status,
     apps,
@@ -332,7 +334,7 @@ export function SettingsPage() {
           rows={rows}
           open={open}
           setOpen={setOpen}
-          data={{ net: { view: net.view, off: net.off }, paths, integ, setInteg, granola: gr.status, apps, reloadApps: loadApps }}
+          data={{ net: { view: net.view, off: net.off }, paths, lix: lixView?.info ?? null, integ, setInteg, granola: gr.status, apps, reloadApps: loadApps }}
           onNotif={() => go("notif")}
           flash={say}
         />
