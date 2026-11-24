@@ -22,6 +22,8 @@ import { registerEvidenceTools } from "./evidence";
 import { registerPeerTools } from "./peers";
 import { registerWayTools } from "./ways";
 import { registerGranolaTools } from "./granola";
+import { registerCallTools } from "./calls";
+import { callTriggersOn } from "../calls";
 import { agentCall } from "./log";
 import { publicBase } from "../links";
 import { granolaOn } from "../granola/types";
@@ -502,6 +504,8 @@ export function makeServer(ctx: T.Ctx): McpServer {
   if (pathsOn()) registerWayTools(server, ctx, run);
   // The member's recent Granola calls (lib/mcp/granola.ts), read only. Only with RN_GRANOLA=1.
   if (granolaOn()) registerGranolaTools(server, ctx, run);
+  // A call, ready for Claude (lib/mcp/calls.ts): what a call workflow prepared. Only with RN_CALL_TRIGGERS=1.
+  if (callTriggersOn()) registerCallTools(server, ctx, run);
 
   return server;
 }

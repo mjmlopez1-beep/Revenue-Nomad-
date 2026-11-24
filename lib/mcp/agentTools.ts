@@ -33,8 +33,8 @@ export interface AgentTool {
   draft?: boolean;
   /** Where its result lands in the app. */
   land?: AgentLand;
-  /** Only where the server offers it: Google network (RN_GOOGLE), ways in (RN_PATHS), Granola (RN_GRANOLA). */
-  needs?: "network" | "paths" | "granola";
+  /** Only where the server offers it: Google network (RN_GOOGLE), ways in (RN_PATHS), Granola (RN_GRANOLA), call triggers (RN_CALL_TRIGGERS). */
+  needs?: "network" | "paths" | "granola" | "calls";
 }
 
 export const AGENT_GROUPS: { id: AgentGroup; name: string; d: string }[] = [
@@ -74,6 +74,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   T("read", "list_proposal_templates", "Proposal templates", "Your templates and the ones Merlin has", "Listed proposal templates", { land: "proposals" }),
   T("read", "get_proposal", "Read a proposal", "One proposal, and what it still needs before it can go", "Read a proposal", { land: "proposals" }),
   T("read", "list_granola_calls", "Your calls", "Recent calls from Granola, to draft from", "Listed your recent calls", { land: "proposals", needs: "granola" }),
+  T("read", "get_call_pack", "A call, ready for Claude", "After a sales call: the summary, what was agreed, your template, closest cases and voice", "Read a call's pack", { cost: "close", land: "proposals", needs: "calls" }),
   T("read", "list_evidence", "Your Evidence Bank", "Your case studies, the client hidden unless you named it", "Read your Evidence Bank", { cost: "close", land: "evidence" }),
   T("read", "match_evidence", "Match your evidence", "Your closest cases for one company, in words", "Matched your evidence to a company", { cost: "close", land: "evidence" }),
 
