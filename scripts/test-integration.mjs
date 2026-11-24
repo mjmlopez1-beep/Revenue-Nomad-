@@ -93,7 +93,10 @@ class Client {
   /** The public id the seat-holder picker gives for a member's exact name. */
   async pick(name) {
     const r = await call("GET", "/api/table?people=" + encodeURIComponent(name), { token: this.token, ipAddr: this.ip });
-    return r.json?.members?.find((m) => m.name === name)?.id ?? null;
+    // Members are named to each other by first name and last initial until they choose the directory (lib/memberName.ts, profile item 1, 2026-11-24).
+    const parts = name.trim().split(/\s+/);
+    const short = parts.length > 1 ? `${parts[0]} ${parts.at(-1)[0].toUpperCase()}.` : name;
+    return r.json?.members?.find((m) => m.name === name || m.name === short)?.id ?? null;
   }
 }
 

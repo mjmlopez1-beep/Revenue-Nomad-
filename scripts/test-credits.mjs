@@ -670,19 +670,26 @@ section("picker", async () => {
   const anon = await call("GET", "/api/table?people=una", { ipAddr: nextIp() });
   check("signed out, the search returns nothing", anon.status === 200 && anon.json?.members?.length === 0, anon.json);
   const joined = await T.people("una pick");
-  check("a joined member is listed, with no email", joined.json?.members?.some((m) => m.name === "Una Picked" && !("email" in m) && m.you === false), joined.json);
+  // Named the way she chose: first name and last initial until she picks the directory (lib/memberName.ts, profile item 1, 2026-11-24).
+  check("a joined member is listed, with no email", joined.json?.members?.some((m) => m.name === "Una P." && !("email" in m) && m.you === false), joined.json);
 
   const quiet = seedMember(3);
   const self = seedMember(4);
   if (quiet && self) {
     const names = async (who, q) => ((await who.people(q)).json?.members ?? []).map((m) => m.name);
-    check("a seed member who never signed in is not listed, even by full name", !(await names(T, quiet.name)).includes(quiet.name));
+    // Other members see a member by first name and last initial until they choose the directory (lib/memberName.ts): look for either.
+    const shortOf = (n) => {
+      const p = String(n).trim().split(/\s+/);
+      return p.length > 1 ? `${p[0]} ${p.at(-1)[0].toUpperCase()}.` : String(n);
+    };
+    const listed = async (who, n) => (await names(who, n)).some((x) => x === n || x === shortOf(n));
+    check("a seed member who never signed in is not listed, even by full name", !(await listed(T, quiet.name)));
     // Members add only seats they held: typing someone else's exact name doesn't make a seat for them.
     const add = await T.act({ type: "add", company: (await hostsOf())[hostN++].name, newEngagement: true, engagementFields: { function: "Sales", type: "Advisory", operator: quiet.name } });
     check("a seat named for another member is refused", add.status === 400 && add.json?.error === "You can add seats you held. Pick yourself as the seat holder.", add.json);
     // A sweep by two-letter prefixes finds no seed member who hasn't signed in.
-    const signedIn = new Set([0, 1, 2].map((n) => seedMember(n)?.name));
-    const seedNames = new Set(seedFile.members.map((m) => m.name));
+    const signedIn = new Set([0, 1, 2].map((n) => shortOf(seedMember(n)?.name ?? "")));
+    const seedNames = new Set(seedFile.members.map((m) => shortOf(m.name)));
     const found = new Set();
     for (const q of ["ja", "jo", "ma", "mi", "da", "ch", "an", "br", "ke", "st", "ro", "sa", "ti", "pa", "la", "al", "be", "ca", "de", "je"]) for (const n of await names(T, q)) if (seedNames.has(n) && !signedIn.has(n)) found.add(n);
     // Up to 5 allowed: seed members another test file signed in as on this same server.
@@ -691,9 +698,9 @@ section("picker", async () => {
     const Me = new Client("Seed Member", nextIp(), self.token);
     const own = (await Me.people(self.name)).json?.members ?? [];
     check("a member always finds themselves", own.some((m) => m.name === self.name && m.you === true), own.length);
-    check("until they visit, nobody else finds them", !(await names(T, self.name)).includes(self.name));
+    check("until they visit, nobody else finds them", !(await listed(T, self.name)));
     await seedSignIn(quiet, nextIp());
-    check("once a seed member signs in, they are listed", (await names(T, quiet.name)).includes(quiet.name));
+    check("once a seed member signs in, they are listed", await listed(T, quiet.name));
 
   } else skip("seed member picker checks", "no seed file the server knows");
 

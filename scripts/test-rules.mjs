@@ -77,7 +77,10 @@ class Client {
   /** The public id the seat-holder picker gives for a member's exact name. */
   async pick(name) {
     const r = await call("GET", "/api/table?people=" + encodeURIComponent(name), { token: this.token, ipAddr: this.ip });
-    return r.json?.members?.find((m) => m.name === name)?.id ?? null;
+    // Members are named to each other by first name and last initial until they choose the directory (lib/memberName.ts, profile item 1, 2026-11-24).
+    const parts = name.trim().split(/\s+/);
+    const short = parts.length > 1 ? `${parts[0]} ${parts.at(-1)[0].toUpperCase()}.` : name;
+    return r.json?.members?.find((m) => m.name === name || m.name === short)?.id ?? null;
   }
 }
 
@@ -278,6 +281,11 @@ const section = (name, fn) => (sections[name] = fn);
 
 /** Naming anyone but yourself as a seat holder, an open role included (members add only seats they held). */
 const SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
+/** A member as other members see them until they choose the directory: first name and last initial (lib/memberName.ts, profile item 1, 2026-11-24). */
+const shortOf = (name) => {
+  const parts = String(name).trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0]} ${parts.at(-1)[0].toUpperCase()}.` : String(name);
+};
 /** A fact about a seat from anyone but its holder. */
 const HOLDER_ONLY = "Only the person who held this seat can add this.";
 
@@ -654,7 +662,8 @@ section("report", async () => {
   const P = await member("Pat Payer");
   // A fact she pays for, on a company she unlocked first (so the unlock is that one fact).
   const pv0 = await P.view();
-  const payCo = pv0.companies.find((c) => c.hidden && c.friendly.open === 0 && c.engagements.some((e) => e.cells.role?.s === "locked"));
+  // A company with a paid fact on it (a rate, a dated end month or how it was sourced): not every seat carries one (interim and firm-client seats often don't).
+  const payCo = pv0.companies.find((c) => c.hidden && c.friendly.open === 0 && c.engagements.some((e) => e.cells.role?.s === "locked") && c.engagements.some((e) => ["rate", "end", "sourced"].some((f) => e.cells[f]?.s === "locked")));
   await unlockCo(P, payCo.id);
   const pv = await P.view();
   let paidFact = null;
@@ -1256,7 +1265,7 @@ section("company", async () => {
   if (!wc) return skip("member tag", "the seed holder's company is hidden or missing");
   const ops = wc.engagements.filter((e) => e.cells.operator?.s === "locked").slice(0, 4);
   for (const e of ops) await W.act({ type: "unlock", entity: "engagement", id: e.id, field: "operator" });
-  const holderCell = () => W.view().then((v) => v.companies.find((c) => c.id === wc.id)?.engagements.map((e) => e.cells.operator).find((c) => c?.s === "value" && normName(c.v) === normName(sm.name)));
+  const holderCell = () => W.view().then((v) => v.companies.find((c) => c.id === wc.id)?.engagements.map((e) => e.cells.operator).find((c) => c?.s === "value" && (normName(c.v) === normName(sm.name) || c.v === shortOf(sm.name))));
   const before2 = await holderCell();
   check("a seed member who never signed in is a name, not a Member", !!before2 && before2.member === undefined, before2 ? { member: before2.member } : "seat not found");
   const holder = new Client("Seed holder", nextIp(), sm.token);
@@ -1528,7 +1537,7 @@ section("econ", async () => {
   check("no Active seat or open role in the whole table has a locked end month", liveLocked === 0 && endsLocked >= 1, { liveLocked, endsLocked });
 
   // 2. Who held a seat and their role: free to members who see the company (PEERS_FREE, fellow fractionals are free).
-  check("on a seat with its holder on file, who held it and the role show free once the company is open", ya?.cells.operator?.s === "value" && ya.cells.operator.v === X.name && ya.cells.role?.s === "value" && ya.cells.role.v === ROLE && !ya.cells.operator.paid, [ya?.cells.operator, ya?.cells.role]);
+  check("on a seat with its holder on file, who held it and the role show free once the company is open", ya?.cells.operator?.s === "value" && ya.cells.operator.v === shortOf(X.name) && ya.cells.role?.s === "value" && ya.cells.role.v === ROLE && !ya.cells.operator.paid, [ya?.cells.operator, ya?.cells.role]);
   const y1 = await Y.act({ type: "unlock", entity: "engagement", id: aid, field: "role" });
   const y2 = await Y.act({ type: "unlock", entity: "engagement", id: aid, field: "operator" });
   check("asking to unlock either spends nothing", y1.status === 400 && y1.json?.error === NOTHING_LOCKED && y2.status === 400 && y2.json?.error === NOTHING_LOCKED && (await Y.view()).me.credits === STARTER - PRICE, [y1.json, y2.json]);
@@ -1633,7 +1642,7 @@ section("econ", async () => {
     check(
       // Who held the seat, with the role, comes free with the company (PEERS_FREE): the company and the person are what cost.
       `  asked for with the company in one request, they go through: the company (${PRICE}) and the person, who held the seat free with their role`,
-      kMany.status === 200 && kAfter.me.credits === STARTER - PRICE - 1 && kSeat?.company.hidden === false && kSeat.cells.operator?.v === H.name && kSeat.cells.role?.s === "value" && kSeat.people[0]?.cells.name?.v === "Gus Gatekeeper",
+      kMany.status === 200 && kAfter.me.credits === STARTER - PRICE - 1 && kSeat?.company.hidden === false && kSeat.cells.operator?.v === shortOf(H.name) && kSeat.cells.role?.s === "value" && kSeat.people[0]?.cells.name?.v === "Gus Gatekeeper",
       kMany.json?.error ?? [kMany.json?.message, kAfter.me.credits],
     );
   } else skip("a locked company's people", NEED_SCAN);
