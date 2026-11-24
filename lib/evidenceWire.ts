@@ -145,7 +145,7 @@ export async function closestView(token: string | null, pubs: string[], nowMs = 
   if (!me) return null;
   if (!closeOn(s, me.id, nowMs)) return { on: false, ready: 0, drafts: 0, rows: {} };
   const all = casesIn(s, me.id);
-  const ready = all.filter((c) => c.status === "ready").length;
+  const ready = all.filter((c) => c.status === "ready" && !c.review).length;
   const rows: Record<string, ClosestRow> = {};
   if (ready && pubs.length)
     for (const [pub, r] of Object.entries(matchRowsIn(seed, s, me.id, [...new Set(pubs)].slice(0, CLOSEST_MAX))))

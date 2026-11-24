@@ -2,7 +2,7 @@
 
 /**
  * Evidence Bank on Your seats (Seats.dc.html, the Evidence case column): for Close members in the
- * new look, each seat says where its case stands and offers "Finish its evidence case", which opens
+ * new look, each seat says where its case stands and offers "Finish its case study", which opens
  * Evidence Bank at that seat's draft (open.ts). A seat added during the visit starts its draft at
  * once (draft on seat add, api.ts draftNewSeats). Without Close the column says it is on the Close
  * plan; with the new look off nothing here draws or runs.
@@ -50,29 +50,29 @@ export const seatEvidenceOn = (ui2: boolean, plan: { canClose: boolean } | null 
 /** The fill line under the column's head. */
 export function seatCasesFill(m: Map<string, EvidenceStatus> | null, seatIds: readonly string[], close: boolean): string {
   if (!close) return "On the Close plan";
-  if (!m) return "One case per seat";
+  if (!m) return "One case study per seat";
   const ready = seatIds.filter((id) => m.get(id) === "ready").length;
-  return `${ready} of ${seatIds.length} ${seatIds.length === 1 ? "case" : "cases"} ready`;
+  return `${ready} of ${seatIds.length} ${seatIds.length === 1 ? "case study" : "case studies"} ready`;
 }
 
-/** The seat's case, in its cell: Case ready (open it), or Finish its evidence case. */
+/** The seat's case study, in its cell: Case study ready (open it), or Finish its case study. */
 export function SeatCaseCell({ seatId, status, page, openPage, name }: { seatId: string; status: EvidenceStatus | undefined; page: string; openPage: (p: "evidence") => void; name: string }) {
   const go = () => openEvidence({ page, openPage }, seatId);
   if (status === "ready")
     return (
       <span className="sp-two">
-        <span className="sp-tag sp-tag-ok">Case ready</span>
-        <button type="button" className="sp-mini" aria-label={`Open the evidence case for your seat at ${name}`} onClick={go}>
+        <span className="sp-tag sp-tag-ok">Case study ready</span>
+        <button type="button" className="sp-mini" aria-label={`Open the case study for your seat at ${name}`} onClick={go}>
           Open it
         </button>
       </span>
     );
   return (
     <span className="sp-two">
-      <button type="button" className="btn btn-sm btn-pine sp-evcase" aria-label={`Finish its evidence case: your seat at ${name}`} onClick={go}>
-        Finish its evidence case
+      <button type="button" className="btn btn-sm btn-pine sp-evcase" aria-label={`Finish its case study: your seat at ${name}`} onClick={go}>
+        Finish its case study
       </button>
-      <span className="sp-sub">{status === "draft" ? "Draft started · 3 questions" : "3 questions, about 3 minutes"}</span>
+      <span className="sp-sub">{status === "draft" ? "Draft started · a few questions" : "A few questions, about 3 minutes"}</span>
     </span>
   );
 }
@@ -82,9 +82,9 @@ export function SeatCaseLine({ seatId, status, openPage, name }: { seatId: strin
   const go = () => openEvidence({ page: "seats", openPage }, seatId);
   return (
     <p className="ys-evcase">
-      <span>{status === "ready" ? "Its evidence case is ready." : status === "draft" ? "Its evidence case is a draft. Three questions finish it." : "Three questions turn this seat into an evidence case."}</span>
-      <button type="button" className="btn btn-sm btn-pine" aria-label={`${status === "ready" ? "Open the evidence case" : "Finish its evidence case"}: your seat at ${name}`} onClick={go}>
-        {status === "ready" ? "Open the case" : "Finish its evidence case"}
+      <span>{status === "ready" ? "Its case study is ready." : status === "draft" ? "Its case study is a draft. A few questions finish it." : "A few questions turn this seat into a case study."}</span>
+      <button type="button" className="btn btn-sm btn-pine" aria-label={`${status === "ready" ? "Open the case study" : "Finish its case study"}: your seat at ${name}`} onClick={go}>
+        {status === "ready" ? "Open the case study" : "Finish its case study"}
       </button>
     </p>
   );

@@ -78,7 +78,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   T("read", "list_evidence", "Your Evidence Bank", "Your case studies, the client hidden unless you named it", "Read your Evidence Bank", { cost: "close", land: "evidence" }),
   T("read", "match_evidence", "Match your evidence", "Your closest cases for one company, in words", "Matched your evidence to a company", { cost: "close", land: "evidence" }),
 
-  T("add", "add_my_seat", "Add your seat", "A seat you held. It becomes a way in and a draft evidence case", "Added your seat", { cost: "earn", land: "seats" }),
+  T("add", "add_my_seat", "Add your seat", "A seat you held. It becomes a way in and a draft case study", "Added your seat", { cost: "earn", land: "seats" }),
   T("add", "add_company_fact", "Add a company fact", "A fact Merlin does not have yet", "Added a company fact", { cost: "earn", land: "companies" }),
   T("add", "add_person", "Add a person", "Someone at a company, with their title", "Added a person", { cost: "earn", land: "companies" }),
   T("add", "save_my_network", "Save your network", "Company, name, title, how many emails and when. Never email text", "Saved your network", { land: "warm", needs: "network" }),
@@ -89,7 +89,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   T("add", "create_or_update_proposal", "Save a proposal draft", "Writes or updates a draft in Proposals", "Saved a proposal draft", { cost: "close", draft: true, land: "proposals" }),
   T("add", "draft_proposal_from_call", "Draft from a call", "A proposal draft from a Granola call or pasted notes", "Drafted a proposal from a call", { cost: "close", draft: true, land: "proposals" }),
   T("add", "change_proposal", "Change a proposal", "Edits pricing options, add-ons or wording in a draft", "Changed a proposal", { cost: "close", asked: "Showed you a change to a proposal", draft: true, land: "proposals" }),
-  T("add", "save_evidence_case", "Save an evidence case", "Writes a case study in your Evidence Bank, after you say yes", "Saved an evidence case", { cost: "close", asked: "Showed you an evidence case to save", draft: true, land: "evidence" }),
+  T("add", "save_evidence_case", "Save a case study", "Writes a case study in your Evidence Bank, after you say yes", "Saved a case study", { cost: "close", asked: "Showed you a case study to save", draft: true, land: "evidence" }),
 
   T("spend", "unlock:company", "Open a company", "Its name, website and the posting of its open roles", "Opened a company", { cost: "c2", asked: "Asked the price of a company", land: "companies" }),
   T("spend", "unlock:person", "Open a person", "Their name and title, as one purchase", "Opened a person", { cost: "c1", asked: "Asked the price of a person", land: "companies" }),

@@ -186,6 +186,12 @@ run suggest npx tsx scripts/test-suggest.mts
 run proposals npx tsx scripts/test-proposals.mts
 # Proposals in the new look (app/post/proposalsPage): the rows' words, views and next steps, the Example rows never counted, a template from the library read back, the outline (Proof says Evidence Bank is coming), the client preview, and in the source: Merlin never Claude, no export, the one editor's saving and two-tab check, the addresses unchanged. Pure.
 run proposals-page npx tsx scripts/test-proposals-page.mts
+# Evidence Bank on the server (lib/evidence, lib/mcp/evidence.ts save_evidence_case): fit tags, drafts from a seat, the client hidden by default, Close only, case studies from the member's agent marked for review, the coverage count moving from 0 to 1 of 10 on a save. In process, on a made-up seed.
+run evidence npx tsx scripts/test-evidence.mts
+# Evidence Bank as the rest of Merlin uses it (lib/evidenceWire.ts): Proof's pick, the Closest evidence column, one source for the ranking. In process, on a made-up seed.
+run evidence-wire npx tsx scripts/test-evidence-wire.mts
+# Evidence Bank's page (app/post/evidence): Case studies by client with real name and logo, tiles that edit in place, tag search, the wizard and where it picks up, Build this for me, the coverage count from the saved list, Close only, no export. Pure.
+run evidence-page npx tsx scripts/test-evidence-page.mts
 # Documents to sign (lib/documents): a PDF uploaded and kept private on the volume, fields placed for each signer, signing in order (the sender too), the plan gate, the signer's code, consent, hash and fields, typed and drawn signatures, the final PDF with the values stamped in and the audit trail page (read back with pdf-lib and pdf.js), both fingerprints, everyone emailed the PDF, decline, void, expiry, the pipeline, privacy. In process, PDFs made here, email to a fake endpoint.
 run documents npx tsx scripts/test-documents.mts
 # After it goes out (lib/close, app/api/sign/activity): beacon validation and rate limits, readers by a cookie (never an IP), section and option time capped by the time that passed, the follow-up rules, alerts (first open, a new reader, engaged at most once in 6 hours, signed and the pipeline at Won, each channel's switch, Slack only when connected), reminders (day 2, day 7, before the link closes, off per proposal, stopped on sign, decline and withdraw), the renewal and its copy, the Close gate, a document moving to Won, privacy, the plan rows. In process, email and Slack to fakes.

@@ -167,13 +167,14 @@ export const whoOf = (c: Pick<EvidenceCase, "clientNamed" | "clientName" | "clie
  * The case, joined from the answers by Merlin's template (no AI): who the client is, the problem,
  * what the member did, and the numbers as they typed them. Empty answers stay out.
  */
-export function caseText(c: Pick<EvidenceCase, "clientNamed" | "clientName" | "clientLabel" | "answers" | "outcomes">): string {
+export function caseText(c: Pick<EvidenceCase, "clientNamed" | "clientName" | "clientLabel" | "answers" | "outcomes"> & { took?: string }): string {
   const who = whoOf(c);
   const lines = [
     c.clientNamed && c.clientName ? `The client: ${c.clientName}, ${lowerFirst(c.clientLabel)}.` : `The client: ${lowerFirst(who)}.`,
     c.answers.problem ? `The problem: ${lowerFirst(sentence(c.answers.problem))}` : "",
     c.answers.did ? `What I did: ${lowerFirst(sentence(c.answers.did))}` : "",
     c.outcomes.length ? `What changed: ${c.outcomes.map(outcomeSentence).join(" ")}` : c.answers.numbers ? `What changed: ${lowerFirst(sentence(c.answers.numbers))}` : "",
+    c.took?.trim() ? `How long it took: ${lowerFirst(sentence(c.took))}` : "",
   ];
   return lines.filter(Boolean).join(" ").slice(0, EVIDENCE_LIMITS.text);
 }
