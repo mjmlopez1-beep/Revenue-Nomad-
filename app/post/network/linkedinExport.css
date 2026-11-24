@@ -304,3 +304,12 @@
 .su-sources > .su-src-wide {
   grid-column: 1 / -1;
 }
+.sp-lix {
+  padding: 12px 16px 0;
+}
+.sp-lix:empty {
+  display: none;
+}
+.lx-follow li label > span.lx-tag {
+  flex: 0 0 auto;
+}
