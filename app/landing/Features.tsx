@@ -400,7 +400,7 @@ export function features(live: Live = OFF): Feature[] {
           label: "Workflows",
           beta: true,
           head: ["Hear ", "the moment it changes", ", then take the next step"],
-          body: "Put an alert on any list or company you follow: a new open role, new funding, a new leader, a seat ended. It comes by email, in Slack or in the bell. A workflow then takes the next step: open the company, find who decides, draft a note. Each step shows its credits before it runs, and a note always waits as a draft. You can also use Merlin from your own AI assistant, such as Claude.",
+          body: "Use funding rounds, leadership changes, and new roles to trigger your next steps. Set up workflows to research the company, find the right contact, and draft outreach for your fractional service. Each step shows its credits before it runs, and outreach waits as a draft for you to send.",
           art: <FeatFlow />,
           corner: <Corner c="tr" t="ember" className="lp-feat-corner" />,
           visual: <FlowVisual />,
