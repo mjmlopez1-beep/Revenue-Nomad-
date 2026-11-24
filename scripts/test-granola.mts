@@ -57,6 +57,9 @@ const check = (name: string, ok: boolean, detail?: unknown) => {
 
 const DAY = 86_400_000;
 const NOW = Date.now();
+// "Used today" and "used yesterday" by the UTC day, safe at any hour (just after midnight too).
+const SINCE_MIDNIGHT = NOW - Date.UTC(new Date(NOW).getUTCFullYear(), new Date(NOW).getUTCMonth(), new Date(NOW).getUTCDate());
+const EARLIER_TODAY = NOW - Math.min(2 * 3_600_000, Math.floor(SINCE_MIDNIGHT / 2));
 const iso = (ms: number) => new Date(ms).toISOString();
 const dir = mkdtempSync(path.join(tmpdir(), "rn-granola-"));
 
@@ -102,7 +105,7 @@ writeFileSync(
     billing: { members: { mem_jordan: trial, mem_bo: { trialStartedAt: iso(NOW - 40 * DAY), trialEndsAt: iso(NOW - 26 * DAY) }, mem_sam: trial }, events: [], payments: [], ended: [] },
     connector: {
       clients: [],
-      grants: [grant("g_live", "mem_jordan", "Claude", NOW - 2 * 3_600_000, NOW + 20 * DAY), grant("g_old", "mem_bo", "ChatGPT", NOW - 40 * DAY, NOW - DAY)],
+      grants: [grant("g_live", "mem_jordan", "Claude", EARLIER_TODAY, NOW + 20 * DAY), grant("g_old", "mem_bo", "ChatGPT", NOW - 40 * DAY, NOW - DAY)],
       alerts: {},
     },
   }),
@@ -689,7 +692,7 @@ async function main() {
   check("a grant past its refresh expiry doesn't (Bo's ChatGPT)", (await O.connectedApps("mem_bo")).length === 0);
   check("Claude, connected: mint chip, the app and when it was used", JSON.stringify(M.claudePick(jApps, NOW)) === JSON.stringify({ chip: "Connected", tone: "mint", line: "Claude · used today" }), M.claudePick(jApps, NOW));
   check("Claude, none: Not set up", M.claudePick([], NOW).chip === "Not set up" && M.claudePick([], NOW).tone === "outline" && M.claudePick(null).chip === "…");
-  check("two apps: each named once, the latest use", M.claudePick([...jApps, { id: "x", name: "Claude", connectedAt: iso(NOW - 9 * DAY), lastUsedAt: iso(NOW - 9 * DAY) }, { id: "y", name: "Cursor", connectedAt: iso(NOW - 3 * DAY), lastUsedAt: iso(NOW - DAY - 3_600_000) }], NOW).line === "Claude · used today, Cursor · used yesterday");
+  check("two apps: each named once, the latest use", M.claudePick([...jApps, { id: "x", name: "Claude", connectedAt: iso(NOW - 9 * DAY), lastUsedAt: iso(NOW - 9 * DAY) }, { id: "y", name: "Cursor", connectedAt: iso(NOW - 3 * DAY), lastUsedAt: iso(EARLIER_TODAY - DAY) }], NOW).line === "Claude · used today, Cursor · used yesterday");
   await O.disconnectApp("mem_jordan", "g_live");
   check("revoked: the grant is gone, Not set up", (await O.connectedApps("mem_jordan")).length === 0 && M.claudePick(await O.connectedApps("mem_jordan"), NOW).chip === "Not set up");
   const link = (o: Partial<{ calendar: boolean; contacts: boolean; status: "ok" | "reconnect" }> = {}) => ({ email: "jordan@averyadvisory.example", status: "ok" as const, goneAt: null, deleteOn: null, syncedAt: iso(NOW), connectedAt: iso(NOW), calendar: true, contacts: true, error: null, ...o });
