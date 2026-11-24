@@ -6,7 +6,7 @@
  * The kind is read from what Merlin already has, never stored:
  *   Intro request   a conversation about a seat with an intro logged on it (Your pipeline's intros)
  *   Question        a conversation about a seat with no intro logged
- *   Lead passed     a conversation between fellow fractionals that a lead was passed in (Peers' leads)
+ *   Referral        a conversation between fellow fractionals that a company was referred in (Peers' referrals)
  *   Team up         a team's shared thread
  *   Fellow fractional  a conversation about no seat (from the Fractionals directory)
  *   Invite claimed  opened by itself when a fractional claimed their seat through the member's invite
@@ -22,7 +22,7 @@ export type Kind = ReplyKind;
 
 export const KINDS: Record<Kind, { label: string; tint: string }> = {
   intro: { label: "Intro request", tint: "#E8F3EE" },
-  lead: { label: "Lead passed", tint: "#FFE7A8" },
+  lead: { label: "Referral", tint: "#FFE7A8" },
   q: { label: "Question", tint: "#E3E8F7" },
   team: { label: "Team up", tint: "#F3E8F5" },
   peer: { label: "Fellow fractional", tint: "#DDF0F7" },
@@ -73,7 +73,7 @@ export const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
   { key: "intro", label: "Intros" },
-  { key: "lead", label: "Leads" },
+  { key: "lead", label: "Referrals" },
   { key: "q", label: "Questions" },
   { key: "team", label: "Teams" },
   { key: "peer", label: "Peers" },
@@ -144,7 +144,7 @@ export function aboutLine(c: ConversationRec, k: Kind, lead?: LeadRec | null): s
   const first = c.with.first;
   if (k === "peer") return "Fellow fractionals on Merlin. No seat in question.";
   if (k === "team") return `Your team thread on ${lower(companyWords(c) || "a company")}.`;
-  if (k === "lead" && lead) return lead.side === "to-you" ? `A lead ${first} passed you: ${lower(companyWords(c, lead))}.` : `A lead you passed to ${first}: ${lower(companyWords(c, lead))}.`;
+  if (k === "lead" && lead) return lead.side === "to-you" ? `Referred to you by ${first}: ${lower(companyWords(c, lead))}.` : `Referred to ${first}: ${lower(companyWords(c, lead))}.`;
   if (k === "invite") return `Their seat at ${lower(companyWords(c) || "a company")}.`;
   return `${c.started ? "About their" : "About your"} ${seatAt(c)}.`;
 }
@@ -162,7 +162,7 @@ export function contextLine(c: ConversationRec, k: Kind, lead?: LeadRec | null):
       return c.started ? `You asked ${first} to team up on ${co}. This is your shared thread.` : `${first} asked you to team up on ${co}. This is your shared thread.`;
     case "lead":
       if (!lead) return `You and ${first} are fellow fractionals on Merlin.`;
-      return lead.side === "to-you" ? `${first} passed you a lead. ${companyWords(c, lead)} is open for you, free, and for nobody else.` : `You passed ${lower(companyWords(c, lead))} to ${first}. It opened free for them alone.`;
+      return lead.side === "to-you" ? `${first} referred a company to you. ${companyWords(c, lead)} is open for you, free, and for nobody else.` : `You referred ${lower(companyWords(c, lead))} to ${first}. It opened free for them alone.`;
     default:
       return c.started ? `You wrote to ${first} about their ${seatAt(c)}.` : `${first} unlocked your ${seatAt(c)} and wants to talk.`;
   }
@@ -184,9 +184,9 @@ export function listHead(list: readonly ConversationRec[]): string {
   return `${list.length} ${list.length === 1 ? "conversation" : "conversations"} · ${unread} unread`;
 }
 
-/** What a lead says it stands at, for the Leads tab. */
+/** What a referral says it stands at, for the Referrals tab. */
 export function leadStatus(l: LeadRec): string {
-  if (l.status === "declined") return l.side === "to-you" ? "You passed on it" : "Passed on";
+  if (l.status === "declined") return l.side === "to-you" ? "You turned it down" : "Turned down";
   if (l.status === "taken") return l.won ? "Taken, then won" : l.side === "to-you" ? "In your pipeline" : "Taken";
   return l.side === "to-you" ? "Waiting for you" : "Waiting for an answer";
 }
@@ -204,6 +204,6 @@ export interface ExampleRow {
 }
 export const EXAMPLE_ROWS: readonly ExampleRow[] = [
   { example: true, reason: "intro", kind: "intro", about: "A software company · Fractional CRO", last: "Happy to introduce you. What should I say about you?" },
-  { example: true, reason: "lead", kind: "lead", about: "A fintech company · you passed it", last: "Taking it. Thank you. You earned 5 credits." },
+  { example: true, reason: "lead", kind: "lead", about: "A fintech company · you referred it", last: "Taking it. Thank you. You earned 5 credits." },
   { example: true, reason: "q", kind: "q", about: "A SaaS company · Fractional CMO", last: "You: What did the CEO care about most in your first 90 days?" },
 ];

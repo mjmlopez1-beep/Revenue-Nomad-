@@ -28,7 +28,7 @@
  *    leads_passed_to_me say it, the passer never sees it, and the one-time move of stored leads;
  *  - the export without what members wrote; ?p=fractionals opens Peers' Every fractional.
  */
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -210,7 +210,7 @@ async function main() {
   /* ---------- pure ---------- */
   console.log("\nThe rules");
   check("a VP Sales and a CMO complement each other, two VPs Sales don't", core.complements("Sales", "Marketing") && core.complements("Marketing", "Sales") && !core.complements("Sales", "Sales"));
-  check("the lead line", core.leadLine({ from: "Ana Ruiz", company: "Acme", role: "Sales", rate: "$9k/mo" }) === "Ana passed you Acme: open Sales role, posted $9k/mo");
+  check("the lead line", core.leadLine({ from: "Ana Ruiz", company: "Acme", role: "Sales", rate: "$9k/mo" }) === "Ana referred Acme to you: open Sales role, posted $9k/mo");
   check("a circle never takes a ninth", core.circleFit({ size: 8, fns: [], shape: ICP }, { fn: "Sales", shape: ICP }) === null && core.circleFit({ size: 3, fns: ["Sales", "Sales"], shape: ICP }, { fn: "Sales", shape: ICP }) === null);
   check("the month's prompt", core.promptFor("2026-11").length > 10 && core.promptFor("2026-11") !== core.promptFor("2026-12"));
   check("thread words", core.threadWords("you", ago(2 * DAY), t0) === "You wrote 2 days ago" && core.threadWords("replied", ago(DAY), t0) === "Replied");
@@ -285,7 +285,7 @@ async function main() {
   }
 
   /* ---------- pass a lead ---------- */
-  console.log("\nPass a lead");
+  console.log("\nRefer it to a peer (peer.pass)");
   {
     check("Acme is locked for Theo and Cara before", (await hiddenFor("mem_theo", "c_acme")) === true && (await hiddenFor("mem_cara", "c_acme")) === true);
     const picks = (await peers.peerPicks(tok("mem_ana"), ACME, ROLE))!;
@@ -295,7 +295,7 @@ async function main() {
     const anaBefore = await bal("mem_ana");
     mails.length = 0;
     const r = await act("mem_ana", { type: "peer.pass", companyId: ACME, memberId: pub("mem_theo"), roleId: ROLE, note: "They want someone who has built a team from scratch.", from: "role" });
-    check("passed, with the words", /^Passed to Theo\. It opens free for them/.test(r.message), r.message);
+    check("referred, with the words", /^Referred to Theo\. It opens free for them/.test(r.message), r.message);
     check("Acme opens for Theo, free: nothing on his credit history", (await hiddenFor("mem_theo", "c_acme")) === false && (await t.loadState()).ledger.filter((l) => l.memberId === "mem_theo").length === theoLedger);
     const theoCo = (await t.viewPatch(tok("mem_theo"), [ACME]))!.companies!.find((c) => c.id === ACME)!;
     const roleRec = theoCo.engagements.find((e) => e.id === ROLE)!;
@@ -303,14 +303,14 @@ async function main() {
     check("Cara's Acme stays locked", (await hiddenFor("mem_cara", "c_acme")) === true);
     const theo = await view("mem_theo");
     const lead = theo.inbox[0];
-    check("Theo's lead line", lead?.line === "Ana passed you Acme Robotics: open Sales role, posted $9k/mo" && lead.status === "new" && lead.fresh === true, lead);
+    check("Theo's lead line", lead?.line === "Ana referred Acme Robotics to you: open Sales role, posted $9k/mo" && lead.status === "new" && lead.fresh === true, lead);
     const conv = (await t.loadState()).conversations!.find((c) => c.id === lead.conversationId)!;
-    check("it is in their Messages, with Ana's note", conv && conv.messages.at(-1)!.by === "mem_ana" && conv.messages.at(-1)!.text.includes("Passing you Acme Robotics") && conv.messages.at(-1)!.text.includes("built a team"));
+    check("it is in their Messages, with Ana's note", conv && conv.messages.at(-1)!.by === "mem_ana" && conv.messages.at(-1)!.text.includes("Referring Acme Robotics to you: open Sales role") && conv.messages.at(-1)!.text.includes("built a team"));
     const home = (await peers.peersHome(tok("mem_theo")))!;
     check("on Theo's Home: From your peers", home.leads[0]?.id === lead.id && home.leads[0].side === "to-you");
     await settle();
     const m = mails.find((x) => x.to === "mem_theo@example.com");
-    check("the lead email: the line as the subject, a signed-in link, no address", m?.subject === "Ana passed you Acme Robotics: open Sales role, posted $9k/mo" && /\/api\/go\?/.test(m.text) && !m.text.includes("mem_ana@example.com"), m);
+    check("the lead email: the line as the subject, a signed-in link, no address", m?.subject === "Ana referred Acme Robotics to you: open Sales role, posted $9k/mo" && /\/api\/go\?/.test(m.text) && !m.text.includes("mem_ana@example.com"), m);
     check("Ana's credits unchanged until Theo takes it", (await bal("mem_ana")) === anaBefore);
     check("passing it again to Theo is refused", /already/.test((await refused("mem_ana", { type: "peer.pass", companyId: ACME, memberId: pub("mem_theo") })) ?? ""));
     const take = await act("mem_theo", { type: "peer.answer", id: lead.id, take: true });
@@ -337,7 +337,7 @@ async function main() {
     check("  leads_passed_to_me says Sent now", (await mcp.leadsPassedToMe(theoCtx)).passed_to_you && ((await mcp.leadsPassedToMe(theoCtx)).passed_to_you as { lead_id: string; pipeline_stage?: string }[]).find((x) => x.lead_id === lead.id)?.pipeline_stage === "Sent");
     check("Ana sees it taken, with her credits", (await view("mem_ana")).sent.find((l) => l.id === lead.id)?.credited === 5);
     check("never where Theo's deal stands, his notes or who he wrote to", !JSON.stringify((await view("mem_ana")).sent).match(/\"stage\"|Sent|notes/));
-    check("Ana's ledger line", (await t.buildView(tok("mem_ana"))).me!.ledger?.some((l) => l.reason === "A peer took the lead you passed" && l.delta === 5) ?? true);
+    check("Ana's ledger line", (await t.buildView(tok("mem_ana"))).me!.ledger?.some((l) => l.reason === "A peer took the company you referred" && l.delta === 5) ?? true);
     // A win at Acme is credited to the passer.
     await pa.recordPipelineEvent("mem_theo", ACME, "signed");
     const stats = P.outcomeStats(await t.loadState());
@@ -346,8 +346,8 @@ async function main() {
     // Ana can't pass what she can't see; and the day's limit.
     check("a company the passer can't see is refused", /Open the company first/.test((await refused("mem_ana", { type: "peer.pass", companyId: pub("c_cedar"), memberId: pub("mem_kai") })) ?? ""));
     const second = await act("mem_ana", { type: "peer.pass", companyId: ACME, memberId: pub("mem_kai") });
-    check("the tenth pass of the day goes", /^Passed to Kai/.test(second.message) && second.peers?.passesLeft === 0, second.peers?.passesLeft);
-    check("the eleventh is refused", /10 leads a day/.test((await refused("mem_ana", { type: "peer.pass", companyId: ACME, memberId: pub("mem_gus") })) ?? ""));
+    check("the tenth referral of the day goes", /^Referred to Kai/.test(second.message) && second.peers?.passesLeft === 0, second.peers?.passesLeft);
+    check("the eleventh is refused", /10 companies a day/.test((await refused("mem_ana", { type: "peer.pass", companyId: ACME, memberId: pub("mem_gus") })) ?? ""));
     // Mute.
     await act("mem_kai", { type: "peer.mute", memberId: pub("mem_ana"), on: true });
     const kaiPicks = (await peers.peerPicks(tok("mem_ana"), ACME, null))!;
@@ -547,6 +547,29 @@ async function main() {
     check("  a lead followed up, sent from a note, or further on, and every other deal, stay as they are", st("followed").stage === "sent" && st("noted").stage === "sent" && st("replied").stage === "replied" && st("notpeer").stage === "sent");
     check("  run again, nothing moves", P.migrateLeadsToReach(old) === 0);
     check("outcomeStats counts To reach out apart, and not as Sent", P.outcomeStats({ pipeline: { m: old } }).byStage.reach === 1 && P.outcomeStats({ pipeline: { m: old } }).reached.sent === 4);
+  }
+
+
+  /* ---------- the words: "Refer it to a peer" (the owner's rename of "Pass it to...") ---------- */
+  console.log("\nThe words: Refer it to a peer");
+  {
+    const root = process.cwd();
+    const walk = (d: string): string[] => readdirSync(path.join(root, d), { withFileTypes: true }).flatMap((f) => (f.isDirectory() ? walk(`${d}/${f.name}`) : /\.(ts|tsx)$/.test(f.name) ? [`${d}/${f.name}`] : []));
+    // A client handing a proposal to someone else to sign (app/sign, lib/proposals, lib/close) is another "pass", and stays; so do
+    // the words Ask Merlin still understands from a member (fractionalsModel.ts take(/.../)).
+    const files = [...walk("app"), ...walk("lib")].filter((f) => !/^(app\/sign|app\/api\/sign|lib\/proposals|lib\/close)\//.test(f));
+    const said = (f: string) => readFileSync(path.join(root, f), "utf8").replace(/^\s*(\*|\/\/|\/\*).*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+    const OLD = /Pass it to|Pass it on|Pass it\b|Pass a lead|Pass to a|Pass as a lead|Passed to you|Passed to \$|Passed by|Passed before|Leads passed|Lead passed|Leads you passed|leads passed to you|passes left|passed you|took the lead you passed|You passed|passed on it|passed it\b/;
+    const left = files.flatMap((f) => said(f).split("\n").map((l, k) => [f, k + 1, l] as const).filter(([, , l]) => OLD.test(l) && !/passedFrom|passed_to_you|you_passed|leads_passed_to_me|pass_lead|take\(\//.test(l)));
+    check("no member-facing \"Pass it to\", \"Pass a lead\", \"Passed to you\" or \"Leads passed\" left (tool names pass_lead and leads_passed_to_me stay)", files.length > 300 && left.length === 0, left.slice(0, 8).map(([f, k, l]) => `${f}:${k} ${l.trim().slice(0, 120)}`));
+    const sheets = said("app/post/PeerSheets.tsx");
+    check("the button and the sheet: Refer it to a peer, Refer it to <name>, Referred before, referrals left today", /Refer it to a peer/.test(sheets) && /`Refer it to \$\{toName\}`/.test(sheets) && /Referred before/.test(sheets) && /referrals left today/.test(sheets));
+    check("the lists: Referrals for you and Referrals sent", /"Referrals for you"/.test(said("app/post/fractionals/FractionalsPage.tsx")) && /"Referrals sent"/.test(said("app/post/fractionals/FractionalsPage.tsx")) && /Referrals for you/.test(said("app/post/Peers.tsx")) && /leads: "Referrals sent"/.test(said("app/post/credits/creditsModel.ts")));
+    check("past tense: Referred to <name> and Referred to you by <name>", /`Referred to \$\{first\}\./.test(said("lib/peers.ts")) && /Referred to you by/.test(said("app/post/Pipeline.tsx")) && /Referred to you by/.test(said("app/post/WonSheet.tsx")));
+    check("the email, the bell and the ledger say it too", /referred \$\{flat\(o\.company\)/.test(said("lib/peersCore.ts")) && /"See the referral"/.test(said("lib/peers.ts")) && /referral or team-up/.test(said("app/post/shell/Bell.tsx")) && /"A peer took the company you referred"/.test(said("lib/table.ts")));
+    const mcp = said("lib/mcp/peers.ts") + said("lib/mcp/agentTools.ts");
+    check("the connector: tool names unchanged, their words say refer and referrals", /"pass_lead"/.test(mcp) && /"leads_passed_to_me"/.test(mcp) && /title: "Refer it to a peer"/.test(mcp) && /title: "Referrals for you"/.test(mcp) && !/Pass a lead|Leads passed/.test(mcp));
+    check("Sign's own hand-off to another signer keeps its words", /passed this/.test(readFileSync(path.join(root, "app/sign/Sign.tsx"), "utf8")));
   }
 
   console.log(`\n${passes} passed, ${failures} failed`);

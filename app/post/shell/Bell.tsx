@@ -149,7 +149,7 @@ export function Bell({
   const close = () => setOpen(false);
   const lines: BellLine[] = [];
   if (counts.unread > 0) lines.push({ id: "msg", head: plural(counts.unread, "conversation"), text: "with something new for you", fresh: true, go: go.messages });
-  if (counts.peers > 0) lines.push({ id: "peers", head: plural(counts.peers, "lead or team-up", "leads and team-ups"), text: "from your peers", fresh: true, go: go.peers });
+  if (counts.peers > 0) lines.push({ id: "peers", head: plural(counts.peers, "referral or team-up", "referrals and team-ups"), text: "from your peers", fresh: true, go: go.peers });
   if (counts.radar > 0 && !told(["radar"])) lines.push({ id: "radar", head: plural(counts.radar, "new company", "new companies"), text: "in your Crystal Ball", fresh: true, go: go.radar });
   if (counts.roles > 0 && !told(["roles"])) lines.push({ id: "roles", head: plural(counts.roles, fn ? `new ${fn} role` : "new open role"), text: "since your last visit", fresh: true, go: go.hiring });
   if (counts.follows > 0 && !told(["fact"])) lines.push({ id: "follows", head: plural(counts.follows, "company", "companies"), text: "you follow changed since your last visit", fresh: true, go: go.following });

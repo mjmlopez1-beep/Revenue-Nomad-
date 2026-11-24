@@ -16,7 +16,7 @@
  * is used" line, an expired day's note, the start questions with no function yet, the empty states,
  * the cards on phones, opening a locked company by plan (CrystalOpen: free on Trial and Pro and not
  * counted toward the 15 a day, one a day on Free, 2 credits with billing off), "They have a full-time
- * leader" (a fact, 1 credit), Pass it to a peer, the delivery card with Slack as it happens on Pro,
+ * leader" (a fact, 1 credit), Refer it to a peer, the delivery card with Slack as it happens on Pro,
  * and the signals radar_opened and radar_clicked.
  *
  * Its table is the Stage 1 workbench (workbench/Workbench.tsx): picking rows gives Open N (one quote,

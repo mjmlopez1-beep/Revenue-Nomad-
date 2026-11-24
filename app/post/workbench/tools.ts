@@ -7,7 +7,7 @@
  * free on the trial and Pro up to 15 a day); Who held the seat is free once the company is open;
  * Decision maker is the person's name and title (one purchase); Work email opens after the name;
  * Rate paid is the seat's rate. Signals are list alerts (F5). Actions are Add to pipeline, Draft
- * notes, Start a proposal (Close), Pass as a lead.
+ * notes, Start a proposal (Close), Refer it to a peer.
  *
  * Left out, with nothing behind them yet (BUILD_PLAN part 6): "Ask Merlin, a column Merlin
  * researches" (no research agent on the server), Import a
@@ -120,7 +120,7 @@ function peopleItems(ctx: ToolCtx): ToolItem[] {
     { id: "act-pipe", tab: "actions", label: "Add to pipeline", sub: "Ticked rows' companies become targets", cost: "Free", tone: "free", do: { kind: "action", action: "pipeline" } },
     { id: "act-notes", tab: "actions", label: "Draft notes", sub: "One note per person, from a template in your voice", cost: "Free", tone: "free", do: { kind: "action", action: "notes" } },
     { id: "act-watch", tab: "actions", label: "Watch for a new decider", sub: "Tell me when one joins a company in this view", cost: pro ? "Free" : "Pro", tone: pro ? "free" : "gate", do: { kind: "alert", trigger: "leader" } },
-    { id: "act-pass", tab: "actions", label: "Pass as a lead", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
+    { id: "act-pass", tab: "actions", label: "Refer it to a peer", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
   ];
 }
 
@@ -197,7 +197,7 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
     // Actions on the rows picked.
     { id: "act-pipe", tab: "actions", label: "Add to pipeline", sub: "Picked rows wait at To reach out", cost: "Free", tone: "free", do: { kind: "action", action: "pipeline" } },
     { id: "act-notes", tab: "actions", label: "Draft notes", sub: "One note a row, from a template in your voice", cost: "Free", tone: "free", do: { kind: "action", action: "notes" } },
-    { id: "act-pass", tab: "actions", label: "Pass as a lead", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
+    { id: "act-pass", tab: "actions", label: "Refer it to a peer", sub: "To a fractional who fits. Earn 5 credits when they pick it up", cost: "Earn", tone: "free", do: { kind: "action", action: "pass" } },
     { id: "act-proposal", tab: "actions", label: "Start a proposal", sub: "From a call or a template", cost: "Close", tone: ctx.close ? "free" : "gate", do: { kind: "page", page: "proposals" } },
   ];
   return items;

@@ -458,7 +458,7 @@ function pills(r: PipelineRec): { t: string; cls: string }[] {
   const closed = closedWords(r.stage);
   if (closed) out.push({ t: closed, cls: "plain" });
   if (r.paper) out.push({ t: `${r.paper.kind === "contract" ? "Contract" : "Proposal"}: ${r.paper.state}`, cls: closed || r.paper.tone === "closed" ? "plain" : r.paper.tone === "you" ? "pine" : "mint" });
-  if (r.lead) out.push({ t: `Passed by ${r.lead.by.split(" ")[0]}`, cls: "plain" });
+  if (r.lead) out.push({ t: `Referred by ${r.lead.by.split(" ")[0]}`, cls: "plain" });
   if (r.team) out.push({ t: `Teamed with ${r.team.with}`, cls: "plain" });
   if (r.ask) out.push({ t: "No reply seen", cls: "plain" });
   if (r.stage === "won" && !r.seat) out.push({ t: "Add it as your seat. Earns credits", cls: "volt" });

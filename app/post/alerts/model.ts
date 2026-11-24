@@ -308,7 +308,7 @@ export function alertGroups(x: Inputs): Group[] {
     name: "From your peers",
     watch: "Fractionals who know you",
     tag: null,
-    trig: "A lead is passed to you",
+    trig: "A company is referred to you",
     det: "or someone asks to team up",
     triggers: null,
     chips: [emailChip(me.peerEmail !== false), chip("slack", false, "none", "Not sent to Slack"), chip("bell", true, "fixed", "Leads and team-ups show in the bell")],

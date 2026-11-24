@@ -120,7 +120,7 @@ export interface Fit {
 }
 
 /**
- * How a role fits the member: another function is "Not your function" (pass it on); then the
+ * How a role fits the member: another function is "Not your function" (refer it to a peer); then the
  * company against their ideal client. A confirmed match is Strong where the company hired
  * fractionals before, else Good; a maybe (a part not on file) is Good with past hires, else
  * Possible; a known part that conflicts is Possible. Without an ideal client, their function is Good.
@@ -209,8 +209,8 @@ export function statusOf(r: Row, x: StatusCtx): Status {
   const e = r.e!;
   const p = x.pipe.get(r.i.c.id);
   const passed = x.passed?.get(e.id);
-  if (p && WROTE.has(p.stage)) return { k: "pitched", label: "Pitched", sub: passed ? `Passed to ${passed}` : p.sent ? dayOf(p.sent).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "" };
-  const sub = passed ? `Passed to ${passed}` : p ? "In pipeline" : "";
+  if (p && WROTE.has(p.stage)) return { k: "pitched", label: "Pitched", sub: passed ? `Referred to ${passed}` : p.sent ? dayOf(p.sent).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "" };
+  const sub = passed ? `Referred to ${passed}` : p ? "In pipeline" : "";
   const firstSeen = e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : null);
   const fresh = !x.seen.has(e.id) && (!x.since || (!!firstSeen && firstSeen > x.since));
   return fresh ? { k: "new", label: "New", sub } : { k: "seen", label: "Seen", sub };
@@ -368,7 +368,7 @@ export function footWords(x: { view: HireView; shown: number; total: number; min
   if (x.view === "closed") return { text: "Roles that came down in the last 30 days. A company that just filled a role often needs help around it.", go: { label: "Back to open roles", to: x.myFn ? "mine" : "all" } };
   if (x.view === "mine" && x.myFn) {
     const rest = x.total - x.mine;
-    return { text: rest > 0 ? `${rest} more open ${rest === 1 ? "role" : "roles"} in other functions. Pass one to a fractional who fits and earn 5 credits.` : `Every open role on file is in ${x.myFn}.`, go: rest > 0 ? { label: "Show all functions", to: "all" } : null };
+    return { text: rest > 0 ? `${rest} more open ${rest === 1 ? "role" : "roles"} in other functions. Refer one to a peer who fits and earn 5 credits.` : `Every open role on file is in ${x.myFn}.`, go: rest > 0 ? { label: "Show all functions", to: "all" } : null };
   }
   return { text: x.myFn ? `Every function is showing. ${x.mine} of these ${x.total} roles are in ${x.myFn}, your function.` : `Every open role on file, ${x.total} in all.`, go: x.myFn ? { label: `Only ${x.myFn}`, to: "mine" } : null };
 }

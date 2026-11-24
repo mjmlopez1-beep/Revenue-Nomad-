@@ -134,7 +134,7 @@ export function AboutSection({ i, title = "About" }: { i: CoInfo; title?: string
   );
 }
 
-/** Not my fit? Pass it to a peer, or team up on it (PeerSheets.tsx). Only at a company the member can see by name. */
+/** Not my fit? Refer it to a peer, or team up on it (PeerSheets.tsx). Only at a company the member can see by name. */
 export function PeerSection({ i, crystal }: { i: CoInfo; crystal?: boolean }) {
   if (i.c.hidden) return null;
   return (
@@ -142,7 +142,7 @@ export function PeerSection({ i, crystal }: { i: CoInfo; crystal?: boolean }) {
       <h3 className="tp-dsec-h" id="pe-dsec-h">
         With a peer
       </h3>
-      <p className="tp-dsec-note">Not your fit? Pass it to someone great, free for them. Or team up and pitch it together.</p>
+      <p className="tp-dsec-note">Not your fit? Refer it to a peer, free for them. Or team up and pitch it together.</p>
       <PeerActions company={i.c.id} role={i.engs.find(openRole)?.id ?? null} from={i.engs.some(openRole) ? "role" : crystal ? "crystal" : "record"} />
     </section>
   );

@@ -86,7 +86,7 @@ export interface NavInput {
   hiringN: number | null;
   /** Fractionals in the directory (null until known). */
   fractionalsN?: number | null;
-  /** Leads passed to the member and team-up asks waiting on them (Peers' badge). */
+  /** Referrals for the member and team-up asks waiting on them (Peers' badge). */
   peersNew?: number;
   followingN: number | null;
   seatsMissing: number | null;

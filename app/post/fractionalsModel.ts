@@ -210,7 +210,7 @@ export const leadTitle = (r: Pick<FractionalRec, "title" | "fn">) => r.title || 
 /* =====================================================================================
  * The Fractionals page in the new look (fractionals/FractionalsPage.tsx, Fractionals.dc.html):
  * one page for the directory and Peers. Views over every record: All, Serve the same clients as
- * you, You know, Passed you a lead. Chips narrow a view; Ask Merlin sets them from plain words.
+ * you, You know, Referred you a company. Chips narrow a view; Ask Merlin sets them from plain words.
  * Every record arrives locked as the member may see it: these only narrow, count and word it.
  * ===================================================================================== */
 
@@ -223,7 +223,7 @@ export const FX_VIEWS: { key: FxView; label: string }[] = [
   { key: "all", label: "All" },
   { key: "same", label: "Serve the same clients as you" },
   { key: "know", label: "You know" },
-  { key: "passed", label: "Passed you a lead" },
+  { key: "passed", label: "Referred you a company" },
 ];
 
 export type FxChip = "on" | "off" | "diff" | "same" | "clevel" | "open" | "ev" | "unlocked" | "us";
@@ -260,7 +260,7 @@ export function fxFlip(f: FxFilters, k: FxChip): FxFilters {
   return { ...f, chips };
 }
 
-/** What only the member holds, keyed by keyOf: who they know (from their own sources) and who passed them a lead. */
+/** What only the member holds, keyed by keyOf: who they know (from their own sources) and who referred them a company. */
 export interface FxCtx {
   myFn: string | null;
   hasIcp: boolean;
@@ -465,7 +465,7 @@ export function askFx(text: string, industries: string[], fns: string[]): FxAsk 
   };
   if (take(/\b(serves? my clients|my clients|same clients|clients like mine|like mine|my kind of client|my ideal client)\b/)) (view = "same"), said.push("Serve the same clients as you");
   if (take(/\b(i know|you know|people i know|already know|know)\b/)) (view = "know"), said.push("You know");
-  if (take(/\b(passed me|passed you|passed a lead|sent me a lead)\b/)) (view = "passed"), said.push("Passed you a lead");
+  if (take(/\b(referred me|referred you|referred a company|referrals? (for|to) (me|you)|passed me|passed you|passed a lead|sent me a lead)\b/)) (view = "passed"), said.push("Referred you a company");
   if (take(/\b(takes? leads|open to leads|taking leads|wants? leads|leads)\b/)) f.chips.push("open"), said.push("Open to leads");
   if (take(/\b(not on merlin|invite|not a member)\b/)) f.chips.push("off"), said.push("Not on Merlin yet");
   else if (take(/\b(on merlin|members?)\b/)) f.chips.push("on"), said.push("On Merlin");

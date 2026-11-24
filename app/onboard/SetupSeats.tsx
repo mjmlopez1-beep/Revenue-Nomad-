@@ -239,7 +239,7 @@ export function SeatsScreen(p: {
             setting("fractionals", on, setDir);
           }}
           label="Show me in the Fractionals directory"
-          hint={`Fractionals who serve the same clients can find you and pass leads. ${seatNameWho(dir)}`}
+          hint={`Fractionals who serve the same clients can find you and refer companies to you. ${seatNameWho(dir)}`}
         />
       </section>
     </>

@@ -818,7 +818,7 @@ function Asks({ view, first, tab, setTab, firstQ }: { view: AgentView; first: bo
     { tab: "close", q: "Use my [template name] template and draft a proposal for [company] from my call with [who you spoke to].", n: "Close plan, and on the trial. Lands in Proposals as a draft." },
     { tab: "close", q: "Change the [company] proposal: add a second pricing option at [price] a month.", n: "Close plan, and on the trial." },
     { tab: "close", q: "Send the [company] proposal to [who signs] for signature.", n: "Asks first. It shows who it goes to." },
-    { tab: "close", q: "Pass [a company that is not my fit] to a peer who does RevOps.", n: "Asks first. Earns 5 credits when it is picked up." },
+    { tab: "close", q: "Refer [a company that is not my fit] to a peer who does RevOps.", n: "Asks first. Earns 5 credits when it is picked up." },
     ...(has("save_my_network")
       ? [{ tab: "teach" as const, q: TEACH_NETWORK, n: "Needs your mail connected in your agent. Merlin never gets message text.", link: { page: "warm" as ShellPage, label: "See your warm paths" } }]
       : []),

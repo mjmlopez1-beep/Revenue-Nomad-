@@ -1144,7 +1144,7 @@ export async function loadState(): Promise<State> {
     if (!s.flags.reachStage) {
       let n = 0;
       for (const log of Object.values(s.pipeline ?? {})) n += migrateLeadsToReach(log);
-      if (n) console.log(`Moved ${n} lead${n === 1 ? "" : "s"} a peer passed, not written to yet, to To reach out.`);
+      if (n) console.log(`Moved ${n} referral${n === 1 ? "" : "s"} from a peer, not written to yet, to To reach out.`);
       s.flags.reachStage = true;
     }
     // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
@@ -4413,7 +4413,7 @@ async function fullView(
       }
       // A peer took a lead the member passed them (lib/peers.ts).
       if (l.reason === "peer") {
-        put(l, { at: l.at, delta: l.delta, reason: "A peer took the lead you passed", company: "", field: "" });
+        put(l, { at: l.at, delta: l.delta, reason: "A peer took the company you referred", company: "", field: "" });
         continue;
       }
       // Pro's credits for a paid month, and a top-up bought (lib/billing).
@@ -7353,7 +7353,7 @@ export async function perform(
             if (a.peerEmail) delete p.peerEmailOff;
             else p.peerEmailOff = true;
             s.profiles[me.id] = p;
-            return { message: a.peerEmail ? "We'll email you when a peer passes you a lead or asks you to team up." : "Peer emails are off. Leads and team-ups still show on Home and in Peers." };
+            return { message: a.peerEmail ? "We'll email you when a peer refers a company to you or asks you to team up." : "Peer emails are off. Referrals and team-ups still show on Home and in Peers." };
           }
           if (typeof a.messageEmail === "boolean") {
             const p = { ...(s.profiles[me.id] ?? {}) };
@@ -7449,7 +7449,7 @@ export async function perform(
             if (a.leads) delete p.leadsOff;
             else p.leadsOff = true;
             s.profiles[me.id] = p;
-            return { message: a.leads ? "You're open to leads. A company a fractional passes you opens free for you." : "Leads are off. Nobody can pass you a company until you turn them on again." };
+            return { message: a.leads ? "You're open to leads. A company a fractional refers to you opens free for you." : "Leads are off. Nobody can refer you a company until you turn them on again." };
           }
           // "Show me in the Fractionals directory" (Referral partners' switch, `partners`, is the same one now).
           const show = typeof a.fractionals === "boolean" ? a.fractionals : typeof a.partners === "boolean" ? a.partners : null;

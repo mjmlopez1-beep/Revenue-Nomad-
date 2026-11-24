@@ -31,7 +31,7 @@ const PipelineBoard = dynamic(() => import("./pipeline/Board").then((m) => m.Pip
 
 const CLOSED: Stage[] = ["quiet", "lost", "notnow"];
 const EMPTY_WORDS: Partial<Record<Stage, string>> = {
-  reach: "When a peer passes you a lead, or you go with a route in.",
+  reach: "When a peer refers a company to you, or you go with a route in.",
   sent: "Mark a note sent and it lands here.",
   replied: "Merlin moves a deal here when they write back.",
   meeting: "From your calendar, when you meet.",
@@ -168,14 +168,14 @@ function Card({ e, i, due, onOpen, onDraft, onWon }: { e: PipelineRec; i: CoInfo
         <CompanyLogo name={e.name ?? ""} domain={e.name ? i?.c.iconDomain ?? i?.domain ?? null : null} hidden={!e.name} seed={e.company} />
         <span className="pl-card-n">{e.name ?? <LockedName seed={e.company} />}</span>
       </button>
-      <span className="pl-card-to">{e.stage === "reach" ? (e.lead ? "A lead a peer passed you. Nothing sent yet." : "Nothing sent yet.") : `To ${e.to.label} · ${CHANNEL_WORDS[e.channel]}`}</span>
+      <span className="pl-card-to">{e.stage === "reach" ? (e.lead ? "A peer referred this to you. Nothing sent yet." : "Nothing sent yet.") : `To ${e.to.label} · ${CHANNEL_WORDS[e.channel]}`}</span>
       {(CLOSED as string[]).includes(e.stage) ? <StageChip stage={e.stage} /> : null}
       {e.how && e.stage !== "reach" && <span className="pl-how">{e.how}</span>}
       {/* Your way in (network/Ways.tsx): the route the member went with here, and its step. */}
       {e.route && <RouteLine company={e.company} />}
       {(e.lead || e.team) && (
         <span className="pl-peer">
-          {e.lead ? `Passed to you by ${e.lead.by.split(" ")[0]}` : ""}
+          {e.lead ? `Referred to you by ${e.lead.by.split(" ")[0]}` : ""}
           {e.lead && e.team ? " · " : ""}
           {e.team ? `Teamed with ${e.team.with}` : ""}
         </span>

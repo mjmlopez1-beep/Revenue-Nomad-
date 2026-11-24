@@ -995,7 +995,7 @@ function PrivSec({ say }: { say: (t: string, err?: boolean) => void }) {
         />
         <SwitchRow
           t="Open to leads"
-          d="A fellow fractional can pass you a company. It opens free for you."
+          d="A fellow fractional can refer you a company. It opens free for you."
           on={me.leads !== false}
           busy={busy === "leads"}
           onFlip={() => void flip("leads", { type: "settings", leads: me.leads === false })}

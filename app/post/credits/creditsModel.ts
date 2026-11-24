@@ -85,7 +85,7 @@ export const KIND_LABEL: Record<Kind, string> = {
   added: "Facts you added",
   rates: "Rates you shared",
   invites: "Invite bonuses",
-  leads: "Leads you passed",
+  leads: "Referrals sent",
   plan: "Plan credits and top-ups",
   refunds: "Refunds",
   takenBack: "Taken back",
@@ -121,7 +121,7 @@ export function kindOf(l: Line): Kind {
     case "reversal":
     case "retract":
       return "takenBack";
-    case "A peer took the lead you passed":
+    case "A peer took the company you referred":
       return "leads";
   }
   if (REFUND_WORDS.test(l.reason)) return "refunds";
@@ -451,10 +451,10 @@ export function waysToEarn(
     },
     {
       id: "lead",
-      title: "Pass a lead you cannot take",
+      title: "Refer it to a peer",
       reward: `+${PASS_CREDIT}`,
       earns: true,
-      what: "Send a company to a fractional who fits. You earn when they pick it up.",
+      what: "Refer a company you cannot take to a fractional who fits. You earn when they pick it up.",
       status: "On a company's record or from Fractionals",
       go: "Find a fractional",
     },

@@ -3,7 +3,7 @@
  * the server (lib/peers.ts), the app (app/post/Peers.tsx, PeerSheets.tsx) and the checks share them.
  * Pure, relative imports only.
  *
- *  - Pass a lead ("Not my fit? Pass it to someone great"): a member hands a company (from their
+ *  - Refer it to a peer (pass a lead in the code): a member hands a company (from their
  *    Crystal Ball, an open role, a record or a deal) to a peer, with a note. The company opens free
  *    for that peer alone (a gift, no credits and no daily cap), it lands in their Messages and on
  *    their Home, and they can take it into their pipeline. When they do, the passer earns
@@ -235,18 +235,18 @@ const flat = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
 export const firstOf = (name: string) => flat(name).split(" ")[0] || flat(name) || "A peer";
 
 /**
- * "Ana passed you Acme: open Sales role, posted $9k/mo". `company` is the name the peer can see
+ * "Ana referred Acme to you: open Sales role, posted $9k/mo". `company` is the name the peer can see
  * (the pass opens it for them); `role` the open role's function, `rate` its posted rate when the
  * posting gave one.
  */
 export function leadLine(o: { from: string; company: string; role?: string | null; rate?: string | null }): string {
   const role = o.role ? `open ${o.role} role${o.rate ? `, posted ${o.rate}` : ""}` : "";
-  return `${firstOf(o.from)} passed you ${flat(o.company) || "a company"}${role ? `: ${role}` : ""}`;
+  return `${firstOf(o.from)} referred ${flat(o.company) || "a company"} to you${role ? `: ${role}` : ""}`;
 }
 
 /** A pass's message in the pair's conversation: the line, then the note. */
 export function passMessage(o: { from: string; company: string; role?: string | null; rate?: string | null; note: string }): string {
-  const line = leadLine(o).replace(/^\S+ passed you /, "Passing you ");
+  const line = leadLine(o).replace(/^\S+ referred (.*) to you(:|$)/, "Referring $1 to you$2");
   return o.note ? `${line}.\n\n${o.note}` : `${line}. I think you'd be great here.`;
 }
 
@@ -480,7 +480,7 @@ export interface PeersHome {
   circle: { id: string; name: string; unread: number; latest: { first: string; text: string } | null; prompt: string } | null;
 }
 
-/** A peer suggested in the Pass a lead or Team up sheet. */
+/** A peer suggested in the Refer it to a peer or Team up sheet. */
 export interface PeerPick {
   id: string;
   name: string;
