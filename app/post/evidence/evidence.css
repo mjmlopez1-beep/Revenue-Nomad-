@@ -1012,11 +1012,6 @@
 .ev-phone .ev-tag {
   min-height: 44px;
 }
-.ev-phone .ev-check {
-  min-height: 0;
-  width: 28px;
-  height: 28px;
-}
 .ev-phone .wb-bottom {
   padding-bottom: 76px;
 }
