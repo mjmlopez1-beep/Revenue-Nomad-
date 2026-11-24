@@ -40,7 +40,6 @@ import { CountersignDue } from "./MySignature";
 import { FromYourPeers } from "./HomePeers";
 import { RouteMove } from "./network/Ways";
 import { KnownMoves, useKnownMoves } from "./network/KnownMoves";
-import { WhatsNew } from "./shell/WhatsNew";
 import { ProWelcome, TrialSummaryCard } from "./Billing";
 import { Scene } from "../ui/fractions/lazy";
 import { crystalLine, sinceWords, showMeDue } from "./todayModel";
@@ -140,8 +139,6 @@ export function Home2(p: Home2Props) {
         <span className="h2-day">{daySub}</span>
         {p.actions && <div className="h2-acts">{p.actions}</div>}
       </div>
-      {/* What's new sits under the page's header on every page; Home draws its own header, so it places it here. */}
-      <WhatsNew />
 
       {first && about && (
         <section aria-label="About this page" className="h2-about">

@@ -178,7 +178,7 @@ async function pure() {
   check("What's new: saved views are lists with alerts, search and Invite moved, Settings in one place, Alerts and workflows", /Saved views are lists/.test(words) && /alert/.test(words) && /Search moved to Find/.test(words) && /Invite a fractional moved/.test(words) && /Settings is one page/.test(words) && /Alerts and workflows/.test(words));
   check("What's new: plain words, no numbers, no exclamation marks, no dashes as punctuation", !/\d/.test(words) && !/!/.test(words) && !/ - |—|–/.test(words), words);
   check("What's new: each line opens its page", rn.WHATS_NEW.every((x) => ["find", "credits", "settings", "alerts"].includes(x.page) && !!x.go));
-  check("What's new is drawn in the new look's shell", /<WhatsNew \/>/.test(readFileSync("app/post/TradingPost.tsx", "utf8")));
+  check("What's new is not drawn on any page (owner, 2026-11-24: no members used the old look yet)", !["app/post/TradingPost.tsx", "app/post/Home2.tsx"].some((f) => /<WhatsNew\b/.test(readFileSync(f, "utf8"))));
   check("a member who starts in the new look never gets it: the set-up closes it as it ends", /stripOff: "whatsnew"/.test(readFileSync("app/onboard/Setup.tsx", "utf8")));
 }
 

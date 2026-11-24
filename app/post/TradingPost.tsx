@@ -81,7 +81,6 @@ import { Rail } from "./shell/Rail";
 import { HeaderActions, ShellHeader, type Crumb } from "./shell/Header";
 import { Bell } from "./shell/Bell";
 import { PageStrip } from "./shell/PageStrip";
-import { WhatsNew } from "./shell/WhatsNew";
 import { setFindStart } from "./find/start";
 import { NudgeSlot, pickSlotNudge } from "./nudges";
 import { COMPANY_PRICE, COMPANY_PRICE_SAY, FIND_HINT, FIND_NONE, FOUND_NOTE, REFERRAL_BONUS } from "@/lib/tableFields";
@@ -3420,9 +3419,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             )}
             {/* The help sheet, the Undo toast and the spend question, hosted once whatever the header draws. */}
             <TopHosts me={me} contact={contact} emailOn={view.email} starter={view.stats?.starter} />
-            {/* Stage 9: the release notes for members who used the old look, once, until closed (shell/WhatsNew.tsx). Under
-                the header, never above it: a page that draws its own header places it there itself (Home), else it waits for the next page. */}
-            {!headOwn && <WhatsNew />}
+            {/* No "What's new in Merlin" notes (owner, 2026-11-24: no members used the old look yet). shell/WhatsNew.tsx is kept for later. */}
             {stripKey && !defShown?.ownStrip && !(onScreen === "table" && recordOpen && phone) && <PageStrip page={stripKey} own={stripOwn} />}
           </>
         ) : (
