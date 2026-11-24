@@ -14,6 +14,13 @@ Merlin was built as an alternative to cold, high-volume outreach, which Revenue 
 
 > Merlin uses gmail.send only to send a note the member has written or reviewed and approved with a single tap, from their own Gmail, one message at a time, at most 50 a day. There is no bulk sending, no mailing lists and no automatic sending. Notes go to people the member already knows or has chosen to contact. Merlin was built as an alternative to cold, high-volume outreach: its purpose is to help members reach people they already have relationships with. Merlin never reads message content.
 
+
+### drive.file (only when "Fill my Google Docs template" is part of the submission)
+
+`https://www.googleapis.com/auth/drive.file` is a non-sensitive scope: Merlin can only see files the member picks with Google's file picker or files Merlin itself creates. Ask for it incrementally, the first time a member uses "Fill my Google Docs template" in Workflows, never at Connect Google.
+
+> Merlin uses drive.file only for "Fill my Google Docs template": the member picks their own proposal template in Google's file picker, and Merlin makes a copy in the member's Drive and fills its {{placeholders}} with the proposal Merlin drafted for them. Merlin cannot see any other file in the member's Drive. Nothing is shared with other members, sold, used for ads or used to train AI models.
+
 ## The recommendation
 
 **Submit Calendar and Contacts now. Leave Gmail for later.**
