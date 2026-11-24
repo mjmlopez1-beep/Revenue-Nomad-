@@ -14,9 +14,9 @@
  * (lib/proposals/rates.ts proposalRate on this member's own view). The editor then has Merlin write
  * only "What we heard" and "What I recommend".
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { View } from "@/lib/tableTypes";
-import type { ProposalRec, ProposalsView } from "@/lib/proposals/types";
+import type { MyTemplate, ProposalRec, ProposalsView } from "@/lib/proposals/types";
 import type { HomeCall, HomeCompany, HomeView } from "@/lib/proposals/recent";
 import type { QuickResult } from "@/lib/proposals/quick";
 import { blanksOf, docFields, moneyOf } from "@/lib/proposals/library";
@@ -27,6 +27,7 @@ import { useAppMaybe } from "../shell/pages";
 import { Sheet } from "../ui";
 import { StatusPill } from "./ProposalsHome";
 import { api } from "../ProposalParts";
+import { LearnTemplate } from "./LearnTemplate";
 import "./proposalsPage.css";
 import "./p2.css";
 
@@ -84,6 +85,7 @@ export function Home2({
   onPut,
   onContracts,
   onTemplates,
+  onLearned,
   closePrompt,
 }: {
   data: ProposalsView;
@@ -93,6 +95,8 @@ export function Home2({
   onPut: (p: ProposalRec) => void;
   onContracts: () => void;
   onTemplates: () => void;
+  /** Templates the member saved from a proposal they'd sent (LearnTemplate). */
+  onLearned?: (t: MyTemplate[]) => void;
   closePrompt: React.ReactNode;
 }) {
   const c = useAppMaybe();
@@ -104,6 +108,7 @@ export function Home2({
   const [filter, setFilter] = useState<Filter>("all");
   const [all, setAll] = useState(false);
   const [paste, setPaste] = useState(false);
+  const [learn, setLearn] = useState(false);
   const live = useRef(true);
   useEffect(() => () => void (live.current = false), []);
 
@@ -135,10 +140,13 @@ export function Home2({
     })();
   }, [data.canBuild, loadHome]);
 
-  const lastAllocation = useMemo(() => [...data.proposals].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).find((p) => p.fields["pricing.allocation"])?.fields["pricing.allocation"] ?? null, [data.proposals]);
-  /** The price for a start: ONE calculation with What should I charge, on this member's own view. */
+  /**
+   * The price for a start: ONE calculation with What should I charge, on this member's own view. The
+   * days a week only as the call said them: never carried over from an earlier proposal (a "40 hours a
+   * week" from another deal priced a 2.5-day plan as full time). Unsaid, the document asks.
+   */
   const rateFor = (companyId: string | null, terms?: HomeCall["terms"]) => {
-    const allocation = terms?.allocation ?? lastAllocation ?? "";
+    const allocation = terms?.allocation ?? "";
     const r = proposalRate(view, { company: { id: companyId }, fields: allocation ? { "pricing.allocation": allocation } : {}, callFee: terms?.fee ?? null });
     return { fee: r.fee, allocation: allocation || undefined };
   };
@@ -279,6 +287,9 @@ export function Home2({
             <button type="button" className="tp-flink" onClick={onTemplates}>
               Templates
             </button>
+            <button type="button" className="tp-flink" data-learn onClick={() => setLearn(true)}>
+              Make a template from one you&#39;ve sent
+            </button>
           </p>
         </section>
       )}
@@ -331,6 +342,7 @@ export function Home2({
           </button>
         )}
       </section>
+      {learn && <LearnTemplate onClose={() => setLearn(false)} onSaved={(t) => (setLearn(false), onLearned?.(t))} />}
       {paste && <PasteSheet infos={infos} busy={busy === "paste"} onClose={() => setPaste(false)} onStart={(body) => void start("paste", { ...body, rate: rateFor(typeof body.companyId === "string" ? body.companyId : null) })} />}
     </div>
   );
@@ -371,7 +383,7 @@ function PasteSheet({ infos, busy, onClose, onStart }: { infos: CoInfo[]; busy: 
         <span>Your notes or the transcript</span>
         <textarea className="input" rows={8} value={text} onChange={(e) => setText(e.target.value)} />
       </label>
-      <p className="p2-muted">Merlin reads it once to fill the proposal. It isn&#39;t kept.</p>
+      <p className="p2-muted">Merlin reads it once to write the proposal: who&#39;s who, what you heard, the plan. The transcript isn&#39;t kept.</p>
     </Sheet>
   );
 }

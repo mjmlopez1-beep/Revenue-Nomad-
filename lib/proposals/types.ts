@@ -7,6 +7,7 @@
  * panel or the export. What the client sees is the frozen copy of one version (FrozenDoc), and
  * nothing else: no notes, no snippets from a call, no budget signals, no ids.
  */
+import type { CallBrief } from "./brief";
 
 /** One block of the proposal, in the member's order. `blockId` is a library block's id, or "custom". */
 export interface ProposalBlock {
@@ -283,6 +284,12 @@ export interface StoredProposal {
    * one instead of a copy. Never the transcript.
    */
   fromCall?: { recorder: string; id: string };
+  /**
+   * The call brief Merlin's AI (or its rules) read from the call (lib/proposals/brief.ts): who was on
+   * it and in what role, the insights with their quotes, the alternatives, the shape. The member's
+   * alone: never in the document, the client's page, another member's view or the export. Never the transcript.
+   */
+  brief?: CallBrief;
 }
 
 /** A version kept so it can be compared or restored: what the document said, and what changed after it. */
@@ -375,6 +382,8 @@ export interface ProposalRec {
   versions?: { version: number; at: string; note: string }[];
   /** The call it was drafted from (StoredProposal.fromCall). */
   fromCall?: { recorder: string; id: string };
+  /** The call brief (StoredProposal.brief), for the member's own rail. */
+  brief?: CallBrief;
 }
 
 /**
@@ -390,6 +399,8 @@ export interface MyTemplate {
   kind: "docx" | "pdf" | "md" | "txt";
   blocks: { blockId: string; title: string; body: string }[];
   createdAt: string;
+  /** Learned by Merlin's AI from a proposal the member sent (lib/proposals/learn.ts): their voice and what each section does. Theirs alone. */
+  learned?: { voice: { tone: string; headings: string; length: string; phrases: string[] }; purposes: string[] };
 }
 
 /** A template as the app lists it: ours (the library) or theirs. */

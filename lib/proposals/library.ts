@@ -9,6 +9,7 @@
  */
 import raw from "./templates.json";
 import type { DiscoveryNote, ProposalBlock, SignerInfo } from "./types";
+import { OPERATOR_BLOCKS, OPERATOR_STARTER, OPERATOR_TEMPLATES } from "./operatorLib";
 
 export interface LibField {
   key: string;
@@ -59,8 +60,8 @@ const lib = raw as unknown as {
   fieldSources: Record<string, string>;
 };
 
-export const BLOCKS: LibBlock[] = lib.blocks;
-export const TEMPLATES: LibTemplate[] = lib.templates;
+export const BLOCKS: LibBlock[] = [...lib.blocks, ...OPERATOR_BLOCKS];
+export const TEMPLATES: LibTemplate[] = [...lib.templates, ...OPERATOR_TEMPLATES];
 export const DISCOVERY_FIELDS: DiscoveryField[] = lib.discoveryExtraction.fields;
 export const RISK_DEFS: RiskFlagDef[] = lib.discoveryExtraction.riskFlags;
 export const OBJECTIONS = lib.objectionLibrary;
@@ -83,6 +84,7 @@ export function guidanceFor(blockId: string, templateId: string | null): { guida
  * benchmarks or the call fills; the rest is a scaffold in plain words that the member rewrites.
  */
 export const STARTER: Record<string, string> = {
+  ...OPERATOR_STARTER,
   cover: "{{headline}}\n\nPrepared for {{client.signerName}}, {{client.signerTitle}}, {{client.companyName}}\nPrepared by {{provider.name}}, {{provider.title}}\n{{proposal.date}} · Version {{proposal.version}}",
   what_we_heard: "What we heard on {{discovery.callDate}}:\n{{pains}}",
   why_now: "{{whyNow.trigger}}\n\nWaiting has a cost: {{whyNow.costOfWaiting}}",

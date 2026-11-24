@@ -244,6 +244,8 @@ const ABOUT: Record<string, string> = {
   "ongoing-retainer": "Extend or grow a seat you already hold",
   "revops-build": "A scoped build with milestones",
   advisory: "A few hours a month, no delivery",
+  "senior-operator": "Embedded, a 30-day assessment, then sprints",
+  "operator-agreement": "The agreement that goes with it",
 };
 export const LIBRARY = TEMPLATES.map((t) => ({ id: t.id, title: t.title, short: t.title.split(":")[0], sections: t.blocks.length, about: ABOUT[t.id] ?? t.bestFor.split(/[.:]/)[0] }));
 /** How many sections a blank proposal starts with. */

@@ -12,7 +12,8 @@ import { addCompanyFor, siteName } from "@/lib/proposals/addCompany";
 import { proofView } from "@/lib/proposals/proof";
 import { proposals2On } from "@/lib/proposals/flag";
 import { homeFor } from "@/lib/proposals/recent";
-import { quickProposal, retemplate } from "@/lib/proposals/quick";
+import { draftAgreement, quickProposal, retemplate } from "@/lib/proposals/quick";
+import { learnTemplate, saveLearned } from "@/lib/proposals/learn";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,19 @@ export const POST = guarded(async (req: NextRequest) => {
       if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
       if (limited(`prop-quick:${me.id}`, 30, 10 * 60_000)) return err("That's a lot of new proposals at once. Give it a few minutes, then try again.", 429);
       return answer(() => quickProposal(token, { call: b.call as never, companyId: b.companyId, companyName: b.companyName, templateId: b.templateId, blank: b.blank, transcript: b.transcript, rate: b.rate as never }, o));
+    case "agreement":
+      // The agreement that goes with a proposal drafted from a call, from the same call brief (RN_PROPOSALS2).
+      if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
+      return answer(() => draftAgreement(token, id, o));
+    case "template_learned_save":
+      // Save what Merlin learned from a proposal the member sent, as they edited it: theirs alone (lib/proposals/learn.ts).
+      if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
+      try {
+        return NextResponse.json({ templates: await saveLearned(token, { title: b.title, sections: b.sections, agreement: b.agreement, voice: b.voice, files: b.files }) }, { headers: NO_STORE });
+      } catch (e) {
+        if (e instanceof MineProblem) return err(e.message, e.status, e.upgrade);
+        throw e;
+      }
     case "retemplate":
       if (!proposals2On()) return err("That didn't go through. Refresh the page and try again.");
       return answer(() => retemplate(token, id, { templateId: b.templateId, rev: b.rev }, o));

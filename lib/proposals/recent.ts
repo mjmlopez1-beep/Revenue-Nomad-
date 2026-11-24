@@ -23,6 +23,7 @@ import { extract, parseTranscript, sentences } from "./extract";
 import { signerInCall } from "./startCall";
 import { moneyOf } from "./library";
 import { ProposalProblem } from "./store";
+import { cleanCall } from "./brief";
 
 const DAY = 86_400_000;
 /** How far back the home looks for calls, and how many it lists. */
@@ -120,7 +121,9 @@ export const _recentKept = {
 };
 
 /** A reading by Merlin's rules from a transcript or notes. Pure: the text goes nowhere. */
-export function prepFrom(text: string, me: { name: string; email?: string }, o: { company: string; minutes: number | null; people?: { name: string; email: string }[] }, nowMs = Date.now()): CallPrep {
+export function prepFrom(raw: string, me: { name: string; email?: string }, o: { company: string; minutes: number | null; people?: { name: string; email: string }[] }, nowMs = Date.now()): CallPrep {
+  // The recorder's header, audio trouble and filler never reach a reading (brief.ts cleanCall).
+  const text = cleanCall(raw).text;
   const rules = readByRules(text);
   const sum = summaryByRules(rules, o);
   const ex = extract(text, me.name);

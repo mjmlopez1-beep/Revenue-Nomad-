@@ -135,7 +135,7 @@ check("  the example rows carry no action but See activity", !/examples\.map[\s\
 
 /* ---------- templates ---------- */
 console.log("\ntemplates");
-check("the library: five examples with their section counts", M.LIBRARY.map((l) => l.sections).join() === "16,15,5,13,9" && M.LIBRARY.every((l) => l.about.length < 60));
+check("the library: seven examples (the five, the Senior operator family and its agreement) with their section counts", M.LIBRARY.map((l) => l.sections).join() === "16,15,5,13,9,14,15" && M.LIBRARY.every((l) => l.about.length < 60));
 for (const l of M.LIBRARY) {
   const md = M.templateMarkdown(l.id, `${l.short}, in your voice`);
   const parsed = TP.parseMarkdown(md, M.BUILT_FROM);

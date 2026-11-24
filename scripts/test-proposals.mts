@@ -209,7 +209,7 @@ async function main() {
 
   /* ================= the library ================= */
   console.log("\nthe library");
-  check("5 templates and 25 blocks: the 24 researched and the numbered agreement", L.TEMPLATES.length === 5 && L.BLOCKS.length === 25 && !!L.blockDef("agreement"), [L.TEMPLATES.length, L.BLOCKS.length]);
+  check("7 templates and 35 blocks: the 24 researched, the numbered agreement, and the Senior operator family's (propbrain)", L.TEMPLATES.length === 7 && L.BLOCKS.length === 35 && !!L.blockDef("agreement"), [L.TEMPLATES.length, L.BLOCKS.length]);
   check("every template block is in the library", L.TEMPLATES.every((t) => t.blocks.every((b) => !!L.blockDef(b.blockId))));
   check("every library block has starting text", L.BLOCKS.every((b) => typeof L.STARTER[b.id] === "string" && L.STARTER[b.id].length > 0));
   const tb = L.templateBlocks("fractional-sales-leader");
@@ -326,7 +326,7 @@ async function main() {
   const MN0 = await import("../lib/proposals/mine");
   const fredWas = structuredClone((await T.loadState()).billing!.members.mem_fre);
   await T.tableInternals.mutate((st) => void (st.billing!.members.mem_fre = { trialStartedAt: iso(-10 * DAY), trialEndsAt: iso(11 * DAY) }));
-  check("in the trial: building is on, every template open", (await S.listProposals(FRE, BASE)).canBuild && (await S.listProposals(FRE, BASE)).templatesOpen.length === 5);
+  check("in the trial: building is on, every template open", (await S.listProposals(FRE, BASE)).canBuild && (await S.listProposals(FRE, BASE)).templatesOpen.length === 7);
   const fp = await S.createProposal(FRE, { templateId: "sprint-90", companyName: "Wrenfield Dairy" }, BASE);
   const fredMine = await MN0.uploadTemplate(FRE, "fred.md", Buffer.from("# Fred's SOW\n\n## Fees\n$5,000 a month for advice, two calls a week and a written plan."));
   check("in the trial: a proposal and a saved template of his own", fp.status === "draft" && /^mt_/.test(fredMine.id));
@@ -345,7 +345,7 @@ async function main() {
   check("  his template is not deleted: it is still stored", (await T.loadState()).myTemplates?.mem_fre?.some((t) => t.id === fredMine.id) === true);
   const fsend = await S.sendProposal(FRE, fp.id, { signer: { name: "Rhea Wren", email: "rhea@wrenfield.example" } }, BASE).then(() => null, (e: InstanceType<typeof S.ProposalProblem>) => e);
   check("Free: sending is Close's, said plainly with the price, with the upgrade link", !!fsend && fsend.status === 403 && /Sending for signature is on Close: \$79 a month, or \$790 a year/.test(fsend.message) && /p=billing/.test(fsend.upgrade ?? ""), fsend?.message);
-  check("Trial: every template and sending", (await S.listProposals(PAT, BASE)).canSend && (await S.listProposals(PAT, BASE)).templatesOpen.length === 5);
+  check("Trial: every template and sending", (await S.listProposals(PAT, BASE)).canSend && (await S.listProposals(PAT, BASE)).templatesOpen.length === 7);
 
   /* ================= privacy ================= */
   console.log("\nprivacy");
@@ -602,7 +602,7 @@ async function main() {
   const ctx = { member: (await T.memberForToken(PAT))!, origin: BASE };
   const fctx = { member: (await T.memberForToken(FRE))!, origin: BASE };
   const lib = await C.listProposalTemplates(ctx);
-  check("list_proposal_templates: templates, blocks with guidance and fields, what to pull from a call", (lib.templates as unknown[]).length === 5 && (lib.blocks as { fields: unknown[] }[]).every((b) => Array.isArray(b.fields)) && (lib.from_a_call as { cues: string[] }[]).every((x) => x.cues.length > 0) && /person who signs/.test(String(lib.about)));
+  check("list_proposal_templates: templates, blocks with guidance and fields, what to pull from a call", (lib.templates as unknown[]).length === 7 && (lib.blocks as { fields: unknown[] }[]).every((b) => Array.isArray(b.fields)) && (lib.from_a_call as { cues: string[] }[]).every((x) => x.cues.length > 0) && /person who signs/.test(String(lib.about)));
   const flist = await C.listProposalTemplates(fctx);
   check("list_proposal_templates after the trial: building is Close's, with the link, and his saved template is counted as kept, not opened", flist.can_build === false && String(flist.plan).startsWith(S.CLOSE_BUILD) && /p=billing/.test(String(flist.plan)) && flist.your_templates_kept === 1 && !("templates" in flist) && !JSON.stringify(flist).includes("$5,000"), flist);
   const made = await C.createOrUpdateProposal(ctx, {
@@ -952,7 +952,7 @@ Pat Rowan: Let's meet Thursday to go through it.`.repeat(3);
   const mt = await MN.uploadTemplate(PAT, "Northwind SOW.docx", docx);
   check("uploaded: kept as hers, the file itself not kept", /^mt_/.test(mt.id) && mt.blocks.length === 4 && !readFileSync(path.join(dir, "intel.json"), "utf8").includes("[Content_Types]"));
   const mv = await S.listProposals(PAT, BASE);
-  check("her templates come first in the list, then Merlin's", mv.templates[0].id === mt.id && mv.templates[0].mine && mv.templates.filter((x) => !x.mine).length === 5);
+  check("her templates come first in the list, then Merlin's", mv.templates[0].id === mt.id && mv.templates[0].mine && mv.templates.filter((x) => !x.mine).length === 7);
   const fromMine = await S.createProposal(PAT, { templateId: mt.id, companyName: "Larkspur Foods" }, BASE);
   check("a proposal from her own template: its sections and her text", fromMine.blocks.map((b) => b.title).join("|") === "Background|Scope of work|Fees|Out of scope" && fromMine.blocks[2].body === "$11,000 a month, billed in advance." && fromMine.title === "Northwind SOW for Larkspur Foods", fromMine.title);
   const mkit = await K.proposalKit(PAT, { templateId: mt.id, companyName: "Larkspur Foods" });

@@ -267,7 +267,7 @@ let callProposalId = "";
   check(`a handful of things to fill, not thirty-six (${blanks.length}: ${blanks.join(", ")})`, blanks.length <= 3, blanks);
   check("the progress chips point at the section each blank is in", P.blanksWithPlaceOf(p).every((x) => !!x.block && p.blocks.some((b) => b.id === x.block)));
   const ai = p.blocks.filter((b) => r.ai.blocks.includes(b.id)).map((b) => b.blockId).sort();
-  check("only two sections wait for Merlin's AI: What we heard and What I recommend", JSON.stringify(ai) === JSON.stringify(["recommendation", "what_we_heard"]) && r.ai.state === "ready", r.ai);
+  check("a call opens the Senior operator family; What I heard waits for Merlin's reading of the call", p.templateId === "senior-operator" && ai.includes("what_we_heard") && r.ai.state === "ready", { t: p.templateId, ai, r: r.ai });
   check("those two open with Merlin's rules' words, not empty", p.blocks.filter((b) => r.ai.blocks.includes(b.id)).every((b) => b.body.trim().length > 20));
   check("no AI call on the way to the document", aiCalls.length === 0);
   const h2 = await R.homeFor(JOR);
@@ -316,32 +316,48 @@ console.log("\nTap a company: one calculation");
   check("Free can't start one (the Close gate)", /403/.test((await refused(Q.quickProposal(FRE, { blank: true }))) ?? ""));
 }
 
-/* ---------- 5. only two sections go to Merlin's AI, from the reading ---------- */
-console.log("\nMerlin's AI writes two sections");
+/* ---------- 5. Merlin reads the call into its brief, and writes the proposal from it ---------- */
+console.log("\nMerlin reads the call and writes the proposal");
 {
-  aiAnswer = (prompt) => {
-    const ids = [...prompt.matchAll(/"block_id":"([a-z_]+)"/g)].map((m) => m[1]);
-    return { id: "msg_fake", type: "message", role: "assistant", model: "model-from-the-env", content: [{ type: "text", text: JSON.stringify({ blocks: ids.map((id) => ({ block_id: id, title: id, body: id === "what_we_heard" ? "Your win rate fell to 22% and the forecast is a guess." : "Two days a week as your fractional CRO, at {{pricing.monthlyFee}} a month." })) }) }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 900, output_tokens: 300 } };
+  const brief = {
+    client_company: "Cedar and Pine",
+    people: [{ name: "Dana Whitfield", side: "client", role: "CEO", decides: true, on_call: true }],
+    member_role: "operator",
+    operator: "",
+    summary: "Cedar and Pine wants to reach $8M next year; win rate fell from 31% to 22%.",
+    insights: [
+      { title: "Win rate fell", body: "Win rate fell from 31% to 22%.", evidence: "Our win rate fell from 31% to 22%" },
+      { title: "The forecast is a guess", body: "The forecast is a guess every month.", evidence: "the forecast is a guess every month" },
+      { title: "A clear goal", body: "They want to get to $8M next year.", evidence: "We want to get to $8M next year" },
+      { title: "Two days a week fits", body: "Two days a week sounds right.", evidence: "Two days a week sounds right" },
+    ],
+    constraint: { title: "", body: "", evidence: "" },
+    alternatives: [],
+    shape: { days_per_week: "2", hours_per_week: "", duration: "six months", phases: [], start: "", reports_to: "" },
+    success: [],
+    risks: [],
+    next_steps: [{ step: "We send the proposal", owner: "", when: "" }],
+    questions: [],
+    write: { headline: "A senior sales leader inside the business", subtitle: "", thesis: { line: "A steady forecast needs one owner.", supports: [] }, pitfalls: [], glance: [], plan: { assess: { items: [], deliverable: "" }, decision: "", design: { items: [], deliverable: "" }, deploy: { items: [], deliverable: "" } }, day30: [], priorities: [], math: [], focus: [], commitments: [], out_of_scope: [] },
   };
+  aiAnswer = () => ({ id: "msg_fake", type: "message", role: "assistant", model: "model-from-the-env", content: [{ type: "text", text: JSON.stringify(brief) }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 900, output_tokens: 300 } });
   const before = granolaAsked.length;
   const out = await Q.writeSections(JOR, callProposalId, {});
   const call = aiCalls.at(-1)!;
   const prompt = call.messages[0].content;
-  check("one AI request, sized for two sections", aiCalls.length === 1 && call.max_tokens <= 2000);
-  check("it asks for exactly What we heard and What I recommend", JSON.stringify([...prompt.matchAll(/"block_id":"([a-z_]+)"/g)].map((m) => m[1]).sort()) === JSON.stringify(["recommendation", "what_we_heard"]));
-  check("from the call's reading, not the transcript", prompt.includes("$8M") && prompt.includes("summary") && !prompt.includes("FILLERLINE") && !prompt.includes("Thanks for making the time"), prompt.slice(0, 600));
-  check("the reading was kept: no Granola request for the AI pass", granolaAsked.length === before);
-  check("the member's voice goes with it", /"voice":"/.test(prompt));
-  check("two sections back, each to its own block", out.sections.length === 2);
+  check("one AI request for the brief", aiCalls.length === 1 && /three parties/.test(call.system));
+  check("the call goes in this request alone: read again from the recorder, never kept", granolaAsked.length > before && !readFileSync(path.join(dir, "intel.json"), "utf8").includes("FILLERLINE"), granolaAsked.slice(before));
+  check("the member's voice goes with it", /"writer_voice":"/.test(prompt));
+  check("the brief is read: who signs, what they said", out.ai.ran && out.brief.insights.length === 4 && out.fields["client.signerName"] === undefined);
+  check("sections written from it, What I heard among them", out.sections.some((x) => x.blockId === "what_we_heard" && /Win rate fell/.test(x.body)));
   const p0 = await S.getProposal(JOR, callProposalId);
   const heard = p0.blocks.find((b) => b.blockId === "what_we_heard")!;
-  // The member edits What we heard while Merlin writes: only What I recommend goes in.
+  // The member edits What I heard while Merlin reads: it stays theirs.
   await S.updateProposal(JOR, callProposalId, { blocks: p0.blocks.map((b) => (b.id === heard.id ? { ...b, body: "My own words about the call." } : b)) });
   const n = await Q.applyIfUntouched(JOR, callProposalId, out.sections, out.before);
   const p1 = await S.getProposal(JOR, callProposalId);
-  check("put in only where the member hasn't changed a word", n === 1 && p1.blocks.find((b) => b.id === heard.id)!.body === "My own words about the call." && /fractional CRO/.test(p1.blocks.find((b) => b.blockId === "recommendation")!.body));
+  check("put in only where the member hasn't changed a word", n >= 1 && p1.blocks.find((b) => b.id === heard.id)!.body === "My own words about the call." && p1.blocks.some((b) => b.blockId === "thesis"));
   check("and only once", (await Q.applyIfUntouched(JOR, callProposalId, out.sections, out.before)) === 0);
-  check("nothing else in the document changed", p1.blocks.filter((b) => !["what_we_heard", "recommendation"].includes(b.blockId)).every((b) => p0.blocks.find((x) => x.id === b.id)?.body === b.body));
   check("Free: refused (the Close gate)", /403/.test((await refused(Q.writeSections(FRE, callProposalId, {}))) ?? ""));
   const s = JSON.parse(readFileSync(path.join(dir, "intel.json"), "utf8"));
   check("metered against the AI budget like a draft", JSON.stringify(s.aiUsage ?? {}).includes("mem_jor"));
@@ -384,7 +400,7 @@ console.log("\nNo detours, plain words");
   check("no em dashes in what the member reads", !/—/.test(files.slice(0, 4).map(src).join("\n")));
   check("Merlin, never Claude or Anthropic, in the new screens", !/Claude|Anthropic/.test(files.slice(0, 4).map(src).join("\n")));
   check("no template maker or four start cards on the new home", !/TemplateMaker|StartSheet|From a template/.test(src("app/post/proposalsPage/Home2.tsx")));
-  check("the AI writes two sections only (the schema and the prompt)", /AI_BLOCKS = \["what_we_heard", "recommendation"\]/.test(src("lib/proposals/quick.ts")) && /max_tokens: 2000/.test(src("lib/proposals/quick.ts")));
+  check("one brief request reads the call; other templates get only the sections they have", /AI_BLOCKS = \["what_we_heard", "recommendation"\]/.test(src("lib/proposals/quick.ts")) && /present\.has\(k\)/.test(src("lib/proposals/quick.ts")) && /max_tokens: 8000/.test(src("lib/proposals/brief.ts")));
   check("no per-keystroke server call: the home's search filters what it has", !/onChange=\{\(e\) => \{?[^}]*fetch/.test(src("app/post/proposalsPage/Home2.tsx")));
 }
 

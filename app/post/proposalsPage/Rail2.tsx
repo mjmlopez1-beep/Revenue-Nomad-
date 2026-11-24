@@ -28,7 +28,6 @@ import "./p2.css";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 /** Discovery keys of the buyer's lines, in words. */
-const LINE_WORDS: Record<string, string> = { "goals.target": "Their goal", pains: "What hurts", metrics: "A number", timeline: "Timing", buyerPhrases: "Their words", "whyNow.trigger": "Why now" };
 
 export interface Rail2Props {
   p: ProposalRec;
@@ -37,6 +36,8 @@ export interface Rail2Props {
   readOnly: boolean;
   /** Set the monthly fee (and what follows from it). */
   onFee: (fee: number) => void;
+  /** Set the days a week (the hours, and the fee from the one calculation unless the member set it). */
+  onDays?: (allocation: string) => void;
   onProof: (ids: string[], text: string) => void;
   onTemplate: (templateId: string) => void;
   /** Signing status and activity, once sent. */
@@ -50,7 +51,7 @@ export function Rail2(x: Rail2Props) {
   return (
     <div className="p2-rail" data-rail>
       {x.signing && <section className="p2-card">{x.signing}</section>}
-      <RateCard p={p} view={x.view} readOnly={x.readOnly} onFee={x.onFee} />
+      <RateCard p={p} view={x.view} readOnly={x.readOnly} onFee={x.onFee} onDays={x.onDays} />
       <CasesCard p={p} readOnly={x.readOnly} onProof={x.onProof} />
       <CallCard p={p} />
       <TemplateCard p={p} templates={x.templates} readOnly={x.readOnly} onTemplate={x.onTemplate} />
@@ -64,7 +65,10 @@ export function Rail2(x: Rail2Props) {
   );
 }
 
-function RateCard({ p, view, readOnly, onFee }: { p: ProposalRec; view: View; readOnly: boolean; onFee: (n: number) => void }) {
+/** The days a week a member picks from when the call didn't say (never assumed full time). */
+export const DAY_CHOICES = ["1 day a week", "2 days a week", "2.5 days a week", "3 days a week"];
+
+function RateCard({ p, view, readOnly, onFee, onDays }: { p: ProposalRec; view: View; readOnly: boolean; onFee: (n: number) => void; onDays?: (allocation: string) => void }) {
   const r = useMemo(() => proposalRate(view, { company: p.company, fields: p.fields }), [view, p.company, p.fields]);
   const [how, setHow] = useState(false);
   const fee = moneyOf(p.fields["pricing.monthlyFee"]) ?? null;
@@ -105,6 +109,19 @@ function RateCard({ p, view, readOnly, onFee }: { p: ProposalRec; view: View; re
       <p className="p2-math" data-math>
         {m.math}
       </p>
+      {!m.hoursWeek && onDays && !readOnly && (
+        <div className="p2-days" data-ask="days">
+          <p className="p2-muted">How many days a week? The call didn&#39;t say, so Merlin won&#39;t assume.</p>
+          <div className="p2-chips" role="group" aria-label="Days a week">
+            {DAY_CHOICES.map((d) => (
+              <button key={d} type="button" className="p2-fee" onClick={() => onDays(d)}>
+                <strong>{d.replace(" a week", "")}</strong>
+                <span>a week</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {r.big && (
         <p className="p2-muted">
           What should I charge says: {r.big.replace(/^Ask /, "ask ").replace(/^Start at /, "start at ")} for {r.fn}
@@ -178,31 +195,78 @@ function CasesCard({ p, readOnly, onProof }: { p: ProposalRec; readOnly: boolean
   );
 }
 
+const SIDE_WORDS: Record<string, string> = { client: "Client", member: "You", operator: "Operator", intermediary: "Introduced by", other: "Also" };
+
+/** From the call: Merlin's brief (who's who, what you heard with the quote behind it, the alternatives and your answer, next steps). Yours alone. */
 function CallCard({ p }: { p: ProposalRec }) {
+  const b = p.brief;
   const summary = p.notes.find((n) => n.key === "call.summary")?.text ?? null;
   const agreed = p.notes.filter((n) => n.key === "call.agreed").map((n) => n.text);
-  const lines = p.notes.filter((n) => LINE_WORDS[n.key]).slice(0, 4);
   const rec = p.fromCall ? RECORDER_NAMES[p.fromCall.recorder as RecorderKey] ?? "your call recorder" : null;
-  if (!summary && !agreed.length && !lines.length && !rec) return null;
+  if (!b && !summary && !agreed.length && !rec) return null;
+  const role = b?.memberRole === "firm" ? "You're the firm placing the operator." : b?.memberRole === "operator" ? "You'd do the work yourself." : null;
   return (
     <section className="p2-card" data-card="call" aria-labelledby="p2-call-h">
       <div className="p2-card-h">
         <h3 id="p2-call-h">From the call</h3>
+        {b && <span className="p2-pill">{b.by === "ai" ? "Read by Merlin" : "Only what's certain"}</span>}
       </div>
-      {summary && <p>{summary}</p>}
-      {agreed.length > 0 && (
+      {(b?.summary || summary) && <p>{b?.summary || summary}</p>}
+      {b && b.people.length > 0 && (
+        <ul className="p2-people" aria-label="Who's who">
+          {b.people.slice(0, 8).map((x) => (
+            <li key={x.name}>
+              <strong>{x.name}</strong> <span className="p2-muted">{[SIDE_WORDS[x.side], x.role, x.decides ? "decides" : ""].filter(Boolean).join(" · ")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {role && <p className="p2-muted">{role}</p>}
+      {b && b.insights.length > 0 && (
+        <details className="p2-brief">
+          <summary>What you heard, with what they said</summary>
+          <ul>
+            {b.insights.map((x) => (
+              <li key={x.title}>
+                <strong>{x.title}.</strong> {x.body}
+                {x.evidence && <span className="p2-quote">&ldquo;{x.evidence}&rdquo;</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {b && b.alternatives.length > 0 && (
+        <details className="p2-brief">
+          <summary>What they&#39;re weighing instead</summary>
+          <ul>
+            {b.alternatives.map((x) => (
+              <li key={x.option}>
+                <strong>{x.option}.</strong> {x.answer && <>Your answer: {x.answer}</>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {b && b.risks.length > 0 && (
+        <details className="p2-brief">
+          <summary>Risks</summary>
+          <ul>
+            {b.risks.map((x) => (
+              <li key={x.risk}>
+                {x.risk} {x.answer && <span className="p2-muted">{x.answer}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {!b && agreed.length > 0 && (
         <ul className="p2-agreed">
           {agreed.map((a) => (
             <li key={a}>{a}</li>
           ))}
         </ul>
       )}
-      {lines.map((l) => (
-        <p key={l.text} className="p2-line">
-          <span className="p2-muted">{LINE_WORDS[l.key]}</span> {l.text}
-        </p>
-      ))}
-      <p className="p2-muted">{rec ? `Read once from ${rec}. The transcript isn't kept.` : "From the notes you pasted. They aren't kept."}</p>
+      <p className="p2-muted">{rec ? `Read from ${rec}. The transcript isn't kept, and the quotes are for you alone.` : "From the call you pasted. It isn't kept, and the quotes are for you alone."}</p>
     </section>
   );
 }
@@ -223,7 +287,7 @@ function TemplateCard({ p, templates, readOnly, onTemplate }: { p: ProposalRec; 
         ))}
         <option value="blank">A blank page</option>
       </select>
-      <p className="p2-muted">Switching keeps what you filled in and the two sections Merlin wrote.</p>
+      <p className="p2-muted">Switching keeps what you filled in and what Merlin wrote from the call.</p>
     </section>
   );
 }

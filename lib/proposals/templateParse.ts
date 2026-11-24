@@ -37,6 +37,15 @@ export class TemplateProblem extends Error {}
 
 /** Checked in this order: the more specific headings ("Out of scope", "Payment schedule") before the general ones ("scope", "pricing"). */
 const KEYWORDS: [RegExp, string][] = [
+  [/\b(thesis)\b/i, "thesis"],
+  [/\b(pitfalls?)\b/i, "pitfalls"],
+  [/\bat a glance\b/i, "engagement_glance"],
+  [/\bby day 30\b/i, "day30"],
+  [/\b(where the operator sits|org chart)\b/i, "org_chart"],
+  [/\b(questions for)\b/i, "questions"],
+  [/\b(areas of focus|focus areas)\b/i, "focus_areas"],
+  [/\b(we commit|commitments?)\b/i, "commitments"],
+  [/\b(steering committee)\b/i, "governance"],
   [/\baddendum\b/i, "addendum_header"],
   [/\b(out of scope|exclusions?|not included)\b/i, "out_of_scope"],
   [/\b(payment schedule|payment terms|invoic|billing)\b/i, "payment_schedule"],
@@ -66,6 +75,9 @@ const KEYWORDS: [RegExp, string][] = [
 /** The library block a heading reads as, or "custom". */
 export function blockFor(heading: string): string {
   const t = heading.trim();
+  // A library section's own title reads as that section (a template saved from the library reads back whole).
+  const exact = BLOCKS.find((b) => b.title.toLowerCase() === t.toLowerCase());
+  if (exact) return exact.id;
   for (const [re, id] of KEYWORDS) if (re.test(t) && BLOCKS.some((b) => b.id === id)) return id;
   return "custom";
 }

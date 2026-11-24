@@ -65,6 +65,13 @@ import { useLive } from "./Live";
 import { fieldLabel as labelOf } from "@/lib/proposals/library";
 import { rateMath } from "@/lib/proposals/rates";
 import { blanksWithPlaceOf, fillWords, readyWords } from "./proposalsPage/progress";
+import { mergeWritten, type WrittenSection } from "@/lib/proposals/written";
+import { proposalRate } from "@/lib/proposals/rates";
+import { moneyOf as moneyOf0 } from "@/lib/proposals/library";
+import { OPERATOR_AGREEMENT, SENIOR_OPERATOR } from "@/lib/proposals/operatorLib";
+import type { BriefMiss, CallBrief } from "@/lib/proposals/brief";
+import { DeckView } from "./proposalsPage/Deck";
+import { openSend as openContractSend } from "./contracts/SendSheet";
 import "./proposals.css";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
@@ -369,6 +376,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
           onPut={put}
           onContracts={() => toContracts()}
           onTemplates={() => setTemplates(true)}
+          onLearned={(ts) => setData((d) => (d ? { ...d, templates: [...ts.map((t) => ({ id: t.id, title: t.title, about: t.fileName, mine: true, open: true, sections: t.blocks.length })), ...d.templates] } : d))}
           closePrompt={<CloseBuildPrompt />}
         />
         {templates && <TemplatesSheet data={data} onClose={() => setTemplates(false)} onChange={(t) => setData((d) => (d ? { ...d, templates: t } : d))} />}
@@ -601,6 +609,13 @@ function unsavedText(body: Record<string, unknown>, now: ProposalRec, base: Prop
     for (const [k, v] of Object.entries(body.fields as Record<string, string>)) if (now.fields[k] !== v && base.fields[k] !== v && v) out.push(`${fieldLabel(k)}: ${v}`);
   return out.join("\n\n");
 }
+
+/** Why Merlin's AI won't read the call for this member, in their words (the editor's progress line). */
+const AI_STATE_WORDS = {
+  off: "Merlin's AI isn't switched on for your account yet.",
+  plan: "Reading a call with Merlin's AI is on Close.",
+  usedup: "You've used this month's AI allowance.",
+} as const;
 
 function Editor({
   initial,
@@ -852,10 +867,34 @@ function Editor({
   const sendIt = async () => {
     void flush();
     const signers = signersOf(p, fields, { name: data.me.name, email: data.me.email });
+    // The agreement goes through the Contracts flow (Review and send), signers in order: the client first, the member last.
+    if (p.templateId === OPERATOR_AGREEMENT) {
+      if (!(await settle())) return toast("Your last edit isn't saved yet. Try again in a moment.", true);
+      const sent = await openContractSend({ kind: "proposal", id: p.id, signers, message: noteInVoice(signers[0].name.split(/\s+/)[0] ?? "", view.me?.voice), title: p.title, linkDays: p.linkDays || 30, canClose: data.canSend });
+      if (sent) {
+        const fresh = await latestOf(p.id);
+        if (fresh) take(fresh), onSaved(fresh);
+        toast(sent.message);
+      }
+      return;
+    }
     const r = await openSend({ kind: "proposal", id: p.id, signers, message: noteInVoice(signers[0].name.split(/\s+/)[0] ?? "", view.me?.voice), title: p.title, linkDays: p.linkDays || 30, canClose: data.canSend });
     if (r) take(r.proposal), onSaved(r.proposal), setChanging(false), toast(r.message);
   };
   const [readyMs, setReadyMs] = useState<number | null>(null);
+  /** The deck view (a view of the document; the editor stays the source of truth). */
+  const [deck, setDeck] = useState(false);
+  const [agreeing, setAgreeing] = useState(false);
+  /** The agreement that goes with this proposal, from the same call brief: a new draft, opened. */
+  const draftAgreementNow = async () => {
+    if (!(await settle())) return toast("Your last edit isn't saved yet. Try again in a moment.", true);
+    setAgreeing(true);
+    const r = await api<ProposalRec>({ op: "agreement", id: p.id });
+    setAgreeing(false);
+    if (r.error) return toast(r.error, true);
+    toast("The agreement is drafted from the same call. Check it, then send it for signature.");
+    onOpen(r);
+  };
   const [aiNow, setAiNow] = useState(launch?.ai.state ?? "none");
   const aiBlocks = launch?.ai.blocks ?? [];
   const changeRef = useRef(change);
@@ -863,32 +902,39 @@ function Editor({
   const flushRef = useRef(flush);
   flushRef.current = flush;
   const aiStarted = useRef(false);
-  /** Merlin writes What we heard and What I recommend; each goes in where the member hasn't changed it meanwhile. */
+  /** Why Merlin's AI didn't read the call (said plainly, with Try again when that can help). */
+  const [miss, setMiss] = useState<(BriefMiss & { retry: boolean }) | null>(null);
+  /**
+   * Merlin reads the call into its brief and writes the sections from it; each goes in where the
+   * member hasn't changed it meanwhile, new ones in the template's order. The days a week the call
+   * gave set the rate through the one calculation (never a silent 40 hours).
+   */
   const runSections = async (agree?: boolean) => {
     aiStarted.current = true;
     setAiNow("ready");
+    setMiss(null);
     const end = await live.start({ op: "sections", id: initial.id, ...(agree ? { agree: true } : {}) });
     if (end.ok) {
-      const r = end.result as { sections: { id: string; body: string }[]; before: Record<string, string> };
+      const r = end.result as { sections: WrittenSection[]; before: Record<string, string>; fields: Record<string, string>; notes: DiscoveryNote[]; brief: CallBrief; ai: { ran: boolean; miss: BriefMiss | null; retry: boolean } };
       const cur = latest.current;
-      let n = 0;
-      const blocks = cur.blocks.map((b) => {
-        const w = r.sections.find((x) => x.id === b.id);
-        if (!w || b.body !== r.before[b.id] || w.body === b.body) return b;
-        n++;
-        return { ...b, body: w.body };
-      });
-      if (n) changeRef.current({ blocks }, { blocks }), void flushRef.current();
-    } else if (end.status !== 499) toast(end.message, true);
+      const m = mergeWritten(cur.blocks, r.sections, r.before);
+      const f: Record<string, string> = { ...cur.fields };
+      for (const [k, v] of Object.entries(r.fields ?? {})) if (!f[k]) f[k] = v;
+      // The days a week now known: the fee from the same calculation as What should I charge, unless the member or the call set it.
+      const feeSrc = cur.sources["pricing.monthlyFee"];
+      if (r.fields?.["pricing.allocation"] && feeSrc !== "manual" && feeSrc !== "call") {
+        const rate = proposalRate(view, { company: cur.company, fields: f });
+        if (rate.fee) f["pricing.monthlyFee"] = money0(rate.fee);
+        const hm = rateMath(rate.fee ?? null, f["pricing.allocation"]);
+        if (hm.hoursMonth) f["pricing.hoursMonth"] = String(hm.hoursMonth);
+      }
+      const patch: Partial<ProposalRec> = { blocks: m.blocks, fields: f, notes: r.notes, brief: r.brief };
+      changeRef.current(patch, { blocks: m.blocks, fields: f, notes: r.notes });
+      void flushRef.current();
+      if (!r.ai.ran && r.ai.miss) setMiss({ ...r.ai.miss, retry: r.ai.retry });
+    } else if (end.status !== 499) setMiss({ code: "failed", message: end.message, retry: true });
     if (launch) setReadyMs(performance.now() - launch.at);
   };
-  useEffect(() => {
-    if (!v2 || !launch || aiStarted.current) return;
-    if (launch.ai.state === "ready") void runSections();
-    else setReadyMs(performance.now() - launch.at);
-    // Once, as a tapped proposal opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const money0 = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
   /** A fee from the rail: the fee, and what follows from it when Merlin set it (from month 4, past the hours). */
   const setFee = (n: number) => {
@@ -897,7 +943,21 @@ function Editor({
     if (ours("pricing.stepDownFee")) f["pricing.stepDownFee"] = money0(Math.round((n * 2) / 3 / 250) * 250);
     const m = rateMath(n, f["pricing.allocation"]);
     if (m.hourly && ours("pricing.overageRate")) f["pricing.overageRate"] = money0(Math.round(m.hourly / 5) * 5);
+    if (m.hoursMonth) f["pricing.hoursMonth"] = String(m.hoursMonth);
     change({ fields: f, sources: { ...p.sources, "pricing.monthlyFee": "manual" } }, { fields: f });
+  };
+  /** Days a week from the rail: the allocation, its hours, and the fee from the one calculation (unless the member or the call set the fee). */
+  const setDays = (allocation: string) => {
+    const f: Record<string, string> = { ...p.fields, "pricing.allocation": allocation };
+    const feeSrc = p.sources["pricing.monthlyFee"];
+    if (feeSrc !== "manual" && feeSrc !== "call") {
+      const r = proposalRate(view, { company: p.company, fields: f });
+      if (r.fee) f["pricing.monthlyFee"] = money0(r.fee);
+    }
+    const m = rateMath(moneyOf0(f["pricing.monthlyFee"]), allocation);
+    if (m.hoursMonth) f["pricing.hoursMonth"] = String(m.hoursMonth);
+    if (m.hourly && (!p.fields["pricing.overageRate"] || p.sources["pricing.overageRate"] !== "manual")) f["pricing.overageRate"] = money0(Math.round(m.hourly / 5) * 5);
+    change({ fields: f, sources: { ...p.sources, "pricing.allocation": "manual" } }, { fields: f });
   };
   const switchTemplate = async (templateId: string) => {
     if (!(await settle())) return toast("Your last edit isn't saved yet. Try again in a moment.", true);
@@ -919,14 +979,23 @@ function Editor({
     <div className="p2-progress" role="status" aria-live="polite" data-ready-ms={readyMs !== null ? Math.round(readyMs) : undefined} data-writing={writingNow || undefined}>
       {writingNow ? (
         <p>
-          <strong>Merlin is writing What we heard and What I recommend</strong> from the call. Everything else is in.
+          <strong>Merlin is reading the call and writing the proposal from it.</strong> Your rate, case studies and terms are in.
         </p>
       ) : aiNow === "consent" && !aiStarted.current && !readOnly ? (
         <p>
-          Merlin can write What we heard and What I recommend from the call. It keeps the proposal, not the transcript.{" "}
+          Merlin can read the call and write the proposal from it. It keeps the brief, not the transcript.{" "}
           <button type="button" className="btn btn-sm btn-pine" onClick={() => void runSections(true)}>
-            Write them
+            Read the call
           </button>
+        </p>
+      ) : (miss || (["off", "plan", "usedup"].includes(aiNow) && launch?.ai.state !== "none")) && !readOnly ? (
+        <p data-miss={miss?.code ?? aiNow}>
+          <strong>Merlin didn&#39;t read the call.</strong> {miss?.message ?? AI_STATE_WORDS[aiNow as keyof typeof AI_STATE_WORDS]} Only what is certain is filled in.{" "}
+          {miss?.retry && (
+            <button type="button" className="btn btn-sm btn-pine" onClick={() => void runSections()}>
+              Try again
+            </button>
+          )}
         </p>
       ) : readOnly ? null : (
         <p>
@@ -940,6 +1009,28 @@ function Editor({
         </p>
       )}
       {writingNow && <span className="p2-bar" aria-hidden />}
+      <div className="p2-viewbar" role="group" aria-label="View">
+        <button type="button" className="p2-filter" aria-pressed={!deck} onClick={() => setDeck(false)}>
+          Document
+        </button>
+        <button type="button" className="p2-filter" aria-pressed={deck} onClick={() => (void flush(), setDeck(true))}>
+          Deck
+        </button>
+        {p.templateId === SENIOR_OPERATOR && !readOnly && (
+          <button type="button" className="tp-flink" disabled={agreeing} onClick={() => void draftAgreementNow()}>
+            {agreeing ? "Drafting the agreement" : "Draft the agreement"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+  const deckEl = v2 && deck && (
+    <div className="page-wide pp-page pp-editing p2-deckpage">
+      <button type="button" className="page-back" onClick={() => setDeck(false)}>
+        <IconChevron dir="left" /> Back to the document
+      </button>
+      {progressLine}
+      <DeckView blocks={p.blocks} fields={fields} from={data.me.name} to={p.company.name} />
     </div>
   );
 
@@ -1056,6 +1147,7 @@ function Editor({
         <ActivityPanel kind="proposal" id={p.id} version={`${p.version}:${p.rev}:${p.status}`} onOpen={onOpen} quiet />
       </>
     );
+    if (deckEl) return deckEl;
     return (
       <>
       <EditorFrame
@@ -1161,6 +1253,7 @@ function Editor({
                     templates={data.templates}
                     readOnly={readOnly}
                     onFee={setFee}
+                    onDays={setDays}
                     onProof={setProof}
                     onTemplate={(id) => void switchTemplate(id)}
                     signing={sentEl}

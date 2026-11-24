@@ -79,6 +79,17 @@ const TITLE_KIND = new Map(
     agreement: "Consulting agreement",
     signature: "Signature",
     addendum_header: "Addendum reference",
+    // The Senior operator family (operatorLib.ts).
+    thesis: "Thesis",
+    pitfalls: "Typical pitfalls",
+    engagement_glance: "The engagement at a glance",
+    day30: "What you'll have by day 30",
+    org_chart: "Where the operator sits",
+    questions: "Questions for our next meeting",
+    scope: "Scope",
+    governance: "Governance",
+    commitments: "What we commit to deliver",
+    focus_areas: "Expected areas of focus",
   }).map(([id, title]) => [title.toLowerCase(), id]),
 );
 /** A section's kind: as frozen, or (a send from before kinds were kept) its library title's. */
@@ -88,6 +99,10 @@ export const kindOf = (b: { title: string; kind?: string }) => b.kind ?? TITLE_K
 const SCOPE_RANK: Record<string, number> = {
   the_math: 1,
   reporting_structure: 2,
+  governance: 2,
+  org_chart: 2,
+  day30: 4,
+  focus_areas: 7,
   team_rates: 2,
   operating_cadence: 2,
   role_profile: 2,

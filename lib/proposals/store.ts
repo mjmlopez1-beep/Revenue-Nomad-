@@ -252,6 +252,7 @@ export function recOf(p: StoredProposal, nowMs = Date.now(), origin?: string): P
     ...(p.versions?.length ? { versions: [...p.versions].reverse().map((v) => ({ version: v.version, at: v.at, note: v.note })) } : {}),
     ...(p.proofCases?.length ? { proofCases: [...p.proofCases] } : {}),
     ...(p.fromCall ? { fromCall: { ...p.fromCall } } : {}),
+    ...(p.brief ? { brief: structuredClone(p.brief) } : {}),
   };
 }
 
