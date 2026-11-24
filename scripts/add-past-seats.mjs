@@ -11,6 +11,7 @@
  *   node scripts/add-past-seats.mjs <past-seats.csv> --dry-run                          (counts only, writes nothing)
  *   node scripts/add-past-seats.mjs <past-seats.csv> --counts-only                      (no company name or title printed)
  *   node scripts/add-past-seats.mjs <past-seats.csv> --seed <intel-seed.json> --no-seal (tests, a copy)
+ *   node scripts/add-past-seats.mjs <interim-seats.csv> --interim [--companies ...]      (the Interim Seats tab)
  *
  * Needs the seed key (RN_INTEL_SEED_KEY, else data/intel-seed.key): seats are keyed by a one-way
  * HMAC of the file's past_seat_id under it: "e_ps_" + the first 20 hex of
@@ -33,6 +34,18 @@
  * key as on that person's current seats (add-seat-scan.mjs --backfill-holder-keys), so one
  * fractional's seats can be grouped. It sits on the seat record, outside its fields, so no view,
  * export or connector answer carries it. A seat on file that lacks one gets it on a re-run.
+ *
+ * --interim reads the Interim Seats tab instead (the same columns, with interim_seat_id, "li-int-..."):
+ * each seat is type Interim, keyed "e_is_" + the first 20 hex of HMAC-SHA256(key, "interim-seat:" +
+ * interim_seat_id), so it never collides with a past seat. An interim title at an executive search,
+ * staffing or interim placement firm (staffingFirm in scripts/seat-import.mjs, e.g. WittKieffer) is
+ * the firm that placed the person, not the client that hired them: those rows are dropped. Interim
+ * seats count toward fractional friendly like any fractional seat (FRACTIONAL_TYPES in lib/tableFields.ts).
+ *
+ * A company size reads from the Past Companies tab's employee_range_std first (employee_range may
+ * show a band Sheets turned into a date, "2/10"), then employee_range, then employee_count. A seat
+ * whose Past Companies row says skipped (a placeholder, or a name too short to look up) is dropped
+ * unless the company is on the seed already: no company is created from a skipped row.
  *
  * Nothing about the person is stored: no past_seat_id, profile id, location, current title or
  * company, search query, capture day, tenure, or the holder's country. The person's name is read
@@ -97,7 +110,7 @@ const { employeeBand, industryOf, revenueBand } = await import("../lib/industryM
 const { companyFirm } = await import("../lib/firmRemoval.ts");
 const {
   FUNCTION_MAP, aboutNamesHolder, cleanKeeping, cleanUrl, companyIndex, companyName, host, hqCountry, inCa, inUs, isTrue, linkedinKey, nameSeat, newCompanyId, notFractional,
-  outsideUsNames, ownFirm, parseCsv, personKey, real, seedKey, seniorTitle,
+  outsideUsNames, ownFirm, parseCsv, personKey, real, seedKey, seniorTitle, staffingFirm,
 } = await import("./seat-import.mjs");
 
 /* ---------- arguments ---------- */
@@ -112,15 +125,22 @@ const flag = (name) => {
 };
 const seedPath = flag("--seed") ?? "data/intel-seed.json";
 const companiesPath = flag("--companies");
-const BOOLEANS = ["--no-seal", "--dry-run", "--counts-only", "--names"];
+const BOOLEANS = ["--no-seal", "--dry-run", "--counts-only", "--names", "--interim"];
 const noSeal = args.includes("--no-seal");
 const dryRun = args.includes("--dry-run");
 /** Print counts only: no company name or title (the file names real people and their clients). */
 const countsOnly = args.includes("--counts-only");
 const withNames = args.includes("--names");
+/** The Interim Seats tab: interim_seat_id, type Interim, "e_is_" ids, staffing firms dropped. */
+const interim = args.includes("--interim");
+const ID_COL = interim ? "interim_seat_id" : "past_seat_id";
+const ID_PREFIX = interim ? "e_is_" : "e_ps_";
+const SEAT_TYPE = interim ? "Interim" : "Fractional";
+/** The row's stable id (past_seat_id, or interim_seat_id with --interim). */
+const sidOf = (r) => String(r[ID_COL] ?? "").trim();
 const csvPath = args.filter((a) => !BOOLEANS.includes(a))[0];
 if (!csvPath || args.some((a) => a.startsWith("--") && !BOOLEANS.includes(a))) {
-  console.error("Usage: node scripts/add-past-seats.mjs <past-seats.csv> [--companies <past-companies.csv>] [--dry-run] [--counts-only] [--seed <path> --no-seal] [--names]");
+  console.error("Usage: node scripts/add-past-seats.mjs <past-seats.csv> [--interim] [--companies <past-companies.csv>] [--dry-run] [--counts-only] [--seed <path> --no-seal] [--names]");
   process.exit(1);
 }
 
@@ -128,7 +148,7 @@ if (!csvPath || args.some((a) => a.startsWith("--") && !BOOLEANS.includes(a))) {
 
 const seatKey = seedKey("Seats are keyed by an HMAC under it.");
 /** The seat's id: a one-way HMAC of the file's past_seat_id, so no profile id reaches the seed. */
-const pastId = (id) => `e_ps_${createHmac("sha256", seatKey).update(`past-seat:${id}`).digest("hex").slice(0, 20)}`;
+const pastId = (id) => `${ID_PREFIX}${createHmac("sha256", seatKey).update(`${interim ? "interim-seat" : "past-seat"}:${id}`).digest("hex").slice(0, 20)}`;
 /** The earliest end year kept (the file holds roles that ended in 2021 or later). */
 const FIRST_END = 2021;
 const THIS_YEAR = new Date().getUTCFullYear();
@@ -136,6 +156,12 @@ const THIS_YEAR = new Date().getUTCFullYear();
 const yearOf = (v) => {
   const m = /^(\d{4})(?:\.0+)?$/.exec(String(v ?? "").trim());
   return m ? Number(m[1]) : null;
+};
+/** A standard size band ("2-10", "1001-5000", "10001+") from employee_range_std, or null when the cell holds anything else. */
+const STD_BANDS = new Set(["1", "2-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+"]);
+const stdBand = (v) => {
+  const t = real(v).replace(/[,\s]/g, "").replace(/[–—]/g, "-");
+  return STD_BANDS.has(t) ? employeeBand(t) : null;
 };
 /** The year a seat's start or end month is in ("2025-03" and "2025" are 2025), or null. */
 const yearIn = (v) => {
@@ -147,6 +173,10 @@ const yearIn = (v) => {
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const rows = parseCsv(readFileSync(csvPath, "utf8"));
+if (rows.length && !(ID_COL in rows[0])) {
+  console.error(`The file has no ${ID_COL} column.${interim ? "" : " For the Interim Seats tab, add --interim."}`);
+  process.exit(1);
+}
 
 /** Past Companies rows by name and the example person's country, and by name alone (the first one). */
 const tabByNameCountry = new Map();
@@ -168,7 +198,7 @@ const tabOf = (r) => {
   return tabByNameCountry.get(`${k}|${String(r.country ?? "").trim().toLowerCase()}`) ?? tabByName.get(k) ?? null;
 };
 /** The match the Past Companies row was made by ("domain+name+country", "domain+name", "no_match", "skipped"). */
-const methodOf = (tab) => real(tab?.match_method).toLowerCase();
+const methodOf = (tab) => real(tab?.match_method).toLowerCase().replace(/\s*\(guess \d+\)$/, "");
 const TRUSTED_METHOD = "domain+name+country";
 /**
  * A Past Companies row whose facts this run attaches, as the owner's best guess: one the sheet
@@ -275,13 +305,13 @@ const newSeats = new Set();
 
 for (const r of rows) {
   count(countryCount, String(r.country ?? "").trim());
-  const psid = String(r.past_seat_id ?? "").trim();
+  const psid = sidOf(r);
   if (!psid) {
-    drop("no past seat id");
+    drop(interim ? "no interim seat id" : "no past seat id");
     continue;
   }
   if (seen.has(psid)) {
-    drop("same past seat id twice in the file");
+    drop(interim ? "same interim seat id twice in the file" : "same past seat id twice in the file");
     continue;
   }
   seen.add(psid);
@@ -347,6 +377,11 @@ for (const r of rows) {
     drop(why);
     continue;
   }
+  // An interim title at a search, staffing or interim placement firm: the firm placed them, it didn't hire them.
+  if (interim && staffingFirm(company)) {
+    drop("executive search or staffing firm (staffingFirm)");
+    continue;
+  }
   const fn = FUNCTION_MAP[String(r.function ?? "").trim()] ?? FUNCTION_MAP[String(r.role_category ?? "").trim()] ?? null;
   if (fn && !FUNCTIONS.includes(fn)) throw new Error(`function ${fn} is not in FUNCTIONS`);
   if ((!GTM_FUNCTIONS.includes(fn) && !seniorTitle(r.seat_title)) || !keepsNonGtm(r.seat_title, fn)) {
@@ -368,8 +403,9 @@ for (const r of rows) {
     website: site,
     linkedin: li,
     industry: industryOf(real(fromTab?.industry) || real(fromRow?.company_industry), company),
+    // employee_range_std first: employee_range may hold a band Sheets read as a date ("2/10" for 2-10).
     employees: fromTab
-      ? employeeBand(real(fromTab.employee_range)) ?? employeeBand(real(fromTab.employee_range_std)) ?? employeeBand(real(fromTab.employee_count)) ?? employeeBand(real(fromRow?.company_employee_range))
+      ? stdBand(fromTab.employee_range_std) ?? employeeBand(real(fromTab.employee_range)) ?? employeeBand(real(fromTab.employee_count)) ?? employeeBand(real(fromRow?.company_employee_range))
       : employeeBand(real(fromRow?.company_employee_range)),
     revenue: revenueBand(real(fromTab?.rn_revenue_bucket) || real(fromRow?.company_rn_revenue_bucket)),
     // HQ country only when the match carries the country.
@@ -391,6 +427,11 @@ for (const r of rows) {
   if (!c && site && bySite.get(siteKey(site))) (c = bySite.get(siteKey(site))), (how = "website");
   if (!c && domainOwner(site, company)) (c = domainOwner(site, company)), (how = "the company its website names");
   if (!c && byName.get(companyKey(company))) (c = byName.get(companyKey(company))), (how = "name");
+  // A placeholder or a name too short to look up (the tab says skipped): never a new company.
+  if (!c && methodOf(tab) === "skipped") {
+    drop("placeholder or too-short name (Past Companies says skipped)");
+    continue;
+  }
   if (!c && removedNames.has(companyKey(company))) {
     drop("fractional firm the seed already removed");
     continue;
@@ -467,7 +508,7 @@ for (const r of rows) {
   if (isTrue(fromTab?.likely_fractional_provider) || isTrue(fromRow?.company_likely_fractional_provider)) flagged.set(c.id, c.fields.name ?? company);
 
   // The seat. Years alone: the file has no months.
-  const fields = { source: "Seat scan", role, type: "Fractional", status: "Ended", end: String(end) };
+  const fields = { source: "Seat scan", role, type: SEAT_TYPE, status: "Ended", end: String(end) };
   if (!fields.role) delete fields.role;
   if (start !== null) fields.start = String(start);
   if (fn) fields.function = fn;
@@ -522,10 +563,10 @@ if (withNames) {
 // Whatever the flag: a name from public profiles on a seat whose row is outside the United States,
 // or in California, comes off, and nothing is written if any such seat would still carry a name.
 const seatOfRow = (r) => {
-  const psid = String(r.past_seat_id ?? "").trim();
+  const psid = sidOf(r);
   return psid ? engById.get(pastId(psid)) : undefined;
 };
-const { takenOff, namedOutsideUs } = outsideUsNames(firstRows, seatOfRow, (e) => e.id.startsWith("e_ps_"));
+const { takenOff, namedOutsideUs } = outsideUsNames(firstRows, seatOfRow, (e) => e.id.startsWith(ID_PREFIX));
 if (namedOutsideUs) {
   console.error(`${namedOutsideUs} seats outside the United States or in California would carry a name. Nothing was written.`);
   process.exit(1);
@@ -545,7 +586,7 @@ const allEnded = (id) => (engsAt.get(id) ?? []).length > 0 && engsAt.get(id).eve
 const newOnlyEnded = [...created].filter((id) => left.has(id) && allEnded(id)).length;
 const seedOnlyEnded = seed.companies.filter((c) => allEnded(c.id)).length;
 const n = (set) => [...set].filter((id) => left.has(id)).length;
-const pastOnSeed = seed.engagements.filter((e) => e.id.startsWith("e_ps_")).length;
+const pastOnSeed = seed.engagements.filter((e) => e.id.startsWith(ID_PREFIX)).length;
 // The table's count for the unverified-names switch (lib/table.ts seatCount): seats, not open roles or postings nobody took.
 const tableSeats = seed.engagements.filter((e) => e.fields.status !== "Open role" && !(e.fields.source === "Demand scan" && !e.fields.operator)).length;
 const namesUntil = Number.parseInt(process.env.RN_UNVERIFIED_NAMES_UNTIL ?? "", 10) > 0 ? Number.parseInt(process.env.RN_UNVERIFIED_NAMES_UNTIL, 10) : 10_000;
@@ -586,8 +627,8 @@ if (cleaned.removed.names.length) {
 const borderline = [...flagged].filter(([id]) => left.has(id)).map(([, nm]) => nm).sort();
 console.log(`borderline (the file calls it a likely fractional provider, the rules keep it as a client): ${borderline.length}${countsOnly || !borderline.length ? "" : `: ${borderline.join(" | ")}`}`);
 // People by their one-way key: past seats that join a person who already holds a current seat on the seed (scripts/add-seat-scan.mjs --backfill-holder-keys keys those).
-const currentKeys = new Set(seed.engagements.filter((e) => e.holderKey && !e.id.startsWith("e_ps_")).map((e) => e.holderKey));
-const pastKeyed = seed.engagements.filter((e) => e.holderKey && e.id.startsWith("e_ps_"));
+const currentKeys = new Set(seed.engagements.filter((e) => e.holderKey && !e.id.startsWith("e_ps_") && !e.id.startsWith("e_is_")).map((e) => e.holderKey));
+const pastKeyed = seed.engagements.filter((e) => e.holderKey && e.id.startsWith(ID_PREFIX));
 const pastPeople = new Set(pastKeyed.map((e) => e.holderKey));
 const seatsOf = new Map();
 for (const e of seed.engagements) if (e.holderKey) seatsOf.set(e.holderKey, (seatsOf.get(e.holderKey) ?? 0) + 1);
@@ -597,7 +638,9 @@ console.log(
 console.log(
   `people: ${pastKeyed.length} ended seats keyed, ${pastPeople.size} distinct people; ${pastKeyed.filter((e) => currentKeys.has(e.holderKey)).length} ended seats (${[...pastPeople].filter((k) => currentKeys.has(k)).length} people) join a person with a current seat (${currentKeys.size} people keyed on current seats); people with 2+ seats on the seed: ${[...seatsOf.values()].filter((x) => x >= 2).length}`,
 );
-console.log(`seed now: ${seed.companies.length} companies, ${seed.engagements.length} seats (${pastOnSeed} ended seats from past seats)`);
+console.log(`seed now: ${seed.companies.length} companies, ${seed.engagements.length} seats (${pastOnSeed} ended seats from ${interim ? "interim" : "past"} seats)`);
+// Companies the website finder (lib/websites, RN_WEBSITES) reads next: new ones with no website (it skips placeholders, firms and a person's own practice); the About job (lib/about) reads each site it finds.
+console.log(`new companies with no website (the website finder's queue, then About): ${[...created].filter((id) => left.has(id) && !companyById.get(id)?.fields.website).length} of ${n(created)}`);
 console.log(
   `seats for the unverified-names switch: ${tableSeats} on the seed${tableSeats >= namesUntil ? `, at or over ${namesUntil.toLocaleString("en-US")} (RN_UNVERIFIED_NAMES_UNTIL): names from public profiles stop showing until it is raised` : `, under ${namesUntil.toLocaleString("en-US")} (RN_UNVERIFIED_NAMES_UNTIL)`}`,
 );

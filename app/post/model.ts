@@ -300,6 +300,8 @@ const fnOfSeat = (e: EngagementRec) => shown(e.cells.function);
 export const isHire = (e: EngagementRec) => {
   if (isOpenRole(e)) return false;
   if (e.source === "Demand scan" && !known(e.cells.operator)) return false;
+  // A fractional service a firm named (outsourced accounting, freelance marketers): fractional friendly, but not a hire.
+  if (e.service) return false;
   const type = shown(e.cells.type);
   return !type || FRACTIONAL_TYPES.includes(type);
 };
@@ -550,7 +552,8 @@ export function fitTier(f: Friendly, engs: number, closedPosting = false): { lab
   if (f.open) return { label: "Hiring now", cls: "t-hiring" };
   if (f.fractional >= 2 || f.functions.length >= 2) return { label: "Repeat hirer", cls: "t-repeat" };
   if (f.recent) return { label: "Recent seat", cls: "t-recent" };
-  if (f.fractional) return { label: "Past seat", cls: "t-past" };
+  // A fractional service a firm named counts as a past seat on file, never as a repeat hire.
+  if (f.fractional || f.services) return { label: "Past seat", cls: "t-past" };
   // They went looking for a fractional, but nobody is on file in the seat: not a hire, and not a story.
   if (closedPosting) return { label: "Posting closed", cls: "t-past" };
   if (engs > 0) return { label: "Full-time only", cls: "t-story" };
@@ -575,6 +578,7 @@ export function fitReason(i: CoInfo): string {
   const fns = f.functions.length;
   const bits: string[] = [];
   if (seats) bits.push(`${seats} fractional seat${seats > 1 ? "s" : ""}${fns > 1 ? ` across ${fns} functions` : fns === 1 ? ` in ${f.functions[0]}` : ""}`);
+  if (!seats && f.services) bits.push(`${f.services} fractional service${f.services > 1 ? "s" : ""} on file`);
   if (f.open) bits.push(`${f.open} open role${f.open > 1 ? "s" : ""} now`);
   if (!bits.length) {
     const closed = lastClosedPosting(i);

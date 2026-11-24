@@ -497,7 +497,7 @@ export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g
 export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 
 /** Where a record came from. */
-export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay", "Seat scan"] as const;
+export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay", "Seat scan", "Firm client list", "Clutch review"] as const;
 /** "Added by a member · updated Oct 2026": a record's source with its date, the same on the company page and the tables. */
 export const sourceWithDate = (source: string, updatedAt: string | null | undefined): string => {
   const d = updatedAt ? new Date(updatedAt) : null;
@@ -514,6 +514,11 @@ export const SOURCE_LABEL: Record<string, string> = {
   Clay: "Revenue Nomad research",
   // Current fractional seats Revenue Nomad found. Nobody holds one on Merlin until its fractional claims it.
   "Seat scan": "Revenue Nomad research",
+  // A client a fractional or outsourced executive firm names on its own website (case study,
+  // testimonial or logo wall), scripts/add-firm-clients.mjs. The firm is never named to members.
+  "Firm client list": "Named by a fractional firm",
+  // A client named in a verified Clutch review of a fractional, interim or outsourced leader.
+  "Clutch review": "Clutch review",
   // A leader read from the company's own team page or a press release there (lib/leaders).
   "Company website": "From the company's website",
 };

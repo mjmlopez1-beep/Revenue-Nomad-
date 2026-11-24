@@ -14,9 +14,15 @@
  *     match_method (and without --companies), --names for United States rows only and its
  *     refusal, --counts-only printing no company name, --dry-run writing nothing.
  *  2. The firm rule: three ended seats at a company don't make it a firm; three current ones still do.
+ *  Interim seats (--interim): type Interim, "e_is_" HMAC ids apart from past seats, search and
+ *     staffing firms dropped, a re-run that adds nothing. Firm clients (scripts/add-firm-clients.mjs):
+ *     one seat per client per firm, leadership vs fractional service, sources and member labels,
+ *     admin-only evidence, firms never clients, countries, a re-run that adds nothing.
  *  3. In process, on the seed the script wrote: an ended seat's cells (status and start free, a dated
  *     end and a named holder locked at 1 credit), claiming an ended seat, no hire alert and no new
- *     hire for an ended seat (and why the import leaves addedAt off).
+ *     hire for an ended seat (and why the import leaves addedAt off); an interim seat counts as a
+ *     hire, a fractional service makes a company fractional friendly but never a repeat hirer, no
+ *     provider firm reaches any view, and the new companies with no website are in the website finder's queue.
  */
 import { spawnSync } from "node:child_process";
 import { createHmac } from "node:crypto";
@@ -94,7 +100,7 @@ const kept = [
   base({ past_seat_id: "PSFX-002", person_name: P.orrin, seat_title: "Fractional CFO", company_name: "Bluefin Fixture Analytics", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2023", end_year: "2025", matched_company_id: "https://www.linkedin.com/company/bluefin-wrong", company_website: "https://bluefin-fixture.example.com", company_industry: "Software Development", company_employee_range: "11-50", company_rn_revenue_bucket: "$1M-$5M" }),
   // no_match: name only. A United States holder.
   base({ past_seat_id: "PSFX-003", person_name: P.pella, seat_title: "Fractional CRO", company_name: "Corvid Fixture Freight", function: "Revenue Leadership", role_category: "Sales Leadership", start_year: "2021", end_year: "2022", country: US }),
-  // skipped, and no start year: no start on the seat.
+  // no_match (with a website the tab didn't match), and no start year: no start on the seat.
   base({ past_seat_id: "PSFX-004", person_name: P.rhea, seat_title: "Fractional Head of Growth", company_name: "Dunmore Fixture Robotics", function: "Growth", start_year: "", end_year: "2023" }),
   // matched_company_id: the seat row's own facts fill the company on file. A United States holder whose seat holder name is "Dr. ...".
   base({ past_seat_id: "PSFX-005", person_name: `Dr. ${P.sable}`, seat_title: "Fractional COO", company_name: "Ember Grove (Fixture)", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2024", end_year: String(THIS_YEAR), country: US, matched_company_id: "99077", company_website: "https://www.embergrove-fixture.example.com", company_industry: "Truck Transportation", company_employee_range: "51-200", company_rn_revenue_bucket: "$20M-$50M" }),
@@ -134,6 +140,7 @@ const dropped = [
   base({ past_seat_id: "", person_name: P.yorick, seat_title: "Fractional CMO", company_name: "No Id Fixture Co", start_year: "2021", end_year: "2023" }),
   base({ past_seat_id: "PSFX-001", person_name: P.yorick, seat_title: "Fractional CMO", company_name: "Twice Fixture Co", start_year: "2021", end_year: "2023" }),
   base({ past_seat_id: "PSFX-d20", person_name: P.yorick, seat_title: "Fractional CMO", company_name: "Gonefirm Fixture Collective", start_year: "2021", end_year: "2023" }),
+  base({ past_seat_id: "PSFX-d21", person_name: P.yorick, seat_title: "Fractional CMO", company_name: "Zq Fixture", start_year: "2021", end_year: "2023" }),
 ];
 const dups = [
   // The current seat at Quarry, captured again as a past seat: the same title, years overlap.
@@ -146,10 +153,12 @@ const csvPath = path.join(dir, "past-seats.csv");
 writeFileSync(csvPath, [HEAD, ...ROWS.map((r) => csvLine(HEAD, r))].join("\n") + "\n");
 
 const tab = [
-  { company_name: "Kestrel Fixture Mills", example_person: P.example, country: US, match_method: "domain+name+country", linkedin_url: "https://www.linkedin.com/company/kestrel-fixture", website: "https://www.kestrel-fixture.example.com/", industry: "Software Development", employee_range: "11-50", hq_country: "GB", company_about: "Kestrel Fixture Mills makes recycled paper goods for offices.", rn_revenue_bucket: "$1M-$5M", likely_fractional_provider: "FALSE" },
+  { company_name: "Kestrel Fixture Mills", example_person: P.example, country: US, match_method: "domain+name+country", linkedin_url: "https://www.linkedin.com/company/kestrel-fixture", website: "https://www.kestrel-fixture.example.com/", industry: "Software Development", employee_range: "Nov-50", employee_range_std: "11-50", hq_country: "GB", company_about: "Kestrel Fixture Mills makes recycled paper goods for offices.", rn_revenue_bucket: "$1M-$5M", likely_fractional_provider: "FALSE" },
   { company_name: "Bluefin Fixture Analytics", example_person: P.orrin, country: "Fixtureland", match_method: "domain+name", linkedin_url: "https://www.linkedin.com/company/bluefin-wrong", website: "https://bluefin-wrong.example.com", industry: "Software Development", employee_range: "201-500", hq_country: "US", company_about: "Bluefin Fixture Analytics charts tides for harbors.", rn_revenue_bucket: "$50M+", matched_domain: "bluefin-wrong.example.com" },
   { company_name: "Corvid Fixture Freight", country: US, match_method: "no_match" },
-  { company_name: "Dunmore Fixture Robotics", country: "Fixtureland", match_method: "skipped", website: "https://dunmore-skipped.example.com" },
+  { company_name: "Dunmore Fixture Robotics", country: "Fixtureland", match_method: "no_match", website: "https://dunmore-skipped.example.com" },
+  // A placeholder or a name too short to look up: never a new company, so its seat is dropped.
+  { company_name: "Zq Fixture", country: "Fixtureland", match_method: "skipped" },
   { company_name: "Harbor Fixture Holdings", country: "Fixtureland", match_method: "domain+name+country", linkedin_url: "https://www.linkedin.com/company/88001/", website: "https://harbor-fixture.example.com", industry: "Software Development", employee_range: "51-200", hq_country: "US", company_about: "Harbor Fixture Works runs marinas." },
   { company_name: "Osprey Fixture Diagnostics", country: "Fixtureland", match_method: "domain+name+country", website: "https://osprey-fixture.example.com", industry: "Medical Equipment Manufacturing", hq_country: "US", company_about: "Osprey Fixture Diagnostics, led by Barnaby Wexford, builds lab tests." },
   { company_name: "Juniper Fixture Fields", country: "Fixtureland", match_method: "domain+name+country", website: "https://juniper-fixture.example.com", likely_fractional_provider: "TRUE" },
@@ -196,6 +205,7 @@ const DROPS: [string, string][] = [
   ["no past seat id", "1"],
   ["same past seat id twice in the file", "1"],
   ["fractional firm the seed already removed", "1"],
+  ["placeholder or too-short name (Past Companies says skipped)", "1"],
 ];
 for (const [why, n] of DROPS) check(`drops: ${why} (${n})`, dropCount(out1, why) === n, out1.split("\n").filter((l) => l.startsWith("dropped")));
 check("the provider flag: company_likely_fractional_provider, provider_by_name and the Past Companies tab's, NOT_FIRMS overrules it", dropCount(out1, "likely fractional provider (the file's flag)") === "3");
@@ -250,6 +260,7 @@ check("the tab's facts come before the seat row's copy of the match", !text1.inc
 check("matched_company_id as \"name:\" + a current company's name: the seat goes to that company", seatOf("PSFX-011")?.companyId === "c_quarry" && !coNamed("Wrenfield Fixture Energy"));
 type Marked = Co & { enrichedBy?: { by: string; match: string; fields: string[] } };
 const mark = (c: Co | undefined) => (c as Marked | undefined)?.enrichedBy;
+check("size reads from employee_range_std first (employee_range may be a band Sheets made a date)", kes?.fields.employees === "11–50" && !!mark(kes)?.fields.includes("employees"), kes?.fields);
 check(
   "each company given facts carries a private import mark: the match and the fields it filled, outside its fields",
   mark(blue)?.by === "past seats" && mark(blue)?.match === "domain+name" && mark(blue)!.fields.includes("website") && !mark(blue)!.fields.includes("hq") &&
@@ -258,7 +269,8 @@ check(
     !mark(coOf("PSFX-003")) && !mark(coOf("PSFX-004")) && s1.companies.every((c) => !("enrichedBy" in c.fields)),
   [mark(blue), mark(kes), mark(s1.companies.find((c) => c.id === "c_ember"))],
 );
-check("no_match and skipped: the name only", nameOnlyCo("PSFX-003") && nameOnlyCo("PSFX-004") && !text1.includes("dunmore-skipped"));
+check("no_match: the name only", nameOnlyCo("PSFX-003") && nameOnlyCo("PSFX-004") && !text1.includes("dunmore-skipped"));
+check("skipped (a placeholder): no company and no seat", !coNamed("Zq Fixture") && !seatOf("PSFX-d21"));
 const ember = s1.companies.find((c) => c.id === "c_ember");
 check(
   "matched_company_id: the company on file, by its LinkedIn page, gets the seat row's website, industry, size and revenue, and keeps its name",
@@ -269,7 +281,7 @@ const harbor = s1.companies.find((c) => c.id === "c_harbor");
 check("a trusted Past Companies LinkedIn page matches a company on file, which keeps its own values and only gets what it lacked", seatOf("PSFX-006")?.companyId === "c_harbor" && harbor?.fields.industry === "SaaS" && harbor.fields.website === "harbor-fixture.example.com" && !coNamed("Harbor Fixture Holdings"), harbor?.fields);
 check("a trusted About that names a seat holder is not stored", !!coOf("PSFX-008") && !coOf("PSFX-008")!.fields.about && !text1.includes("Wexford") && coOf("PSFX-008")!.fields.website === "osprey-fixture.example.com", coOf("PSFX-008")?.fields);
 check("NOT_FIRMS overrules the provider flag", !!seatOf("PSFX-010"));
-check("enrichment counts by rule", /enrichment \(companies given facts\): by matched_company_id 1, by domain\+name\+country 3, by domain\+name \(best guess\) 1, by the seat row's Past Companies match 0; with a website 5 of them; created by name only 4/.test(out1) && /\(their match: .*no_match 1/.test(out1), out1.split("\n").find((l) => l.startsWith("enrichment")));
+check("enrichment counts by rule", /enrichment \(companies given facts\): by matched_company_id 1, by domain\+name\+country 3, by domain\+name \(best guess\) 1, by the seat row's Past Companies match 0; with a website 5 of them; created by name only 4/.test(out1) && /\(their match: .*no_match 2/.test(out1), out1.split("\n").find((l) => l.startsWith("enrichment")));
 check("new companies whose only seat is an ended one are counted", line(out1, /new companies whose only seat is an ended one: (\d+)/) === "7", out1);
 
 // Duplicates and the current seat.
@@ -471,6 +483,130 @@ console.log("\nThe firm rule");
   check("three current ones still do (several fractionals work there)", current.companies.length === 0 && FR.seedFirmIds(mk("Active") as never).get("c_three")?.reason === "several fractionals work there");
 }
 
+/* ---------- interim seats: add-past-seats.mjs --interim ---------- */
+
+console.log("\nInterim seats");
+const interimId = (id: string) => `e_is_${createHmac("sha256", Buffer.from(TEST_KEY, "base64")).update(`interim-seat:${id}`).digest("hex").slice(0, 20)}`;
+const IP = { marisol: "Marisol Thackeray", lucan: "Lucan Pembrook", nerys: "Nerys Galloway", tamsin: "Tamsin Oakhurst", bertil: "Bertil Ravensworth" };
+const INT_HEAD = "interim_seat_id,person_name,person_sales_nav_id,seat_title,company_name,function,role_category,is_gtm,role_type,start_year,end_year,duration_months,is_current,person_current_title,person_current_company,person_location,country,source,source_query,captured_on";
+const ibase = (o: Record<string, string>) => ({ ...base({ role_type: "Interim", source: "fixture interim source", country: US, ...o }) });
+const interimRows = [
+  ibase({ interim_seat_id: "LIFX-001", person_name: IP.marisol, seat_title: "Interim CFO", company_name: "Thistle Fixture Clinics", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2022", end_year: "2023" }),
+  // At a company the past seats put on the seed (by name).
+  ibase({ interim_seat_id: "LIFX-002", person_name: IP.lucan, seat_title: "Interim CEO", company_name: "Larkfield Fixture Pay", function: "Executive", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2024", end_year: "2025" }),
+  // The same id text as a past seat: its own seat (another HMAC prefix), not a re-run.
+  ibase({ interim_seat_id: "PSFX-001", person_name: IP.nerys, seat_title: "Interim COO", company_name: "Kestrel Fixture Mills", function: "Operations", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2024", end_year: "2025" }),
+  // The firm that placed them, not a client: dropped.
+  ibase({ interim_seat_id: "LIFX-d01", person_name: IP.tamsin, seat_title: "Interim CFO", company_name: "WittKieffer", function: "Finance", role_category: "Non-GTM", is_gtm: "FALSE", start_year: "2022", end_year: "2023" }),
+  ibase({ interim_seat_id: "LIFX-d02", person_name: IP.bertil, seat_title: "Interim VP Sales", company_name: "Bramble Fixture Staffing Group", function: "Sales", start_year: "2022", end_year: "2023" }),
+  ibase({ interim_seat_id: "", person_name: IP.bertil, seat_title: "Interim CMO", company_name: "No Id Interim Fixture", start_year: "2022", end_year: "2023" }),
+];
+const interimCsv = path.join(dir, "interim-seats.csv");
+writeFileSync(interimCsv, [INT_HEAD, ...interimRows.map((r) => csvLine(INT_HEAD, r))].join("\n") + "\n");
+{
+  const runI = (seedFile: string, ...extra: string[]) =>
+    spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-past-seats.mjs"), interimCsv, "--seed", seedFile, "--no-seal", ...extra], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
+  const before = readFileSync(namedSeedPath, "utf8");
+  const wrong = runI(namedSeedPath);
+  check("interim: without --interim the file is refused (no past_seat_id)", wrong.status === 1 && /no past_seat_id column/.test(wrong.stderr) && readFileSync(namedSeedPath, "utf8") === before, wrong.stderr);
+  const ri = runI(namedSeedPath, "--interim", "--companies", tabPath, "--names");
+  const out = ri.stdout;
+  check("interim: runs", ri.status === 0, ri.stderr + out);
+  check("interim: 3 kept, 2 at search or staffing firms dropped, 1 with no id", line(out, /seats added: (\d+)/) === "3" && dropCount(out, "executive search or staffing firm (staffingFirm)") === "2" && dropCount(out, "no interim seat id") === "1", out);
+  const t = JSON.parse(readFileSync(namedSeedPath, "utf8")) as { engagements: Eng[]; companies: Co[] };
+  const ints = t.engagements.filter((e) => e.id.startsWith("e_is_"));
+  const iseat = (id: string) => t.engagements.find((e) => e.id === interimId(id));
+  check("interim: ids are e_is_ and the HMAC of interim_seat_id", ints.length === 3 && ["LIFX-001", "LIFX-002", "PSFX-001"].every((x) => !!iseat(x)));
+  check("interim: the same id text as a past seat is its own seat", interimId("PSFX-001") !== pastId("PSFX-001") && !!t.engagements.find((e) => e.id === pastId("PSFX-001")));
+  check("interim: type Interim, status Ended, source Seat scan (members read Revenue Nomad research), years alone", ints.every((e) => e.fields.type === "Interim" && e.fields.status === "Ended" && e.fields.source === "Seat scan" && /^\d{4}$/.test(e.fields.end)));
+  check("interim: matched by name to a company on file", iseat("LIFX-002")?.companyId === t.engagements.find((e) => e.id === pastId("PSFX-009a"))?.companyId);
+  check("interim: no company for a staffing firm", !t.companies.some((c) => /WittKieffer|Bramble Fixture Staffing/.test(c.fields.name ?? "")));
+  check("interim: a United States holder is named, as on past seats", iseat("LIFX-001")?.fields.operator === IP.marisol && iseat("LIFX-001")?.holderFrom === "public profile");
+  check("interim: the new companies with no website are counted for the website finder", /new companies with no website \(the website finder's queue, then About\): 1 of 1/.test(out), out.split("\n").filter((l) => l.startsWith("new companies")));
+  check("interim: prints no person's name", !Object.values(IP).some((n) => (out + ri.stderr).includes(n)));
+  const text = readFileSync(namedSeedPath, "utf8");
+  const again = runI(namedSeedPath, "--interim", "--companies", tabPath, "--names");
+  check("interim: a re-run adds nothing and leaves the seed as it was", again.status === 0 && line(again.stdout, /seats added: (\d+)/) === "0" && readFileSync(namedSeedPath, "utf8") === text, again.stdout + again.stderr);
+  const SI = await import("./seat-import.mjs");
+  check("staffingFirm: search and staffing firms by name and words, not clients that share a word", SI.staffingFirm("WittKieffer") && SI.staffingFirm("BE SMITH/AMN HEALTHCARE") && SI.staffingFirm("Tatum by Randstad") && SI.staffingFirm("Acme Fixture Recruiting") && !SI.staffingFirm("Hays County Fixture Clinic") && !SI.staffingFirm("Duke Fixture Research Institute") && !SI.staffingFirm("Thistle Fixture Clinics"));
+}
+
+/* ---------- firm clients: add-firm-clients.mjs ---------- */
+
+console.log("\nFirm clients");
+const FC_HEAD =
+  "client_name,provider_firms,role_or_service,function,evidence_type,confidence,country,year,note,source_urls,already_on_file,slug,domain_guess_1,domain_guess_2,matched_domain,match_method,clay_company_name,linkedin_url,website,industry,employee_range,employee_count,revenue_range_provider,hq_country,company_about,source,domain_guess_3,domain_guess_4,domain_guess_5,domain_guess_6,domain_guess_7";
+const FC_SRC = "Provider firm client lists, collected fixture day";
+const fcRows = [
+  // A leadership seat with a year, a new company with its Clay match.
+  { client_name: "Mossgrove Fixture Foods", provider_firms: "Chief Outsiders", role_or_service: "Fractional CMO", function: "Marketing", evidence_type: "case_study", confidence: "high", country: "United States", year: "2024", source_urls: "https://firm-one.example.com/case/mossgrove", matched_domain: "mossgrove-fixture.example.com", match_method: "domain+name+country", website: "https://mossgrove-fixture.example.com", industry: "Food and Beverage Services", employee_range: "51-200", revenue_range_provider: "10M-25M", hq_country: "United States", company_about: "Mossgrove Fixture Foods bakes bread for cafes.", source: FC_SRC },
+  // The same client and firm again: one seat, both pages.
+  { client_name: "Mossgrove Fixture Foods", provider_firms: "Chief Outsiders", role_or_service: "Fractional CMO", function: "Marketing", evidence_type: "testimonial", confidence: "high", country: "United States", source_urls: "https://firm-one.example.com/testimonials", matched_domain: "mossgrove-fixture.example.com", match_method: "domain+name+country", source: FC_SRC },
+  // A service at the same company (a logo wall: needs review).
+  { client_name: "Mossgrove Fixture Foods", provider_firms: "Kruze Consulting", role_or_service: "outsourced accounting", function: "Finance", evidence_type: "logo", confidence: "medium", country: "United States", source_urls: "https://firm-two.example.com/clients", matched_domain: "mossgrove-fixture.example.com", match_method: "domain+name+country", source: FC_SRC },
+  // Two services at a company with no match: name only, the row's country as its HQ, no website (the website finder's queue).
+  { client_name: "Pebblecroft Fixture Dental", provider_firms: "Pilot", role_or_service: "", function: "Finance", evidence_type: "logo", confidence: "medium", country: "United States", source_urls: "https://firm-three.example.com/customers", match_method: "no_match", source: FC_SRC },
+  { client_name: "Pebblecroft Fixture Dental", provider_firms: "MarketerHire", role_or_service: "Freelance marketer", function: "Marketing", evidence_type: "testimonial", confidence: "high", country: "United States", source_urls: "https://firm-four.example.com/stories", match_method: "no_match", source: FC_SRC },
+  // Two leadership firms on one row, no role: a leadership seat for each.
+  { client_name: "Fernhollow Fixture Tools", provider_firms: "Chief Outsiders, Sales Xceleration", role_or_service: "", function: "Multi, Sales", evidence_type: "case_study", confidence: "high", country: "United States", source_urls: "https://firm-one.example.com/case/fernhollow", match_method: "no_match", source: FC_SRC },
+  // A firm named as a client: never a company.
+  { client_name: "Kalungi", provider_firms: "Ampleo", role_or_service: "Fractional CFO", function: "Finance", evidence_type: "logo", confidence: "medium", country: "United States", match_method: "no_match", source: FC_SRC },
+  // Already on file (from the past seats): matched by its website, no new company.
+  { client_name: "Kestrel Fixture Mills Ltd", provider_firms: "TechCXO", role_or_service: "Fractional CTO", function: "Technology", evidence_type: "testimonial", confidence: "high", country: "United Kingdom", already_on_file: "Past Companies tab", source_urls: "https://firm-five.example.com/kestrel", matched_domain: "kestrel-fixture.example.com", match_method: "already on file", source: FC_SRC },
+  // Clutch: a firm whose name holds a comma, an interim role, Poland (a country Merlin reads).
+  { client_name: "Quillmere Fixture Labs", provider_firms: "Solve For Fixture, llc (Clutch review)", role_or_service: "Interim CFO", function: "Finance", evidence_type: "clutch_review", confidence: "high", country: "Poland", year: "2023", note: "Software, 11-50 employees, reviewer is the founder", source_urls: "https://clutch.example.com/review/1", match_method: "no_match", source: "Clutch reviews of fractional providers, collected fixture day" },
+  // Clutch, a country Merlin doesn't read: dropped.
+  { client_name: "Tidewater Fixture Holdings", provider_firms: "Solve For Fixture, llc (Clutch review)", role_or_service: "Fractional CFO", function: "Finance", evidence_type: "clutch_review", confidence: "high", country: "British Virgin Islands", match_method: "no_match", source: "Clutch reviews of fractional providers, collected fixture day" },
+  // A placeholder: dropped.
+  { client_name: "Zq Fixture", provider_firms: "Chief Outsiders", role_or_service: "Fractional CMO", function: "Marketing", evidence_type: "logo", confidence: "medium", country: "United States", match_method: "skipped", source: FC_SRC },
+];
+const fcCsv = path.join(dir, "firm-clients.csv");
+writeFileSync(fcCsv, [FC_HEAD, ...fcRows.map((r) => csvLine(FC_HEAD, r))].join("\n") + "\n");
+const FIRMS = ["Chief Outsiders", "Kruze", "Pilot", "MarketerHire", "Sales Xceleration", "TechCXO", "Solve For Fixture", "Ampleo"];
+{
+  const runF = (seedFile: string, ...extra: string[]) =>
+    spawnSync(process.execPath, [path.join(ROOT, "scripts", "add-firm-clients.mjs"), fcCsv, "--seed", seedFile, "--no-seal", ...extra], { cwd: ROOT, encoding: "utf8", env: { ...process.env, RN_INTEL_SEED_KEY: TEST_KEY } });
+  const before = readFileSync(namedSeedPath, "utf8");
+  const dryF = runF(namedSeedPath, "--dry-run", "--counts-only");
+  check("firm clients: a dry run writes nothing", dryF.status === 0 && readFileSync(namedSeedPath, "utf8") === before, dryF.stderr);
+  check("firm clients: --counts-only prints no firm or company name", !FIRMS.some((f) => dryF.stdout.includes(f)) && !/Mossgrove|Pebblecroft|Fernhollow|Quillmere|Kalungi/.test(dryF.stdout), dryF.stdout);
+  const rf = runF(namedSeedPath);
+  const out = rf.stdout;
+  check("firm clients: runs", rf.status === 0, rf.stderr + out);
+  check("firm clients: 8 seats (7 from firm websites, 1 Clutch), 5 leadership, 3 services", /seats added: 8 \(firm websites 7, Clutch 1\); leadership seats 5 \(firm websites 4, Clutch 1\) \(Interim 1 \(firm websites 0, Clutch 1\)\); fractional services, not hires 3 \(firm websites 3, Clutch 0\)/.test(out), out);
+  check("firm clients: drops a firm, a placeholder and a country Merlin doesn't read", /dropped \(a fractional firm, not a client .*\): 1 /.test(out) && /dropped \(placeholder or too-short name \(match_method skipped\)\): 1 /.test(out) && /dropped \(a country Merlin doesn't read \(lib\/geo.ts\)\): 1 \(firm websites 0, Clutch 1\)/.test(out), out);
+  check("firm clients: the same client and firm twice is one seat", /the same client and firm twice in this file \(one seat\): 1 \(firm websites 1/.test(out), out);
+  check("firm clients: an already_on_file row matches its company by website", /companies matched on file: 1 \(by website 1\); already_on_file rows found 1/.test(out) && /companies created: 4 \(with a Clay match 1, by name 3\)/.test(out), out);
+  check("firm clients: new companies with no website are counted for the website finder", /new companies with no website \(the website finder's queue, then About\): 3 of 4/.test(out), out);
+  const t = JSON.parse(readFileSync(namedSeedPath, "utf8")) as { engagements: (Eng & { service?: boolean; needsReview?: boolean; firmClient?: { firms: string[]; urls: string[]; detail: string[]; confidence: string; year?: string } })[]; companies: Co[] };
+  const fcs = t.engagements.filter((e) => e.id.startsWith("e_fc_"));
+  const coN = (n: string) => t.companies.find((c) => c.fields.name === n);
+  const at = (n: string) => fcs.filter((e) => e.companyId === coN(n)?.id);
+  check("firm clients: ids are e_fc_ and an HMAC", fcs.length === 8 && fcs.every((e) => /^e_fc_[0-9a-f]{20}$/.test(e.id)));
+  const moss = at("Mossgrove Fixture Foods");
+  const mossLead = moss.find((e) => !e.service)!;
+  const mossSvc = moss.find((e) => e.service)!;
+  check("firm clients: a leadership seat: source Firm client list, type Fractional, its role and function, the year as start and end, status Ended, nobody in it", mossLead?.fields.source === "Firm client list" && mossLead.fields.type === "Fractional" && mossLead.fields.role === "Fractional CMO" && mossLead.fields.function === "Marketing" && mossLead.fields.start === "2024" && mossLead.fields.end === "2024" && mossLead.fields.status === "Ended" && !mossLead.fields.operator, mossLead);
+  check("firm clients: its evidence is for admins, on the record outside its fields: firms, how, both pages", mossLead.firmClient?.firms.join() === "Chief Outsiders" && mossLead.firmClient.urls.length === 2 && mossLead.firmClient.detail.join() === "case study,testimonial" && !JSON.stringify(mossLead.fields).includes("Chief Outsiders") && !mossLead.needsReview);
+  check("firm clients: a service: type Project, marked service, a logo wall needs review, no status without a year", mossSvc?.fields.type === "Project" && mossSvc.service === true && mossSvc.needsReview === true && mossSvc.fields.role === "Outsourced accounting" && !mossSvc.fields.status && !mossSvc.fields.start, mossSvc);
+  check("firm clients: a new company with its Clay match (website, size, revenue, About, HQ)", coN("Mossgrove Fixture Foods")?.fields.website === "mossgrove-fixture.example.com" && !!coN("Mossgrove Fixture Foods")?.fields.employees && !!coN("Mossgrove Fixture Foods")?.fields.revenue && coN("Mossgrove Fixture Foods")?.fields.hq === "United States", coN("Mossgrove Fixture Foods")?.fields);
+  check("firm clients: a no_match company: its name and the row's country, no website", coN("Pebblecroft Fixture Dental")?.fields.hq === "United States" && !coN("Pebblecroft Fixture Dental")?.fields.website && at("Pebblecroft Fixture Dental").length === 2 && at("Pebblecroft Fixture Dental").every((e) => e.service));
+  check("firm clients: two firms on one row make a seat each, leadership (a blank role at leadership firms), function Sales", at("Fernhollow Fixture Tools").length === 2 && at("Fernhollow Fixture Tools").every((e) => !e.service && e.fields.type === "Fractional" && e.fields.function === "Sales" && !e.fields.role));
+  const kesCo = t.engagements.find((e) => e.id === pastId("PSFX-001"))!.companyId;
+  check("firm clients: already on file adds the seat to that company, no duplicate company", fcs.some((e) => e.companyId === kesCo && e.fields.role === "Fractional CTO") && !coN("Kestrel Fixture Mills Ltd"));
+  const quill = at("Quillmere Fixture Labs")[0];
+  check("firm clients: a Clutch row: source Clutch review, type Interim, one firm whose name holds a comma, the year", quill?.fields.source === "Clutch review" && quill.fields.type === "Interim" && quill.firmClient?.firms.join() === "Solve For Fixture, llc" && quill.fields.end === "2023" && quill.firmClient?.detail.join() === "Clutch review", quill);
+  check("firm clients: no firm is ever a client company", !t.companies.some((c) => FIRMS.some((f) => (c.fields.name ?? "").includes(f)) || /Kalungi|Tidewater|^Zq Fixture$/.test(c.fields.name ?? "")));
+  const text = readFileSync(namedSeedPath, "utf8");
+  const again = runF(namedSeedPath);
+  check("firm clients: a re-run adds nothing and leaves the seed as it was", again.status === 0 && /seats added: 0 /.test(again.stdout) && readFileSync(namedSeedPath, "utf8") === text, again.stdout + again.stderr);
+  const TF = await import("../lib/tableFields.ts");
+  // The company page's "From ..." words (env.tsx loads CSS, so it is read as text here).
+  const sayBlock = readFileSync(path.join(ROOT, "app/post/company/sections/env.tsx"), "utf8").match(/export const SOURCE_SAY[^}]*\}/)?.[0] ?? "";
+  check("firm clients: members read Named by a fractional firm and Clutch review", TF.SOURCE_LABEL["Firm client list"] === "Named by a fractional firm" && TF.SOURCE_LABEL["Clutch review"] === "Clutch review" && TF.sourceWithDate("Firm client list", null) === "Named by a fractional firm");
+  check("no member-facing source label names LinkedIn or Sales Navigator", ![...Object.values(TF.SOURCE_LABEL), sayBlock].some((l) => /linkedin|sales navigator/i.test(l)) && /"Firm client list": "fractional firms' client lists"/.test(sayBlock) && (TF.SOURCES as readonly string[]).includes("Firm client list") && (TF.SOURCES as readonly string[]).includes("Clutch review"));
+}
+
 /* ---------- 3. in process: the table on the seed the script wrote (with --names) ---------- */
 
 console.log("\nIn process");
@@ -532,6 +668,41 @@ check("a member can claim an ended seat as theirs (Your seats)", /It's yours/.te
   check("no person key or import mark in the connector's get_company", JSON.stringify(g).includes("Kestrel") && !has(JSON.stringify(g)), JSON.stringify(g).slice(0, 200));
   check("no person key or import mark in the admin export", !has(JSON.stringify(exp)));
   check("(the import mark is on the seed, and stays there)", JSON.stringify(named.companies).includes('"enrichedBy"'));
+}
+
+// Interim seats and firm clients in the table: fractional friendly, and a service never makes a repeat hirer.
+{
+  const coIdOf = (name: string) => named2.companies.find((c) => c.fields.name === name)!.id;
+  const named2 = JSON.parse(readFileSync(namedSeedPath, "utf8")) as { engagements: Eng[]; companies: Co[] };
+  const infos = M.deriveAll((await view()).companies as never);
+  const inf = (name: string) => infos.find((i) => i.c.id === pub(coIdOf(name)))!;
+  const thistle = inf("Thistle Fixture Clinics");
+  check("an interim seat counts as a fractional hire (fractional friendly, Past seat)", thistle.c.friendly.fractional === 1 && M.fitTier(thistle.c.friendly, thistle.engs.length).label === "Past seat" && thistle.engs.every((e) => M.isHire(e as never)), thistle.c.friendly);
+  check("an interim seat reads type Interim, free", thistle.engs[0]?.cells.type?.s === "value" && (thistle.engs[0].cells.type as Cell).v === "Interim", thistle.engs[0]?.cells.type);
+  const peb = inf("Pebblecroft Fixture Dental");
+  check(
+    "two fractional services in two functions: fractional friendly (a past seat on file), never a repeat hirer, no hire",
+    peb.c.friendly.fractional === 0 && (peb.c.friendly as { services?: number }).services === 2 && peb.c.friendly.functions.length === 0 && !M.repeatHirer(peb) && M.fitTier(peb.c.friendly, peb.engs.length).label === "Past seat" && peb.c.friendly.score > 0 && peb.engs.every((e) => (e as { service?: boolean }).service === true && !M.isHire(e as never)),
+    peb.c.friendly,
+  );
+  const moss = inf("Mossgrove Fixture Foods");
+  check("a leadership seat and a service: one hire, not a repeat hirer", moss.c.friendly.fractional === 1 && (moss.c.friendly as { services?: number }).services === 1 && moss.c.friendly.functions.join() === "Marketing" && !M.repeatHirer(moss), moss.c.friendly);
+  const fern = inf("Fernhollow Fixture Tools");
+  check("two firms that placed leaders: two hires, a repeat hirer", fern.c.friendly.fractional === 2 && M.repeatHirer(fern), fern.c.friendly);
+  check("the seats read Named by a fractional firm and Clutch review", peb.engs.every((e) => e.source === "Firm client list") && inf("Quillmere Fixture Labs").engs[0]?.source === "Clutch review");
+  const W = await import("../lib/viewWire.ts");
+  const MCP = await import("../lib/mcp/tools.ts");
+  const adminOnly = (text: string) => /firmClient|needsReview|Chief Outsiders|Kruze|MarketerHire|Sales Xceleration|TechCXO|Solve For Fixture|firm-one\.example|clutch\.example|reviewer is the founder/.test(text);
+  const mv = await T.buildView(sm.token);
+  const av = await T.buildView(seed.members[1].token);
+  const g = await MCP.getCompany({ member: sm, origin: "https://merlin.example.com" } as never, { company: "Kestrel Fixture Mills" });
+  const exp = await T.exportState();
+  check("no provider firm, page, note or review mark in a member's view, an admin's, the connector's get_company or the export", !adminOnly(JSON.stringify(mv)) && !adminOnly(JSON.stringify(W.packView(mv))) && !adminOnly(JSON.stringify(av)) && !adminOnly(JSON.stringify(g)) && !adminOnly(JSON.stringify(exp)));
+  check("(the firms and pages are on the seed, for admins)", adminOnly(JSON.stringify(named2.engagements)));
+  // The website finder (RN_WEBSITES) reads every company with no website it hasn't tried: the new ones from these imports are in its queue; About follows once a site is found.
+  const WS = await import("../lib/websites/store.ts");
+  const queue = new Set((await WS.websiteTargets()).map((x) => x.companyId));
+  check("the website finder's queue holds the new companies with no website (interim, firm clients), not those with one", ["Thistle Fixture Clinics", "Pebblecroft Fixture Dental", "Fernhollow Fixture Tools", "Quillmere Fixture Labs"].every((n) => queue.has(coIdOf(n))) && !queue.has(coIdOf("Mossgrove Fixture Foods")));
 }
 
 // No hire alert, no new hire.

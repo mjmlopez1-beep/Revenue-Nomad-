@@ -162,7 +162,7 @@ export function fitWhy(i: CoInfo): string {
     case "Recent seat":
       return "A fractional seat here started in the last two years.";
     case "Past seat":
-      return "A past fractional seat is on file, none in the last two years.";
+      return f.fractional || !f.services ? "A past fractional seat is on file, none in the last two years." : "A fractional firm named it as a client for a fractional service (not a leadership seat), so it has worked with fractionals before.";
     case "Posting closed":
       return "A job posting here came down with nobody named in the seat. They went looking, but no hire is on file.";
     case "Full-time only":

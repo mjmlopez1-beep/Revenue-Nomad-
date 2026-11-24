@@ -212,6 +212,32 @@ export function ownFirm(r) {
   return null;
 }
 
+/**
+ * Executive search, staffing and interim placement firms. An interim leader often lists the firm
+ * that placed them as where they worked ("Interim CFO, WittKieffer"): the firm is not the client
+ * that hired them, so add-past-seats.mjs --interim drops those rows. lib/firms.ts keeps staffing
+ * firms as clients in general (a staffing company can hire a fractional CFO); this list is only
+ * for interim titles. Names compare by their words, so "BE SMITH/AMN HEALTHCARE" and "Tatum by
+ * Randstad" match. NAME_WORDS also catches any name that says it is staffing, recruiting or search.
+ */
+const STAFFING_FIRMS = [
+  "WittKieffer", "Witt Kieffer", "Korn Ferry", "Spencer Stuart", "Heidrick & Struggles", "Heidrick and Struggles", "Russell Reynolds", "Egon Zehnder",
+  "Odgers Berndtson", "Boyden", "Stanton Chase", "Diversified Search", "Isaacson Miller", "Furst Group", "Cejka Search", "Kaye Bassman", "ZRG Partners",
+  "DHR Global", "DHR International", "Caldwell Partners", "B.E. Smith", "BE Smith", "AMN Healthcare", "Tatum by Randstad", "Randstad", "Adecco", "ManpowerGroup",
+  "Kelly Services", "Robert Half", "Accountemps", "Vaco", "Highspring", "RGP", "Resources Global Professionals", "Resources Connection", "Kforce",
+  "Insight Global", "TEKsystems", "Aerotek", "Allegis", "Michael Page", "Page Executive", "Hays Recruitment", "Hays plc", "Addison Group", "Beacon Hill Staffing", "Lucas Group",
+  "Solomon Page", "Orion Talent", "Talentmark", "Cerius Executives", "Express Employment Professionals", "Express Employment", "CareerStaff Unlimited",
+  "GHR Healthcare", "Greenstaff Medical", "Kirby Bates", "Jackson Healthcare", "Cross Country Healthcare", "Integrated Healthcare Strategies",
+  "Executive Interim Partners", "Interim Executives", "Hudson RPO", "Atrium Staffing", "Jobot", "Motion Recruitment", "Ace Talent Curators",
+].map((n) => words(n).join(" "));
+const STAFFING_NAME_WORDS = /\b(staffing|recruiting|recruitment|recruiters?|executive search|search partners|headhunters?|talent curators)\b/i;
+/** True when the company is an executive search, staffing or interim placement firm (by name). */
+export function staffingFirm(name) {
+  const w = ` ${words(name).join(" ")} `;
+  if (w.trim() && STAFFING_FIRMS.some((f) => w.includes(` ${f} `))) return true;
+  return STAFFING_NAME_WORDS.test(String(name ?? ""));
+}
+
 /** True when an About line names one of these seat holders: the whole name, or a word of it after the first of 3+ letters. */
 export function aboutNamesHolder(about, holders) {
   const aw = words(about);
