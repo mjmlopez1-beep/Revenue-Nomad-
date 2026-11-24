@@ -1275,7 +1275,7 @@ function YourCard({ me, mine, first, peers, onClose, onKnow, phone }: { me: Me; 
               </span>
             ))}
             {me.leads !== false && <span className="fy-pill fy-pill-mint">Open to leads</span>}
-            {close && cases > 0 && <span className="fy-pill fy-pill-mint">{plural(cases, "evidence case")}</span>}
+            {close && cases > 0 && <span className="fy-pill fy-pill-mint">{plural(cases, "case study", "case studies")}</span>}
             <button type="button" className="fy-link" onClick={c.openProfile}>
               Change who you serve
             </button>

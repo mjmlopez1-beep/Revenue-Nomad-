@@ -125,6 +125,28 @@ export const lockedMatchesHidden = () => (typeof process !== "undefined" ? proce
 /** The count line for matches held back at locked companies, or null for none. */
 export const lockedKnowWords = (n: number) => (n > 0 ? `You know someone at ${n} locked ${n === 1 ? "company" : "companies"}. Open ${n === 1 ? "it" : "them"} to see who.` : null);
 /** The same for ways in held back at locked companies. */
+/**
+ * Warm paths' counts, all in one unit: companies in the ranked list the page holds (the best
+ * WARM_MAX of `total` companies that fit, lib/paths/ways.ts warmOf). The quadrants sum to `all`,
+ * and each filter counts what picking it lists. `capped`: more companies fit than the list holds,
+ * and the page says how many.
+ */
+export function warmCounts(rows: readonly Pick<WarmRow, "zone" | "ball" | "list" | "hiringNow" | "src">[], total: number) {
+  const zones: Record<Zone, number> = { go: 0, find: 0, warm: 0, watch: 0 };
+  const lists = new Map<string, number>();
+  let ball = 0;
+  let hiring = 0;
+  let fellow = 0;
+  for (const r of rows) {
+    zones[r.zone]++;
+    if (r.ball) ball++;
+    if (r.hiringNow) hiring++;
+    if (r.src === "fellow") fellow++;
+    if (r.list) lists.set(r.list, (lists.get(r.list) ?? 0) + 1);
+  }
+  return { all: rows.length, zones, total: Math.max(total, rows.length), capped: total > rows.length, ball, hiring, fellow, lists };
+}
+
 export const lockedWaysWords = (n: number) => (n > 0 ? `You have a way in at ${n} locked ${n === 1 ? "company" : "companies"} through people you know. Open ${n === 1 ? "it" : "them"} to see who.` : null);
 
 /**

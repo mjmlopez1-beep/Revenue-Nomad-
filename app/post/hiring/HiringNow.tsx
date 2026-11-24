@@ -42,7 +42,7 @@ import { fmtStamp } from "../RoleDate";
 import { filtersFromAsk } from "../find/findModel";
 import { firstOf, ownOf } from "../firstVisit";
 import { store } from "../hooks";
-import { activeCount, applyFilters, bundleLead, icpEmpty, icpLabel, icpMatch, isOpenRole, namedFn, newThisWeek, rowsFor, shown, type Row } from "../model";
+import { activeCount, applyFilters, bundleLead, hireCounts, icpEmpty, icpLabel, isOpenRole, namedFn, newThisWeek, rowsFor, shown, type Row } from "../model";
 import { openWay, useGetIn } from "../network/useWays";
 import { pipelineAct, usePipeline } from "../pipelineStore";
 import { Anchored, useUi } from "../ui";
@@ -57,7 +57,7 @@ import { AlertPanel } from "./AlertPanel";
 import { RoleDrawer, roleTitle } from "./RoleDrawer";
 import {
   CHIP_LABEL, FIT_LABEL, HIRE_SORTS, HIRING_DEFAULT_COLS, alertKeeps, alertName, alertSaveBody, alertTitle, alertWhat, chipTest, closedLately, fitOf, fnOf, footWords, hireSortOf, hirePlace,
-  hiringColumns, hoursOf, inView, listedOf, pastHires, pitchedAt, rateOf, roleLists, sizeHq, sortRoles, statusOf, wayOf,
+  hiringColumns, hoursOf, inView, listedOf, pastHires, pitchedAt, rateOf, roleLists, rolesWords, sizeHq, sortRoles, statusOf, wayOf,
   type HireChip, type HireSort, type HireView, type PipeMap, type WayMap,
 } from "./hiringModel";
 import "../workbench/workbench.css";
@@ -141,14 +141,15 @@ export function HiringNow() {
 
   /* ----- the rows ----- */
   const all = useMemo(() => rowsFor("engagements", c.infos), [c.infos]);
-  const open = useMemo(() => applyFilters(all, t.filters, "hiring", "", me, true).rows, [all, t.filters, me]);
-  const mineN = useMemo(() => (myFn ? open.filter((r) => r.e && fnOf(r.e) === myFn).length : open.length), [open, myFn]);
-  // None of the member's function fits the ideal client: every role of the function, with a line that says so (as the table did).
-  const lift = useMemo(() => {
-    if (view !== "mine" || !t.filters.icp || mineN > 0 || fitOnly) return null;
-    const rows = applyFilters(all, { ...t.filters, icp: false }, "hiring", "", me, true).rows.filter((r) => r.e && fnOf(r.e) === myFn);
-    return rows.length ? rows : null;
-  }, [view, t.filters, mineN, fitOnly, all, me, myFn]);
+  // Every count on this page comes from one place (model.ts hireCounts), the one the sidebar and the table read.
+  const hc = useMemo(() => hireCounts(all, t.filters, me), [all, t.filters, me]);
+  const open = hc.all;
+  const mineN = hc.mine.length;
+  // None of the member's function fits the ideal client: every role of the function, with a line that says so (as the table does).
+  const lift = view === "mine" && hc.lifted && !fitOnly ? hc.everyone.mine : null;
+  /** What the member's function's view lists: its roles, or all of them with the ideal client lifted. */
+  const listedMine = lift ? lift.length : mineN;
+  const words = (k: number, v: HireView = view) => rolesWords(k, { view: v, myFn, icpOn: hc.icpOn && !(v === "mine" && lift), lifted: v === "mine" && !!lift });
   const closed = useMemo(() => applyFilters(closedLately(all), { ...t.filters, roleState: [] }, "all", "", me, true).rows, [all, t.filters, me]);
   const pitched = (r: Row) => !!pitchedAt(r, pipe);
   const base = view === "closed" ? closed : lift ?? inView(open, view, myFn, pitched);
@@ -156,7 +157,7 @@ export function HiringNow() {
   const rows = useMemo(() => sortRoles(base.filter((r) => [...chips].every((k) => chipTest(k, r, chipCtx))), sort, me), [base, chips, sort, me, ways]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownRows = rows.slice(0, limit);
   const pitchedN = useMemo(() => open.filter(pitched).length, [open, pipe]); // eslint-disable-line react-hooks/exhaustive-deps
-  const freshMine = useMemo(() => open.filter((r) => r.e && (!myFn || fnOf(r.e) === myFn) && newThisWeek(r.e)).length, [open, myFn]);
+  const freshMine = useMemo(() => (lift ?? (myFn ? hc.mine : open)).filter((r) => r.e && newThisWeek(r.e)).length, [lift, hc, myFn, open]);
   useEffect(() => setSelected(new Set()), [t.filters, view]);
 
   /* ----- the drawer ----- */
@@ -384,19 +385,19 @@ export function HiringNow() {
     />
   );
   const filterN = activeCount(t.filters);
-  const foot = footWords({ view, shown: rows.length, total: open.length, mine: mineN, myFn, filtered: filterN > 0 || chips.size > 0, pitched: pitchedN });
+  const foot = footWords({ view, shown: rows.length, total: open.length, mine: mineN, myFn, filtered: filterN > 0 || chips.size > 0, pitched: pitchedN, icpOn: hc.icpOn });
   const footGo = (to: HireView | "clear") => (to === "clear" ? (t.clearFilters(), setChips(new Set())) : setView(to));
   const scan = c.view.scan;
   const scanWords = scan?.lastOkAt ? `last scan ${fmtStamp(scan.lastOkAt)}` : scan?.lastRunAt ? "the last scan could not read the job boards" : "the first scan runs this week";
   const opens = live.proOpens;
   const status = first && opens
     ? `${live.plan?.name === "trial" ? "Trial: " : ""}${opens.of - opens.left} of ${opens.of} free opens used today, then 2 credits each · ${scanWords}`
-    : `${n(rows.length)} of ${n(view === "closed" ? closed.length : open.length)} roles · ${n(rows.filter((r) => r.e && newThisWeek(r.e)).length)} new this week · ${scanWords}`;
+    : `${n(rows.length)} of ${words(base.length)} · ${n(rows.filter((r) => r.e && newThisWeek(r.e)).length)} new this week · ${scanWords}`;
   const bottom = (
     <div className="wb-bottom">
       <div role="tablist" aria-label="Lists with these filters" className="wb-bottom-tabs">
         <button type="button" role="tab" aria-selected={view !== "closed"} className={`wb-btab${view !== "closed" ? " on" : ""}`} onClick={() => view === "closed" && setView(myFn ? "mine" : "all")}>
-          Open roles · <span className="num">{n(view === "mine" ? mineN : open.length)}</span>
+          Open roles · <span className="num">{n(view === "mine" ? listedMine : open.length)}</span>
         </button>
         <button type="button" role="tab" aria-selected={false} className="wb-btab" onClick={() => t.setRecordType("companies")}>
           Companies hiring · <span className="num">{n(t.typeCounts.companies)}</span>
@@ -520,11 +521,13 @@ export function HiringNow() {
 
   /* ----- wider screens: the workbench ----- */
   const views: HireView[] = [...(myFn ? (["mine"] as HireView[]) : []), "all", ...(pitchedN || view === "pitched" ? (["pitched"] as HireView[]) : [])];
-  const viewN = (v: HireView) => (v === "mine" ? mineN : v === "all" ? open.length : pitchedN);
+  const viewN = (v: HireView) => (v === "mine" ? listedMine : v === "all" ? open.length : pitchedN);
   const viewLabel = (v: HireView) => (v === "mine" ? `${myFn} for me` : v === "all" ? "All functions" : "Pitched");
   const pill = (on: boolean) => `hn-pill${on ? " on" : ""}`;
   const icpParts = hasIcp ? icpLabel(me.icp).split(" · ") : [];
-  const icpN = open.filter((r) => icpMatch(me.icp, r.i.c) === "match").length;
+  // The ideal client's line: how many of every open role fit it, the same count whether its filter is on or off.
+  const fitN = hasIcp ? hc.fit.all.length : 0;
+  const everyN = hc.everyone.all.length;
   const picked = shownRows.filter((r) => selected.has(r.key));
   const drawer =
     aside === "alert" ? (
@@ -583,7 +586,7 @@ export function HiringNow() {
             {cols.length} of {allCols.length} columns
           </button>
           <span className="wb-tb-quiet num">
-            {n(rows.length)} of {n(view === "closed" ? closed.length : open.length)} roles
+            {n(rows.length)} of {words(base.length)}
           </span>
           <button ref={filterRef} type="button" className={`wb-tb${filterN ? " on" : ""}`} aria-haspopup="dialog" aria-expanded={panel === "filter"} onClick={() => setPanel(panel === "filter" ? null : "filter")}>
             <IconFilter size={14} /> Filter{filterN ? ` · ${filterN}` : ""}
@@ -639,7 +642,7 @@ export function HiringNow() {
             <span className="hn-panel-t">Best fit puts your function, industries and company size first, and says why under each chip.</span>
           </section>
         )}
-        {!first && hasIcp && view !== "closed" && (
+        {!first && hasIcp && view !== "closed" && !lift && (
           <div className="hn-icp" role="group" aria-label="Your ideal client">
             <span>{t.filters.icp ? "Showing only your ideal client:" : "Showing everyone. Your ideal client:"}</span>
             {icpParts.map((p) => (
@@ -648,7 +651,7 @@ export function HiringNow() {
               </span>
             ))}
             <span>
-              {n(icpN)} of {n(open.length)} open roles match.
+              {n(fitN)} of {n(everyN)} open roles fit it{myFn && view === "all" && t.filters.icp && !hc.mine.length && hc.everyone.mine.length ? `, none of them in ${myFn}` : ""}.
             </span>
             <button type="button" className="hn-mini" aria-pressed={t.filters.icp} onClick={() => t.setFilters({ ...t.filters, icp: !t.filters.icp })}>
               {t.filters.icp ? "Show everyone" : "Show only these"}
@@ -663,7 +666,9 @@ export function HiringNow() {
             <span>{view === "mine" ? "Already filtered to your function, from what you said when you signed up:" : "You are looking past your function:"}</span>
             <span className="hn-keep">{view === "mine" && myFn ? `Function: ${myFn}` : "Every function"}</span>
             <span>
-              {myFn ? `${n(mineN)} open ${myFn} roles, ${n(freshMine)} new this week. ${n(open.length - mineN)} more in other functions.` : `${n(open.length)} open roles, ${n(freshMine)} new this week.`}
+              {myFn
+                ? `${words(listedMine, "mine")}, ${n(freshMine)} new this week. ${n(open.length - mineN)} more in other functions${hc.icpOn ? " in your ideal client" : ""}.`
+                : `${words(open.length, "all")}, ${n(freshMine)} new this week.`}
             </span>
             <button type="button" className="tp-flink" onClick={c.openProfile}>
               Change your ideal client
@@ -675,6 +680,7 @@ export function HiringNow() {
           <div className="hn-icp">
             <span>
               None of the {n(lift.length)} open {myFn} roles fit your ideal client right now. Here they all are.
+              {open.length ? ` ${n(open.length)} ${open.length === 1 ? "role" : "roles"} in other functions fit it, under All functions.` : ""}
             </span>
             <button type="button" className="tp-flink" onClick={() => setFitOnly(true)}>
               Only my ideal client

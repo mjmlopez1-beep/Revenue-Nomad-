@@ -20,6 +20,7 @@ import { UpgradeNote } from "./Billing";
 import { ShareRate } from "./Benchmarks";
 import { axisOf, chargeView, fewWords, money, ownRates, per, shortMoney, sitsWords, type Figure, type OwnRate, type RateKind } from "./chargeModel";
 import "./charge.css";
+import { floorWords } from "@/lib/rates";
 
 /** "at companies with $5M–$20M revenue", "at pre-revenue companies". */
 const bandWords = (band: string) => (band === "Pre-revenue" ? "at pre-revenue companies" : `at companies with ${band === "Under $1M" ? "under $1M" : band} revenue`);
@@ -41,7 +42,7 @@ const BandWords = ({ band }: { band: string }) =>
  */
 export function RangeBar({ f, own, kind, ask }: { f: Extract<Figure, { state: "range" }>; own: number | null; kind: RateKind; ask?: { from: number; to: number } | null }) {
   const W = 520;
-  const { min, max, ticks } = axisOf(f, own, kind);
+  const { min, max, ticks } = axisOf(f, own, kind, ask);
   const x = (v: number) => Math.round(((v - min) / (max - min || 1)) * W * 10) / 10;
   const label = `The middle half runs from ${money(f.p25)} to ${money(f.p75)} ${per(kind)}, the median is ${money(f.median)}${own !== null ? `, and your rate is ${money(own)}` : ""}${ask ? `. Merlin's range is ${money(ask.from)} to ${money(ask.to)}` : ""}.`;
   // The first and last ticks sit inside the frame.
@@ -227,7 +228,7 @@ export function Charge({ i, benchmarks, seats = [] }: { i: CoInfo; benchmarks?: 
         </div>
       )}
       <p className="ch-fine">
-        A figure shows once {v.minN} people have a rate in a group, and the range at {v.rangeN}. Amounts are rounded.
+        {floorWords()} Amounts are rounded.
         {indexed ? " This one includes Revenue Nomad's Rate Index." : ""}
         {withoutYours ? " Your own rate is left out of what you see here; nobody else is shown it." : ""}{" "}
         <button type="button" className="ch-link" onClick={() => ui.openPage("rates")}>

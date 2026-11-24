@@ -377,10 +377,13 @@ function gapsAt(r: TableRead, s: State, companyId: string, nowMs: number): { fn:
   if (!isStage(stage) || !GAP_STAGES.includes(stage) || !band || SIZE_BANDS.indexOf(band) < SIZE_BANDS.indexOf(GAP_MIN_BAND)) return [];
   const lead = r.leadsOf(companyId);
   const hired = r.hiredFns(companyId);
+  // Dated by when this reading of the page was first seen, not by the latest re-read: reading every team page again
+  // (a new reader, the 75-day refresh) must not move every old gap into Today and the last 7 days.
+  const at = rec.hashAt && rec.hashAt < teamAt ? rec.hashAt : teamAt;
   return GAP_FUNCTIONS.filter((fn) => !rec.functions[fn] && !lead.ft[fn] && !hired.includes(fn) && propensity(fn, stage) >= GAP_MIN_SHARE).map((fn) => ({
     fn,
     stage,
-    at: teamAt,
+    at,
     // The same reading of the page is the same gap: a new key only when what the page lists changed.
     key: `gap:${T.pubId(companyId)}:${fn}:${(rec.hash ?? "none").slice(0, 10)}`,
   }));

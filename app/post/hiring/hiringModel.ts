@@ -25,7 +25,7 @@ import type { EngagementRec, Me, SavedViewRec } from "@/lib/tableTypes";
 import type { ColumnDef, Fill } from "../workbench/columns";
 import {
   absolutePlace, criteriaOf, dayOf, icpMatch, icpParts, icpUnknown, isOpenRole, namedFn, newThisWeek, openSince, shown, sortRows, withIcpSpelled,
-  type CoInfo, type Filters, type Row, type SortKey,
+  type CoInfo, type Filters, type HireCounts, type Row, type SortKey,
 } from "../model";
 
 export type HireView = "mine" | "all" | "pitched" | "closed";
@@ -197,7 +197,8 @@ export interface StatusCtx {
 }
 export interface Status {
   k: "new" | "seen" | "pitched";
-  label: "New" | "Seen" | "Pitched";
+  /** "New to you": not opened since the member's last visit, which is not the same as listed this week ("new this week"). */
+  label: "New to you" | "Seen" | "Pitched";
   sub: string;
 }
 const WROTE = new Set(["sent", "replied", "meeting", "proposal", "won"]);
@@ -213,7 +214,7 @@ export function statusOf(r: Row, x: StatusCtx): Status {
   const sub = passed ? `Referred to ${passed}` : p ? "In pipeline" : "";
   const firstSeen = e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : null);
   const fresh = !x.seen.has(e.id) && (!x.since || (!!firstSeen && firstSeen > x.since));
-  return fresh ? { k: "new", label: "New", sub } : { k: "seen", label: "Seen", sub };
+  return fresh ? { k: "new", label: "New to you", sub } : { k: "seen", label: "Seen", sub };
 }
 
 /* ---------- the chips and the sorts ---------- */
@@ -295,7 +296,7 @@ export function hiringColumns(x: ColCtx): ColumnDef[] {
     col("hours", "Hours", "minmax(70px, 0.5fr)", (rows) => `${pct(count(rows, (r) => hoursOf(r).known), rows.length)}% posted`, { def: true, num: true }),
     col("fit", "Fit to you", "minmax(124px, 0.8fr)", (rows) => `${pct(count(rows, (r) => fitOf(r, x.me).tier >= 2), rows.length)}% strong or good`, { def: true, sort: "best" }),
     col("way", "Your way in", "minmax(150px, 1.1fr)", (rows) => `${pct(count(rows, (r) => wayOf(r, x.ways, x.first).has), rows.length)}% have a path`, { def: true }),
-    col("status", "Status", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => statusOf(r, x.status).k === "new")} new`, { def: true }),
+    col("status", "Status", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => statusOf(r, x.status).k === "new")} new to you`, { def: true }),
     col("evidence", "Closest evidence", "minmax(170px, 1fr)", (rows) => `${pct(count(rows, (r) => !!closestOf(r.i.c.id)), rows.length)}% matched`, { plan: "close", tip: "Your closest case study for this role. Evidence Bank, on the Close plan." }),
     col("sizeHq", "Size and HQ", "minmax(150px, 0.9fr)", (rows) => `${pct(count(rows, (r) => !!shown(r.i.c.cells.employees)), rows.length)}% on file`, { sort: "employees" }),
     col("past", "Past fractional hires", "minmax(140px, 0.8fr)", (rows) => `${pct(count(rows, (r) => r.i.c.friendly.fractional > 0), rows.length)}% hired before`),
@@ -361,14 +362,34 @@ export function roleLists(views: readonly SavedViewRec[], here: string | null): 
 
 /* ---------- the line under the table ---------- */
 
-export function footWords(x: { view: HireView; shown: number; total: number; mine: number; myFn: string | null; filtered: boolean; pitched: number }): { text: string; go: { label: string; to: HireView | "clear" } | null } {
+/**
+ * What a count of roles counts, said with it, so two counts on screen never look alike when they
+ * count different things: "10 open Sales roles, none in your ideal client", "3 open roles in your
+ * ideal client", "13 open roles", "2 roles you pitched", "4 roles closed in the last 30 days".
+ * The numbers come from model.ts hireCounts.
+ */
+export function rolesWords(n: number, x: { view: HireView; myFn: string | null; icpOn: boolean; lifted: boolean }): string {
+  const num = n.toLocaleString("en-US");
+  const roles = n === 1 ? "role" : "roles";
+  if (x.view === "closed") return `${num} ${roles} closed in the last 30 days`;
+  if (x.view === "pitched") return `${num} ${roles} you pitched`;
+  const fn = x.view === "mine" && x.myFn ? `${x.myFn} ` : "";
+  if (x.view === "mine" && x.lifted) return `${num} open ${fn}${roles}, none in your ideal client`;
+  return `${num} open ${fn}${roles}${x.icpOn ? " in your ideal client" : ""}`;
+}
+
+/** What the default view lists and counts (the sidebar's Hiring now count is the same): the member's function, lifted when none of it fits. */
+export const listedCount = (h: Pick<HireCounts, "fn" | "all" | "listedMine">) => (h.fn ? h.listedMine.length : h.all.length);
+
+export function footWords(x: { view: HireView; shown: number; total: number; mine: number; myFn: string | null; filtered: boolean; pitched: number; icpOn?: boolean }): { text: string; go: { label: string; to: HireView | "clear" } | null } {
   if (!x.shown && x.filtered) return { text: "No open roles match these filters.", go: { label: "Clear filters", to: "clear" } };
   if (x.view === "pitched")
     return { text: x.pitched ? `${x.pitched} ${x.pitched === 1 ? "role" : "roles"} at companies you wrote to. They are in your pipeline too.` : "Nothing pitched yet. Draft a note from a role and mark it sent, and it moves here.", go: { label: "Show all functions", to: "all" } };
   if (x.view === "closed") return { text: "Roles that came down in the last 30 days. A company that just filled a role often needs help around it.", go: { label: "Back to open roles", to: x.myFn ? "mine" : "all" } };
   if (x.view === "mine" && x.myFn) {
     const rest = x.total - x.mine;
-    return { text: rest > 0 ? `${rest} more open ${rest === 1 ? "role" : "roles"} in other functions. Refer one to a peer who fits and earn 5 credits.` : `Every open role on file is in ${x.myFn}.`, go: rest > 0 ? { label: "Show all functions", to: "all" } : null };
+    const where = x.icpOn ? " in your ideal client" : "";
+    return { text: rest > 0 ? `${rest} more open ${rest === 1 ? "role" : "roles"} in other functions${where}. Refer one to a peer who fits and earn 5 credits.` : `Every open role${x.icpOn ? " in your ideal client" : " on file"} is in ${x.myFn}.`, go: rest > 0 ? { label: "Show all functions", to: "all" } : null };
   }
   return { text: x.myFn ? `Every function is showing. ${x.mine} of these ${x.total} roles are in ${x.myFn}, your function.` : `Every open role on file, ${x.total} in all.`, go: x.myFn ? { label: `Only ${x.myFn}`, to: "mine" } : null };
 }

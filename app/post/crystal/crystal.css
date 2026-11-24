@@ -139,6 +139,10 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+.cb-range-note {
+  color: var(--muted);
+  font-size: 13px;
+}
 .cb-bar strong.num {
   font-weight: 700;
 }

@@ -12,7 +12,7 @@
  */
 import type { BenchRate, BenchmarkRow, Benchmarks, RateStat } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
-import { readRate } from "@/lib/rates";
+import { RATE_RANGE_FLOOR, floorWords, readRate } from "@/lib/rates";
 import { ask as askRules } from "@/lib/ask";
 
 export type RateKind = "monthly" | "hourly";
@@ -24,7 +24,7 @@ export type Figure =
   | { state: "few"; n: number; min: number; stat: RateStat };
 
 export function figureOf(s: RateStat, b: Pick<Benchmarks, "rangeN" | "limited">): Figure {
-  const rangeAt = b.rangeN ?? 10;
+  const rangeAt = b.rangeN ?? RATE_RANGE_FLOOR;
   // No median from the server: below the floor. Nothing but the count is printed.
   if (s.median === undefined) return { state: "few", n: s.n, min: s.min, stat: s };
   if (s.p25 !== undefined && s.p75 !== undefined) return { state: "range", p25: s.p25, median: s.median, p75: s.p75, n: s.n, stat: s };
@@ -62,7 +62,7 @@ export function chargeView(b: Benchmarks | undefined, fn: string | null, revenue
   const sized = sizedRow ? figs(sizedRow) : null;
   const all = figs(allRow);
   const lead = sized && (hasFigure(sized.monthly) || hasFigure(sized.hourly)) ? "sized" : "all";
-  return { fn, band, limited: !!b.limited, sized, all, lead, rangeN: b.rangeN ?? 10, minN: b.minN };
+  return { fn, band, limited: !!b.limited, sized, all, lead, rangeN: b.rangeN ?? RATE_RANGE_FLOOR, minN: b.minN };
 }
 
 /** The member's own rate, as the panel places it. `at`: the company of the seat it is about, when there is one. */
@@ -116,10 +116,10 @@ export const moneyRange = (a: number, b: number) => (a === b ? money(a) : `${mon
 /** "3 of the 5 people it needs" for a figure below its floor. */
 export const fewWords = (f: Extract<Figure, { state: "few" }>) => `${f.n} of the ${f.min} people it needs`;
 
-/** The range picture's axis: a little room either side of the middle half and the member's own rate, on round numbers. */
-export function axisOf(f: Extract<Figure, { state: "range" }>, own: number | null, kind: RateKind): { min: number; max: number; ticks: number[] } {
-  const lo = Math.min(f.p25, own ?? f.p25);
-  const hi = Math.max(f.p75, own ?? f.p75);
+/** The range picture's axis: a little room either side of the middle half, the member's own rate and Merlin's range, on round numbers. */
+export function axisOf(f: Extract<Figure, { state: "range" }>, own: number | null, kind: RateKind, ask?: { from: number; to: number } | null): { min: number; max: number; ticks: number[] } {
+  const lo = Math.min(f.p25, own ?? f.p25, ask?.from ?? f.p25);
+  const hi = Math.max(f.p75, own ?? f.p75, ask?.to ?? f.p75);
   const pad = Math.max((hi - lo) * 0.6, kind === "hourly" ? 20 : 1000);
   const rawStep = (hi - lo + 2 * pad) / 5;
   const steps = kind === "hourly" ? [5, 10, 20, 25, 50, 100, 200, 250, 500] : [250, 500, 1000, 2000, 2500, 5000, 10_000, 20_000, 25_000, 50_000];
@@ -251,6 +251,8 @@ export interface Working {
 const people = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "person" : "people"}`;
 /** Hours a week to hours a month, as the server reads hours on a seat (52 weeks over 12 months). */
 export const hoursMonth = (hoursWeek: number) => Math.round((hoursWeek * 52) / 12);
+/** Hours a month at an hourly rate, a month's amount rounded to the nearest $250 as the server rounds a monthly figure. */
+export const byHours = (hoursMonthN: number, hourly: number) => Math.round((hoursMonthN * hourly) / 250) * 250;
 
 export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own: Partial<Record<RateKind, OwnRate>>): Working {
   const g = pickGroup(b, a.fn, a.band, a.kind);
@@ -265,7 +267,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
   if (a.industry) groupS += " The benchmarks have no industry groups yet, so every industry counts.";
   add("The group", groupS);
   if (!g.shown || !g.shown.fig || g.shown.fig.state === "few") {
-    add("What they were paid", `No figure in ${a.fn} yet. A group shows one at ${b.minN} people.`);
+    add("What they were paid", `No figure in ${a.fn} yet. ${floorWords()}`);
     return { steps, big: "Merlin cannot answer from the numbers yet", sub: "It will not guess. Share your own rate privately, and ask two peers to do the same.", lands: "the benchmark above is set to this group, and shows how many people it still needs.", band: null, answered: false };
   }
   const f = g.shown.fig;
@@ -274,20 +276,40 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
   else
     add(
       "What they were paid",
-      `A median of ${money(f.median)} ${per0}. ${f.rangeLocked ? "The middle half is Pro." : `No middle half under ${b.rangeN ?? 10} people.`}`,
+      `A median of ${money(f.median)} ${per0}. ${f.rangeLocked ? "The middle half is Pro." : `No middle half under ${b.rangeN ?? RATE_RANGE_FLOOR} people.`}`,
     );
-  // The check by the hour: the hourly median for the same group times the hours a month. Arithmetic on a figure shown here, rounded as the server rounds.
-  if (a.kind === "monthly" && a.hours) {
-    const h = pickGroup(b, a.fn, g.shown.band, "hourly").shown;
-    if (h?.fig && h.fig.state !== "few") {
-      const hm = hoursMonth(a.hours);
-      add("Checked by the hour", `${a.hours} hours a week is about ${hm} hours a month. At the hourly median of ${money(h.fig.median)} that is ${money(Math.round((hm * h.fig.median) / 250) * 250)} a month.`);
-    } else add("Checked by the hour", `${a.hours} hours a week. There is no hourly figure for this group yet to check against.`);
-  }
+  // By the hours given: the hourly figure for the same group times the hours a month, rounded as the server rounds. When
+  // there is one, the answer is this arithmetic and nothing else, so the range asked and the working shown are the same sum.
   const mine = own[a.kind];
-  const base = rf ?? f;
-  add("Your own rate", mine ? `${money(mine.amount)} ${per0}${mine.at ? ` at ${mine.at}` : ""}: ${sitsShort(mine.amount, base) ?? "no figure to compare yet."}` : "You have not added one yet. Add a rate and Merlin places it. Only you see it.");
   const lands = `the benchmark above is set to ${groupLabel(g.shown.fn, g.shown.band)}`;
+  if (a.kind === "monthly" && a.hours) {
+    const hg = pickGroup(b, a.fn, g.shown.band, "hourly");
+    const h = hg.shown;
+    const hm = hoursMonth(a.hours);
+    if (h?.fig && h.fig.state !== "few") {
+      const hf = h.fig;
+      const at = (rate: number) => byHours(hm, rate);
+      const where = h.band === g.shown.band ? "" : ` (${groupLabel(h.fn, h.band)}, the nearest group with an hourly figure)`;
+      if (hf.state === "range") {
+        add("By your hours", `${a.hours} hours a week is about ${hm} hours a month. At ${money(hf.median)} to ${money(hf.p75)} an hour${where}, the middle to the top of the middle half, that is ${money(at(hf.median))} to ${money(at(hf.p75))} a month.`);
+      } else add("By your hours", `${a.hours} hours a week is about ${hm} hours a month. At the hourly median of ${money(hf.median)}${where} that is ${money(at(hf.median))} a month.`);
+      add("Your own rate", mine ? `${money(mine.amount)} ${per0}${mine.at ? ` at ${mine.at}` : ""}: ${sitsShort(mine.amount, f) ?? "no figure to compare yet."}` : "You have not added one yet. Add a rate and Merlin places it. Only you see it.");
+      const retainer = f.state === "range" ? `${moneyRange(f.p25, f.p75)} a month` : `a median of ${money(f.median)} a month`;
+      add("What to ask", `Merlin goes by your hours: retainers in this group run ${retainer}, for hours they do not say.`);
+      const lo = at(hf.median);
+      const hi = hf.state === "range" ? at(hf.p75) : lo;
+      return {
+        steps,
+        big: hi > lo ? `Ask ${moneyRange(lo, hi)} ${per0}` : `Start at ${money(lo)} ${per0}`,
+        sub: hi > lo ? `${hm} hours a month at the hourly figures above. Open at the high end. Keep the low end as your floor.` : `${hm} hours a month at the hourly median. Quote the hours, so the total is clear.`,
+        lands: `${lands}.`,
+        band: hi > lo ? { from: lo, to: hi } : null,
+        answered: true,
+      };
+    }
+    add("By your hours", `${a.hours} hours a week. There is no hourly figure for this group yet, so Merlin goes by monthly retainers.`);
+  }
+  add("Your own rate", mine ? `${money(mine.amount)} ${per0}${mine.at ? ` at ${mine.at}` : ""}: ${sitsShort(mine.amount, rf ?? f) ?? "no figure to compare yet."}` : "You have not added one yet. Add a rate and Merlin places it. Only you see it.");
   if (rf) {
     add("What to ask", `From the middle (${money(rf.median)}) to the top of the middle half (${money(rf.p75)}): 1 in 4 people in ${groupLabel(g.ranged!.fn, g.ranged!.band)} were paid more than that.`);
     return {
@@ -303,7 +325,7 @@ export function chargeWorking(b: Benchmarks, a: ChargeAsk & { fn: string }, own:
   return {
     steps,
     big: `Start at ${money(f.median)} ${per0}`,
-    sub: f.state === "median" && f.rangeLocked ? "That is the middle for this group. Pro adds the middle half, so Merlin can show how far above it to ask." : `That is the middle for this group. Merlin can say more once ${b.rangeN ?? 10} people have a rate in it.`,
+    sub: f.state === "median" && f.rangeLocked ? "That is the middle for this group. Pro adds the middle half, so Merlin can show how far above it to ask." : `That is the middle for this group. Merlin can say more once ${b.rangeN ?? RATE_RANGE_FLOOR} people have a rate in it.`,
     lands: `${lands}.`,
     band: null,
     answered: true,

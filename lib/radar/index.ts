@@ -347,15 +347,18 @@ function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready:
   // [google network] the page ranks by who the member knows too (networkWarmth: nothing with RN_GOOGLE off).
   const scored = signalsFor(raw, p, { counts: observedTransitions(seed, s), nowMs, warmth: networkWarmth(s, m.id, nowMs) });
   const live = scored.filter((x) => !keptKeys.has(x.key));
-  // A member who tuned their ball (lib/radar/tune.ts): a kept row reads as its signal scores for them now, where the signal is still
-  // in view (its band and why-now as the page shows them; its line, and what the email said, stay). Nobody else's rows change.
-  const now = isTuned(p.tune) ? new Map(scored.map((x) => [x.key, x])) : null;
+  // A kept row reads as its signal scores for the member now, where the signal is still in view (its band and why-now as the
+  // page shows them; its line, and what the email said, stay): for a member who tuned their ball (lib/radar/tune.ts), and for
+  // everyone once a full-time leader of their function is known there since it went out (match.ts `held`), so the ranking
+  // never says High while the panel says a full-time leader is in place.
+  const tuned = isTuned(p.tune);
+  const now = new Map(scored.map((x) => [x.key, x]));
   const retuned = (x: RadarSentRow): RadarSentRow => {
-    const y = now?.get(x.k);
-    return y ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x;
+    const y = now.get(x.k);
+    return y && (tuned || y.held) ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x;
   };
   for (const d of wanted) {
-    const rows = kept[d]?.length ? (now ? kept[d].map(retuned) : kept[d]) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
+    const rows = kept[d]?.length ? kept[d].map(retuned) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
     // A company merged away or taken out since is no row.
     const onFile = rows.filter((x) => c.g.companies.has(x.c));
     // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).
@@ -453,6 +456,8 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   // The page's ranges: each company once, at its latest day in the range.
   const cut = (n: number) => rangeRows(byDay, kept.slice(0, n));
   const ranges = ranged ? RADAR_RANGES.map((r) => ({ range: r.range, companies: cut(r.days).dayOf.size })) : [];
+  /** The oldest day a range could list from: the page says so when the last 30 days hold only a few days of picks. */
+  const since = ranged ? [...kept].reverse().find((d) => (byDay.get(d) ?? []).length > 0) ?? null : null;
   const range: RadarRange | null = !ranged || inKeep ? null : (radarRangeOf(rangeAsked) ?? ranges.find((r) => r.companies > 0)?.range ?? "30d");
   const shown = range ? cut(RADAR_RANGES.find((r) => r.range === range)!.days) : { rows: byDay.get(day) ?? [], dayOf: null };
   const proName = (co: string) => (pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {});
@@ -493,7 +498,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
     today,
     ...(dayAsked != null && dayAsked !== "" && !inKeep ? { expired: true } : {}),
     days: list.map((d) => ({ day: d, companies: count(d) })),
-    ...(ranged ? { range, ranges } : {}),
+    ...(ranged ? { range, ranges, since } : {}),
     rows: rows.map(({ co: _co, ...r }) => r), // eslint-disable-line @typescript-eslint/no-unused-vars
     email: emailEnabled() && EMAIL_RE.test(m.email),
     slack: hasDest(s, m.id),

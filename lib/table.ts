@@ -64,7 +64,7 @@ import path from "path";
 import { gunzipSync } from "zlib";
 import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { iconDomains } from "./companyIcons";
-import { readRate } from "./rates";
+import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail, setMailBlock } from "./email";
 import { renderDigest } from "./digest";
@@ -4920,12 +4920,12 @@ function namesStats(seed: Seed, s: State, g: Graph, idx: MemberIndex): NonNullab
 
 /* ---------- rate benchmarks ---------- */
 
-/** A group shows numbers only with rates from at least this many contributors. */
-export const BENCHMARK_MIN_N = 5;
+/** A group shows numbers only with rates from at least this many contributors (lib/rates.ts RATE_FLOOR, the one constant every line says). */
+export const BENCHMARK_MIN_N = RATE_FLOOR;
 /** A figure that includes Rate Index data needs this many (the survey promised groups of 20). */
-export const BENCHMARK_INDEX_MIN_N = 20;
+export const BENCHMARK_INDEX_MIN_N = RATE_INDEX_FLOOR;
 /** The range (p25 to p75) is sent only at this many contributors. Below it, the median alone. */
-export const BENCHMARK_RANGE_N = 10;
+export const BENCHMARK_RANGE_N = RATE_RANGE_FLOOR;
 /** What leaves the server is rounded: dollars a month to the nearest 250, dollars an hour to the nearest 5 ... */
 const BENCH_ROUND = { monthly: 250, hourly: 5 } as const;
 /** ... and wider while a figure has fewer than BENCHMARK_RANGE_N contributors, where one person moves it most. */
@@ -10860,11 +10860,15 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
           }
         }
         const teamAt = o.team ? now : prev?.teamAt;
+        // The same leaders as the last read (and a team page read before): the reading keeps the day it was first seen.
+        const hash = leadersHash(functions);
+        const sameReading = !!prev && prev.hash === hash && (!!prev.teamAt || !o.team);
+        const hashAt = sameReading ? prev!.hashAt ?? prev!.teamAt ?? prev!.readAt ?? prev!.checkedAt : now;
         // Names stay only where they may (a United States company, nobody who asked to be removed, a member's own choice).
         const named: Pick<LeadersRecord, "functions" | "top"> = { functions, top: mergeTop(prev?.top, o.top) };
         o.named = keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
         all[o.companyId] = {
-          status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
+          status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash, hashAt, functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
           ...(named.top ? { top: named.top } : {}),
         };
         payLeaderBack(s, o.companyId, functions, now);
@@ -10881,7 +10885,7 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
         keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
         o.named = 0;
         all[o.companyId] = {
-          status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
+          status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash, ...(prev.hashAt ? { hashAt: prev.hashAt } : {}) } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
           ...(readAt ? { readAt } : {}), ...(teamAt ? { teamAt } : {}), ...(named.top ? { top: named.top } : {}),
         };
       }
@@ -10913,7 +10917,9 @@ function leadsOf(s: State, companyId: string, hidden: boolean, viewer?: string, 
   });
   const teamAt = teamReadAt(r, nowMs);
   if (!fns.length && !teamAt) return undefined;
-  return { checkedAt: r?.checkedAt ?? "", fns, ...(teamAt ? { teamAt } : {}) };
+  // "Checked <day>" says when the leaders shown were read: a later try that could not reach the site does not move it.
+  const readAt = r ? r.readAt ?? (leadersReadOk(r) ? r.checkedAt : undefined) : undefined;
+  return { checkedAt: r?.checkedAt ?? "", ...(readAt ? { readAt } : {}), fns, ...(teamAt ? { teamAt } : {}) };
 }
 
 /** A members' leader report's ledger ref: "<companyId>.ftLeader:Sales" (the credit history reads "Full-time Sales leader"). */

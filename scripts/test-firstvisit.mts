@@ -100,7 +100,7 @@ async function pure() {
   check("step 5 reads a list's alert switch once lists have one (F5)", !gs.alertOn({ email: true, alert: { on: false } }) && gs.alertOn({ email: false, alert: { on: true } }));
   check("step 6 is on now Evidence Bank is built, for Close only", gs.EVIDENCE_ON && six({}, { close: true }).steps.some((x) => x.key === "evidence") && !six({}, { close: false }).steps.some((x) => x.key === "evidence"));
   const ev = six({}, { close: true, evidence: true });
-  check("step 6 is Close's: of 6 with Close, of 5 without", ev.of === 6 && ev.steps[5].label === "Write your first evidence case" && six({}, { close: false, evidence: true }).of === 5);
+  check("step 6 is Close's: of 6 with Close, of 5 without", ev.of === 6 && ev.steps[5].label === "Write your first case study" && six({}, { close: false, evidence: true }).of === 5);
   check("step 6 is done once one case is ready, not before (a draft doesn't count)", !six({}, { close: true }).steps[5].done && !six({}, { close: true, evidenceReady: 0 }).steps[5].done && six({}, { close: true, evidenceReady: 1 }).steps[5].done);
   check("step 6 done counts toward the card: 1 of 6", gs.sixLine(six({}, { close: true, evidenceReady: 2 })) === "1 of 6 done");
   check("without Close a ready case never shows step 6", !six({}, { close: false, evidenceReady: 3 }).steps.some((x) => x.key === "evidence"));

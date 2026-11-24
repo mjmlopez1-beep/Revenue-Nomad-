@@ -41,7 +41,7 @@ import { useExactFind } from "../ui/find";
 import type { CompanyRec } from "@/lib/tableTypes";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
-  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
+  notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, hireCounts, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
   icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
@@ -711,11 +711,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   useEffect(() => setFitOnly(false), [tab]);
   const hireIcp = icpApplies(eff, tab, me);
   /** Their function's open roles with the profile lifted, when none fit the profile (null otherwise). */
+  // Hiring now's numbers come from one place (model.ts hireCounts), as the page, the sidebar and the first screen read them.
   const liftRows = useMemo(() => {
     if (!hireFn || !fnSplit || fnSplit.mine.length > 0 || !hireIcp || allFns || q.trim()) return null;
-    const mine = splitByFn(applyFilters(allRows, { ...eff, icp: false }, tab, q, cellMe, true).rows, hireFn).mine;
-    return mine.length ? mine : null;
-  }, [hireFn, fnSplit, hireIcp, allFns, q, allRows, eff, tab, cellMe]);
+    const hc = hireCounts(allRows, eff, cellMe, { q, open: filtered });
+    return hc.lifted ? hc.everyone.mine : null;
+  }, [hireFn, fnSplit, hireIcp, allFns, q, allRows, eff, cellMe, filtered]);
   const lifted = !!liftRows && !fitOnly;
   /** What Hiring now lists while it leads with the member's function. Null: every function (Show all functions), or a search. */
   const hireList: Row[] | null = hireFn && fnSplit && !allFns && !q.trim() ? (fnSplit.mine.length ? fnSplit.mine : lifted ? liftRows! : NO_ROWS) : null;
@@ -2121,7 +2122,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const myFn = namedFn(me.function);
   const hiringLiftLive = useMemo(() => {
     if (waiting || tab === "hiring" || !myFn || allFns || searching || facets.hiringMine > 0 || !icpApplies(unpreset, "hiring", me)) return 0;
-    return splitByFn(applyFilters(allRows, { ...unpreset, icp: false }, "hiring", q, cellMe, true).rows, myFn).mine.length;
+    // The same count the sidebar and Hiring now read (model.ts hireCounts): the member's function with the ideal client lifted.
+    const hc = hireCounts(allRows, unpreset, cellMe, { q });
+    return hc.lifted ? hc.everyone.mine.length : 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, tab, myFn, allFns, searching, facets.hiringMine, unpreset, me.icp, allRows, q, cellMe]);
   const hiringLift = first ? first.hiringLift : hiringLiftLive;

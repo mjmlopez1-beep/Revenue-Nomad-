@@ -1715,6 +1715,70 @@ export function splitByFn(rows: Row[], fn: string | null): { mine: Row[]; others
 }
 
 /**
+ * Hiring now's numbers, one set for every screen that counts open roles: Hiring now's views, tabs
+ * and lines, the sidebar's count (place.ts placeRows), the table's Hiring now (TradingPost) and
+ * the first screen (place.ts listAt). Each count says what it counts:
+ *   all, mine          open roles with the filters in play (the ideal client too, while it is on),
+ *                      in every function and in the member's own
+ *   fit                the same with the ideal client applied, whether its filter is on or not
+ *                      (equal to `everyone` for a member with no ideal client)
+ *   everyone           the same with the ideal client lifted
+ *   lifted             the ideal client is on and none of the member's own function fits it, so
+ *                      their function's view lists all of its roles (`everyone.mine`) and says so
+ *   listedMine         what the member's function's view lists: `mine`, or `everyone.mine` lifted
+ * `open`: the rows already filtered with `f` (a caller that has them), so they are not worked out twice.
+ */
+export interface HireCounts {
+  fn: string | null;
+  /** The ideal client narrows `all` and `mine` (the member has one and its filter is on). */
+  icpOn: boolean;
+  all: Row[];
+  mine: Row[];
+  fit: { all: Row[]; mine: Row[] };
+  everyone: { all: Row[]; mine: Row[] };
+  lifted: boolean;
+  listedMine: Row[];
+}
+export function hireCounts(rows: Row[], f: Filters, me: Me, o: { q?: string; open?: Row[] } = {}): HireCounts {
+  const q = o.q ?? "";
+  const fn = namedFn(me.function);
+  const hasIcp = !icpEmpty(me.icp);
+  const icpOn = icpApplies(f, "hiring", me);
+  const all = o.open ?? applyFilters(rows, f, "hiring", q, me, true).rows;
+  const fnOf = (xs: Row[]) => (fn ? splitByFn(xs, fn).mine : xs);
+  const mine = fnOf(all);
+  // The ideal client lifted, and what fits it while its filter is off: worked out only when a screen reads them.
+  let everyone: HireCounts["everyone"] | null = icpOn ? null : { all, mine };
+  let fit: HireCounts["fit"] | null = icpOn || !hasIcp ? { all, mine } : null;
+  const every = () => {
+    if (!everyone) {
+      const xs = applyFilters(rows, { ...f, icp: false }, "hiring", q, me, true).rows;
+      everyone = { all: xs, mine: fnOf(xs) };
+    }
+    return everyone;
+  };
+  const lifted = !!fn && icpOn && !q.trim() && mine.length === 0 && every().mine.length > 0;
+  return {
+    fn,
+    icpOn,
+    all,
+    mine,
+    get fit() {
+      if (!fit) {
+        const xs = applyFilters(rows, { ...f, icp: true }, "hiring", q, me, true).rows;
+        fit = { all: xs, mine: fnOf(xs) };
+      }
+      return fit;
+    },
+    get everyone() {
+      return every();
+    },
+    lifted,
+    listedMine: lifted ? every().mine : mine,
+  };
+}
+
+/**
  * New this week, the way the server counts View.scan.mine7: an open role the last clean scan still
  * listed, first seen in the last 7 days and, when the board gives a date, posted in the last 14.
  */

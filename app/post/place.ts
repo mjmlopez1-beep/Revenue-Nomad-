@@ -11,7 +11,7 @@ import type { Me, SavedViewRec } from "@/lib/tableTypes";
 import { radarRangeOf, sigDayOf } from "@/lib/radar/types";
 import { firstViewPlace } from "../onboard/place";
 import {
-  EMPTY_FILTERS, RECORD_TYPES, SORTS, TYPE_PARAM, activeCount, applyFilters, decodeFilters, encodeFilters, hasRoleDates, hiredOn, icpApplies, icpEmpty, icpMatch, mySeats, namedFn,
+  EMPTY_FILTERS, RECORD_TYPES, SORTS, TYPE_PARAM, activeCount, applyFilters, decodeFilters, encodeFilters, hasRoleDates, hireCounts, hiredOn, icpApplies, icpEmpty, icpMatch, mySeats, namedFn,
   newThisWeek, placeFilters, rowsFor, seatsMissing, shown, sortFor, sortRows, splitByFn, tabOf,
   type CoInfo, type Facets, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
@@ -263,12 +263,9 @@ function listCore(infos: CoInfo[], me: Me, place: Place, off: Set<string>) {
   const allRows = rowsFor(recordType, infos);
   const { rows: filtered, facets: facets0 } = applyFilters(allRows, eff, tab, q, me);
   const fnSplit = hireFn ? splitByFn(filtered, hireFn) : null;
-  const hireIcp = icpApplies(eff, tab, me);
-  let liftRows: Row[] | null = null;
-  if (hireFn && fnSplit && fnSplit.mine.length === 0 && hireIcp && !allFns && !q.trim()) {
-    const mine = splitByFn(applyFilters(allRows, { ...eff, icp: false }, tab, q, me, true).rows, hireFn).mine;
-    liftRows = mine.length ? mine : null;
-  }
+  // Hiring now's numbers come from one place (model.ts hireCounts): the sidebar, the first screen and the page agree.
+  const hc = hireFn && !allFns && !q.trim() ? hireCounts(allRows, eff, me, { q, open: filtered }) : null;
+  const liftRows: Row[] | null = hc?.lifted ? hc.everyone.mine : null;
   const lifted = !!liftRows;
   const hireList: Row[] | null = hireFn && fnSplit && !allFns && !q.trim() ? (fnSplit.mine.length ? fnSplit.mine : lifted ? liftRows! : []) : null;
   return { recordType, filters, q, searching, tab, allFns, presetOn, unpreset, eff, hireFn, allRows, filtered, facets0, fnSplit, liftRows, lifted, hireList };

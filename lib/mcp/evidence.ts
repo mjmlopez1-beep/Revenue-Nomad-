@@ -18,9 +18,9 @@ import { z } from "zod";
 import { loadState } from "../table";
 import { publicBase } from "../links";
 import { upgradeUrl } from "../plan";
-import { CLOSE_EVIDENCE, EvidenceProblem, caseIn, evidenceOpen, listEvidence, matchEvidence, previewCase, safeText, saveCase } from "../evidence/store";
+import { CLOSE_EVIDENCE, EvidenceProblem, caseIn, evidenceOpen, listEvidence, matchEvidence, previewCase, quoteOut, safeText, saveCase } from "../evidence/store";
 import { whoOf } from "../evidence/draft";
-import { CASE_MOTIONS, PROBLEMS, datesOf, type EvidenceCase } from "../evidence/types";
+import { CASE_MOTIONS, PROBLEMS, blanksIn, caseWords, datesOf, type EvidenceCase } from "../evidence/types";
 import { FIT_CATEGORIES } from "../evidence/tags";
 import { ToolProblem, type Ctx, type ToolOut } from "./tools";
 
@@ -64,6 +64,10 @@ export function caseOut(c: EvidenceCase): ToolOut {
     numbers: c.outcomes.map((o) => ({ what: t(o.k), before: o.before, after: o.after, ...(o.unit ? { unit: o.unit } : {}) })),
     worked_with: c.workedWith.map((w) => t(w.title)),
     answers: { problem: t(c.answers.problem), what_i_did: t(c.answers.did), numbers: t(c.answers.numbers) },
+    how_long: t(c.took ?? "") || null,
+    quote: quoteOut(c) ?? null,
+    blanks_left: blanksIn(...caseWords(c)).map(t),
+    waiting_for_review: !!c.review,
     text: t(c.text),
     on_my_card: c.showOnCard,
     used_in_proposals: c.usedIn.length,
@@ -114,6 +118,12 @@ interface SaveArgs {
   problem?: string;
   what_i_did?: string;
   numbers?: string;
+  result?: string;
+  how_long?: string;
+  quote?: string;
+  quote_by?: string;
+  quote_title?: string;
+  quote_where?: string;
   client_named?: boolean;
   client_name?: string;
   client_label?: string;
@@ -141,7 +151,7 @@ export async function saveEvidenceTool(ctx: Ctx, a: SaveArgs): Promise<ToolOut> 
       [
         ["problem", a.problem],
         ["did", a.what_i_did],
-        ["numbers", a.numbers],
+        ["numbers", a.numbers ?? a.result],
       ] as const
     ).filter(([, v]) => v !== undefined),
   );
@@ -164,22 +174,30 @@ export async function saveEvidenceTool(ctx: Ctx, a: SaveArgs): Promise<ToolOut> 
     ...(a.problems !== undefined ? { problems: a.problems } : {}),
     ...(a.type_of_work !== undefined ? { workType: a.type_of_work } : {}),
     ...(a.worked_with !== undefined ? { workedWith: a.worked_with } : {}),
+    ...(a.how_long !== undefined ? { took: a.how_long } : {}),
+    ...(a.quote !== undefined || a.quote_by !== undefined || a.quote_title !== undefined ? { quote: { text: a.quote ?? "", by: a.quote_by ?? "", title: a.quote_title ?? "", where: a.quote_where ?? "" } } : {}),
     ...(a.ready !== undefined ? { status: a.ready ? "ready" : "draft" } : {}),
   };
+  const who = { origin: ctx.origin, agent: ctx.app ?? "" };
   if (!a.confirm) {
-    const p = await wrap(() => previewCase(ctx.member.token, input, { origin: ctx.origin }));
+    const p = await wrap(() => previewCase(ctx.member.token, input, who));
     const out = caseOut(p.case);
     delete out.case_id;
     return {
       confirmed: false,
-      message: `Nothing was saved. This is how the ${p.isNew ? "new case" : "case"} would read.`,
+      message: `Nothing was saved. This is how the ${p.isNew ? "new case study" : "case study"} would read.`,
       would_save: out,
       next: "Show the member the case as it would read, the client as its label unless they asked to name it. Only if they say save, call again with the same arguments and confirm: true.",
     };
   }
-  const v = await wrap(() => saveCase(ctx.member.token, input, { origin: ctx.origin }));
+  const v = await wrap(() => saveCase(ctx.member.token, input, who));
   const c = caseIn(await loadState(), ctx.member.id, v.id);
-  return { confirmed: true, message: a.case_id ? "Saved the change." : "Saved the case in the member's Evidence Bank.", case: c ? caseOut(c) : { case_id: v.id } };
+  const left = c ? blanksIn(...caseWords(c)).length : 0;
+  return {
+    confirmed: true,
+    message: `${a.case_id ? "Saved the change." : "Saved the case study in the member's Evidence Bank."} It shows there marked for review, and goes into proposals once the member checks it${left ? ` and fills the ${left === 1 ? "blank" : `${left} blanks`}` : ""}.`,
+    case: c ? caseOut(c) : { case_id: v.id },
+  };
 }
 
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
@@ -212,15 +230,21 @@ export function registerEvidenceTools(server: McpServer, ctx: Ctx, run: Run): vo
     "save_evidence_case",
     {
       title: "Save a case to my Evidence Bank",
-      description: `Save a new case study to the member's Evidence Bank, or change one (case_id from list_evidence), from what the member told you: the problem, what they did, and the numbers (before and after, only as they said them: never invent, round or estimate one). The client stays hidden by default and reads as its label; set client_named only when the member asks to name the client. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it saves nothing and shows how the case would read. Only if the member says save, call again with the same arguments and confirm: true. Close (the trial included).`,
+      description: `Save a new case study to the member's Evidence Bank, or change one (case_id from list_evidence), from what the member told you or what you found in their own email or your memory of their work: the client company, their role, the dates, the problem, what they did, the result (numbers only as the member or the source said them: never invent, round or estimate one), how long it took, and a quote from someone who can vouch for it. Where you aren't sure, leave a clearly marked blank in square brackets, like [add the result number] or [add a quote], and leave a date out rather than guess it: the member fills the blanks in Merlin. The client stays hidden by default in proposals and reads as its label; set client_named only when the member asks to name the client. A case saved here shows in Merlin as From <your name>, review, and stays out of proposals until the member checks it. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it saves nothing and shows how the case would read. Only if the member says save, call again with the same arguments and confirm: true. One call per case study. Close (the trial included).`,
       inputSchema: {
         case_id: z.string().optional().describe("A case to change, from list_evidence. Leave out for a new case."),
         title: z.string().optional().describe("A short plain title, without the client's name."),
         problem: z.string().optional().describe("What was broken or stuck when the member arrived, in their words."),
         what_i_did: z.string().optional().describe("What the member did, in their words."),
-        numbers: z.string().optional().describe('Before and after, as the member said them: "Win rate went from 22% to 31%. Sales cycle went from 94 days to 61 days."'),
+        numbers: z.string().optional().describe('The result, before and after, as the member or the source said them: "Win rate went from 22% to 31%. Sales cycle went from 94 days to 61 days." A blank like [add the result number] where unsure.'),
+        result: z.string().optional().describe("The same as numbers (either one)."),
+        how_long: z.string().optional().describe('How long the result took: "6 months".'),
+        quote: z.string().optional().describe("A quote from someone who can vouch for the work, word for word as they wrote or said it. Never made up."),
+        quote_by: z.string().optional().describe("Who said it: their name."),
+        quote_title: z.string().optional().describe("Their title: CEO."),
+        quote_where: z.string().optional().describe("Where that person is based (a city and state), when known."),
         client_named: z.boolean().optional().describe("Name the client wherever the case is used. Only when the member asks. False by default."),
-        client_name: z.string().optional().describe("The client's name, only when the member gives it."),
+        client_name: z.string().optional().describe("The client company's name, as the member or their own email gives it. Kept private to the member; out of proposals unless client_named."),
         client_label: z.string().optional().describe('How the client reads while hidden, like "A health care company, $20M to $50M". Never the name.'),
         role: z.string().optional(),
         function: z.string().optional(),
