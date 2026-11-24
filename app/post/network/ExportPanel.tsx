@@ -24,6 +24,7 @@ import { NEVER_WORDS, READS, type ExportFile } from "@/lib/linkedin/files";
 import { readExport, type ExportRead } from "@/lib/linkedin/read";
 import { ASK_EARLY, EXPORT_HOW, USES_ON_BY_DEFAULT, USE_KEYS, USE_WORDS, type ExportInfo, type ExportView, type SeatOfferView, type UseKey } from "@/lib/linkedin/types";
 import { exportAct, loadExport, useExport } from "./useExport";
+import { useAutoPick } from "./useAutoPick";
 import "./linkedinExport.css";
 
 const n = (x: number) => x.toLocaleString("en-US");
@@ -69,7 +70,7 @@ function usesOf(r: ExportRead, v: ExportView | null): { k: UseKey; line: string 
 
 type Stage = { s: "idle" } | { s: "reading" } | { s: "consent"; read: ExportRead; uses: Set<UseKey> } | { s: "sending" } | { s: "done"; message: string };
 
-export function ExportPanel({ picked, onClose, compact }: { picked?: File[]; onClose?: () => void; compact?: boolean }) {
+export function ExportPanel({ picked, onClose, compact, autoPick, onStop }: { picked?: File[]; onClose?: () => void; compact?: boolean; /** Open the picker at once (a switch was turned on). */ autoPick?: boolean; /** Nothing picked, it failed, or the member cancelled the consent screen: a switch goes back to off. */ onStop?: (why?: string) => void }) {
   const { view } = useExport();
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
@@ -78,6 +79,7 @@ export function ExportPanel({ picked, onClose, compact }: { picked?: File[]; onC
   const [asking, setAsking] = useState(false);
   const started = useRef(false);
   const info = view?.info ?? null;
+  useAutoPick(input, autoPick, onStop);
 
   const read = async (files: File[]) => {
     if (!files.length) return;
@@ -87,13 +89,16 @@ export function ExportPanel({ picked, onClose, compact }: { picked?: File[]; onC
       const r = await readExport(files);
       if (!Object.keys(r.found).length) {
         setStage({ s: "idle" });
-        return setErr(r.problems[0] ?? "Merlin found none of the files it reads in that. Pick the .zip LinkedIn sent, or Connections.csv from inside it.");
+        const why = r.problems[0] ?? "Merlin found none of the files it reads in that. Pick the .zip LinkedIn sent, or Connections.csv from inside it.";
+        onStop?.(why);
+        return setErr(why);
       }
       const allowed = new Set(usesOf(r, view).map((x) => x.k));
       setStage({ s: "consent", read: r, uses: new Set(USES_ON_BY_DEFAULT.filter((k) => allowed.has(k))) });
     } catch {
       setStage({ s: "idle" });
       setErr("That couldn't be read on this device. Download the export again and pick the .zip.");
+      onStop?.("That couldn't be read on this device. Download the export again and pick the .zip.");
     } finally {
       if (input.current) input.current.value = "";
     }
@@ -213,7 +218,7 @@ export function ExportPanel({ picked, onClose, compact }: { picked?: File[]; onC
           <button type="button" className="btn btn-pine cp-go" disabled={!stage.uses.size || (view ? view.importsLeft <= 0 : false)} onClick={() => void send(r, stage.uses)}>
             Bring in what is ticked
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => (setStage({ s: "idle" }), onClose?.())}>
+          <button type="button" className="btn btn-ghost" onClick={() => (setStage({ s: "idle" }), onClose?.(), onStop?.())}>
             Cancel
           </button>
         </div>

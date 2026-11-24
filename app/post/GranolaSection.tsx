@@ -9,6 +9,7 @@
  * way, the member sees one status and one Disconnect. Nothing renders with RN_GRANOLA off.
  * Connecting works on every plan; drafting from a call is Close.
  */
+import { ServiceIcon } from "../ui/ServiceIcon";
 import { useRef, useState } from "react";
 import { Chip } from "../ui/system";
 import { useToast } from "../ui/shared";
@@ -20,12 +21,19 @@ const day = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(new Date(iso).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 
 /** A plain notepad mark, drawn here (Granola's own logo isn't used). */
+/** Granola's own icon (ServiceIcon, read from granola.ai by our server), over a plain note glyph until it loads or when there is none. */
 export function GranolaMark({ size = 24 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden focusable="false" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="gr-mark">
-      <rect x="4.5" y="3.5" width="15" height="17" rx="3" />
-      <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" />
-    </svg>
+    <ServiceIcon
+      service="granola"
+      size={size}
+      fallback={
+        <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden focusable="false" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="gr-mark">
+          <rect x="4.5" y="3.5" width="15" height="17" rx="3" />
+          <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" />
+        </svg>
+      }
+    />
   );
 }
 

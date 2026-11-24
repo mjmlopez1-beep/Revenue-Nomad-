@@ -137,7 +137,7 @@ export interface ConnRow {
   never: string;
   last: string;
   feeds: Feed[];
-  /** The button that opens its row: Connect, Add the file, Manage. */
+  /** What turning it on does, in words (Connect, Add the file); "Manage" once it is on. The row's switch and its Manage or Details link stand in for a button. */
   go: string;
   /** Remove: the question first, then what Yes says. Null while there is nothing to remove. */
   remove: { ask: string; yes: string } | null;
@@ -160,6 +160,16 @@ const ALERT_FEEDS: Feed[] = [
   { label: "Crystal Ball", why: "Each company as it moves", page: "radar" },
   { label: "Messages", why: "Who wrote, with a link to reply", page: "messages" },
 ];
+
+/** The question before a switch turns a source of who you know off (here, Warm paths' sources and the set-up's Who you know). */
+export const OFF_ASK = {
+  google: "Turn off Google? Merlin revokes its access at Google and deletes what it read from it, what your agent saved included, at once. Your pipeline keeps your deals without the names that came from Google.",
+  linkedin: "Turn off your LinkedIn connections file? Merlin deletes the connections and the ways in found only from them. This can't be undone.",
+  lix: "Turn off your LinkedIn data export? Merlin deletes what it brought in: its connections, invitations, warmth, who vouched, roles and proof, with the ways in found only from them. Seats you confirmed, companies you followed and your voice stay.",
+  csv: "Turn off your contacts file? Merlin deletes it and the ways in found only from it. This can't be undone.",
+  /** The set-up's one LinkedIn card: the connections file and the export together. */
+  linkedinAll: "Turn off LinkedIn? Merlin deletes your connections and what your export brought in, with the ways in found only from them. Seats you confirmed and your voice stay. This can't be undone.",
+} as const;
 
 export function connRows(x: ConnInput): ConnRow[] {
   const rows: ConnRow[] = [];
@@ -191,8 +201,8 @@ export function connRows(x: ConnInput): ConnRow[] {
       go: g ? "Manage" : "Connect",
       remove: g
         ? {
-            ask: "Disconnect Google? Merlin revokes its access at Google and deletes everything it kept about your network, what your agent saved included, at once. Your pipeline keeps your deals without the names that came from Google.",
-            yes: "Disconnect and delete",
+            ask: OFF_ASK.google,
+            yes: "Turn off and delete",
           }
         : null,
     });
@@ -216,7 +226,7 @@ export function connRows(x: ConnInput): ConnRow[] {
         { label: "People", why: "Marks the people you know", page: "people" },
       ],
       go: li ? "Manage" : "Add the file",
-      remove: li ? { ask: "Delete your LinkedIn connections? The ways in found only from them go too. This can't be undone.", yes: "Delete the file" } : null,
+      remove: li ? { ask: OFF_ASK.linkedin, yes: "Turn off and delete" } : null,
     });
     // The whole LinkedIn data export (lib/linkedin): read on the member's device, only what they ticked brought in.
     if (x.paths.lix !== undefined) {
@@ -239,7 +249,7 @@ export function connRows(x: ConnInput): ConnRow[] {
           { label: "Seats", why: "Roles to confirm as seats", page: "seats" },
         ],
         go: lx ? "Manage" : "Bring it in",
-        remove: lx ? { ask: "Remove what your export brought in? Its connections, invitations, warmth, who vouched, roles and proof go, with the ways in found only from them. Seats you confirmed, companies you followed and your voice stay.", yes: "Remove it" } : null,
+        remove: lx ? { ask: OFF_ASK.lix, yes: "Turn off and delete" } : null,
       });
     }
     const cv = x.paths.csv;
@@ -259,7 +269,7 @@ export function connRows(x: ConnInput): ConnRow[] {
         { label: "People", why: "Marks the people you know", page: "people" },
       ],
       go: cv ? "Manage" : "Add the file",
-      remove: cv ? { ask: "Delete your contacts file? The ways in found only from it go too. This can't be undone.", yes: "Delete the file" } : null,
+      remove: cv ? { ask: OFF_ASK.csv, yes: "Turn off and delete" } : null,
     });
   }
   const integ = x.integ;
@@ -278,7 +288,7 @@ export function connRows(x: ConnInput): ConnRow[] {
       last: s ? (s.lastOkAt ? `Posted ${day(s.lastOkAt)}` : "Not posted yet") : "Nothing yet",
       feeds: ALERT_FEEDS,
       go: s ? "Manage" : "Connect",
-      remove: s ? { ask: "Remove Slack? Alerts to it stop at once.", yes: "Remove Slack" } : null,
+      remove: s ? { ask: "Turn off Slack? Alerts to it stop at once.", yes: "Turn off Slack" } : null,
     });
     const h = integ?.webhook ?? null;
     rows.push({
@@ -294,7 +304,7 @@ export function connRows(x: ConnInput): ConnRow[] {
       last: h ? (h.lastOkAt ? `Posted ${day(h.lastOkAt)}` : "Not posted yet") : "Nothing yet",
       feeds: ALERT_FEEDS.slice(0, 1),
       go: h ? "Manage" : "Connect",
-      remove: h ? { ask: "Remove the webhook? Alerts to it stop at once.", yes: "Remove it" } : null,
+      remove: h ? { ask: "Turn off the webhook? Alerts to it stop at once.", yes: "Turn off" } : null,
     });
   }
   const gr = x.granola;
@@ -315,7 +325,7 @@ export function connRows(x: ConnInput): ConnRow[] {
         { label: "Pipeline", why: "Recent calls on a deal", page: "pipeline" },
       ],
       go: gr.connected ? "Manage" : "Connect",
-      remove: gr.connected ? { ask: gr.via === "oauth" ? "Disconnect Granola? Merlin ends its access and deletes it. Proposals you already drafted stay." : "Disconnect Granola? Merlin deletes your key. Proposals you already drafted stay.", yes: "Disconnect" } : null,
+      remove: gr.connected ? { ask: gr.via === "oauth" ? "Turn off Granola? Merlin ends its access and deletes it. Proposals you already drafted stay." : "Turn off Granola? Merlin deletes your key. Proposals you already drafted stay.", yes: "Turn off" } : null,
     });
   }
   const apps = x.apps ?? [];
@@ -337,7 +347,7 @@ export function connRows(x: ConnInput): ConnRow[] {
     ],
     go: apps.length ? "Manage" : "Connect",
     remove: apps.length
-      ? { ask: apps.length === 1 ? `Disconnect ${apps[0].name}? Its access stops at once.` : `Disconnect all ${apps.length} apps? Their access stops at once.`, yes: apps.length === 1 ? "Disconnect" : "Disconnect all" }
+      ? { ask: apps.length === 1 ? `Turn off ${apps[0].name}? Its access stops at once.` : `Turn off all ${apps.length} apps? Their access stops at once.`, yes: apps.length === 1 ? "Turn off" : "Turn off all" }
       : null,
   });
   return rows;
@@ -367,6 +377,47 @@ export const REMOVE: Record<ConnKey, RemoveCall> = {
   // Connected apps' Disconnect (ConnectedApps.tsx, Agent access): POST /api/oauth/apps { revoke: id }, for each app.
   agent: { via: "oauth", op: "revoke" },
 };
+
+/**
+ * What a row's switch does when it goes from off to on: that source's own connect flow, the very one
+ * its Connect button started before the switch (Connections.tsx turnOn).
+ *   google    Google's OAuth: startGoogle(), Your network's Connect Google (network/Network.tsx)
+ *   slack     Add to Slack (Slack's OAuth, /api/integrations/slack/start) when Merlin has the Slack
+ *             app; else the row opens on its webhook URL form
+ *   hook      the row opens on its webhook URL form
+ *   granola   Connect Granola (Granola's OAuth, startGranola) back to this row; the API key form
+ *             when Granola's sign-in isn't available
+ *   linkedin, lix, csv   the row opens and its file picker opens at once (LinkedInAct, ExportPanel,
+ *             CsvAct): Connections.csv, the whole .zip, a contacts CSV
+ *   agent     Agent access, which shows the connect steps
+ */
+export type ConnectStep =
+  | { go: "google" }
+  | { go: "slack-oauth"; url: "/api/integrations/slack/start" }
+  | { go: "granola-oauth"; back: string }
+  | { go: "open"; pick: boolean }
+  | { go: "page"; page: "agent" }
+  | { go: "none"; why: string };
+export function connectStep(key: ConnKey, x: { googleConfigured: boolean; slackApp: boolean; granolaOauth: boolean }): ConnectStep {
+  switch (key) {
+    case "google":
+      return x.googleConfigured ? { go: "google" } : { go: "none", why: "Google isn't set up on Merlin yet. Your LinkedIn connections file or a contacts file works without it." };
+    case "slack":
+      return x.slackApp ? { go: "slack-oauth", url: "/api/integrations/slack/start" } : { go: "open", pick: false };
+    case "hook":
+      return { go: "open", pick: false };
+    case "granola":
+      return x.granolaOauth ? { go: "granola-oauth", back: "/?p=settings&sec=conn&open=granola" } : { go: "open", pick: false };
+    case "linkedin":
+    case "lix":
+    case "csv":
+      return { go: "open", pick: true };
+    case "agent":
+      return { go: "page", page: "agent" };
+  }
+}
+/** The plain words when a connect flow ends with nothing connected: the switch is back to off. */
+export const staysOff = (name: string, why?: string) => `${why ? `${why} ` : ""}${name} stays off. Nothing was connected.`;
 
 /* ---------- Notifications ---------- */
 

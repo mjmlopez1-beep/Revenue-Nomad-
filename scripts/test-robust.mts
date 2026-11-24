@@ -726,6 +726,8 @@ console.log("\nThe API's routes");
     "api/integrations/slack/callback", "api/integrations/slack/start",
     // A company's logo by its public id, as image bytes (lib/logo.ts): public on purpose, it names nothing.
     "api/logo/[id]",
+    // A service's icon by its fixed key, read from that service's own site (lib/serviceIcon.ts): public on purpose, an allowlist of services only.
+    "api/logo/svc/[key]",
     "api/mcp",
     // Drafting a reply in Messages with Merlin's AI (lib/messagesAi.ts): the member's cookie, Close and the trial, their own conversations only; nothing stored.
     "api/messages",

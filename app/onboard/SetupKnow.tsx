@@ -21,7 +21,11 @@ import { COMPANY_PRICE } from "@/lib/tableFields";
 import type { RadarRow } from "@/lib/radar/types";
 import { bestBuyer, moveWhy } from "@/lib/moves";
 import { shown, type CoInfo } from "@/app/post/model";
-import { GoogleG, startGoogle } from "@/app/post/network/Network";
+import { startGoogle } from "@/app/post/network/Network";
+import { ServiceIcon, type Service } from "@/app/ui/ServiceIcon";
+import { ConnToggle } from "@/app/ui/ConnToggle";
+import { useOffSwitch } from "@/app/post/network/sourceSwitch";
+import { OFF_ASK, REMOVE, staysOff } from "@/app/post/settings/model";
 import { useNetwork } from "@/app/post/network/useNetwork";
 import { useKnown, usePaths } from "@/app/post/network/usePaths";
 import { CsvAct, LinkedInAct, SOURCE_TEXT, type SourceKey } from "@/app/post/network/ConnectPanel";
@@ -48,8 +52,6 @@ export function useKnowCounts(): { any: boolean; line: string; people: number } 
 }
 
 /* ---------- step 4: who you know ---------- */
-
-const ICON: Record<SourceKey, string> = { google: "M4 6h16v12H4zM4 7l8 6 8-6", linkedin: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4", csv: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14" };
 
 export function KnowScreen({ onLeave }: { onLeave: () => void }) {
   const { view: paths } = usePaths();
@@ -90,75 +92,9 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
         </span>
       </div>
       <div className="su-sources">
-        {(["google", "linkedin", "csv"] as SourceKey[]).map((k) => {
-          const t = SOURCE_TEXT[k];
-          const st = status(k);
-          const off = k === "google" && !googleReady;
-          return (
-            <article key={k} className={`su-src${st ? " in" : ""}${open === k && k === "linkedin" ? " su-src-wide" : ""}`} aria-label={t.name}>
-              <span className="su-src-top">
-                <span className="su-src-i" aria-hidden>
-                  {k === "google" ? (
-                    <GoogleG size={18} />
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={ICON[k]} />
-                    </svg>
-                  )}
-                </span>
-                <span className="su-src-t">
-                  <strong>{t.name}</strong>
-                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "Your own LinkedIn data export: the whole .zip, or just Connections.csv. Read on this device: who you message and how often (never the words), your roles and who vouched for you." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
-                </span>
-              </span>
-              {st ? (
-                <span className="su-ok" role="status">
-                  <IconCheck size={14} /> {st}
-                </span>
-              ) : null}
-              {k === "google" ? (
-                off ? (
-                  <span className="su-small">Google isn&apos;t on for Merlin yet. Your LinkedIn file or a CSV works without it.</span>
-                ) : googleIn ? null : (
-                  <span className="su-src-acts">
-                    <button
-                      type="button"
-                      className="su-pine"
-                      onClick={() => {
-                        onLeave();
-                        startGoogle("onboard");
-                      }}
-                    >
-                      Connect Google
-                    </button>
-                    <span className="su-small">You come back to this step after Google asks you.</span>
-                  </span>
-                )
-              ) : open === k ? (
-                k === "linkedin" ? (
-                  <LinkedInAct paths={paths} onAdded={() => setOpen(null)} />
-                ) : (
-                  <CsvAct paths={paths} wide={false} onAdded={() => setOpen(null)} />
-                )
-              ) : (
-                <span className="su-src-acts">
-                  <button type="button" className={st ? "su-ghost" : "su-pine"} onClick={() => setOpen(k)}>
-                    {st ? "Manage it" : k === "linkedin" ? "Add your export" : "Add a CSV"}
-                  </button>
-                  <span className="su-small">{k === "linkedin" ? `No export yet? ${ASK_EARLY} Skip, and add it later in Settings.` : "Columns are matched for you, and you see a preview first."}</span>
-                </span>
-              )}
-              {k === "google" ? (
-                <span className="su-small">
-                  Google stays private: only you see what it brings in, and Merlin never uses it to add anyone to Merlin or to show anyone else.{" "}
-                  <a className="su-a" href="/privacy#google" target="_blank" rel="noreferrer">
-                    How Merlin uses your Google data
-                  </a>
-                </span>
-              ) : null}
-            </article>
-          );
-        })}
+        {(["google", "linkedin", "csv"] as SourceKey[]).map((k) => (
+          <KnowCard key={k} k={k} status={status(k)} open={open === k} setOpen={(on) => setOpen(on ? k : null)} googleReady={googleReady} googleIn={googleIn} lixIn={!!lix} onLeave={onLeave} />
+        ))}
       </div>
       <section className="su-reads" aria-label="What Merlin reads">
         <div>
@@ -182,6 +118,107 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
         <p className="su-small">Nothing here yet. If you skip, Merlin still shows the fractional who held each seat as a way in, and you can bring your contacts in later from Settings.</p>
       ) : null}
     </>
+  );
+}
+
+const KNOW_ICON: Record<SourceKey, Service> = { google: "google", linkedin: "linkedin", csv: "csv" };
+
+/**
+ * One source of who you know, with its switch (the way Settings / Connections has one): on is in.
+ * Off to on: Connect Google (Google's OAuth, back to this step), or the file picker of the LinkedIn
+ * export or a CSV at once. Cancelled or failed, it is back to off, said plainly. On to off: the
+ * question first, then that source's own delete (settings/model.ts REMOVE).
+ */
+function KnowCard({ k, status: st, open, setOpen, googleReady, googleIn, lixIn, onLeave }: { k: SourceKey; status: string | null; open: boolean; setOpen: (on: boolean) => void; googleReady: boolean; googleIn: boolean; lixIn: boolean; onLeave: () => void }) {
+  const { view: paths } = usePaths();
+  const t = SOURCE_TEXT[k];
+  const [said, setSaid] = useState<{ t: string; bad: boolean } | null>(null);
+  const [pending, setPending] = useState(false);
+  const say = (words: string, bad = false) => setSaid({ t: words, bad });
+  const liIn = !!paths?.linkedin;
+  const on = k === "google" ? googleIn : k === "linkedin" ? liIn || lixIn : !!paths?.csv;
+  const off = useOffSwitch({
+    name: k === "google" ? "Google" : k === "linkedin" ? "LinkedIn" : "Your contacts file",
+    ask: k === "google" ? OFF_ASK.google : k === "linkedin" ? (lixIn && liIn ? OFF_ASK.linkedinAll : lixIn ? OFF_ASK.lix : OFF_ASK.linkedin) : OFF_ASK.csv,
+    removes: k === "google" ? [REMOVE.google] : k === "linkedin" ? [...(lixIn ? [REMOVE.lix] : []), ...(liIn ? [REMOVE.linkedin] : [])] : [REMOVE.csv],
+    onSaid: say,
+  });
+  // A file came in: the switch is simply on.
+  useEffect(() => {
+    if (on) setPending(false);
+  }, [on]);
+  const stop = (why?: string) => {
+    setPending(false);
+    setOpen(false);
+    say(staysOff(k === "linkedin" ? "LinkedIn" : "Your contacts file", why), !!why);
+  };
+  const flip = () => {
+    setSaid(null);
+    if (on) return off.ask();
+    if (pending) return stop();
+    if (k === "google") {
+      setPending(true);
+      onLeave();
+      return startGoogle("onboard");
+    }
+    setPending(true);
+    setOpen(true);
+  };
+  const noGoogle = k === "google" && !googleReady;
+  return (
+    <article className={`su-src${st ? " in" : ""}${open && k === "linkedin" ? " su-src-wide" : ""}`} aria-label={t.name}>
+      <span className="su-src-top">
+        <span className="su-src-i" aria-hidden>
+          <ServiceIcon service={KNOW_ICON[k]} size={18} />
+        </span>
+        <span className="su-src-t">
+          <strong>{t.name}</strong>
+          <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "Your own LinkedIn data export: the whole .zip, or just Connections.csv. Read on this device: who you message and how often (never the words), your roles and who vouched for you." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
+        </span>
+        <ConnToggle name={t.name} on={on} pending={pending && !on} busy={off.busy} disabled={noGoogle} onFlip={flip} />
+      </span>
+      {st ? (
+        <span className="su-ok" role="status">
+          <IconCheck size={14} /> {st}
+        </span>
+      ) : null}
+      {off.el}
+      {said ? (
+        <span className={`su-small${said.bad ? " su-bad" : ""}`} role="status">
+          {said.t}
+        </span>
+      ) : null}
+      {k === "google" ? (
+        noGoogle ? (
+          <span className="su-small">Google isn&apos;t on for Merlin yet. Your LinkedIn file or a CSV works without it.</span>
+        ) : googleIn ? null : (
+          <span className="su-small">Turn it on and Google asks you first. You come back to this step after.</span>
+        )
+      ) : open ? (
+        k === "linkedin" ? (
+          <LinkedInAct paths={paths} autoPick={pending} onStop={pending ? stop : undefined} onAdded={() => (setPending(false), setOpen(false))} />
+        ) : (
+          <CsvAct paths={paths} wide={false} autoPick={pending} onStop={pending ? stop : undefined} onAdded={() => (setPending(false), setOpen(false))} />
+        )
+      ) : (
+        <span className="su-src-acts">
+          {on ? (
+            <button type="button" className="su-ghost" onClick={() => setOpen(true)}>
+              Manage it
+            </button>
+          ) : null}
+          <span className="su-small">{k === "linkedin" ? `No export yet? ${ASK_EARLY} Skip, and add it later in Settings.` : "Columns are matched for you, and you see a preview first."}</span>
+        </span>
+      )}
+      {k === "google" ? (
+        <span className="su-small">
+          Google stays private: only you see what it brings in, and Merlin never uses it to add anyone to Merlin or to show anyone else.{" "}
+          <a className="su-a" href="/privacy#google" target="_blank" rel="noreferrer">
+            How Merlin uses your Google data
+          </a>
+        </span>
+      ) : null}
+    </article>
   );
 }
 

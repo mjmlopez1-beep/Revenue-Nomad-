@@ -19,6 +19,7 @@
  * with more than 48 hours left nothing is charged until it ends (PlanView.firstChargeAt).
  * A member who said they aren't looking for a client hears the soft form: Free is a fine answer.
  */
+import { ServiceIcon } from "../ui/ServiceIcon";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Me, PlanView, View } from "@/lib/tableTypes";
 import { IconCheck, IconLock, IconX, useToast, errorText } from "../ui/shared";
@@ -1083,7 +1084,7 @@ export function PlanManageCards({ plan, refresh, ai = true }: { plan: PlanView; 
           <p className="cr-note">Change your card, see your invoices, or switch between monthly and yearly. It opens Stripe, where your payments are kept. Merlin never sees your card.</p>
           <div className="bl-acts">
             <button type="button" className="btn" disabled={!!busy} aria-busy={busy === "portal"} onClick={() => run("portal")}>
-              {busy === "portal" ? "Opening" : "Manage billing"}
+              <ServiceIcon service="stripe" size={16} /> {busy === "portal" ? "Opening" : "Manage billing"}
             </button>
           </div>
         </section>

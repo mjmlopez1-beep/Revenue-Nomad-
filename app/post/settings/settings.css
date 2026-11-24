@@ -841,8 +841,33 @@
 }
 .st-conn-acts {
   flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 2px;
+}
+/* Manage, or Details while off: opens the row below itself. */
+.st-manage {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.st-manage:focus-visible {
+  outline: 2px solid var(--pine);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.st-tile-lix {
+  background: #ddf0f7;
+}
+.st-tile-hook {
+  background: #eef1ef;
 }
 .st-conn-acts .btn {
   justify-content: center;
@@ -1199,9 +1224,12 @@
     flex: 1 1 100%;
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
   }
-  .st-conn-acts .btn {
-    flex: 1 1 120px;
+  .st-conn-acts .st-manage {
+    min-height: 44px;
+    padding: 0 8px;
   }
 }
 

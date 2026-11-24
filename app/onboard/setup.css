@@ -1121,6 +1121,16 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+/* The source's switch (ConnToggle), top right of its card. */
+.su-src-top > .ctg {
+  align-self: flex-start;
+  margin: -6px -4px 0 0;
+}
+.su-bad {
+  color: #b3261e;
+  font-weight: 600;
 }
 .su-src-t strong {
   font-size: 15px;

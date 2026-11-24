@@ -21,6 +21,7 @@
  * how many people they know at companies on Merlin, the warmest three, and the next step.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAutoPick } from "./useAutoPick";
 import { IconX, useToast } from "../../ui/shared";
 import {
   CONTACTS_PROBLEM_WORDS, CSV_PROBLEM_WORDS, mapProblem, parseConnections, pickColumns, readContacts, type ColumnMap, type ContactField, type ContactsFile,
@@ -106,6 +107,8 @@ export function ConnectPanel({
   onSeeKnown,
   onNext,
   nextLabel = "Open your first company",
+  autoPick,
+  onStop,
 }: {
   /** Getting started's step (the eyebrow "STEP 3 OF 6 · FREE · 2 MINUTES"), or null where it isn't a step. */
   step?: StepHead | null;
@@ -118,6 +121,10 @@ export function ConnectPanel({
   /** The next step's button, after a source is in. */
   onNext?: () => void;
   nextLabel?: string;
+  /** A switch turned the first source on: its file picker opens at once (useAutoPick). */
+  autoPick?: boolean;
+  /** Nothing was picked, or the file failed: the switch goes back to off. */
+  onStop?: (why?: string) => void;
 }) {
   const { view: paths } = usePaths();
   const net = useNetwork();
@@ -190,9 +197,9 @@ export function ConnectPanel({
       {src === "google" ? (
         <GoogleAct google={google} />
       ) : src === "linkedin" ? (
-        <LinkedInAct paths={paths} onAdded={() => (setAdded("linkedin"), toast("Your connections are in. Only you see them."))} />
+        <LinkedInAct paths={paths} autoPick={autoPick && src === start} onStop={src === start ? onStop : undefined} onAdded={() => (setAdded("linkedin"), toast("Your connections are in. Only you see them."))} />
       ) : (
-        <CsvAct paths={paths} wide={variant === "inline"} onAdded={() => setAdded("csv")} />
+        <CsvAct paths={paths} wide={variant === "inline"} autoPick={autoPick && src === start} onStop={src === start ? onStop : undefined} onAdded={() => setAdded("csv")} />
       )}
       <span className="cp-foot">{S.foot}</span>
     </div>
@@ -262,7 +269,7 @@ export function NamesOnlyNote({ li, google }: { li: LinkedInInfo | null; google:
   return <p className="cp-note cp-names">{namesOnlyShort(google)}</p>;
 }
 
-export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdded: () => void }) {
+export function LinkedInAct({ paths, onAdded, autoPick, onStop }: { paths: PathsView | null; onAdded: () => void; /** Open the picker at once (a switch was turned on). */ autoPick?: boolean; /** The member closed the picker with no file, or the file failed: the switch goes back to off. */ onStop?: (why?: string) => void }) {
   const file = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const google = useGoogleReady();
@@ -273,6 +280,8 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
   const [whole, setWhole] = useState<File[] | null>(null);
   const li = paths?.linkedin ?? null;
   const left = paths?.importsLeft ?? 0;
+  useAutoPick(file, autoPick, onStop);
+  const fail = (why: string) => (setErr(why), onStop?.(why));
   const pickMany = (fs: File[]) => {
     if (fs.length > 1 || fs.some((f) => /\.zip$/i.test(f.name) || !/connections/i.test(f.name))) {
       if (file.current) file.current.value = "";
@@ -283,17 +292,17 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
   const pick = async (f: File | undefined) => {
     if (!f) return;
     setErr(null);
-    if (f.size > FILE_MAX_BYTES) return setErr("That file is larger than LinkedIn's Connections.csv can be. Pick Connections.csv from the export.");
+    if (f.size > FILE_MAX_BYTES) return fail("That file is larger than LinkedIn's Connections.csv can be. Pick Connections.csv from the export.");
     setBusy("read");
     try {
       const text = await f.text();
       const r = parseConnections(text);
-      if (!r.ok) return setErr(CSV_PROBLEM_WORDS[r.problem]);
+      if (!r.ok) return fail(CSV_PROBLEM_WORDS[r.problem]);
       const res = await pathsAct("import", text);
-      if (res.error) setErr(res.error);
+      if (res.error) fail(res.error);
       else onAdded();
     } catch {
-      setErr("That file couldn't be read. Pick Connections.csv from LinkedIn's export.");
+      fail("That file couldn't be read. Pick Connections.csv from LinkedIn's export.");
     } finally {
       setBusy(null);
       if (file.current) file.current.value = "";
@@ -302,7 +311,7 @@ export function LinkedInAct({ paths, onAdded }: { paths: PathsView | null; onAdd
   if (whole)
     return (
       <div className="cp-acts">
-        <ExportPanel picked={whole} onClose={() => setWhole(null)} />
+        <ExportPanel picked={whole} onClose={() => setWhole(null)} onStop={onStop} />
         <button type="button" className="tp-flink" onClick={() => setWhole(null)}>
           Back to the connections file only
         </button>
@@ -395,7 +404,7 @@ function ColumnSelect({ label, field, header, map, onMap }: { label: string; fie
   );
 }
 
-export function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide: boolean; onAdded: () => void }) {
+export function CsvAct({ paths, wide, onAdded, autoPick, onStop }: { paths: PathsView | null; wide: boolean; onAdded: () => void; /** Open the picker at once (a switch was turned on). */ autoPick?: boolean; /** The member closed the picker with no file, the file failed, or they put it back: the switch goes back to off. */ onStop?: (why?: string) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -411,20 +420,22 @@ export function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide
   const [ask, setAsk] = useState(false);
   const csv = paths?.csv ?? null;
   const left = paths?.importsLeft ?? 0;
+  useAutoPick(input, autoPick, onStop);
+  const fail = (why: string) => (setErr(why), onStop?.(why));
   const pick = async (f: File | undefined) => {
     if (!f) return;
     setErr(null);
-    if (f.size > FILE_MAX_BYTES) return setErr("That file is too large. Pick a CSV under 8 MB, or split it in two.");
+    if (f.size > FILE_MAX_BYTES) return fail("That file is too large. Pick a CSV under 8 MB, or split it in two.");
     setBusy("read");
     try {
       const text = await f.text();
       const r = readContacts(text);
-      if (!r.ok) return setErr(CONTACTS_PROBLEM_WORDS[r.problem]);
+      if (!r.ok) return fail(CONTACTS_PROBLEM_WORDS[r.problem]);
       setFile({ name: f.name, text, info: r });
       setMap(r.map);
       setHalves(r.map.name === undefined && (r.map.first !== undefined || r.map.last !== undefined));
     } catch {
-      setErr("That file couldn't be read. Save it as a CSV and try again.");
+      fail("That file couldn't be read. Save it as a CSV and try again.");
     } finally {
       setBusy(null);
       if (input.current) input.current.value = "";
@@ -441,7 +452,7 @@ export function CsvAct({ paths, wide, onAdded }: { paths: PathsView | null; wide
     // Only these four columns leave the browser.
     const res = await pathsAct("importCsv", pickColumns(file.text, file.info, use));
     setBusy(null);
-    if (res.error) return setErr(res.error);
+    if (res.error) return fail(res.error);
     setFile(null);
     toast(res.message ?? "Added.");
     onAdded();

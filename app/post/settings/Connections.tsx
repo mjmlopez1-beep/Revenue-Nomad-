@@ -2,15 +2,22 @@
 
 /**
  * Settings / Connections (Settings.dc.html): every source Merlin may read and every place it may
- * post, one row each, with what it reads, what it never does, its last activity, what it feeds and
- * Remove. A row opens below itself to connect, add a file, or manage it. Remove runs that source's
- * own delete (model.ts REMOVE, calls.ts runRemove): Google's Disconnect and delete everything, the
- * file deletes, Slack's and the webhook's Remove, Granola's Disconnect, an agent's revoke.
+ * post, one row each, with its service's icon (<ServiceIcon>), what it reads, what it never does,
+ * its last activity, what it feeds, and an on/off switch the way Claude's connectors have one.
+ *   Off to on: that source's own connect flow (model.ts connectStep): Google's OAuth, Add to Slack
+ *   (or the webhook URL form), Connect Granola (or its API key form), the file picker of the LinkedIn
+ *   connections file, the data export or a contacts CSV, Agent access's steps. While it runs the
+ *   switch says Connecting; cancelled or failed, it is back to off with plain words (model.ts staysOff).
+ *   On to off: the question first ("Turn off Google? ..."), then that source's own delete (model.ts
+ *   REMOVE, calls.ts runRemove): Google's Disconnect and delete everything, the file deletes, Slack's
+ *   and the webhook's Remove, Granola's Disconnect, an agent's revoke.
+ * Manage (or Details, while off) opens the row below itself: Read again, Drop Gmail, the channel, the
+ * export's counts and the rest.
  *
  * Google moved here from Your network (connect, Read again, Gmail, what your agent saved, delete).
  * Google stays private to the member: only they see what it brings in (Google's Limited Use rules).
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { IntegrationsView } from "@/lib/notify/types";
 import type { NetworkView } from "@/lib/google/types";
 import type { PathsView } from "@/lib/paths/types";
@@ -22,14 +29,16 @@ import { loadKnown } from "../network/usePaths";
 import { CsvAct, LinkedInAct } from "../network/ConnectPanel";
 import { ExportPanel } from "../network/ExportPanel";
 import type { ExportInfo } from "@/lib/linkedin/types";
-import { ConnectForm, SlackGlyph } from "../Integrations";
+import { ConnectForm } from "../Integrations";
+import { ServiceIcon, type Service } from "../../ui/ServiceIcon";
+import { ConnToggle } from "../../ui/ConnToggle";
 import { connectKey, loadGranola, startGranola, useGranolaNotice } from "../granolaClient";
 import { GRANOLA_READS } from "../GranolaSection";
 import "../granola.css";
 import { openPlans } from "../Billing";
 import { useApp } from "../shell/pages";
 import type { ConnKey } from "./at";
-import { REMOVE, dayWords, type ConnRow, type Feed } from "./model";
+import { REMOVE, connectStep, dayWords, staysOff, type ConnRow, type Feed } from "./model";
 import { runRemove, send } from "./calls";
 
 export interface ConnData {
@@ -44,11 +53,35 @@ export interface ConnData {
   reloadApps: () => void;
 }
 
-const INITIALS: Record<ConnKey, string> = { google: "Go", linkedin: "Li", lix: "Ex", csv: "Co", slack: "Sl", hook: "Ot", granola: "Gr", agent: "Ag" };
+/** Each row's icon: the service's own (LinkedIn's on these signed-in pages only), a plain glyph for a webhook or a file. */
+export const CONN_ICON: Record<ConnKey, Service> = { google: "google", linkedin: "linkedin", lix: "linkedin", csv: "csv", slack: "slack", hook: "webhook", granola: "granola", agent: "claude" };
 
 export function Connections({ rows, open, setOpen, data, onNotif, flash }: { rows: ConnRow[]; open: ConnKey | null; setOpen: (k: ConnKey | null) => void; data: ConnData; onNotif: () => void; flash: (t: string, err?: boolean) => void }) {
+  const c = useApp();
   const [asking, setAsking] = useState<ConnKey | null>(null);
   const [busy, setBusy] = useState<ConnKey | null>(null);
+  // A switch turned on whose connect flow is open (the row below it, or a file picker).
+  const [pending, setPending] = useState<ConnKey | null>(null);
+  const nameOf = (k: ConnKey) => rows.find((r) => r.key === k)?.name ?? "It";
+  // Connected: the switch is simply on. Its row closed with nothing connected: back to off, said plainly.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (pending && rows.find((r) => r.key === pending)?.on) setPending(null);
+  }, [rows, pending]);
+  useEffect(() => {
+    const before = wasOpen.current;
+    wasOpen.current = open;
+    if (pending && before === pending && open !== pending && !rows.find((r) => r.key === pending)?.on) {
+      setPending(null);
+      flash(staysOff(nameOf(pending)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  /** The flow ended with nothing connected (the picker closed, the file failed): the switch is back to off. */
+  const stop = (k: ConnKey) => (why?: string) => {
+    setPending((p) => (p === k ? null : p));
+    flash(staysOff(nameOf(k), why), !!why);
+  };
   const remove = async (r: ConnRow) => {
     setBusy(r.key);
     const res = await runRemove(REMOVE[r.key], data.apps ?? []);
@@ -61,7 +94,43 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
     }
     if (r.key === "agent") data.reloadApps();
     if (r.key === "linkedin" || r.key === "csv" || r.key === "lix") void loadKnown(true);
+    if (r.key === "granola") void loadGranola(true);
+    if (open === r.key) setOpen(null);
     flash(`${r.name} is off. What it gave Merlin is deleted.`);
+  };
+  /** Off to on: that source's own connect flow (model.ts connectStep). */
+  const turnOn = (r: ConnRow) => {
+    const step = connectStep(r.key, { googleConfigured: !!data.net.view?.configured, slackApp: !!data.integ?.slackApp, granolaOauth: !!data.granola?.oauth });
+    switch (step.go) {
+      case "none":
+        return flash(staysOff(r.name, step.why), true);
+      case "google":
+        setPending(r.key);
+        return startGoogle();
+      case "slack-oauth":
+        setPending(r.key);
+        return window.location.assign(step.url);
+      case "granola-oauth":
+        setPending(r.key);
+        return startGranola(step.back);
+      case "page":
+        return c.openPage(step.page);
+      case "open":
+        setPending(r.key);
+        setAsking(null);
+        return setOpen(r.key);
+    }
+  };
+  const flip = (r: ConnRow) => {
+    if (busy) return;
+    if (pending === r.key) {
+      // Turned back off before anything connected.
+      setPending(null);
+      if (open === r.key) setOpen(null);
+      return flash(staysOff(r.name));
+    }
+    if (r.on) return setAsking(asking === r.key ? null : r.key);
+    turnOn(r);
   };
   return (
     <>
@@ -72,18 +141,17 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
           <span role="columnheader">What it can read, and never</span>
           <span role="columnheader">What it feeds</span>
           <span role="columnheader">Last activity</span>
-          <span role="columnheader">
-            <span className="st-sr">Change</span>
-          </span>
+          <span role="columnheader">On or off</span>
         </div>
         {rows.map((r) => {
           const op = open === r.key;
+          const waiting = pending === r.key && !r.on;
           return (
             <div key={r.key} className="st-conn-group" role="rowgroup">
               <div className={`st-conn-row${op ? " open" : ""}`} role="row" data-conn={r.key}>
                 <span role="cell" className="st-conn-name">
                   <span className={`st-tile st-tile-${r.key}`} aria-hidden>
-                    {r.key === "google" ? <GoogleG size={16} /> : INITIALS[r.key]}
+                    <ServiceIcon service={CONN_ICON[r.key]} size={18} />
                   </span>
                   <span className="st-two">
                     <strong>{r.name}</strong>
@@ -91,7 +159,7 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
                   </span>
                 </span>
                 <span role="cell" className="st-two">
-                  <span className={`st-pill${r.on && !r.trouble ? " on" : ""}${r.trouble ? " warn" : ""}`}>{r.status}</span>
+                  <span className={`st-pill${r.on && !r.trouble ? " on" : ""}${r.trouble ? " warn" : ""}`}>{waiting ? "Connecting" : r.status}</span>
                   <span className="st-faint">{r.since}</span>
                 </span>
                 <span role="cell" className="st-reads">
@@ -107,14 +175,10 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
                   {r.last}
                 </span>
                 <span role="cell" className="st-conn-acts">
-                  <button type="button" className={`btn btn-sm${!r.on && !op ? " st-go-off" : ""}`} aria-expanded={op} aria-label={`${op ? "Close" : r.go} ${r.name}`} onClick={() => (setOpen(op ? null : r.key), setAsking(null))}>
-                    {op ? "Close" : r.go}
+                  <ConnToggle name={r.name} on={r.on} pending={waiting} busy={busy === r.key} disabled={(!!busy && busy !== r.key) || r.status === "Loading"} onFlip={() => flip(r)} />
+                  <button type="button" className="st-manage" aria-expanded={op} aria-label={`${op ? "Close" : r.on ? "Manage" : "Details of"} ${r.name}`} onClick={() => (setOpen(op ? null : r.key), setAsking(null))}>
+                    {op ? "Close" : r.on ? "Manage" : "Details"}
                   </button>
-                  {r.remove && asking !== r.key && (
-                    <button type="button" className="btn btn-sm btn-ghost st-remove" aria-label={`Remove ${r.name}`} disabled={!!busy} onClick={() => setAsking(r.key)}>
-                      Remove
-                    </button>
-                  )}
                 </span>
               </div>
               {r.remove && asking === r.key && (
@@ -123,10 +187,10 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
                     <span>{r.remove.ask}</span>
                     <span className="st-ask-acts">
                       <button type="button" className="btn btn-sm st-btn-red" disabled={busy === r.key} aria-busy={busy === r.key} onClick={() => void remove(r)}>
-                        {busy === r.key ? "Removing" : r.remove.yes}
+                        {busy === r.key ? "Turning off" : r.remove.yes}
                       </button>
                       <button type="button" className="btn btn-sm btn-pine" autoFocus onClick={() => setAsking(null)}>
-                        Keep it
+                        Keep it on
                       </button>
                     </span>
                   </div>
@@ -135,7 +199,7 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
               {op && (
                 <div className="st-conn-detail" role="row">
                   <div role="cell">
-                    <Detail k={r.key} row={r} data={data} onNotif={onNotif} flash={flash} />
+                    <Detail k={r.key} row={r} data={data} onNotif={onNotif} flash={flash} pick={waiting} onStop={stop(r.key)} />
                   </div>
                 </div>
               )}
@@ -143,7 +207,7 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
           );
         })}
       </div>
-      <p className="st-note">Merlin never reads the text of an email or a message, through any connection. When you remove one, what it gave Merlin is deleted as its row says. Connections never spend a credit.</p>
+      <p className="st-note">Merlin never reads the text of an email or a message, through any connection. Turn one off and what it gave Merlin is deleted as its row says. Connections never spend a credit.</p>
     </>
   );
 }
@@ -182,7 +246,7 @@ function Facts({ title, rows }: { title: string; rows: [string, ReactNode][] }) 
 }
 
 /** What opens under a row: how to connect it, or what is on file and what else it can do. */
-function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; data: ConnData; onNotif: () => void; flash: (t: string, err?: boolean) => void }) {
+function Detail({ k, row, data, onNotif, flash, pick, onStop }: { k: ConnKey; row: ConnRow; data: ConnData; onNotif: () => void; flash: (t: string, err?: boolean) => void; /** Its switch was just turned on: open the file picker at once. */ pick?: boolean; /** The connect flow ended with nothing connected. */ onStop?: (why?: string) => void }) {
   const c = useApp();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -299,7 +363,7 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
         <FeedsBox row={row} />
         {/* The pick, the consent screen and the results take the row's whole width. */}
         <div className="lx-full">
-          <ExportPanel />
+          <ExportPanel autoPick={pick} onStop={pick ? onStop : undefined} />
         </div>
       </div>
     );
@@ -316,9 +380,9 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
               : "Any list with a name and a company. You match the columns and see a preview before anything is saved. Only the columns you pick reach Merlin."}
           </span>
           {k === "linkedin" ? (
-            <LinkedInAct paths={data.paths} onAdded={() => (toast("Your connections are in. Only you see them."), void loadKnown(true))} />
+            <LinkedInAct paths={data.paths} autoPick={pick} onStop={pick ? onStop : undefined} onAdded={() => (toast("Your connections are in. Only you see them."), void loadKnown(true))} />
           ) : (
-            <CsvAct paths={data.paths} wide={!c.phone} onAdded={() => (toast("Your contacts are in. Only you see them."), void loadKnown(true))} />
+            <CsvAct paths={data.paths} wide={!c.phone} autoPick={pick} onStop={pick ? onStop : undefined} onAdded={() => (toast("Your contacts are in. Only you see them."), void loadKnown(true))} />
           )}
         </div>
         <Facts
@@ -383,7 +447,7 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
               {integ.slackApp && (
                 <span className="st-acts">
                   <a className="btn btn-pine st-g" href="/api/integrations/slack/start">
-                    <SlackGlyph /> Add to Slack
+                    <ServiceIcon service="slack" size={18} /> Add to Slack
                   </a>
                 </span>
               )}
