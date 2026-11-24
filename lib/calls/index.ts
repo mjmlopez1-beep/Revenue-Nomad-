@@ -33,6 +33,7 @@ import { loadSeed, loadState, tableInternals as T, type Member, type Seed, type 
 import { emailEnabled, sendEmail } from "../email";
 import { styleOf, voiceSummary } from "../voice";
 import { workflowsOn } from "../workflows/run";
+import { watchingOf } from "../workflows/graph";
 import {
   CALL_DEFAULT, CALL_STEPS, DELIVERABLE_WORDS, WF_LIMITS, emptyWorkflows, oneLineWf,
   type CallOptions, type Deliverable, type MemberWorkflows, type RunStep, type WfPack, type WfRun, type WfStepKey, type Workflow, type CallsInfo,
@@ -181,7 +182,7 @@ function makeReading(m: Member, s: State, ctx: Omit<CallCtx, "reading">, want: {
 function callWatchers(s: State): string[] {
   if (!callTriggersOn() || !workflowsOn()) return [];
   return Object.entries(s.workflows ?? {})
-    .filter(([id, w]) => !s.closures?.[id] && w.flows.some((f) => f.on && f.trigger === "call"))
+    .filter(([id, w]) => !s.closures?.[id] && watchingOf(w).some((f) => f.trigger === "call"))
     .map(([id]) => id);
 }
 
@@ -203,7 +204,7 @@ export async function callTick(nowMs = Date.now(), origin?: string): Promise<num
     for (const memberId of who) {
       const m = idx.byId.get(memberId);
       if (!m) continue;
-      const flows = s.workflows![memberId].flows.filter((f) => f.on && f.trigger === "call");
+      const flows = watchingOf(s.workflows![memberId]).filter((f) => f.trigger === "call");
       const want = { followup: flows.some((f) => f.steps.some((x) => x.key === "followup")), deck: flows.some((f) => f.steps.some((x) => x.key === "deck")) };
       for (const r of connectedRecorders(s, memberId)) {
         const cur = s.workflows![memberId].calls?.[r.key];

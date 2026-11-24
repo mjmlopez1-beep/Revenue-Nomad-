@@ -237,6 +237,8 @@ run known npx tsx scripts/test-known.mts
 run workflows npx tsx scripts/test-workflows.mts
 # A call ends (lib/calls): a fake Granola MCP server, a fake Fathom API and a fake AI endpoint, in process.
 run call-triggers npx tsx scripts/test-call-triggers.mts
+# Workflows v2 (RN_WORKFLOWS_V2, lib/workflows/graph.ts, graphRun.ts, v2.ts): off is a 404 and today's engine as before; every recipe converts losslessly and runs with the same results; save refuses a send without a tap and a second trigger; the credit quote, the cap and the daily limit; branches; Ask me and Approve, then send; Retry; test mode; describe-to-build; a wait carried on by a second process. In process, on a made-up seed.
+run workflows2 npx tsx scripts/test-workflows2.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
 run invites npx tsx scripts/test-invites.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts

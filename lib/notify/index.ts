@@ -373,6 +373,34 @@ export function postWatch(memberId: string, a: Alert, log: { alert: string; coun
   );
 }
 
+/**
+ * A Workflows v2 notify step (RN_WORKFLOWS_V2): post one alert to the member's own working Slack, or
+ * their own webhook, only that one. Null when that kind isn't connected (or integrations aren't
+ * allowed on the plan); else whether it took it.
+ */
+export function postToKind(memberId: string, kind: "slack" | "webhook", a: Alert, log: { alert: string; count: number }[]): Promise<boolean | null> {
+  return track(
+    (async () => {
+      if (!integrationsAllowed(memberId)) return null;
+      const s = await loadState();
+      const dest = live(s.integrations?.members[memberId]).find((d) => (kind === "webhook" ? d.kind === "webhook" : d.kind !== "webhook"));
+      if (!dest) return null;
+      const now = new Date().toISOString();
+      const r = await post(dest.kind, dest.url, a, now);
+      await T.mutate((d) => {
+        const st = integ(d);
+        const cur = st.members[memberId];
+        const dd = [cur?.slack, cur?.webhook].find((x) => x?.url === dest.url);
+        if (dd) record(dd, r, now);
+        if (r.ok) st.stats.sent.watch = (st.stats.sent.watch ?? 0) + 1;
+        else st.stats.failed++;
+        if (r.ok) logAlert(d, memberId, log.map((x) => ({ at: now, alert: x.alert, kind: "watch", channel: kind, count: x.count })));
+      });
+      return r.ok;
+    })(),
+  );
+}
+
 /** The member has a working Slack or webhook connected. */
 export const connectedFor = (s: State, memberId: string) => live(s.integrations?.members[memberId]).length > 0;
 

@@ -178,6 +178,9 @@ export interface MemberWorkflows {
   packs?: WfPack[];
   /** The call watch's cursor, by recorder ("granola", "fathom"). */
   calls?: Record<string, CallCursor>;
+  /** Workflows v2 (RN_WORKFLOWS_V2, lib/workflows/graph.ts): the graphs the member saved, and their runs (the last V2_LIMITS.runsKept a workflow). */
+  graphs?: import("./graph").GraphWorkflow[];
+  graphRuns?: import("./graph").GraphRun[];
 }
 export type WorkflowsState = Record<string, MemberWorkflows>;
 
@@ -491,8 +494,10 @@ export function forgetWorkflows(d: { workflows?: WorkflowsState }, memberId: str
  */
 export function exportWorkflows(ws: WorkflowsState | undefined): WorkflowsState | undefined {
   if (!ws) return undefined;
-  // A call run's packs for Claude and the call watch's cursor stay out too.
-  return Object.fromEntries(Object.entries(ws).map(([id, w]) => [id, { flows: w.flows, runs: [], reminders: [], drafts: [], keys: [] }]));
+  // A call run's packs for Claude and the call watch's cursor stay out too. Workflows v2: the graphs stay (definitions, the webhook's secret left out); their runs don't.
+  return Object.fromEntries(
+    Object.entries(ws).map(([id, w]) => [id, { flows: w.flows, runs: [], reminders: [], drafts: [], keys: [], ...(w.graphs?.length ? { graphs: w.graphs.map(({ hook: _h, ...g }) => g) } : {}) }]), // eslint-disable-line @typescript-eslint/no-unused-vars
+  );
 }
 
 /* ---------- what the Alerts page reads (GET /api/table?workflows=1) ---------- */
