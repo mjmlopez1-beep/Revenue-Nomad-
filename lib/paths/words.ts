@@ -64,6 +64,12 @@ export interface Parts {
   bridgeId?: string;
   leaderId?: string;
   ownSeat?: string | null;
+  /**
+   * The person decides or hired at the target, as Merlin has them on file there, while the member's
+   * own file has them at another company: their title from that file is their title there, so it is
+   * never said beside the target (one company per person shown, never another's title).
+   */
+  elsewhere?: boolean;
 }
 
 /** "Acme's", "Acme Robotics'", or "this company's". */

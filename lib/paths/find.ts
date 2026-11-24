@@ -280,8 +280,8 @@ export function findAll(w: World, me: Me, contacts: Contact[]): { byCompany: Map
     for (const l of leaders) {
       if (l.seat && (l.rel === "Hiring for the seat" || l.rel === "Reported to")) {
         const s = w.seats.get(l.seat);
-        add(l.companyId, 1, BASE.hired, recency(s?.active ? 0 : yearsAgo(s?.to ?? s?.from ?? null)), { kind: "hired", fn: s?.fn ?? null, rel: l.rel, year: s?.active ? null : yearOf(s?.from ?? null), ownSeat: l.seat, active: !!s?.active });
-      } else if (l.rel === "Decision maker" && l.companyId !== c.companyId) add(l.companyId, 1, BASE.leads * 0.9, 0.9, { kind: "leads" });
+        add(l.companyId, 1, BASE.hired, recency(s?.active ? 0 : yearsAgo(s?.to ?? s?.from ?? null)), { kind: "hired", fn: s?.fn ?? null, rel: l.rel, year: s?.active ? null : yearOf(s?.from ?? null), ownSeat: l.seat, active: !!s?.active, ...(l.companyId !== c.companyId ? { elsewhere: true } : {}) });
+      } else if (l.rel === "Decision maker" && l.companyId !== c.companyId) add(l.companyId, 1, BASE.leads * 0.9, 0.9, { kind: "leads", elsewhere: true });
     }
     const mySeats = pc ? (w.persons.get(pc)?.seats ?? []).map((id) => w.seats.get(id)!).filter(Boolean) : [];
     for (const s of mySeats)
@@ -410,7 +410,9 @@ function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
   const d = "directory" in r.via ? r.via : null;
   const name = c?.name ?? d!.name;
   const first = c?.first ?? name.trim().split(/\s+/)[0];
-  const who: Who = { name, first, title: c?.title ?? null, src: c?.src ?? ["messages"], met: c?.met ?? false };
+  // Their title from the member's own file is their title at the company the file has them at: said only where that is the target.
+  const title = r.parts.elsewhere ? null : c?.title ?? null;
+  const who: Who = { name, first, title, src: c?.src ?? ["messages"], met: c?.met ?? false };
   if (d) who.src = [];
   const parts: Parts = { ...r.parts, who, target };
   const score = scoreOf(r.degree, r.q);
@@ -426,7 +428,7 @@ function viewOf(r: Raw, target: string | null, me: Me, key: string): PathView {
       key: c?.key ?? null,
       name,
       first,
-      title: c?.title ?? null,
+      title,
       src: c?.src ?? [],
       warmth: c?.warmth ?? null,
       why: c?.why ?? "In the Fractionals directory",

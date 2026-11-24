@@ -395,7 +395,8 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
   };
   switch (parts.kind) {
     case "leads":
-      viaIsTarget(`${p.via.title ?? "A leader"} · decides`);
+      // On file as a decision maker there while the member's file has them elsewhere: no title from that other company.
+      viaIsTarget(`${p.via.title ?? (parts.elsewhere ? "Decision maker" : "A leader")} · decides`);
       break;
     case "hired": {
       const fnWords = fnSeat(parts.fn);
