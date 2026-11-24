@@ -28,6 +28,8 @@ import { guarded } from "@/lib/apiGuard";
 import { ActionError } from "@/lib/table";
 import { publicOrigin } from "@/lib/mcp/http";
 import { limited } from "@/lib/rateLimit";
+import { memberRead } from "@/lib/usageGuard";
+import { memberForToken } from "@/lib/table";
 import { companyPaths, deleteConnections, deleteContacts, importConnections, importContacts, knownView, pathsView, setAway } from "@/lib/paths";
 import { FILE_MAX_BYTES } from "@/lib/paths/types";
 import { getInView, planLines, warmView, wayAct, wayIn, type WayOp } from "@/lib/paths/ways";
@@ -42,6 +44,10 @@ const fail = (error: string, status = 400) => NextResponse.json({ error }, { sta
 export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get(COOKIE)?.value ?? null;
   const sp = req.nextUrl.searchParams;
+  // Per-member read limits (lib/usageGuard.ts): Warm paths and Your network read people, so they count as people reads.
+  const who = token ? (await memberForToken(token))?.id : undefined;
+  const slow = who ? memberRead(who, "people") : null;
+  if (slow) return fail(slow, 429);
   if (sp.get("map") !== null) {
     const v = await getInView(token);
     if (!v) return fail(SIGNED_OUT, 401);

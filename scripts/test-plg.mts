@@ -103,7 +103,8 @@ writeFileSync(
       members: {
         mem_pro: { trialStartedAt: iso(-60 * DAY), trialEndsAt: iso(-39 * DAY), proUntil: iso(20 * DAY), interval: "month", paidSince: iso(-39 * DAY) },
         // Tia's trial ends in 3 days (day 18 of 21).
-        mem_tri: { trialStartedAt: iso(-18 * DAY), trialEndsAt: iso(3 * DAY - HOUR) },
+        // (Extended once already: opening companies in her last days, a value moment, doesn't move the end here.)
+        mem_tri: { trialStartedAt: iso(-18 * DAY), trialEndsAt: iso(3 * DAY - HOUR), trialExtended: true },
         mem_free: { trialStartedAt: iso(-40 * DAY), trialEndsAt: iso(-19 * DAY) },
       },
       events: [],

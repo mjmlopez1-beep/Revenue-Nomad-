@@ -114,7 +114,8 @@ writeFileSync(
         mem_clo: { trialStartedAt: iso(-60 * DAY), trialEndsAt: iso(-39 * DAY), proUntil: iso(20 * DAY), interval: "month", paidSince: iso(-39 * DAY), tier: "close" },
         mem_tri: { trialStartedAt: iso(-2 * DAY), trialEndsAt: iso(19 * DAY) },
         // Ty's trial ends in 2 days.
-        mem_tend: { trialStartedAt: iso(-19 * DAY), trialEndsAt: iso(2 * DAY) },
+        // (Extended once already, so opening companies in his last days, a value moment, doesn't extend it again.)
+        mem_tend: { trialStartedAt: iso(-19 * DAY), trialEndsAt: iso(2 * DAY), trialExtended: true },
         // Cam is on Pro, cancelled: it runs to 3 days from now, then Free.
         mem_can: { trialStartedAt: iso(-60 * DAY), trialEndsAt: iso(-39 * DAY), proUntil: iso(3 * DAY), interval: "month", paidSince: iso(-39 * DAY), cancelAt: iso(-DAY) },
         mem_free: { trialStartedAt: iso(-40 * DAY), trialEndsAt: iso(-19 * DAY) },

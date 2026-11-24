@@ -2394,11 +2394,11 @@ function freeCompanyLeft(s: State, memberId: string, nowMs: number): boolean {
  * the day, as before. Free while billing is live: none (its free one is Crystal Ball's).
  */
 function freeCompaniesLeft(s: State, memberId: string, nowMs: number): number {
-  // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves it out, for the suites that check what paid unlocks cost.
-  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return 0;
   const acc = accessFor(s, memberId, nowMs);
   if (acc === "open") return 0;
   if (acc === "trial") return trialOpensLeft(s, memberId, nowMs);
+  // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves the free company of the day out, for the suites that check what paid unlocks cost.
+  if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return 0;
   if (gated(planRec(s, memberId), nowMs)) return 0;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   const used = s.ledger.filter((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today).length;

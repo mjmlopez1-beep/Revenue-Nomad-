@@ -314,9 +314,7 @@ export function threeLines(
   me: Pick<Me, "earnCap" | "proOpens" | "crystal"> & Partial<Pick<Me, "openAll">>,
   starter: number,
 ): { n: string; t: string; s: string }[] {
-  const opens = me.openAll
-    ? " On your plan everything opens; only email and phone numbers cost credits."
-    : me.proOpens
+  const opens = me.proOpens
     ? ` In your trial companies open free, up to ${TRIAL_OPENS_DAILY} a day, with everything on them.`
     : me.crystal === "one" || me.crystal === "used"
       ? ` On Free, one ${FEATURE_NAME} company a day opens free.`
@@ -329,8 +327,8 @@ export function threeLines(
     },
     {
       n: "−",
-      t: "You spend to see.",
-      s: `A company is ${COMPANY_PRICE} credits and a fact is 1.${opens}`,
+      t: me.openAll ? "You spend on email and phone." : "You spend to see.",
+      s: me.openAll ? "Pro opens everything. A person's email or phone number is 1 credit, where a fellow fractional added it." : `A company is ${COMPANY_PRICE} credits and a fact is 1.${opens}`,
     },
     {
       n: "+1",

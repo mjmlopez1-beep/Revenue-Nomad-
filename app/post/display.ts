@@ -79,13 +79,15 @@ export function postingToOpen(i: CoInfo, focus: string | null): { e: EngagementR
  * is below their credits (25 on an account's first day, then 100 in any 24 hours; lib/table.ts
  * unlockRoom). Null when the credits run out first, or no limit is in play.
  */
-export function unlocksLeft(me: Pick<Me, "credits" | "unlocksLeft">): number | null {
+export function unlocksLeft(me: Pick<Me, "credits" | "unlocksLeft"> & Partial<Pick<Me, "openAll">>): number | null {
+  // Pro and Close open everything: no "N unlocks left today" (email and phone keep the day's limit on the server).
+  if (me.openAll) return null;
   const left = me.unlocksLeft;
   return left === null || left === undefined || left >= me.credits ? null : left;
 }
 
 /** "25 unlocks left today", near the balance and on the record's unlock line. Null when the limit doesn't bind. */
-export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft">): string | null {
+export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft"> & Partial<Pick<Me, "openAll">>): string | null {
   const left = unlocksLeft(me);
   if (left === null) return null;
   return left === 0 ? "No unlocks left today" : `${left} ${left === 1 ? "unlock" : "unlocks"} left today`;

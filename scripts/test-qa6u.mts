@@ -12,7 +12,7 @@
  *     which month of a yearly plan; the thanks after checkout names the plan bought; the sidebar's
  *     plan line; a free open in the credit history names the plan it opened on (the Close trial);
  *     the billing page for a member on Close says Close in its status, buttons and pause card;
- *   - Home's trial card: the free opens left of 15, and the Crystal Ball's count in its own words;
+ *   - Home's trial card: the trial's companies left of 40, and the Crystal Ball's count in its own words;
  *   - the table's credits line reads the balance now (pickSlotNudge);
  *   - Unlock and send: the one question says the message then sends;
  *   - the claim page says where Merlin found the seat, and who sent the link;
@@ -198,8 +198,8 @@ async function inProcess() {
   /* ---------- Home's trial card ---------- */
   console.log("\nHome's trial card");
   const TM = await import("../app/post/todayModel");
-  const card = TM.trialCardLine(21, { left: 15, of: 15 }, 18);
-  check("the free opens left of 15, then Crystal Ball's 18 in its own words", /15 of 15 free opens left today\. 18 companies are in your Crystal Ball today\.$/.test(card) && !/ 18 left today/.test(card), card);
+  const card = TM.trialCardLine(21, { left: 40, of: 40 }, 18);
+  check("the trial's companies left of 40, then Crystal Ball's 18 in its own words", /40 of 40 companies left to open today\. 18 companies are in your Crystal Ball today\.$/.test(card) && !/ 18 left today/.test(card), card);
 
   /* ---------- one balance ---------- */
   console.log("\nThe table's credits line");
