@@ -186,7 +186,8 @@ async function inProcess() {
   check("on view, the seed's Welcome Read reads as nobody named", !json.includes("Welcome Read") && holderOf("Harborline Labs")?.s === "empty", cells);
   // Fellow fractionals are free (PEERS_FREE): at a company Ada can see, who held the seat shows by name, at no charge.
   const named = (c: ReturnType<typeof holderOf>, v: string) => c?.s === "value" && (c as { v?: unknown }).v === v;
-  check("Ashley Read and a member's own Dear Halvorsen are still on their seats (named, free: fellow fractionals)", named(holderOf("Readwell Systems"), "Ashley Read") && named(holderOf("Halvorsen Partners Co"), "Dear Halvorsen"), cells);
+  // A member is named to others by first name and last initial until they choose the directory (lib/memberName.ts, profile item 1, 2026-11-24).
+  check("Ashley Read and a member's own Dear Halvorsen are still on their seats (named, free: fellow fractionals)", named(holderOf("Readwell Systems"), "Ashley Read") && named(holderOf("Halvorsen Partners Co"), "Dear H."), cells);
   const names = coOf("Readwell Systems").people.map((p) => p.cells.name?.s).sort();
   check("a person named Meet Our Team has no name on view; Jordan Read keeps theirs", !json.includes("Meet Our Team") && names.join() === "empty,locked", cells);
   const sal = "tok-sal-qafix";

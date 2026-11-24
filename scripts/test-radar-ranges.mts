@@ -16,9 +16,9 @@
  *     kept opens the default range and says so; without &range= the view is the one Home, Today's
  *     moves and the connect moment read, unchanged (the latest day, no ranges);
  *   - what counts "new" (RadarView.days, ?today=1's newCount and since) means what it meant;
- *   - plans: Trial names each locked company across 30 days, Free names none; everything a range
+ *   - plans: the trial names only what it opened (lists keep the rest locked), Free names none; everything a range
  *     lists is in crystalCompanyIds (the server's check); Free opens one a UTC day in full from
- *     anywhere in Last 30 days, a second is refused, a company older than what is kept is refused;
+ *     anywhere in Last 30 days, a second is refused; on the trial one older than what is kept opens as a trial company;
  *   - the keep window: RADAR_KEEP_VIEW_DAYS is at least 31, and a delivery forgets older days;
  *   - the state's cost: the radar's share for a member with 30 days of history, printed.
  */
@@ -252,9 +252,11 @@ async function main() {
   check("the page's own since count (todayModel radarSince) is unchanged", radarSince(home!, `${ago(2)}T12:00:00.000Z`) === 4 && radarSince(home!, null) === 2);
 
   /* ---------- plans ---------- */
-  console.log("\nTrial: every range names its locked companies");
+  // Open data on paid plans (owner, 2026-11-24): the trial opens up to 40 companies a day in full, and lists show the rest
+  // locked until opened. So Crystal Ball names only what the trial opened: a locked company is described, never named.
+  console.log("\nTrial: every range keeps its locked companies unnamed until she opens them");
   check("Rae is on the trial", radar.isPro(await t.loadState(), "mem_rae", Date.now()));
-  check("each locked company in Last 30 days is named for her, and stays locked in her table", (month?.rows ?? []).every((r) => r.name === NAMES[Object.keys(NAMES).find((c) => pub(c) === r.id)!]) && (await t.buildView(RAE)).companies.filter((c) => ids(month).includes(c.id)).every((c) => c.hidden));
+  check("no locked company in Last 30 days is named for her, and each stays locked in her table", (month?.rows ?? []).length > 0 && (month?.rows ?? []).every((r) => !r.name) && !JSON.stringify(month).includes(NAMES[Object.keys(NAMES)[0]]) && (await t.buildView(RAE)).companies.filter((c) => ids(month).includes(c.id)).every((c) => c.hidden));
   const ballRae = await radar.crystalPublicIds(RAE);
   check("everything any range lists is in her Crystal Ball, so it opens free", [today, week, month].every((v) => ids(v).every((id) => ballRae.has(id))), [...ballRae]);
   check("a kept day outside the range is too (its link opens free), and nothing older", ballRae.has(P.i) && !ballRae.has(P.j));
@@ -269,7 +271,10 @@ async function main() {
       return (e as Error).message;
     }
   };
-  check("one older than what is kept is refused", (await refused(t.perform(RAE, { type: "unlock", entity: "company", id: P.j, field: "identity", from: "crystal" }, BASE))) === t.CRYSTAL_NOT_IN);
+  // One older than what is kept isn't Crystal Ball's to open: on the trial it opens as one of the day's 40, said as the trial's.
+  const pastKeep = (await t.perform(RAE, { type: "unlock", entity: "company", id: P.j, field: "identity", from: "crystal" }, BASE)) as { message?: string };
+  check("one older than what is kept opens as one of the trial's companies today, not as Crystal Ball's", /Free in your trial\. \d+ of today's 40 companies left\./.test(pastKeep.message ?? "") && (await t.buildView(RAE)).me!.credits === c0, pastKeep.message);
+  void refused;
 
   console.log("\nFree: no more than one a day, whatever the range");
   const fenMe = (await t.buildView(FEN)).me!;

@@ -105,8 +105,9 @@ async function main() {
     "own sites: the policy says Merlin reads the emails fractionals publish on their own business websites, US only, to invite them and show members, removable at /remove",
     PRIVACY_VERSION === "1.3" &&
       pt.includes(`${ownLine}, for people in the United States only, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at Remove my name.`) &&
-      src("app/data/DataFlows.tsx").includes(`${ownLine}, US only and never for a person in California, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at /remove.`) &&
-      src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only and never for a person in California by their own location (`lib/california.ts`), to invite them to join Merlin or claim their seats and to show members, and anyone can remove their name and email at `/remove`"),
+      // The email finder is private to the member who runs it (owner, 2026-11-24, "Pro opens everything"): the data page and the doc say so.
+      src("app/data/DataFlows.tsx").includes(`${ownLine}, US only and never for a person in California, to invite them to join Merlin or claim their seats, and through the email finder to show only the member who looks one up (never shared with other members and never sold). Anyone can remove their name and email at /remove.`) &&
+      src("docs/data-flows.md").includes("the email addresses that fractionals publish on their own business websites, US only and never for a person in California by their own location (`lib/california.ts`), to invite them to join Merlin or claim their seats, and through the email finder to show only the member who looks one up (never shared with other members and never sold), and anyone can remove their name and email at `/remove`"),
   );
   check(
     "deletion of Google data: the pipeline is cleared too, and access removed at Google means deleted after 30 days",

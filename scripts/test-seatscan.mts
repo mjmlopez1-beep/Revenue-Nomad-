@@ -365,8 +365,9 @@ if (up) {
   check("a fact they add after claiming earns as usual", r.status === 200 && (await credits(ann)) === before + 1, r.json);
   bv = await bob.view();
   const forBob = seatAt(bv, "Corvid Freight");
-  // Fellow fractionals are free (PEERS_FREE): Bob sees Corvid Freight, so the name shows at no charge.
-  check("others see the name, free, and it isn't claimable", forBob.cells.operator.s === "value" && forBob.cells.operator.v === "Annika Claimworth" && !forBob.claimable && !forBob.yours, forBob);
+  // Fellow fractionals are free (PEERS_FREE): Bob sees Corvid Freight, so the name shows at no charge, the way Annika
+  // chose it: first name and last initial until she picks the directory (lib/memberName.ts, profile item 1, 2026-11-24).
+  check("others see the name, free, and it isn't claimable", forBob.cells.operator.s === "value" && forBob.cells.operator.v === "Annika C." && !forBob.claimable && !forBob.yours, forBob);
   check("others see its rate locked", forBob.cells.rate.s === "locked");
   r = await bob.act({ type: "claimSeat", engagementId: s0.id });
   check("a claimed seat can't be claimed again", r.status === 400 && /already claimed/.test(r.json?.error ?? ""), r.json);

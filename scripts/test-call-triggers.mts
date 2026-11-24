@@ -46,7 +46,7 @@ writeFileSync(
   JSON.stringify({
     ledger: [],
     values: {},
-    // Jordan opened Cedar and Pine and Northwind; Halcyon Freight stays locked for Jordan. Riley opened Larkspur.
+    // Jordan opened Cedar and Pine and Northwind, not Halcyon Freight (on Close it opens all the same). Riley opened Larkspur.
     unlocks: { "c_cedar.identity": ["mem_jordan"], "c_north.identity": ["mem_jordan"], "c_lark.identity": ["mem_riley"] },
     seen: { mem_jordan: seen, mem_riley: seen, mem_free: seen },
     profiles: { mem_jordan: { function: "Sales", onboarded: true, title: "Fractional VP Sales" }, mem_riley: { function: "Marketing", onboarded: true }, mem_free: { function: "Finance", onboarded: true } },
@@ -116,7 +116,7 @@ const meetings: FakeMeeting[] = [
   { id: "not_cedarcall00001", title: "Cedar and Pine x Jordan: discovery", start: t0 - 45 * MIN, minutes: 35, people: [{ name: "Jordan Avery", email: "jordan@avery.example" }, { name: "Dana Whitfield", email: "dana@cedarpine.example" }], lines: sales(1) },
   // An internal standup: nobody from outside Jordan's company. Left alone.
   { id: "not_standup0000001", title: "Weekly standup", start: t0 - 40 * MIN, minutes: 15, people: [{ name: "Jordan Avery", email: "jordan@avery.example" }, { name: "Sam Lee", email: "sam@avery.example" }], lines: [["Sam Lee", "Quick update on the website copy and the newsletter. Nothing else from me today, thanks."]] },
-  // A sales call with Halcyon Freight (locked for Jordan): nothing agreed.
+  // A sales call with Halcyon Freight (Jordan never opened it; Close opens it all the same): nothing agreed.
   {
     id: "not_halcyon0000001",
     title: "Intro call",
@@ -381,11 +381,12 @@ async function main() {
   check("get_call_pack: the kit (template, voice), the closest cases, and no transcript unless ticked", gp.transcript === null && (gp.kit as { template?: { id: string } })?.template?.id === pack!.template && !!(gp.kit as { voice?: unknown }).voice && JSON.stringify(gp.case_studies).includes("software company"), { t: gp.transcript, k: (gp.kit as { template?: unknown })?.template, c: gp.case_studies });
   check("get_call_pack refuses a pack id that isn't one", /cp_/.test(await refused(getCallPack({ member: T.memberIndex(await t.loadSeed(), await t.loadState()).byId.get("mem_jordan")!, origin: "" }, { pack_id: "../x" }))));
 
-  // Halcyon Freight: locked for Jordan; nothing agreed.
-  const hRuns = jr.filter((r) => /locked/.test(r.line));
+  // Halcyon Freight: Jordan never opened it; nothing agreed. Pro and Close open every company (owner, 2026-11-24, "Pro opens
+  // everything"), so on Close the run names it; a company a member's plan doesn't open is described (lib/calls companyOf, identityHidden).
+  const hRuns = jr.filter((r) => r.company === T.pubId("c_halcyon"));
   const hP = hRuns.find((r) => r.wf === wfP);
   check("nothing agreed: the proposal run records it, and nothing is built", !!hP && /Nothing agreed, nothing built/.test(hP.line) && hP.steps.every((x) => x.status === "skipped") && !hP.built?.proposal, hP);
-  check("a locked company is described, never named, in runs, the bell and the email", hRuns.length >= 2 && !JSON.stringify(jr).includes("Halcyon") && !JSON.stringify(st1.inbox?.mem_jordan ?? []).includes("Halcyon") && !mails.some((m) => /Halcyon/.test(m.subject + m.text + m.html)), hRuns.map((r) => r.line));
+  check("on Close a company Jordan never opened is named in the runs (Pro opens everything), never as locked", hRuns.length >= 2 && hRuns.every((r) => /Halcyon Freight/.test(r.line) && !/locked/.test(r.line)), hRuns.map((r) => r.line));
 
   // Delivery: one email and one bell line per run that built something.
   const bell = (st1.inbox?.mem_jordan ?? []).find((x) => x.id === `wf-call:${pRun.id}`);

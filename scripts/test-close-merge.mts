@@ -563,7 +563,8 @@ async function main() {
   check("Merlin's own AI features name neither Claude nor Anthropic in the merged screens", mergedUi.every((f) => !/Claude|Anthropic/.test(strip(f))), mergedUi.filter((f) => /Claude|Anthropic/.test(strip(f))));
   const names = CP.PLAN_ROWS.map((r) => r[0]);
   check("the plan rows: one set, no row twice, each Close row from the four pieces there once", new Set(names).size === names.length && ["Drop in a contract, fields placed for you", "Change it by talking", "Start from the call", "Know when they open it and what they read", "Reminders until they sign", "Renewal reminders", "Give them options to pick from", "Sealed PDF anyone can check"].every((w) => names.filter((n) => n === w).length === 1), names);
-  check("  the landing page keeps its first six", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Opening companies|Fellow fractionals|Proposals and e-signature|Merlin drafting and your own contracts|Pipeline after a signature|Open roles");
+  // Pro opens everything (owner, 2026-11-24): what opens, then email and phone numbers (the only credits on Pro and Close), then the rest.
+  check("  the landing page keeps its first seven", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Companies, seats, rates and people|Email and phone numbers|Fellow fractionals|Proposals and e-signature|Merlin drafting and your own contracts|Pipeline after a signature|Open roles");
   check("the Terms are 1.2 and the Privacy Policy 1.3, effective November 22, 2026", LG.TERMS_VERSION === "1.2" && LG.PRIVACY_VERSION === "1.3" && LG.LEGAL_EFFECTIVE === "2026-11-22");
   const terms = src("app/terms/Terms.tsx");
   const privacy = src("app/privacy/Privacy.tsx");

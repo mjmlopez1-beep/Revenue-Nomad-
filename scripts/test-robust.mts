@@ -746,6 +746,9 @@ console.log("\nThe API's routes");
     "api/proposals/template",
     // The radar: Send now (an admin's cookie), and the email's open pixel and tracked links (the radar's signature; a click only ever goes to a path in the app).
     "api/radar", "api/radar/go", "api/radar/open",
+    // Approve, then send (lib/send, RN_SEND): the member's cookie and a tap in the app only (never a bearer token or an agent);
+    // api/send/connect asks Google for gmail.send the first time, with a one-time state, and comes back to the note.
+    "api/send", "api/send/connect",
     // api/sign/pdf: the sealed PDF of a signed proposal, with the signed copy's own link.
     "api/sign",
     // The signing page's reading beacons (lib/close): a valid, live signing link is the only key; a random reader cookie, never the IP.
@@ -1076,7 +1079,11 @@ else {
 
       // The cap on views.
       const burst = await Promise.all(Array.from({ length: 150 }, () => load("fixtok-2")));
-      eq("150 loads from one member at once all answer", burst.filter((r) => r.status === 200 && r.me === "fm2").length, 150);
+      // Per-member read limits (lib/usageGuard.ts READS_PER_MINUTE, 90; owner 2026-11-24 with "Pro opens everything": generous for a
+      // person, stops scripted bulk): a burst of 150 from one member is served up to the minute's limit and the rest are asked to wait.
+      const served = burst.filter((r) => r.status === 200 && r.me === "fm2").length;
+      const waited = burst.filter((r) => r.status === 429 && /That's a lot of requests in a short time/.test(r.error)).length;
+      check(`150 loads from one member at once: up to 90 answer, the rest are told to wait (${served} served, ${waited} told)`, served >= 1 && served <= 90 && served + waited === 150, burst.filter((r) => r.status !== 200 && r.status !== 429).slice(0, 3));
       const many = await Promise.all(Array.from({ length: BIG - 10 }, (_, i) => load(`fixtok-${i + 10}`)));
       const ok = many.filter((r, i) => r.status === 200 && r.me === `fm${i + 10}`).length;
       const busy = many.filter((r) => r.status === 503);

@@ -312,7 +312,8 @@ async function main() {
   /* ---------- 8. plan rows ---------- */
   const rowsOf = (w: string) => CP.PLAN_ROWS.find((r) => r[0] === w);
   check("plan rows: the three Close features, trial only on Free and Pro", ["Drop in a contract, fields placed for you", "Change it by talking", "Start from the call"].every((w) => rowsOf(w)?.[1] === "In your trial only" && rowsOf(w)?.[2] === "In your trial only" && !!rowsOf(w)?.[3] && !rowsOf(w)![3].endsWith(".")) && CP.CLOSE_ADDS.some(([w]) => w === "Change it by talking"));
-  check("  the landing page keeps its six rows", CP.LANDING_ROWS.length === 6 && !CP.LANDING_ROWS.some((r) => r[0] === "Start from the call") && CP.LANDING_ROWS.some((r) => r[0] === "Open roles"));
+  // Pro opens everything (owner, 2026-11-24): the landing page leads with what opens and with email and phone numbers, so seven rows.
+  check("  the landing page keeps its seven rows", CP.LANDING_ROWS.length === 7 && CP.LANDING_ROWS.some((r) => r[0] === "Email and phone numbers") && !CP.LANDING_ROWS.some((r) => r[0] === "Start from the call") && CP.LANDING_ROWS.some((r) => r[0] === "Open roles"));
 
   /* ---------- 9. Merlin's own AI features never name Claude or Anthropic; the Privacy page does ---------- */
   const { readFileSync } = await import("node:fs");

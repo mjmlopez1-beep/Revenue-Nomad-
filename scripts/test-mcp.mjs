@@ -838,6 +838,13 @@ async function main() {
     const evList = await tool(at, "list_evidence");
     check("list_evidence never names a hidden client, and gives no company or seat id", evList.out?.cases?.length === evList0.out.cases.length + 1 && !evList.text.includes("Northwind") && !/"company_id"|"seat_id"|"companyId"|"seatId"/.test(evList.text), evList.text.slice(0, 300));
     const someCo = (await tool(at, "search_companies", { limit: 1 })).out?.companies?.[0]?.id;
+    // eb2 (Evidence Bank, 2026-11-24): a case study an agent saved waits for the member's check ("From Claude · review") and stays
+    // out of proposals and matching until then; the member's own save on their page is that check.
+    const evWait = someCo ? await tool(at, "match_evidence", { company_id: someCo }) : null;
+    check("match_evidence leaves out a case study still waiting for the member's review", !!evWait && evWait.out?.ranked?.length === 0 && evWait.out.drafts_skipped >= 1, evWait?.out);
+    const evId = evSaved.out?.case?.case_id;
+    const checked = await call("POST", "/api/evidence", { cookie: A.token, ipAddr: A.ip, headers: { origin: BASE }, body: { op: "save", id: evId, status: "ready" } });
+    check("the member checks it on their page (a save there takes the review mark off)", checked.status === 200 && !(await tool(at, "list_evidence")).out?.cases?.find((c) => c.case_id === evId)?.waiting_for_review, checked.json);
     const evMatch = someCo ? await tool(at, "match_evidence", { company_id: someCo }) : null;
     check("match_evidence: Same, Close or Different in words, no percentage", !!evMatch && evMatch.out?.ranked?.length >= 1 && evMatch.out.ranked.every((r) => ["Same", "Close", "Different"].includes(r.match) && Array.isArray(r.same)) && !/%"|percent/i.test(JSON.stringify(evMatch.out.ranked)), evMatch?.out);
     const bEv = await tool(ba.access_token, "list_evidence");

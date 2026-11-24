@@ -175,7 +175,8 @@ async function inProcess() {
   console.log("\nHide my name on my seats");
   await act(SAL, { type: "unlock", entity: "company", id: lark, field: "identity" });
   const holder = async (tok: string) => (await view(tok)).companies.find((c) => c.id === lark)?.engagements[0]?.cells.operator as { s: string; v?: string } | undefined;
-  check("before: fellow fractionals see Casey's name free once the company is open", (await holder(SAL))?.v === "Casey Morgan", await holder(SAL));
+  // As other members see Casey until she chooses the directory: first name and last initial (lib/memberName.ts, profile item 1, 2026-11-24).
+  check("before: fellow fractionals see Casey's name free once the company is open", (await holder(SAL))?.v === "Casey M.", await holder(SAL));
   await act(CAS, { type: "settings", fractionals: true });
   check("in the directory, by name", JSON.stringify(await F.fractionalsView(SAL)).includes("Casey Morgan"));
   const on = await act(CAS, { type: "settings", nameHidden: true });
