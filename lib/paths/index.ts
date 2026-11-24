@@ -619,7 +619,7 @@ export function introPlansOf(seed: Seed, s: State, m: Member, f: Found, nowMs = 
       const p = t.parts;
       const other = p.leader ? { name: leaderName(p.leaderId), role: null } : holder(p.otherSeat);
       const facts: IntroFacts = {
-        kind: p.kind as IntroFacts["kind"], degree: t.degree, first: c.first, title: c.title, company: named, bridge: p.bridge ?? null, bridgeNote: p.bridgeNote ?? p.bridge ?? null,
+        kind: p.kind as IntroFacts["kind"], degree: t.degree, first: c.first, title: p.elsewhere ? null : c.title, company: named, bridge: p.bridge ?? null, bridgeNote: p.bridgeNote ?? p.bridge ?? null,
         fn: p.fn ?? null, active: !!p.active, other: other.name, otherRole: other.role, rel: p.rel ?? null, leader: !!p.leader,
       };
       const why = nowClause(rows.get(t.target));

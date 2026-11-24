@@ -5,7 +5,7 @@
  * Moved out of Drawer.tsx: the record drawer (phones, RN_UI2 off) and the company page (company/CompanyPage.tsx) both draw these.
  */
 import type { CompanyRec } from "@/lib/tableTypes";
-import { checkedWords, leadItems } from "@/lib/leaders/types";
+import { checkedWords, leadItems, leadsReadAt } from "@/lib/leaders/types";
 
 /**
  * Who leads each function, from the company's own website (lib/leaders): "Sales: full-time CRO
@@ -32,7 +32,7 @@ export function LeadsLine({ c }: { c: CompanyRec }) {
         ) : (
           "the company's website"
         )}
-        , checked {checkedWords(leads.checkedAt)}
+        , checked {checkedWords(leadsReadAt(leads))}
       </span>}
     </p>
   );

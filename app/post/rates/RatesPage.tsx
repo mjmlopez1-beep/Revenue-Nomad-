@@ -74,6 +74,7 @@ import {
 import { takeLanding, takeRatesStart } from "../pageStart";
 import "../charge.css";
 import "./rates.css";
+import { RATE_RANGE_FLOOR, floorWords } from "@/lib/rates";
 
 const KIND_LABEL: Record<RateKind, string> = {
   monthly: "Per month",
@@ -640,18 +641,16 @@ export function RatesPage() {
       <details className="rt-how">
         <summary>How these figures work, and what is never shown</summary>
         <p>
-          A group shows a middle figure (the median) once {b.minN} different
-          people have a rate in it. Low and high show at {b.rangeN ?? 10}{" "}
-          people. They are the middle half: 1 in 4 people are paid less than
-          low, and 1 in 4 more than high.{" "}
+          {floorWords()} Low and high are the middle half: 1 in 4 people
+          are paid less than low, and 1 in 4 more than high.{" "}
           {anyIndexed
-            ? "Groups that include Revenue Nomad's Rate Index, our survey and contract data, show at 20 people."
+            ? "Rate Index is Revenue Nomad's own survey and contract data."
             : ""}
         </p>
         <p>
           Each person counts once, however many rates they shared. Amounts are
           rounded to the nearest $250 a month or $5 an hour, and to the nearest
-          $1,000 or $25 while fewer than {b.rangeN ?? 10} people are in a
+          $1,000 or $25 while fewer than {b.rangeN ?? RATE_RANGE_FLOOR} people are in a
           figure. Where we know the hours, an hourly rate also counts in the
           monthly figures, and a monthly retainer in the hourly ones.
           {withoutYours
@@ -1205,7 +1204,7 @@ export function RatesPage() {
               : r.function;
           })
           .join(", ")}
-        . A group shows a figure at {b.minN} people.{" "}
+        . {floorWords()}{" "}
         <button type="button" className="tp-flink" onClick={toAdd}>
           Share a rate to start one
         </button>

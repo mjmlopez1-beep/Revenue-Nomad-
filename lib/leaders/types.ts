@@ -83,6 +83,12 @@ export interface LeadersRecord {
   /** The last read reached the site (found or none). False after a skip or a failure, which keep what was on file. */
   ok?: boolean;
   hash?: string;
+  /**
+   * When the site first read as `hash` says (the same leaders, by function), with a team page read:
+   * a re-read that finds the same leaders keeps it. What a gap or a change found there is dated by,
+   * so reading every page again (a new reader, a refresh) never makes old news look new.
+   */
+  hashAt?: string;
   functions: Record<string, LeaderFn>;
   why?: string;
   pages?: number;
@@ -169,7 +175,10 @@ export interface LeadLine {
 
 /** CompanyRec.leads: the functions with a leader on file, and when the site was read. */
 export interface CompanyLeads {
+  /** When Merlin last tried the site, whether or not it could read it. */
   checkedAt: string;
+  /** When the site was last read OK: the leaders shown are from that read. Absent: no read reached it. */
+  readAt?: string;
   fns: LeadLine[];
   /** The last read of a team or leadership page there, in the last KNOWN_DAYS. Absent: we haven't checked their team page. */
   teamAt?: string;
@@ -240,6 +249,9 @@ export const isFractionalLead = (l: Pick<LeadLine, "kind">) => l.kind === "fract
 /** A full-time leader at Director or above (every leader kept is Director+). */
 export const isFullTimeLead = (l: Pick<LeadLine, "kind">) => l.kind === "full-time";
 
+/** The day the leaders shown were read (the last read that reached the site), else the last try: what "checked" may honestly say. */
+export const leadsReadAt = (leads: Pick<CompanyLeads, "checkedAt" | "readAt">) => leads.readAt || leads.checkedAt;
+
 /** "Nov 18" (with the year when it isn't this year), in UTC so the server and the page agree. */
 export function checkedWords(iso: string, now = new Date()): string {
   const d = new Date(iso);
@@ -254,7 +266,7 @@ export const leadItems = (leads: CompanyLeads) => leads.fns.map((l) => `${l.fn}:
 /** The whole line: "Sales: full-time CRO since 2024 · Marketing: fractional CMO · from the company's website, checked Nov 18". */
 export function leadsLine(leads: CompanyLeads, now = new Date()): string {
   const site = leads.fns.some((l) => l.how !== "members");
-  return [...leadItems(leads), ...(site ? [`from the company's website, checked ${checkedWords(leads.checkedAt, now)}`] : [])].join(" · ");
+  return [...leadItems(leads), ...(site ? [`from the company's website, checked ${checkedWords(leadsReadAt(leads), now)}`] : [])].join(" · ");
 }
 
 /** In place of "No fractional Sales yet" when a full-time leader is on file: "FT Sales Leader since 2024", or "Members say: full-time CRO". */

@@ -151,6 +151,13 @@ export const leaderLine = (sig: Pick<RawSignal, "lead" | "ledFullTime" | "hiredF
   return fullTimeWords(fn, k) ?? noLeaderWords(fn, k) ?? `No fractional ${fn} leader on Merlin`;
 };
 
+/** "a full-time Sales leader is in place now (their team page)", "a full-time CRO is in place now (members say)". */
+export function inPlaceWords(fn: string, k: FnKnow): string {
+  if (k.s !== "full-time") return "";
+  const who = k.role && k.role !== "Other" ? k.role : k.level === "C-level" || k.level === "VP" ? roleLabel(fn, k.level) : `${fn} leader`;
+  return `a full-time ${who} is in place now (${k.how === "members" ? "members say" : "their team page"})`;
+}
+
 /** A full-time leader of the member's function is known there: the signal stays on the page only, under Medium (FT_PENALTY, then capped). */
 export const FT_CAP = MEDIUM_AT * 0.99;
 /** Nobody has read their team page: never High on "nobody leads it yet" alone (capped under HIGH_AT). */
@@ -206,6 +213,8 @@ export interface Scored extends RawSignal {
   whyNow: string;
   /** When a hire is likely, in months from now [from, to] (the page's "When"): the rule's window from where the company is in it. */
   horizon: [number, number];
+  /** A full-time leader of the member's function is known there now, so the score is held under Medium (FT_CAP). */
+  held?: true;
 }
 
 /** A rule's window [a, b] months after the event, `t` months after it: months from now. Past the window: soon, if at all. */
@@ -266,14 +275,17 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       ahead = [0, 3];
       whyNow = fullTime
         ? `Just ended ${sig.endReason === "Converted to full-time" ? "as a full-time role" : "with a full-time hire"} · less likely to open again`
-        : "Just ended · the seat may be open again";
+        : ftLed
+          ? `Just ended · ${inPlaceWords(p.fn, know)}, so the seat may stay filled`
+          : "Just ended · the seat may be open again";
       break;
     }
     case "departure": {
       const pr = SIGNAL_PRIORS.departure["*"];
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
       ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
-      whyNow = `${leadWord(p.fn)} gone from its website · ${pr.why} ${gapWords(pr.gap)}`;
+      // The leader who left may already be replaced: a full-time leader of the function there now says the seat looks filled.
+      whyNow = ftLed ? `${leadWord(p.fn)} gone from its website · ${inPlaceWords(p.fn, know)}, so the seat looks filled` : `${leadWord(p.fn)} gone from its website · ${pr.why} ${gapWords(pr.gap)}`;
       break;
     }
     case "sales-build": {
@@ -394,6 +406,9 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   // nobody has read their team page: never High on "nobody leads it yet" alone.
   /** The ceiling the caps put on this signal, which tuning keeps (lib/radar/tune.ts). */
   let cap = sig.kind === "gap" ? UNKNOWN_CAP : Infinity;
+  // A seat that ended, or a leader gone from the website, while a full-time leader of the function is in place there now:
+  // the seat looks filled, so never more than Low (the panel says why; a direct open role keeps its score).
+  if ((sig.kind === "departure" || sig.kind === "seat") && ftLed) (score = Math.min(score * FT_PENALTY, FT_CAP)), (cap = FT_CAP);
   if (sig.kind === "tenure" || sig.kind === "rehire" || sig.kind === "arrival" || sig.kind === "team-build" || sig.kind === "headcount") {
     if (ftLed) (score = Math.min(score * FT_PENALTY, FT_CAP)), (cap = FT_CAP);
     else if (know.s === "unknown") (score = Math.min(score, UNKNOWN_CAP)), (cap = UNKNOWN_CAP);
@@ -411,8 +426,9 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
   if (mult !== 1) score = Math.min(score * mult, cap);
   const band = bandOf(score);
   const horizon = ahead;
-  if (openedMs !== null) return { ...sig, at: new Date(openedMs).toISOString(), atMs: openedMs, why, score, band, whyNow, horizon };
-  return { ...sig, why, score, band, whyNow, horizon };
+  const held = cap === FT_CAP ? ({ held: true } as const) : {};
+  if (openedMs !== null) return { ...sig, at: new Date(openedMs).toISOString(), atMs: openedMs, why, score, band, whyNow, horizon, ...held };
+  return { ...sig, why, score, band, whyNow, horizon, ...held };
 }
 
 /** The months-ago words, for lines that are not a hire's ("this month", "2 months ago"). */

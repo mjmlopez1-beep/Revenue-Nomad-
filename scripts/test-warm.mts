@@ -182,6 +182,18 @@ async function main() {
   check("every mark sits in its own quadrant", v.rows.filter((r) => r.onMap).every(inQuad), v.rows.filter((r) => r.onMap && !inQuad(r)).map((r) => [r.zone, r.x, r.y]));
   check("the counts on the map are the marks", R.ZONES.every((z) => v.counts[z] === v.rows.filter((r) => r.onMap && r.zone === z).length));
   check("the counts in all add up", R.ZONES.reduce((a, z) => a + v.countsAll[z], 0) === v.total);
+  // One unit on the page: companies in the list it holds. The quadrants add up to All, and each filter counts what it lists.
+  const T2 = await import("../lib/paths/types.ts");
+  const wc = T2.warmCounts(v.rows, v.total);
+  check("the page's quadrants sum to its All", R.ZONES.reduce((a, z) => a + wc.zones[z], 0) === wc.all && wc.all === v.rows.length, wc);
+  check("with every company in the list, the page's quadrants are the server's", !wc.capped && R.ZONES.every((z) => wc.zones[z] === v.countsAll[z]));
+  // More companies fit than the list holds (the tester's 747 under All 300): the page counts the 300 it lists and says how many fit.
+  const many = Array.from({ length: 300 }, (_, k) => ({ zone: R.ZONES[k % 4], ball: k % 5 === 0, list: k % 7 === 0 ? "Top accounts" : null, hiringNow: k % 150 === 0, src: k % 3 === 0 ? ("fellow" as const) : null }));
+  const capped = T2.warmCounts(many, 747);
+  check("capped: All and the quadrants count the same 300, never 747 under 300", capped.capped && capped.all === 300 && capped.total === 747 && R.ZONES.reduce((a, z) => a + capped.zones[z], 0) === 300, capped);
+  check("capped: each filter counts what picking it lists", capped.ball === many.filter((r) => r.ball).length && capped.hiring === 2 && capped.fellow === 100 && capped.lists.get("Top accounts") === many.filter((r) => r.list).length);
+  const wsrc = readFileSync(new URL("../app/post/network/WarmPaths.tsx", import.meta.url), "utf8");
+  check("the page reads its counts from warmCounts, says when the list is capped, and calls the hiring filter a count of companies", /const wc = warmCounts\(rows,/.test(wsrc) && /Your best \{n\(wc\.all\)\} of the \{n\(wc\.total\)\} companies that fit you/.test(wsrc) && /label: "Companies hiring now", n: wc\.hiring/.test(wsrc) && !/v\.countsAll/.test(wsrc));
   check("the lines say where they sit, honestly", /^(Fit \d of 5 or more|The better fitting half)$/.test(v.lines.fit.words) && /^(Est\. success \d+% or more|Your warmer half of these ways in)$/.test(v.lines.way.words), v.lines);
   check("the warmest way in is said: the best of the marks' estimates", v.warmest === Math.max(...v.rows.map((r) => r.best ?? 0)), v.warmest);
   check("a cold note to who decides is the weakest way in, and says so", v.rows.filter((r) => r.src === "direct").every((r) => !r.locked ? /^A cold note to /.test(r.via ?? "") : true) && v.rows.some((r) => r.src === "direct"), v.rows.filter((r) => r.src === "direct").map((r) => r.via));

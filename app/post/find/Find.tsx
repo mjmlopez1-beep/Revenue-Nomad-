@@ -307,7 +307,7 @@ export function Find(p: FindProps) {
           <div className="fd-prev-top">
             <strong>Preview</strong>
             <span className="fd-prev-n" role="status">
-              {kind === "lookalikes" && !like.length ? "Pick a past client first. Nothing is spent here." : p.waiting || !run ? "Counting the whole table…" : <>{Math.min(PREVIEW, found)} of <b>{found.toLocaleString("en-US")}</b> {noun(found).replace(/^[\d,]+ /, "")} found · updates as you filter · nothing is spent yet</>}
+              {kind === "lookalikes" && !like.length ? "Pick a past client first. Nothing is spent here." : p.waiting || !run ? "Counting the whole table…" : <>{Math.min(PREVIEW, found)} of <b>{found.toLocaleString("en-US")}</b> {noun(found).replace(/^[\d,]+ /, "")}{df.icp && hasIcp && kind !== "lookalikes" ? " in your ideal client" : ""} found · updates as you filter · nothing is spent yet</>}
             </span>
             <input type="search" aria-label="Search these results" placeholder="Search by name, website, industry or function" value={q} onChange={(e) => setQ(e.target.value)} className="fd-search" />
             <label className="fd-sort">

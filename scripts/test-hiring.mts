@@ -171,6 +171,7 @@ async function main() {
   /* ----- status ----- */
   const ctx0 = { since: null, seen: new Set<string>(), pipe: new Map() };
   check("a first visit: every role is New", open.every((r) => H.statusOf(r, ctx0).k === "new"));
+  check("the status says New to you, never a bare New beside \"0 new this week\" (two different counts)", open.every((r) => H.statusOf(r, ctx0).label === "New to you") && /\} new to you`/.test((await import("node:fs")).readFileSync(new URL("../app/post/hiring/hiringModel.ts", import.meta.url), "utf8")));
   check("a role opened here reads Seen", H.statusOf(rNw, { ...ctx0, seen: new Set(["e_nw_sales"]) }).label === "Seen");
   const since = isoAgo(10);
   check("since the last visit: a role first seen after it is New, one before it Seen", H.statusOf(rNw, { ...ctx0, since }).k === "new" && H.statusOf(rHf, { ...ctx0, since }).k === "seen");
@@ -194,7 +195,7 @@ async function main() {
   check("twelve columns, nine before the member adds one, in the mockup's order", cols.length === 12 && JSON.stringify(cols.filter((c) => H.HIRING_DEFAULT_COLS.includes(c.id)).map((c) => c.label)) === JSON.stringify(["Role", "Function", "Company", "Listed", "Rate", "Hours", "Fit to you", "Your way in", "Status"]));
   check("the three to add: Closest evidence, Size and HQ, Past fractional hires", JSON.stringify(cols.filter((c) => !H.HIRING_DEFAULT_COLS.includes(c.id)).map((c) => c.label)) === JSON.stringify(["Closest evidence", "Size and HQ", "Past fractional hires"]));
   const w = (id: string) => cols.find((c) => c.id === id)!.words!(open);
-  check("heading words in each column's terms", w("role") === "4 roles" && w("fn") === "2 functions" && w("company") === "75% open" && w("listed") === "2 this week" && w("rate") === "75% posted a rate" && w("status") === "4 new", cols.map((c) => c.words?.(open)));
+  check("heading words in each column's terms", w("role") === "4 roles" && w("fn") === "2 functions" && w("company") === "75% open" && w("listed") === "2 this week" && w("rate") === "75% posted a rate" && w("status") === "4 new to you", cols.map((c) => c.words?.(open)));
   check("Closest evidence: none matched before the member's cases come in", w("evidence") === "0% matched");
   const CL = await import("../app/post/workbench/closest.ts");
   CL.putClosest([open[0].i.c.id], { [open[0].i.c.id]: { label: "Close", same: ["Same size"], diff: [], caseId: "ev1", title: "Sales off the founder's desk" } });
@@ -242,8 +243,37 @@ async function main() {
   check("the foot with nothing matching the filters: Clear filters", H.footWords({ view: "all", shown: 0, total: 4, mine: 3, myFn: "Sales", filtered: true, pitched: 0 }).go?.to === "clear");
   check("plain words: no exclamation marks in what the page says", ![H.footWords({ view: "pitched", shown: 0, total: 4, mine: 3, myFn: "Sales", filtered: false, pitched: 0 }).text, H.alertTitle("mine", "Sales", f0), fCp.why, fLl.why].some((s) => s.includes("!")));
 
-  /* ----- Evidence Bank is Close only (BUILD_PLAN part 8) ----- */
   const { readFileSync } = await import("node:fs");
+  /* ----- one number set: Hiring now's views, the sidebar and the first screen count the same roles (model.ts hireCounts) ----- */
+  {
+    const infos = [northwind, cedar, halcyon, larkspur];
+    const rowsE = M.rowsFor("engagements", infos as never);
+    const fIcp = { ...M.EMPTY_FILTERS, icp: true };
+    const fOff = { ...M.EMPTY_FILTERS, icp: false };
+    // Sales: two of its open roles are at companies in the ideal client (Health Care, 51-200).
+    const hs = M.hireCounts(rowsE, fIcp as never, me);
+    check("counts: Sales with the ideal client on lists its 2 roles there, not lifted", hs.icpOn && hs.mine.length === 2 && !hs.lifted && hs.listedMine.length === 2, { mine: hs.mine.length, lifted: hs.lifted });
+    check("counts: the member's function is a part of every function, and both of everyone", hs.mine.every((r) => hs.all.includes(r)) && hs.all.every((r) => hs.everyone.all.includes(r)) && hs.everyone.mine.length === 3 && hs.everyone.all.length === 4);
+    check("counts: what fits the ideal client is the same whether its filter is on or off", M.hireCounts(rowsE, fOff as never, me).fit.all.length === hs.all.length && M.hireCounts(rowsE, fOff as never, me).everyone.all.length === hs.everyone.all.length);
+    // RevOps: its only open role is outside the ideal client, so its view lists it with the ideal client lifted, and says so.
+    const rev = { ...me, function: "RevOps" } as unknown as Me;
+    const hr = M.hireCounts(rowsE, fIcp as never, rev);
+    check("counts: none of the function fits, so its view is lifted and lists every role of it", hr.lifted && hr.mine.length === 0 && hr.listedMine.length === 1 && H.listedCount(hr) === 1);
+    check("…and every function stays the ideal client's 2 roles, said as such", hr.all.length === 2 && H.rolesWords(hr.all.length, { view: "all", myFn: "RevOps", icpOn: hr.icpOn, lifted: false }) === "2 open roles in your ideal client");
+    check("…the lifted count says it is outside the ideal client, so 1 RevOps role beside 2 in all never reads as a contradiction", H.rolesWords(hr.listedMine.length, { view: "mine", myFn: "RevOps", icpOn: hr.icpOn, lifted: hr.lifted }) === "1 open RevOps role, none in your ideal client");
+    const P2 = await import("../app/post/place");
+    const place = (m: Me) => ({ t: "engagements" as const, v: "hiring" as const, s: null, f: fIcp as never, q: "", c: null, p: null, all: false, sig: null, home: false });
+    const side = (m: Me) => P2.placeRows(infos as never, m, place(m) as never, new Set()).length;
+    check("the sidebar's Hiring now count is the page's own view count (Sales)", side(me) === H.listedCount(hs), { side: side(me), page: H.listedCount(hs) });
+    check("the sidebar's Hiring now count is the page's own view count (RevOps, lifted)", side(rev) === H.listedCount(hr), { side: side(rev), page: H.listedCount(hr) });
+    const first = P2.listAt(infos as never, { ...rev, benchRates: [], savedViews: [] } as unknown as Me, place(rev) as never, new Set()).first;
+    check("the first screen counts the same list (lifted)", first.n === H.listedCount(hr), first.n);
+    const src = readFileSync(new URL("../app/post/hiring/HiringNow.tsx", import.meta.url), "utf8");
+    check("the page reads its counts from hireCounts, and its status says what it counts", /hireCounts\(all, t\.filters, me\)/.test(src) && /of \$\{words\(base\.length\)\}/.test(src) && !/roles · \$\{n\(rows\.filter/.test(src));
+    check("the foot says when the other functions' count is the ideal client's", H.footWords({ view: "mine", shown: 1, total: 2, mine: 0, myFn: "RevOps", filtered: false, pitched: 0, icpOn: true }).text.startsWith("2 more open roles in other functions in your ideal client"));
+  }
+
+  /* ----- Evidence Bank is Close only (BUILD_PLAN part 8) ----- */
   const drawer = readFileSync(new URL("../app/post/hiring/RoleDrawer.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../app/post/hiring/HiringNow.tsx", import.meta.url), "utf8");
   check("the drawer's Closest case study shows only on Close", /\{close && <ClosestCase companyId=\{c\.id\} \/>\}/.test(drawer) && /aria-label="Closest case study"/.test(drawer) && !/Part of the Close plan/.test(drawer) && !/Evidence Bank is coming/.test(drawer));
