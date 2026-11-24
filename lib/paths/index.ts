@@ -34,6 +34,7 @@ import { findAll, leadersOfContact, type Contact, type ContactTarget, type Me, t
 import { firstWord, personKey } from "./match";
 import { cleanPersonName } from "../personName";
 import { directoryOf, worldOf } from "./world";
+import { tieWarmth, tieWords, vouchKey } from "../linkedin/warmth";
 import { forgetSource } from "./plan";
 import {
   AWAY_MAX, FILE_MAX_BYTES, IMPORTS_DAILY, TARGETS_MAX, fromFile, lockedMatchesHidden, lockedWaysWords, namesOnlyWords, waysWords,
@@ -67,7 +68,7 @@ const importsToday = (p: MemberPaths | undefined, nowMs: number) => (p?.imports 
 /* ---------- the import ---------- */
 
 /** The older file's company, title, email and day for each profile link also in the new file (by link only, never by name). */
-function carryOver(next: LinkedInRow[], old: LinkedInRow[]): LinkedInRow[] {
+export function carryOver(next: LinkedInRow[], old: LinkedInRow[]): LinkedInRow[] {
   const was = new Map<string, LinkedInRow>();
   for (const o of old) if (o.u && (o.c || o.e || o.p)) was.set(o.u, o);
   return next.map((x) => {
@@ -148,7 +149,7 @@ export async function deleteContacts(token: string | null): Promise<PathsAnswer>
     const p = all[w.m.id];
     if (!p) return;
     delete p.csv;
-    if (!p.linkedin && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
+    if (!p.linkedin && !p.lix && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
   });
   return (await pathsView(token))!;
 }
@@ -186,7 +187,7 @@ export async function deleteConnections(token: string | null): Promise<PathsAnsw
     forgetSource(s.routes, w.m.id, "linkedin");
     if (!p) return;
     delete p.linkedin;
-    if (!p.csv && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
+    if (!p.csv && !p.lix && !(p.imports ?? []).length && !(p.away ?? []).length) delete all[w.m.id];
   });
   return (await pathsView(token))!;
 }
@@ -248,6 +249,9 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
       was.msgCount ??= c.msgCount;
       was.msgLast ??= c.msgLast;
       was.conv ??= c.conv;
+      was.liMsg ??= c.liMsg;
+      was.vouch ??= c.vouch;
+      if (was.invited && !c.invited) delete was.invited;
       return;
     }
     out.set(c.key, c);
@@ -303,6 +307,10 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
   // A row with neither (LinkedIn's files from December 2026 have names and profile links only) is
   // placed by its profile link alone, never by its name (linkMatch).
   const rows: LinkedInRow[] = pathsOf(s, m.id)?.linkedin?.rows ?? [];
+  // The member's own LinkedIn data export (lib/linkedin): messages each way and vouches, by profile link (a vouch by exact name and company).
+  const lix = pathsOf(s, m.id)?.lix;
+  const warmBy = new Map((lix?.warm ?? []).map((x) => [x.profileSlug, x]));
+  const vouchOf = (r: { u?: string; f: string; l: string; c?: string }) => lix?.vouch?.[vouchKey(r)];
   let matched = 0;
   let byLink = 0;
   for (const r of rows) {
@@ -321,10 +329,34 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     // Someone at no company on Merlin and not a member is no way in: kept in the file, left out here.
     // One matched by their profile link to people on file at more than one company stays in: their records give the ways in.
     if (!companyId && !member && !link) continue;
+    const lw = r.u ? warmBy.get(r.u) : undefined;
+    const vf = vouchOf(r);
+    const tie = tieWords(lw, vf, nowMs);
     put({
       key: `l:${r.u ?? `${name}|${r.c ?? ""}`}`, name, first: firstWord(name), nameKey: personKey(name), title: r.p ?? null, companyId, email, slug: r.u ?? null,
-      linkedin: r.u ? linkedinUrl(r.u) : null, src: ["linkedin"], warmth: null, why: r.d ? `LinkedIn connection since ${r.d.slice(0, 4)}` : "LinkedIn connection", met: false,
+      linkedin: r.u ? linkedinUrl(r.u) : null, src: ["linkedin"], warmth: tieWarmth(lw, vf, nowMs), why: tie ?? (r.d ? `LinkedIn connection since ${r.d.slice(0, 4)}` : "LinkedIn connection"), met: false,
       connected: r.d ?? null, member,
+      ...(lw ? { liMsg: { sent: lw.sent, received: lw.received, first: lw.first, last: lw.last } } : {}),
+      ...(vf ? { vouch: vf } : {}),
+    });
+  }
+
+  // Pending invitations from the export: weaker ties than connections, placed by their profile link alone (linkMatch), never by a name.
+  const connected = new Set(rows.map((r) => r.u).filter(Boolean));
+  for (const inv of lix?.invites ?? []) {
+    if (connected.has(inv.u)) continue;
+    const link = linkMatch(w, inv.u, m.id);
+    if (!link) continue;
+    const name = shownName(inv.n);
+    const lw = warmBy.get(inv.u);
+    const vf = lix?.vouch?.[inv.u];
+    const tie = tieWords(lw, vf, nowMs);
+    put({
+      key: `i:${inv.u}`, name, first: firstWord(name), nameKey: personKey(name), title: null, companyId: link.companyId, email: null, slug: inv.u, linkedin: linkedinUrl(inv.u),
+      src: ["linkedin"], warmth: tieWarmth(lw, vf, nowMs), why: [inv.out ? "You invited them on LinkedIn, not connected yet" : "Invited you on LinkedIn, not connected yet", tie].filter(Boolean).join(" · "), met: false,
+      connected: null, member: link.member, invited: { out: inv.out },
+      ...(lw ? { liMsg: { sent: lw.sent, received: lw.received, first: lw.first, last: lw.last } } : {}),
+      ...(vf ? { vouch: vf } : {}),
     });
   }
 
@@ -737,7 +769,8 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
     }
     const recs = seen ? leadersOfContact(world, c).filter((l) => l.companyId === c.companyId) : [];
     const lastMet = c.lastMet ?? null;
-    const msg = c.msgLast ?? null;
+    // A message on Merlin, or one on LinkedIn from the member's own export (its day only).
+    const msg = [c.msgLast ?? null, c.liMsg?.last ?? null].filter((x): x is string => !!x).sort().pop() ?? null;
     const last = lastMet && (!msg || lastMet >= msg) ? lastMet : msg;
     const lastKind = !last ? null : last === lastMet && lastMet ? ((c.meetings ?? 0) > 0 ? "Meeting" : "Email") : "Message";
     people.push({

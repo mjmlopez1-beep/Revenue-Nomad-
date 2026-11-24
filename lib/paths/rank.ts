@@ -59,6 +59,12 @@ export type Evidence =
   | { kind: "peer"; shared?: { active: boolean; year: number | null } | null }
   /** A connection in the member's own LinkedIn import, and nothing else: weak. */
   | { kind: "linkedin"; since: string | null }
+  /** Messages on LinkedIn between the two, from the member's own export: how many, both ways or not, and the last day. Never the words. */
+  | { kind: "limsg"; count: number; both: boolean; last: string | null }
+  /** One recommended (rec) or endorsed the other on LinkedIn, from the member's own export. `theirs`: they vouched for the member. */
+  | { kind: "vouch"; rec: boolean; theirs: boolean }
+  /** A LinkedIn invitation still pending (not a connection): weaker than one. */
+  | { kind: "invited"; out: boolean }
   /** Saved in the member's own contacts, never met. */
   | { kind: "contact" }
   /** Works now where the other one holds a seat now. */
@@ -122,6 +128,17 @@ export function evidenceStrength(e: Evidence, nowMs: number): number {
       const d = daysSince(e.since, nowMs);
       return d !== null && d <= 5 * 365.25 ? 0.42 : 0.28;
     }
+    case "limsg": {
+      const d = daysSince(e.last, nowMs);
+      if (d === null) return 0.4;
+      if (d <= 60) return e.count >= 4 && e.both ? 0.8 : 0.6;
+      if (d <= 270) return e.both ? 0.5 : 0.42;
+      return 0.28;
+    }
+    case "vouch":
+      return e.rec ? 0.7 : 0.48;
+    case "invited":
+      return 0.2;
     case "contact":
       return 0.25;
     case "colleague":
@@ -515,6 +532,10 @@ export function evidenceAge(e: Evidence, nowMs: number): { days: number; what: s
       const d = daysSince(e.since, nowMs);
       return d === null ? null : { days: Math.round(d), what: "the day you connected" };
     }
+    case "limsg": {
+      const d = daysSince(e.last, nowMs);
+      return d === null ? null : { days: Math.round(d), what: "a message on LinkedIn" };
+    }
     default:
       return null;
   }
@@ -574,6 +595,12 @@ export function evidenceWords(e: Evidence, nowMs: number, at?: string | null): s
       return e.shared ? "A peer on Merlin, you share a client" : "A peer on Merlin";
     case "linkedin":
       return `From your LinkedIn${y(e.since) ? ` since ${y(e.since)}` : ""}, not met`;
+    case "limsg":
+      return `${e.count} LinkedIn ${e.count === 1 ? "message" : "messages"}${e.both ? " both ways" : ""}${e.last ? `, last ${monthDay(e.last, nowMs)}` : ""}`;
+    case "vouch":
+      return e.rec ? (e.theirs ? "Recommended you on LinkedIn" : "You recommended them on LinkedIn") : e.theirs ? "Endorsed you on LinkedIn" : "You endorsed them on LinkedIn";
+    case "invited":
+      return e.out ? "You invited them on LinkedIn, not connected yet" : "Invited you on LinkedIn, not connected yet";
     case "contact":
       return "In your contacts, not met";
     case "colleague":

@@ -732,6 +732,8 @@ console.log("\nThe API's routes");
     "api/oauth/apps", "api/oauth/authorize", "api/oauth/register", "api/oauth/revoke", "api/oauth/token",
     // Smart ways in (lib/paths): the member's cookie, their own LinkedIn connections only.
     "api/paths",
+    // The LinkedIn data export (lib/linkedin): the member's cookie, only the derived payload of their own export.
+    "api/paths/export",
     // Proposals (lib/proposals): the member's cookie for their own; api/sign: the signer's signed link (one send, 30 days) is the only key.
     "api/proposals",
     // Merlin drafting and changing a proposal, live (lib/proposals/live.ts): the member's cookie, and only their own jobs.

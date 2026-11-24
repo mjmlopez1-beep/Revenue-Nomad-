@@ -127,6 +127,12 @@ export interface Contact {
   msgCount?: number;
   msgLast?: string | null;
   conv?: string | null;
+  /** From the member's own LinkedIn data export (lib/linkedin): messages each way and the first and last day, never the words. */
+  liMsg?: { sent: number; received: number; first: string; last: string };
+  /** Vouch flags from the export: r recommended you, R you recommended them, e endorsed you, E you endorsed them. */
+  vouch?: string;
+  /** A pending LinkedIn invitation, not a connection: weaker than one (out: the member sent it). */
+  invited?: { out: boolean };
 }
 
 export interface Me {
@@ -167,6 +173,8 @@ const YEAR_MS = 365.25 * 86_400_000;
 /** How much the member's tie to the person counts: their warmth, else a LinkedIn connection by how long ago. */
 export function tieOf(c: Contact, nowMs: number): number {
   if (c.warmth) return WARMTH_MULT[c.warmth];
+  // An invitation still pending on LinkedIn: weaker than a connection.
+  if (c.invited) return 0.5;
   const d = c.connected ? Date.parse(`${c.connected}T12:00:00Z`) : NaN;
   return Number.isFinite(d) && nowMs - d < 3 * YEAR_MS ? 0.74 : 0.66;
 }

@@ -24,6 +24,7 @@
 import type { Warmth } from "../google/types";
 import type { IntroPlanView } from "./intro";
 import type { OddsBand, PathBand, Zone } from "./rank";
+import type { ExportStore } from "../linkedin/types";
 
 /* ---------- what is kept ---------- */
 
@@ -81,6 +82,8 @@ export interface MemberPaths {
   imports?: string[];
   /** Suggested additions (lib/paths/suggest.ts, RN_SUGGEST): the member's "no" and "added" keys, one-way hashes, never a name. */
   suggest?: { skip: string[]; added: string[] };
+  /** Their LinkedIn data export (lib/linkedin): only the derived parts of each use they ticked. */
+  lix?: ExportStore;
 }
 
 /** State.paths: member id -> what they uploaded. Nobody else's answer ever reads another member's entry. */
@@ -331,7 +334,7 @@ export type WaySource = "google" | "linkedin" | "csv" | "messages" | "fellow" | 
 /** The words for each, as the Sources panel and a link's tag say them. */
 export const WAY_SOURCE_WORDS: Record<WaySource, string> = {
   google: "Your Google contacts and calendar",
-  linkedin: "Your LinkedIn connections file",
+  linkedin: "Your LinkedIn connections and data export",
   csv: "Your CSV",
   messages: "Merlin messages",
   fellow: "Fellow fractionals on Merlin",
