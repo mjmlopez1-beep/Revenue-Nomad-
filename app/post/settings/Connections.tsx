@@ -175,7 +175,7 @@ export function Connections({ rows, open, setOpen, data, onNotif, flash }: { row
                   {r.last}
                 </span>
                 <span role="cell" className="st-conn-acts">
-                  <ConnToggle name={r.name} on={r.on} pending={waiting} busy={busy === r.key} disabled={(!!busy && busy !== r.key) || r.status === "Loading"} onFlip={() => flip(r)} />
+                  <ConnToggle name={r.name} on={r.on} pending={waiting} busy={busy === r.key} disabled={(!!busy && busy !== r.key) || r.status === "Loading" || r.status === "Not set up on Merlin"} onFlip={() => flip(r)} />
                   <button type="button" className="st-manage" aria-expanded={op} aria-label={`${op ? "Close" : r.on ? "Manage" : "Details of"} ${r.name}`} onClick={() => (setOpen(op ? null : r.key), setAsking(null))}>
                     {op ? "Close" : r.on ? "Manage" : "Details"}
                   </button>
