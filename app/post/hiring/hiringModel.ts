@@ -197,7 +197,8 @@ export interface StatusCtx {
 }
 export interface Status {
   k: "new" | "seen" | "pitched";
-  label: "New" | "Seen" | "Pitched";
+  /** "New to you": not opened since the member's last visit, which is not the same as listed this week ("new this week"). */
+  label: "New to you" | "Seen" | "Pitched";
   sub: string;
 }
 const WROTE = new Set(["sent", "replied", "meeting", "proposal", "won"]);
@@ -213,7 +214,7 @@ export function statusOf(r: Row, x: StatusCtx): Status {
   const sub = passed ? `Passed to ${passed}` : p ? "In pipeline" : "";
   const firstSeen = e.openedAt ?? (e.opened ? `${e.opened}T00:00:00Z` : null);
   const fresh = !x.seen.has(e.id) && (!x.since || (!!firstSeen && firstSeen > x.since));
-  return fresh ? { k: "new", label: "New", sub } : { k: "seen", label: "Seen", sub };
+  return fresh ? { k: "new", label: "New to you", sub } : { k: "seen", label: "Seen", sub };
 }
 
 /* ---------- the chips and the sorts ---------- */
@@ -295,7 +296,7 @@ export function hiringColumns(x: ColCtx): ColumnDef[] {
     col("hours", "Hours", "minmax(70px, 0.5fr)", (rows) => `${pct(count(rows, (r) => hoursOf(r).known), rows.length)}% posted`, { def: true, num: true }),
     col("fit", "Fit to you", "minmax(124px, 0.8fr)", (rows) => `${pct(count(rows, (r) => fitOf(r, x.me).tier >= 2), rows.length)}% strong or good`, { def: true, sort: "best" }),
     col("way", "Your way in", "minmax(150px, 1.1fr)", (rows) => `${pct(count(rows, (r) => wayOf(r, x.ways, x.first).has), rows.length)}% have a path`, { def: true }),
-    col("status", "Status", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => statusOf(r, x.status).k === "new")} new`, { def: true }),
+    col("status", "Status", "minmax(88px, 0.6fr)", (rows) => `${count(rows, (r) => statusOf(r, x.status).k === "new")} new to you`, { def: true }),
     col("evidence", "Closest evidence", "minmax(170px, 1fr)", (rows) => `${pct(count(rows, (r) => !!closestOf(r.i.c.id)), rows.length)}% matched`, { plan: "close", tip: "Your closest case study for this role. Evidence Bank, on the Close plan." }),
     col("sizeHq", "Size and HQ", "minmax(150px, 0.9fr)", (rows) => `${pct(count(rows, (r) => !!shown(r.i.c.cells.employees)), rows.length)}% on file`, { sort: "employees" }),
     col("past", "Past fractional hires", "minmax(140px, 0.8fr)", (rows) => `${pct(count(rows, (r) => r.i.c.friendly.fractional > 0), rows.length)}% hired before`),

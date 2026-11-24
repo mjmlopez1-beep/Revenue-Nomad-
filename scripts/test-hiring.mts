@@ -171,6 +171,7 @@ async function main() {
   /* ----- status ----- */
   const ctx0 = { since: null, seen: new Set<string>(), pipe: new Map() };
   check("a first visit: every role is New", open.every((r) => H.statusOf(r, ctx0).k === "new"));
+  check("the status says New to you, never a bare New beside \"0 new this week\" (two different counts)", open.every((r) => H.statusOf(r, ctx0).label === "New to you") && /\} new to you`/.test((await import("node:fs")).readFileSync(new URL("../app/post/hiring/hiringModel.ts", import.meta.url), "utf8")));
   check("a role opened here reads Seen", H.statusOf(rNw, { ...ctx0, seen: new Set(["e_nw_sales"]) }).label === "Seen");
   const since = isoAgo(10);
   check("since the last visit: a role first seen after it is New, one before it Seen", H.statusOf(rNw, { ...ctx0, since }).k === "new" && H.statusOf(rHf, { ...ctx0, since }).k === "seen");
@@ -194,7 +195,7 @@ async function main() {
   check("twelve columns, nine before the member adds one, in the mockup's order", cols.length === 12 && JSON.stringify(cols.filter((c) => H.HIRING_DEFAULT_COLS.includes(c.id)).map((c) => c.label)) === JSON.stringify(["Role", "Function", "Company", "Listed", "Rate", "Hours", "Fit to you", "Your way in", "Status"]));
   check("the three to add: Closest evidence, Size and HQ, Past fractional hires", JSON.stringify(cols.filter((c) => !H.HIRING_DEFAULT_COLS.includes(c.id)).map((c) => c.label)) === JSON.stringify(["Closest evidence", "Size and HQ", "Past fractional hires"]));
   const w = (id: string) => cols.find((c) => c.id === id)!.words!(open);
-  check("heading words in each column's terms", w("role") === "4 roles" && w("fn") === "2 functions" && w("company") === "75% open" && w("listed") === "2 this week" && w("rate") === "75% posted a rate" && w("status") === "4 new", cols.map((c) => c.words?.(open)));
+  check("heading words in each column's terms", w("role") === "4 roles" && w("fn") === "2 functions" && w("company") === "75% open" && w("listed") === "2 this week" && w("rate") === "75% posted a rate" && w("status") === "4 new to you", cols.map((c) => c.words?.(open)));
   check("Closest evidence: none matched before the member's cases come in", w("evidence") === "0% matched");
   const CL = await import("../app/post/workbench/closest.ts");
   CL.putClosest([open[0].i.c.id], { [open[0].i.c.id]: { label: "Close", same: ["Same size"], diff: [], caseId: "ev1", title: "Sales off the founder's desk" } });
