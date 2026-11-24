@@ -150,7 +150,7 @@ run bench npx tsx scripts/test-bench.mjs
 run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 # Names on found seats (scripts/add-seat-names.mjs, claim-outreach.mjs), Verify, claim links, Remove my name and the switch, on a made-up seed and key, with its own servers.
 run names env NAMES_PORT="$PORT" npx tsx scripts/test-names.mts
-# Ended seats (scripts/add-past-seats.mjs) and person keys (add-seat-scan.mjs --backfill-holder-keys): the drop rules, year-only dates, status Ended, HMAC ids and keys kept off every view, re-runs, duplicates of current seats, enrichment by match_method, US-only names and the refusal, counts-only output, the firm rule, claiming an ended seat and no hire alert for one, on a made-up seed and key.
+# Ended seats (scripts/add-past-seats.mjs) and person keys (add-seat-scan.mjs --backfill-holder-keys): the drop rules, year-only dates, status Ended, HMAC ids and keys kept off every view, re-runs, duplicates of current seats, enrichment by match_method, US-only names and the refusal, counts-only output, the firm rule, claiming an ended seat and no hire alert for one; interim seats (--interim) and firm clients (add-firm-clients.mjs): types, labels, services kept out of repeat hirers, staffing firms, countries, the website finder queue; on a made-up seed and key.
 run pastseats npx tsx scripts/test-pastseats.mts
 run seatspage npx tsx scripts/test-seatspage.mts
 # Referral partners: Invite to connect, the claim bonus and the conversation it opens, Message, the Referral partners page and the connector's warm paths, on a made-up seed and key, with its own server.

@@ -130,6 +130,13 @@ export interface EngagementRec {
    */
   belowLead?: boolean;
   /**
+   * A fractional service a firm named this company as a client for (outsourced accounting,
+   * bookkeeping, freelance marketers: scripts/add-firm-clients.mjs), not a fractional leader's seat.
+   * It makes the company fractional friendly (Friendly.services) but is not a hire: never a repeat
+   * hirer, Functions hired or the benchmarks (isHire). Left out on every other seat.
+   */
+  service?: boolean;
+  /**
    * The viewer can "Invite to connect" this seat's holder: they see the name, and the holder is not
    * a member who has signed in (a name from public profiles, or a member who never signed in), so
    * the seat's claim link is how they get on Merlin and connect. `path` is that link with the
@@ -187,6 +194,13 @@ export interface Friendly {
    * with nobody named as its seat holder counts in neither list. Empty when nothing is open.
    */
   hiring?: string[];
+  /**
+   * Fractional services on file (EngagementRec.service): a firm named the company as a client for
+   * outsourced accounting, freelance marketers and the like. Fractional friendly counts them as a
+   * past seat (the score and the Past seat tier), but they are not hires: never in `fractional` or
+   * `functions`, so never a repeat hirer. Left out when there are none.
+   */
+  services?: number;
 }
 
 export interface CompanyRec {

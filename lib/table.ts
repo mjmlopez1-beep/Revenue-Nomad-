@@ -203,6 +203,21 @@ interface SeedEngagement {
    * Server only, for grouping one fractional's seats: never copied into the graph, a view or an export.
    */
   holderKey?: string;
+  /**
+   * A fractional service a firm named the company as a client for (outsourced accounting,
+   * bookkeeping, freelance marketers), not a leader's seat: scripts/add-firm-clients.mjs. The graph
+   * carries it (EngNode.service): fractional friendly counts it, a repeat hirer never does.
+   */
+  service?: boolean;
+  /**
+   * Where a firm client seat came from, for admins only (scripts/add-firm-clients.mjs): the
+   * firm or firms that named the client, how (case study, testimonial, logo, Clutch review), the
+   * pages, the row's confidence, year and note. Server only: never copied into the graph, a view
+   * or an export, so no member sees the firm's name.
+   */
+  firmClient?: { firms: string[]; detail: string[]; urls: string[]; confidence: string | null; year?: string; note?: string };
+  /** An import an admin should check (a firm's logo wall, medium confidence). Server only. */
+  needsReview?: boolean;
 }
 interface SeedContact {
   id: string;
@@ -1387,7 +1402,7 @@ interface Node {
 }
 type CompanyNode = Node & { name: string };
 /** `holderFrom`: the seed's seat-holder name came from public profiles (PUBLIC_PROFILE), and it is on this node. */
-type EngNode = Node & { companyId: string; verified: boolean; source: string; holderFrom?: string };
+type EngNode = Node & { companyId: string; verified: boolean; source: string; holderFrom?: string; service?: boolean };
 /**
  * `site`: a leader read from the company's own website (source LEADERS_SOURCE, lib/leaders), built
  * from State.leaders by leaderPeople: the page (`url` never spells a name, `page` is where the
@@ -1495,7 +1510,7 @@ function graph(seed: Seed, s: State): Graph {
       const pub = !bad && e.holderFrom === PUBLIC_PROFILE && !!e.fields.operator;
       if (pub) publicNames++;
       const seedFields = bad ? withoutKey(e.fields, "operator") : e.fields;
-      g.engagements.set(e.id, { id: e.id, seedFields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added", ...(pub ? { holderFrom: PUBLIC_PROFILE } : {}) });
+      g.engagements.set(e.id, { id: e.id, seedFields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added", ...(pub ? { holderFrom: PUBLIC_PROFILE } : {}), ...(e.service ? { service: true } : {}) });
     }
   for (const e of s.engagements)
     if (!g.engagements.has(e.id) && !out.has(e.companyId))
@@ -3399,6 +3414,7 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
   let recent = 0;
   let stories = 0;
   let postings = 0;
+  let services = 0;
   const functions = new Set<string>();
   const hiring = new Set<string>();
   const now = Date.now();
@@ -3412,6 +3428,12 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
     }
     if (e.source === "Demand scan" && !live(e, s, "operator")) {
       postings++;
+      continue;
+    }
+    // A fractional service a firm named (outsourced accounting, freelance marketers): a past seat on
+    // file for fractional friendly, but not a hire, so it never makes a repeat hirer.
+    if (e.service) {
+      services++;
       continue;
     }
     // Every seat counts the same whatever its source (a member's story, a published engagement, a
@@ -3428,12 +3450,12 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
   // posting that came down (they went looking for a fractional), though neither is a hire.
   const score = Math.min(
     100,
-    Math.min(40, fractional * 20) + Math.min(20, functions.size * 10) + (fractional >= 2 ? 15 : 0) + (recent ? 15 : 0) + (open || postings ? 30 : 0) + (stories && !fractional && !open && !postings ? 5 : 0),
+    Math.min(40, fractional * 20 + (services && !fractional ? 20 : 0)) + Math.min(20, functions.size * 10) + (fractional >= 2 ? 15 : 0) + (recent ? 15 : 0) + (open || postings ? 30 : 0) + (stories && !fractional && !open && !postings ? 5 : 0),
   );
   const tier = score >= 60 ? "High" : score >= 30 ? "Medium" : score > 0 ? "Low" : null;
   // A fractional firm kept for admin review (a member holds a seat there, see lib/firmRemoval.ts) is not a client: no score, no hires.
   if (firm) return { score: 0, tier: null, fractional: 0, open, functions: [], hiring: [...hiring], operators: operators.size, recent: 0 };
-  return { score, tier, fractional, open, functions: [...functions], hiring: [...hiring], operators: operators.size, recent };
+  return { score, tier, fractional, open, functions: [...functions], hiring: [...hiring], operators: operators.size, recent, ...(services ? { services } : {}) };
 }
 
 /**
@@ -4220,6 +4242,8 @@ async function fullView(
         // viewer can see it (SEAT_BUNDLE locks the role of a seat whose holder is on file), and only
         // the flag goes out, never the title.
         ...(belowLead(live(e, s, "role")) ? { belowLead: true } : {}),
+        // A fractional service a firm named (not a leader's seat): fractional friendly, never a hire (isHire).
+        ...(e.service ? { service: true } : {}),
         ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
     });
@@ -8539,7 +8563,7 @@ export async function partnersView(token: string | null): Promise<PartnersView |
   const firms = firmsInReview(seed, s);
   const firsts = new Map<string, Map<string, string>>();
   for (const e of g.engagements.values()) {
-    if (firms.has(e.companyId) || isOpenRole(e, s, tracks)) continue;
+    if (firms.has(e.companyId) || isOpenRole(e, s, tracks) || e.service) continue;
     if (e.source === "Demand scan" && !live(e, s, "operator")) continue;
     const type = live(e, s, "type");
     if (type && !FRACTIONAL_TYPES.includes(type)) continue;
@@ -10398,7 +10422,7 @@ function crystalModelStats(seed: Seed, s: State, g: Graph, nowMs: number): NonNu
     if (live(e, s, "endReason")) facts.endReason++;
     if (live(e, s, "revenue")) facts.revenueThen++;
     if (live(e, s, "employees")) facts.employeesThen++;
-    if (firms.has(e.companyId) || isOpenRole(e, s, tracks) || (e.source === "Demand scan" && !live(e, s, "operator"))) continue;
+    if (firms.has(e.companyId) || isOpenRole(e, s, tracks) || e.service || (e.source === "Demand scan" && !live(e, s, "operator"))) continue;
     const type = live(e, s, "type");
     if (type && !FRACTIONAL_TYPES.includes(type)) continue;
     if (belowLead(live(e, s, "role"))) continue;

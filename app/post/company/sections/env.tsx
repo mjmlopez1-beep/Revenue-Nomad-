@@ -75,6 +75,8 @@ export const SOURCE_SAY: Record<string, string> = {
   "Member added": "what members added",
   Clay: "Revenue Nomad research",
   "Seat scan": "Revenue Nomad research",
+  "Firm client list": "fractional firms' client lists",
+  "Clutch review": "Clutch reviews",
 };
 /** A role still open: the scan follows it and it has not closed, or it is marked Open role. */
 export const openRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));

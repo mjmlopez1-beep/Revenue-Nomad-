@@ -161,6 +161,8 @@ const named = (fn: string | null | undefined) => (fn && fn !== "Other" ? fn : nu
 export function isHireRaw(e: EngNode, s: State, tracks: Tracks): boolean {
   if (T.isOpenRole(e, s, tracks)) return false;
   if (e.source === "Demand scan" && !T.live(e, s, "operator")) return false;
+  // A fractional service a firm named (outsourced accounting, freelance marketers): not a hire.
+  if (e.service) return false;
   const type = T.live(e, s, "type");
   return !type || FRACTIONAL_TYPES.includes(type);
 }
