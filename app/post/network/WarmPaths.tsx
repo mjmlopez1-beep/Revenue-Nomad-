@@ -44,6 +44,7 @@ import { openWay, suggestPost, useSuggest, useWarm, useWayIn, wayPost } from "./
 import { EXAMPLE_ROWS, exampleRoute } from "./warmExamples";
 import { KnownMoves } from "./KnownMoves";
 import { openSettings } from "../settings/at";
+import { SendLaunch, SendPromise, draftKey, useSendOn } from "../send/Send";
 import "../workbench/workbench.css";
 import "./warm.css";
 
@@ -795,6 +796,7 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
   const routes = v?.routes ?? [];
   const rt = routes[Math.min(routeIdx, Math.max(0, routes.length - 1))] ?? null;
   const ask = rt?.steps[0] ?? null;
+  const sendOn = useSendOn();
   const [text, setText] = useState("");
   useEffect(() => setText(ask?.note?.body ?? ""), [ask?.note?.body]);
   const direct = !!rt && rt.between === 0;
@@ -939,7 +941,25 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
                   <strong>{ask.note.subject}</strong>
                   <textarea aria-label={`The note to ${ask.note.to}`} value={text} onChange={(e) => setText(e.target.value)} rows={8} />
                   <span className="wp-acts">
-                    <button type="button" className="btn btn-pine" disabled={busy} aria-busy={busy} onClick={() => void sendIt()}>
+                    {ask.act?.kind !== "message" && (
+                      <SendLaunch
+                        className="btn btn-pine"
+                        title={`A note to ${ask.note.to}`}
+                        d={() => ({
+                          key: draftKey(`warm:${r.id}:${rt?.id ?? ""}`, ask.note!.email, ask.note!.subject, text),
+                          kind: direct ? "network" : "intro",
+                          to: ask.note!.email,
+                          toName: ask.note!.to,
+                          subject: ask.note!.subject,
+                          body: text,
+                          company: r.id,
+                          effect: { type: "pipeline.sent", companyId: r.id, from: "network", channel: direct ? "email" : "intro" },
+                        })}
+                        // Sent from Gmail: the plan's first step is done, as Mark as sent does.
+                        onSent={() => void markSent()}
+                      />
+                    )}
+                    <button type="button" className={`btn${ask.act?.kind !== "message" && sendOn ? "" : " btn-pine"}`} disabled={busy} aria-busy={busy} onClick={() => void sendIt()}>
                       {ask.act?.kind === "message" ? `Send to ${ask.act.first} on Merlin` : "Open in Gmail"}
                     </button>
                     {ask.act?.kind !== "message" && (
@@ -951,7 +971,7 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
                       Mark as sent
                     </button>
                   </span>
-                  <span className="wp-sub">Merlin never sends for you. Marking it sent puts the company in your pipeline under Reached out.</span>
+                  <SendPromise small off={<span className="wp-sub">Merlin never sends for you. Marking it sent puts the company in your pipeline under Reached out.</span>} />
                 </div>
               )}
             </>

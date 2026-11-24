@@ -104,6 +104,8 @@ import "./post.css";
  */
 const loadAdd = () => import("./AddModal");
 const AddModal = dynamic(() => loadAdd().then((m) => m.AddModal), { ssr: false });
+// Approve and send (lib/send, RN_SEND): the toasts after a tap and the way back from Google's consent page. Draws nothing while sending is off.
+const SendHost = dynamic(() => import("./send/Send").then((m) => m.SendHost), { ssr: false });
 /** Fetch them while the member reads (the Add form first): opening one is then instant. */
 const preloadLater = (admin: boolean) => {
   for (const f of [loadAdd, ...preloadPages(admin)]) void f().catch(() => {});
@@ -3700,6 +3702,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
             ]}
           />
         )}
+        <SendHost />
       </div>
       </AppCtxProvider>
       </FitWhyCtx.Provider>

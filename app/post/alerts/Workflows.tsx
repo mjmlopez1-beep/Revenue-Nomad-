@@ -23,6 +23,8 @@ import {
   type FlowRow, type RunRow, type WfDraft, type WfScope, type WfScopeKind, type WfStep, type WfStepKey, type WfTrigger, type WorkflowsAnswer, type WorkflowsView,
 } from "@/lib/workflows/types";
 import { whenWords } from "./model";
+import { SendLaunch, draftKey } from "../send/Send";
+import { useSend } from "../send/sendStore";
 import "./alerts.css";
 
 /* ---------- the server ---------- */
@@ -538,6 +540,9 @@ export function WorkflowDrafts({ openCompany }: { openCompany: (pub: string) => 
   const toast = useToast();
   const [list, setList] = useState<(WfDraft & { name: string })[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // Approve and send (lib/send, RN_SEND): a workflow's draft goes from the member's Gmail only on their tap.
+  const send = useSend();
+  const sentKeys = new Set((send.view?.items ?? []).filter((x) => x.status !== "cancelled" && x.status !== "draft" && x.status !== "failed").map((x) => x.key.split(":").slice(0, 2).join(":")));
   useEffect(() => {
     void call<{ drafts?: (WfDraft & { name: string })[] }>("/api/table?workflows=drafts").then((r) => !isErr(r) && setList(r.drafts ?? null));
   }, []);
@@ -559,7 +564,7 @@ export function WorkflowDrafts({ openCompany }: { openCompany: (pub: string) => 
     <section className="wf-drafts" aria-label="Drafts from your workflows">
       <div className="wf-drafts-h">
         <strong>Drafts from your workflows</strong>
-        <span className="al-sub">Never sent. Copy one to use it.</span>
+        <span className="al-sub">{send.on ? "Nothing goes until you approve it. It sends from your own Gmail." : "Never sent. Copy one to use it."}</span>
       </div>
       <ul>
         {list.slice(0, 5).map((d) => (
@@ -567,14 +572,20 @@ export function WorkflowDrafts({ openCompany }: { openCompany: (pub: string) => 
             <button type="button" className="wf-draft" aria-expanded={open === d.id} onClick={() => setOpen(open === d.id ? null : d.id)}>
               <span className="wf-draft-s">{d.subject}</span>
               <span className="al-sub">
-                {d.companyName} · <span className="ms2-tag">Draft</span>
+                {d.companyName} · <span className="ms2-tag">{sentKeys.has(`wf:${d.id}`) ? "Approved" : "Draft"}</span>
               </span>
             </button>
             {open === d.id && (
               <div className="wf-draft-body">
                 <pre>{d.body}</pre>
                 <span className="wf-draft-acts">
-                  <button type="button" className="btn btn-sm btn-pine" onClick={() => void copy(d)}>
+                  {!sentKeys.has(`wf:${d.id}`) && (
+                    <SendLaunch
+                      className="btn btn-sm btn-pine"
+                      d={() => ({ key: draftKey(`wf:${d.id}`, d.subject, d.body), kind: "workflow", subject: d.subject, body: d.body, company: d.company, effect: { type: "pipeline.sent", companyId: d.company, from: "record", channel: "email" } })}
+                    />
+                  )}
+                  <button type="button" className={`btn btn-sm${send.on ? "" : " btn-pine"}`} onClick={() => void copy(d)}>
                     Copy
                   </button>
                   <button type="button" className="btn btn-sm wf-edit" onClick={() => openCompany(d.company)}>

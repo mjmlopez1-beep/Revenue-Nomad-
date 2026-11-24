@@ -24,6 +24,7 @@
  * Phones: one column. The list, then a conversation or a new message fills the screen.
  */
 import { WorkflowDrafts } from "../alerts/Workflows";
+import { Outbox } from "../send/Send";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConversationRec, FractionalRec, FractionalsView } from "@/lib/tableTypes";
 import type { LeadRec, PeerRec } from "@/lib/peersCore";
@@ -354,7 +355,9 @@ export function Messages2() {
         <span>{listHead(all)}</span>
         <span className="ms2-muted">Newest first</span>
       </div>
-      {/* Notes a workflow drafted (lib/workflows, Beta): drafts only, never sent. Nothing shows while workflows are off. */}
+      {/* Approve and send (lib/send, RN_SEND): notes waiting for the member's approval (an agent's included), going out, and sent from their Gmail. Nothing while sending is off. */}
+      <Outbox />
+      {/* Notes a workflow drafted (lib/workflows, Beta): drafts until the member approves one. Nothing shows while workflows are off. */}
       <WorkflowDrafts openCompany={(id) => app.openCompany(id)} />
       {first && <p className="ms2-list-note">Nobody has written yet. These three show what lands here. Pick one and Merlin opens the same kind of draft in the message box.</p>}
       <ul>

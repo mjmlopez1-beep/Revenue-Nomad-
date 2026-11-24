@@ -35,6 +35,7 @@ import type { GetInRow, GetInView, PlanLine, PlanView, RouteNote, RouteStepView,
 import { lockedWaysWords } from "@/lib/paths/types";
 import type { StepOp } from "@/lib/paths/plan";
 import { openWay, useGetIn, usePlans, useWayIn, wayPost, type WayDo } from "./useWays";
+import { SendLaunch, draftKey } from "../send/Send";
 import "./ways.css";
 
 const cx = (...p: (string | false | null | undefined)[]) => p.filter(Boolean).join(" ");
@@ -264,6 +265,42 @@ function NowStep({ v, st, plan, i, run }: { v: WayInView; st: RouteStepView; pla
         </>
       ) : null}
       <div className="wy-step-acts">
+        {/* Approve and send (lib/send, RN_SEND): the note goes from the member's Gmail, then the step is done as if they pressed it. */}
+        {st.kind === "ask" && st.note && st.act?.kind !== "message" && !invite?.invite && !(plan.nudge && st.nudge) ? (
+          <SendLaunch
+            className="btn btn-pine btn-lg"
+            title={`A note to ${st.note.to}`}
+            d={() => ({
+              key: draftKey(`way:${v.id}:${st.n}`, st.note!.email, st.note!.subject, text),
+              kind: "intro",
+              to: st.note!.email,
+              toName: st.note!.to,
+              subject: st.note!.subject,
+              body: text,
+              company: v.id,
+              effect: { type: "pipeline.sent", companyId: v.id, from: "network", channel: "intro" },
+            })}
+            onSent={() => void run.answer("sent")}
+          />
+        ) : null}
+        {plan.nudge && st.nudge ? (
+          <SendLaunch
+            className="btn btn-pine btn-lg"
+            title={`A nudge to ${st.nudge.to}`}
+            label="Approve and send the nudge"
+            d={() => ({
+              key: draftKey(`way:${v.id}:${st.n}:nudge`, st.nudge!.email, st.nudge!.subject, nudgeText),
+              kind: "followup",
+              to: st.nudge!.email,
+              toName: st.nudge!.to,
+              subject: st.nudge!.subject,
+              body: nudgeText,
+              company: v.id,
+              followUp: true,
+            })}
+            onSent={() => void run.answer("nudged")}
+          />
+        ) : null}
         {invite?.invite ? (
           <>
             <InviteConnect e={invite} name={st.act!.first} company={company} />

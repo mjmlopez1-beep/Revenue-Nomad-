@@ -12,6 +12,11 @@
  * unlocked) or another mail app, and Message on Merlin for a seat holder who is a member. Nothing
  * here sends on its own. What they edit stays in this sheet. "Mark as sent", or using the note,
  * puts the company in the member's pipeline at Sent (lib/pipeline.ts) and the move leaves today's.
+ *
+ * With Approve and send on (lib/send, RN_SEND): To is a field (the address on file, or one they
+ * type), and "Approve and send" sends the note from the member's own Gmail after 30 seconds to
+ * undo. Once it went, the server does what Mark as sent does (`sendAs.effect`), and the page's
+ * own follow-on runs (`sendAs.onGmailSent`). Off: the sheet is exactly as before.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Me } from "@/lib/tableTypes";
@@ -29,6 +34,11 @@ import { IntroBlock } from "./network/IntroWhy";
 import { STRENGTH_WORDS, type Warmth } from "@/lib/google/types";
 import { WarmthChip, type Strength } from "../ui/system";
 import type { IntroPlanView } from "@/lib/paths/intro";
+import { moveSent } from "@/lib/moves";
+import type { SendEffect, SendItemView, SendKind } from "@/lib/send/types";
+import { SendIcon, SendPromise, ToInput, draftKey, useApprove } from "./send/Send";
+import { useSend, whenSent } from "./send/sendStore";
+import { loadPipeline } from "./pipelineStore";
 import "./movenote.css";
 
 const MAX = 2000;
@@ -42,7 +52,7 @@ export function WhoWarmth({ w, strength }: { w: Warmth; strength?: boolean }) {
 }
 
 export function NoteSheet({
-  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro,
+  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro, sendAs,
 }: {
   m: Move;
   row: RadarRow;
@@ -59,6 +69,11 @@ export function NoteSheet({
   sentLabel?: string;
   /** Your network: "Why Jake", and who this person can introduce the member to (lib/paths/intro.ts), or that the note asks generally. */
   intro?: { plan: IntroPlanView | null; first: string; strength: string | null } | null;
+  /**
+   * Approve and send: what a sent note does on the server (default: the company into the pipeline
+   * at Sent, from a record) and what the page does after (default: nothing more).
+   */
+  sendAs?: { effect?: SendEffect; kind?: SendKind; onGmailSent?: (it: SendItemView) => void };
 }) {
   const ui = useUi();
   const toast = useToast();
@@ -77,6 +92,9 @@ export function NoteSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
   const [used, setUsed] = useState(false);
+  const send = useSend();
+  const approve = useApprove();
+  const [toAddr, setToAddr] = useState(facts?.to?.email ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // The note grows with its text (CSS caps it), so the whole of it shows.
@@ -119,6 +137,33 @@ export function NoteSheet({
     onSent("merlin");
   };
   const title = facts.kind === "roleCold" && !to ? "A note for the open role" : `A note to ${first ?? "them"}`;
+  // Approve and send: every note but a message to a seat holder on Merlin (that one goes on Merlin).
+  const sendable = send.on && !onMerlin;
+  const approveIt = () => {
+    const addr = toAddr.trim();
+    const effect: SendEffect = sendAs?.effect ?? { type: "pipeline.sent", companyId: m.id, from: "record", ...moveSent(m), channel: m.do === "intro" ? "intro" : "email" };
+    void approve.go(
+      !addr ? "Add their email address to send it." : !subject.trim() ? "Add a subject." : !body.trim() ? "The note is empty." : !linkKept ? `Keep the link in it. It's how ${first} claims the seat.` : {
+        key: draftKey(`note:${facts.kind}:${m.id}`, addr, subject, body),
+        to: addr,
+        toName: to?.name ?? null,
+        subject,
+        body,
+        kind: sendAs?.kind ?? (m.do === "intro" ? "intro" : "move"),
+        company: m.id,
+        effect,
+      },
+      (it) => {
+        whenSent(it.id, (x) => {
+          // An invite to connect is recorded once it went, as with the mail buttons.
+          if (invite) void ui.act({ type: "invite", engagementId: invite.seatId, note: body }, { quiet: true, silentError: true });
+          if (sendAs?.onGmailSent) sendAs.onGmailSent(x);
+          else void loadPipeline(true);
+        });
+        onClose();
+      },
+    );
+  };
   const buyer = way.kind === "buyer" ? way : null;
   // An open role's note says "I've applied": the posting comes first, then the note.
   const posting = m.do === "reply" && m.open?.posting && m.open.posting !== "locked" ? webLink(m.open.posting) : null;
@@ -142,7 +187,12 @@ export function NoteSheet({
                 {busy ? "Sending" : "Message on Merlin"}
               </button>
             )}
-            <a className={`btn${onMerlin || posting ? "" : " btn-pine"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
+            {sendable && (
+              <button type="button" className={`btn${posting ? "" : " btn-pine"} mn-go sd-approve`} disabled={approve.busy} aria-busy={approve.busy} onClick={approveIt}>
+                <SendIcon /> {approve.busy ? "Sending" : "Approve and send"}
+              </button>
+            )}
+            <a className={`btn${onMerlin || posting || sendable ? "" : " btn-pine"} mn-go`} href={gmailLink(to?.email, subject, body)} target="_blank" rel="noreferrer" onClick={record}>
               <IconExternal size={14} /> Open in Gmail
             </a>
             <button type="button" className="btn mn-go" onClick={() => void copy()}>
@@ -158,15 +208,20 @@ export function NoteSheet({
               <path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
-            <span>
-              <b>Merlin drafts, you send.</b> Merlin never sends for you.
-              <span className="mn-promise-more">
-                {" "}
-                {onMerlin
-                  ? "Message on Merlin goes to their Merlin inbox when you press it. The mail buttons open a draft in your own mail."
-                  : "This opens as a draft in your own mail, and nothing goes out until you press Send there. Merlin never reads your email."}
-              </span>
-            </span>
+            <SendPromise
+              more
+              off={
+                <span>
+                  <b>Merlin drafts, you send.</b> Merlin never sends for you.
+                  <span className="mn-promise-more">
+                    {" "}
+                    {onMerlin
+                      ? "Message on Merlin goes to their Merlin inbox when you press it. The mail buttons open a draft in your own mail."
+                      : "This opens as a draft in your own mail, and nothing goes out until you press Send there. Merlin never reads your email."}
+                  </span>
+                </span>
+              }
+            />
           </p>
             <button type="button" className={`btn${used ? " btn-pine" : ""} mn-done`} onClick={() => onSent()}>
               {sentLabel}
@@ -222,7 +277,16 @@ export function NoteSheet({
         </div>
 
         <div className="mn-fields">
-          {!onMerlin || to?.email ? (
+          {sendable ? (
+            <>
+              <ToInput id="mn-to" value={toAddr} onChange={setToAddr} name={to?.name ?? null} />
+              {to?.email && toAddr.trim().toLowerCase() === to.email.toLowerCase() ? (
+                <span className="mn-from">{to.from === "your own contacts" ? "from your own contacts" : "a contact you unlocked"}</span>
+              ) : !to?.email && buyer?.email === "locked" ? (
+                <span className="mn-from">{first}&apos;s email is on the record, 1 credit. Or type an address you have.</span>
+              ) : null}
+            </>
+          ) : !onMerlin || to?.email ? (
             <div className="mn-field">
               <span className="mn-k">To</span>
               {to?.email ? (
@@ -262,6 +326,11 @@ export function NoteSheet({
         {err && (
           <p className="mn-warn" role="alert">
             {err}
+          </p>
+        )}
+        {approve.err && (
+          <p className="mn-warn" role="alert">
+            {approve.err}
           </p>
         )}
         <VoiceLine me={me} onClaude={onClaude} />

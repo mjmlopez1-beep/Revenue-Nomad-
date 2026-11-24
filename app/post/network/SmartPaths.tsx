@@ -21,6 +21,7 @@ import { EXPORT_STEPS, FILE_MAX_BYTES, lockedWaysWords, waysWords, type PathView
 import { WarmthChip } from "./parts";
 import { pathsAct, useCompanyPaths, usePathCount, usePaths, usePlan } from "./usePaths";
 import { IntroLine } from "./IntroWhy";
+import { SendLaunch, SendPromise, draftKey, useSendOn } from "../send/Send";
 import "./paths.css";
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -28,11 +29,12 @@ const n = (x: number) => x.toLocaleString("en-US");
 
 /* ---------- one way in ---------- */
 
-export function PathRow({ p, compact = false }: { p: PathView; compact?: boolean }) {
+export function PathRow({ p, compact = false, company = null }: { p: PathView; compact?: boolean; /** The company's public id, for Approve and send's record. */ company?: string | null }) {
   const copy = useCopy();
   const [open, setOpen] = useState(false);
   // "Why Dana": how strong the relationship is, and how many companies in the member's list Dana can introduce them to.
   const plan = usePlan(p.via.key);
+  const sendOn = useSendOn();
   const mail = p.via.email ? `mailto:${encodeURIComponent(p.via.email)}?subject=${encodeURIComponent(p.note.subject)}&body=${encodeURIComponent(p.note.body)}` : null;
   return (
     <div className={`sp-path${compact ? " sp-path-c" : ""}`} data-path={p.kind}>
@@ -60,7 +62,7 @@ export function PathRow({ p, compact = false }: { p: PathView; compact?: boolean
           <p>{p.note.body}</p>
           <div className="nw-row nw-wrap">
             {mail && (
-              <a className="btn btn-sm btn-pine" href={mail}>
+              <a className={`btn btn-sm${sendOn ? "" : " btn-pine"}`} href={mail}>
                 Open in your email
               </a>
             )}
@@ -69,11 +71,24 @@ export function PathRow({ p, compact = false }: { p: PathView; compact?: boolean
                 Open on LinkedIn
               </a>
             )}
+            <SendLaunch
+              className="btn btn-sm btn-pine"
+              d={() => ({
+                key: draftKey(`path:${p.key}`, p.via.email, p.note.subject, p.note.body),
+                kind: p.degree === 1 ? "network" : "intro",
+                to: p.via.email,
+                toName: p.via.name,
+                subject: p.note.subject,
+                body: p.note.body,
+                company,
+                effect: company ? { type: "pipeline.sent", companyId: company, from: "network", channel: p.degree === 1 ? "email" : "intro", intro: p.degree !== 1, to: { name: p.via.name, role: p.via.title } } : null,
+              })}
+            />
             <button type="button" className="btn btn-sm" onClick={() => void copy(p.note.body, "Note copied.")}>
               Copy
             </button>
           </div>
-          <span className="nw-small">Merlin never sends for you. You review it and send it yourself.</span>
+          <SendPromise off={<span className="nw-small">Merlin never sends for you. You review it and send it yourself.</span>} more={false} small />
         </div>
       )}
     </div>
@@ -211,7 +226,7 @@ function TargetRow({ t, info, onOpen }: { t: TargetView; info: CoInfo | undefine
         </div>
         <span className="chip chip-outline sp-count num">{t.count === 1 ? "1 way in" : `${t.count} ways in`}</span>
       </div>
-      <PathRow p={t.best} />
+      <PathRow p={t.best} company={t.id} />
       <div className="np-acts">
         <button type="button" className="btn btn-sm btn-ghost" onClick={onOpen}>
           {t.count > 1 ? `See all ${t.count} on the record` : "Open the record"}
@@ -288,7 +303,7 @@ export function SmartWaysIn({ i }: { i: CoInfo }) {
       </h3>
       <div className="sp-way-list">
         {list.map((p) => (
-          <PathRow key={p.key} p={p} compact />
+          <PathRow key={p.key} p={p} compact company={i.c.id} />
         ))}
       </div>
       {c.paths.length > list.length && (
