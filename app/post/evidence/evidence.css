@@ -458,6 +458,13 @@
 }
 .ev-endrow .input {
   flex: 1 1 140px;
+  min-width: 0;
+}
+/* "Still going" stays on one line beside the month (or under it when there is no room), never split under its box. */
+.ev-endrow .ev-check {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .ev-check {
   display: inline-flex;

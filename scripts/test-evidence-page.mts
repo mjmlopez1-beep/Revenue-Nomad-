@@ -294,6 +294,7 @@ async function main() {
   const all = files.map((f) => src(join("app/post/evidence", f))).join("\n");
   const strings = (all.match(/"[^"\n]{3,}"|`[^`\n]{3,}`|>[^<>{}\n]{3,}</g) ?? []).join("\n");
   check("no export, CSV or download anywhere on the page", !/Export|Download|\bCSV\b|\.csv|PDF/.test(strings.replace(/ExportProof|ExportPanel/g, "")), strings.match(/.*(Export|Download|CSV|PDF).*/)?.[0]);
+  check("on a phone, Still going stays on one line beside or under the month, never split under its box", /\.ev-endrow \.ev-check \{[^}]*flex-wrap: nowrap;[^}]*white-space: nowrap;/.test(src("app/post/evidence/evidence.css")) && /\.ev-endrow \.input \{[^}]*min-width: 0;/.test(src("app/post/evidence/evidence.css")));
   check("no volt: nothing on Evidence Bank earns a credit", !all.includes("btn-volt") && !src("app/post/evidence/evidence.css").includes("--volt"));
   check("fractional words, not generic AI words", !M.NOT_OUR_WORDS.test(strings), strings.match(new RegExp(`.*${M.NOT_OUR_WORDS.source}.*`, "i"))?.[0]);
   check("case studies, never 'evidence case' in what the member reads", !/evidence case|New case(?! study)|case library/i.test(strings), strings.match(/.*(evidence case|New case(?! study)|case library).*/i)?.[0]);
