@@ -17,7 +17,7 @@
  * No export anywhere.
  */
 import { ExportProof } from "../network/ExportPanel";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CompanyLogo, IconPlus, IconSearch, useToast } from "../../ui/shared";
 import { ShellHeader } from "../shell/Header";
 import { useApp } from "../shell/pages";
@@ -148,12 +148,20 @@ function Bank() {
   useEffect(() => onOpenEvidence((id) => id && cases && void openSeat(id, cases)), [cases, openSeat]);
   // Case studies the member's agent saved (Build this for me, save_evidence_case) arrive while they
   // were in Claude: coming back to this tab reads the bank again, so the table and the count move.
+  // Also with the wizard or a form open (Build this for me sits inside the wizard too): they keep
+  // their own fields, so reading the list again changes nothing the member is typing. Once for the
+  // pair of events a return fires (visibilitychange, then focus).
+  const lastBack = useRef(0);
   useEffect(() => {
-    const back = () => document.visibilityState === "visible" && !editing && !wiz && void load();
+    const back = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastBack.current < 2000) return;
+      lastBack.current = Date.now();
+      void load();
+    };
     document.addEventListener("visibilitychange", back);
     window.addEventListener("focus", back);
     return () => (document.removeEventListener("visibilitychange", back), window.removeEventListener("focus", back));
-  }, [load, editing, wiz]);
+  }, [load]);
 
   const put = (x: Study) => {
     const wasReady = (cases ?? []).some((y) => y.status === "ready");

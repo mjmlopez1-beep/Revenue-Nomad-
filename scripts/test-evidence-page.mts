@@ -206,6 +206,7 @@ async function main() {
   check("coverage: with the category names only, a category used as a tag counts", M.coverageOf([study("x3", { workType: ["Finance"] })], { categories: CATALOGUE.categories, tags: [] }).covered.join() === "Finance");
   check("the page counts from the same list it draws, so a save moves it at once", /const cover = coverageOf\(cases, catalogue\)/.test(ev) && ev.includes("Covers {cover.n} of {cover.of} categories") && /setCases\(\(cs\) => \[x, \.\.\.\(cs \?\? \[\]\)/.test(ev));
   check("coming back from Claude reads the bank again (cases the connector saved)", ev.includes('addEventListener("visibilitychange", back)') && ev.includes('window.addEventListener("focus", back)'));
+  check("coming back reads the bank again with the wizard or a form open too (Build this for me sits inside the wizard), once a return", !/const back = \(\) => [^\n]*(!editing|!wiz)/.test(ev) && /\[load\]\);/.test(ev.slice(ev.indexOf('addEventListener("visibilitychange", back)'))) && ev.includes("Date.now() - lastBack.current < 2000"));
 
   /* ----- the wizard ----- */
   check("four steps in fractional words", M.WIZ_STEPS.map((s) => s.h).join(" | ") === "Pick a client you did great work for | What was the problem, and what did you do? | What changed? | Who can vouch for it?");
