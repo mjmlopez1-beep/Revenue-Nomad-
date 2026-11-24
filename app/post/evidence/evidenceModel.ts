@@ -202,9 +202,12 @@ export function searchTags(q: string, cat: TagCatalogue, picked: readonly string
   for (const r of tagPool(cat)) {
     const n = r.name.toLowerCase();
     if (have.has(n)) continue;
-    const inCat = r.category.toLowerCase();
-    if (!words.every((w) => n.includes(w) || inCat.includes(w))) continue;
-    const s = n.startsWith(t) ? 0 : n.split(/[\s/-]+/).some((w) => w.startsWith(words[0])) ? 1 : words.every((w) => n.includes(w)) ? 2 : 3;
+    // Each word typed starts a word of the tag or its category ("board" finds Board reporting, not Onboarding).
+    const nameWords = n.split(/[^a-z0-9]+/);
+    const catWords = r.category.toLowerCase().split(/[^a-z0-9]+/);
+    const inName = (w: string) => nameWords.some((x) => x.startsWith(w));
+    if (!words.every((w) => inName(w) || catWords.some((x) => x.startsWith(w)))) continue;
+    const s = n.startsWith(t) ? 0 : inName(words[0]) ? 1 : words.every(inName) ? 2 : 3;
     scored.push({ r, s });
   }
   return scored.sort((a, b) => a.s - b.s || a.r.name.length - b.r.name.length || a.r.name.localeCompare(b.r.name)).slice(0, max).map((x) => x.r);

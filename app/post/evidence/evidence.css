@@ -493,14 +493,24 @@
   margin-top: 16px;
 }
 .ev-switches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px 28px;
   margin-top: 14px;
 }
 .ev-switches .ev-check {
-  flex: 1 1 280px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: 8px;
+  align-items: start;
+  line-height: 19px;
+}
+.ev-switches .ev-check input {
+  margin: 1px 0 0;
+}
+.ev-switches .ev-check .ev-field-hint {
+  grid-column: 2;
+  padding-left: 0;
 }
 .ev-form-foot,
 .ev-confirm {
