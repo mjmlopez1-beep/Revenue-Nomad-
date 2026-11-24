@@ -89,9 +89,19 @@ const utcDay = (ms: number) => {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 };
 
-/** A member's rows, saved and waiting, oldest first. */
+/** Rows being written (taken from waiting, not yet in the committed state), by member. */
+const writing = new Map<string, AgentLogRow[]>();
+
+/**
+ * A member's rows, saved and waiting, oldest first. Rows being written show too until the state
+ * that holds them is the one read (a write of a big state takes a while): those newer than the
+ * last saved row, so a row is never shown twice nor missed while it is on its way.
+ */
 export function rowsIn(s: State, memberId: string): AgentLogRow[] {
-  return [...(s.connector?.log?.[memberId] ?? []), ...(waiting.get(memberId) ?? [])];
+  const saved = s.connector?.log?.[memberId] ?? [];
+  const last = saved.length ? saved[saved.length - 1].at : "";
+  const onWay = (writing.get(memberId) ?? []).filter((r) => r.at > last);
+  return [...saved, ...onWay, ...(waiting.get(memberId) ?? [])];
 }
 
 /** Keep LOG_DAYS and LOG_MAX. */
@@ -109,6 +119,7 @@ export async function flushAgentLog(): Promise<void> {
   const batch = [...waiting.entries()];
   waiting.clear();
   waitingN = 0;
+  for (const [id, rows] of batch) writing.set(id, [...(writing.get(id) ?? []), ...rows]);
   const nowMs = Date.now();
   await tableInternals
     .mutate((s) => {
@@ -120,7 +131,15 @@ export async function flushAgentLog(): Promise<void> {
         log[id] = pruned([...(log[id] ?? []), ...rows], nowMs);
       }
     })
-    .catch((e) => console.error("agent log write failed", e));
+    .catch((e) => console.error("agent log write failed", e))
+    .finally(() => {
+      // Written (or failed, as before: a failed write keeps nothing): no longer on the way.
+      for (const [id, rows] of batch) {
+        const left = (writing.get(id) ?? []).filter((r) => !rows.includes(r));
+        if (left.length) writing.set(id, left);
+        else writing.delete(id);
+      }
+    });
 }
 
 /** Add a row (written with the next batch). */
@@ -140,6 +159,7 @@ export function record(memberId: string, row: AgentLogRow): void {
 export const forgetWaiting = (memberId: string) => {
   waitingN -= waiting.get(memberId)?.length ?? 0;
   waiting.delete(memberId);
+  writing.delete(memberId);
 };
 
 /* ---------- the daily spend limit ---------- */

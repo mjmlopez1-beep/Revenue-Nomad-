@@ -1581,10 +1581,11 @@ function graph(seed: Seed, s: State): Graph {
   // Fractionals: each seat knows its graph, so a cell can find the fractional it belongs to (personIndex).
   graphSeeds.set(g, seed);
   for (const e of g.engagements.values()) engGraphs.set(e, g);
-  // Every record knows its graph too, so a cell can tell whether the trial opened its company (planSees).
-  for (const e of g.engagements.values()) nodeGraphs.set(e, g);
-  for (const p of g.contacts.values()) nodeGraphs.set(p, g);
-  for (const c of g.companies.values()) nodeGraphs.set(c, g);
+  // Every record knows its graph too, so a cell can tell whether the trial opened its company (planSees). A property, not
+  // a WeakMap: a graph is built for every action, and tens of thousands of WeakMap entries a build slowed every action down.
+  for (const e of g.engagements.values()) (e as GraphOf)[GRAPH_OF] = g;
+  for (const p of g.contacts.values()) (p as GraphOf)[GRAPH_OF] = g;
+  for (const c of g.companies.values()) (c as GraphOf)[GRAPH_OF] = g;
   return g;
 }
 
@@ -1593,8 +1594,9 @@ function graph(seed: Seed, s: State): Graph {
 /** The seed and the graph each seat was built in, for personIndex (a cell is read from its node alone). */
 const graphSeeds = new WeakMap<Graph, Seed>();
 const engGraphs = new WeakMap<Node, Graph>();
-/** The graph each record (company, seat or person) was built in. */
-const nodeGraphs = new WeakMap<Node, Graph>();
+/** The graph each record (company, seat or person) was built in: a symbol, so it is never sent or saved. */
+const GRAPH_OF = Symbol("graph");
+type GraphOf = { [GRAPH_OF]?: Graph };
 /** Each seat's one-way person key (SeedEngagement.holderKey), read defensively: only "p_" and hex. Never sent anywhere. */
 const holderKeyIndex = new WeakMap<Seed, Map<string, string>>();
 function seedHolderKeys(seed: Seed): Map<string, string> {
@@ -2601,13 +2603,14 @@ const planOpenAt = (s: State, memberId: string, at: string) => billingLive() && 
 function planSees(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
   if (!me || !node) return false;
   if (entity === "contact" && (PAID_DETAILS as readonly string[]).includes(key)) return false;
-  if (entity === "engagement" && (key === "operator" || key === "role") && seatBundled(node, s) && peerPrivate(s, node)) return false;
+  // The plan first: on Free (most cells of most tables) nothing more is asked.
   const acc = accessFor(s, me.id);
+  if (acc !== "open" && acc !== "trial") return false;
+  if (entity === "engagement" && (key === "operator" || key === "role") && seatBundled(node, s) && peerPrivate(s, node)) return false;
   if (acc === "open") return true;
-  if (acc !== "trial") return false;
   const companyId = entity === "company" ? node.id : (node as EngNode | PersonNode).companyId;
   if (trialOpened(s, me.id, companyId)) return true;
-  const g = nodeGraphs.get(node);
+  const g = (node as GraphOf)[GRAPH_OF];
   const seed = g ? graphSeeds.get(g) : undefined;
   return !!g && !!seed && !identityHidden(g, s, memberIndex(seed, s), null as unknown as Tracks, me, companyId);
 }
