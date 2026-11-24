@@ -36,6 +36,7 @@ import { stripGone, useApp } from "../shell/pages";
 import { earnedAt, onFileUnderName, stepWords, verificationOf, whenWords } from "./seatsModel";
 import { SeatCaseCell, seatCasesFill, seatEvidenceOn, useSeatCases } from "../evidence/SeatEvidence";
 import { FoundSeats } from "../FoundSeats";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 
 /** A guess as a row: from the member's calendar, or a seat on file under their name. */
 type Guess =
@@ -210,6 +211,21 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
     { name: "Evidence case", fill: seatCasesFill(cases, seatIds, close) },
     { name: "Your rate", fill: "You choose who sees it" },
   ];
+  // Click a header to sort your seats by it, both ways (the guesses to confirm stay on top).
+  const ysCols: SortCol<{ id: string; s: SeatInfo | undefined }>[] = [
+    { key: "Company", label: "Company", get: (x) => (x.s && !x.s.i.c.hidden ? x.s.i.c.name : null) },
+    { key: "Seat", label: "Seat", get: (x) => (x.s ? shown(x.s.e.cells.role) ?? shown(x.s.e.cells.function) : null) },
+    { key: "Verification", label: "Verification", get: (x) => (x.s ? verificationOf(x.s.e, earnedAt(c.view.ledger, x.s.i.c.name).waiting).word : null) },
+    { key: "Earned", label: "Earned", kind: "number", get: (x) => (x.s ? earnedAt(c.view.ledger, x.s.i.c.name).paid : null) },
+    { key: "Ways in it created", label: "Ways in it created", kind: "number", get: (x) => (x.s ? x.s.e.people.length || null : null) },
+    { key: "Evidence case", label: "Evidence case", get: (x) => (x.s && close ? cases?.get(x.s.e.id) ?? null : null) },
+    { key: "Your rate", label: "Your rate", kind: "money", get: (x) => (x.s ? shown(x.s.e.cells.rate) : null) },
+  ];
+  const ysSort = useSort(
+    sl.order.current.map((id) => ({ id, s: sl.byId.get(id) })),
+    ysCols,
+    { storageKey: "yourSeats" },
+  );
   const chev = (on: boolean, label: string, go: () => void) => (
     <button type="button" className="sp-exp" aria-expanded={on} aria-label={label} onClick={go}>
       <IconChevron size={16} dir={on ? "up" : "down"} />
@@ -496,16 +512,15 @@ export function YourSeats({ bottom }: { bottom: (status: ReactNode) => ReactNode
                     <span className="sr-only">Open</span>
                   </th>
                   {heads.map((h) => (
-                    <th key={h.name} scope="col">
-                      <span>{h.name}</span>
-                      <span className="sp-fill">{h.fill}</span>
-                    </th>
+                    <SortHeader key={h.name} s={ysSort} k={h.name} extra={<span className="sp-fill">{h.fill}</span>}>
+                      {h.name}
+                    </SortHeader>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {guesses.map((x, n) => [guessRow(x, n), open === x.id ? guessDetail(x) : null])}
-                {sl.order.current.map((id) => {
+                {ysSort.rows.map(({ id }) => {
                   const note = sl.gone.get(id);
                   if (note !== undefined)
                     return (

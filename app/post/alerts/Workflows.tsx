@@ -25,6 +25,7 @@ import {
   type CallOptions, type Deliverable, type FlowRow, type RunRow, type WfDraft, type WfScope, type WfScopeKind, type WfStep, type WfStepKey, type WfTrigger, type WorkflowsAnswer, type WorkflowsView,
 } from "@/lib/workflows/types";
 import { whenWords } from "./model";
+import { SortHeader, useSort, type SortCol, type Sorter } from "../../ui/sortable";
 import "./alerts.css";
 
 /* ---------- the server ---------- */
@@ -141,6 +142,8 @@ export function WorkflowsTab({
   openCompany: (pub: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // Click a header to sort the workflows by it, both ways.
+  const wfSort = useSort(v.flows, WF_SORT, { storageKey: "workflows" });
   const run = async (a: Record<string, unknown>) => {
     setBusy(true);
     try {
@@ -193,11 +196,11 @@ export function WorkflowsTab({
       <section aria-label="Workflows" className="wf-wrap">
         <div role="table" aria-label="Workflows" className="wf-table">
           <div role="row" className="wf-row wf-head">
-            <Head name="Workflow, in plain words" fill={first ? "None yet" : `${v.flows.length} ${v.flows.length === 1 ? "workflow" : "workflows"}`} />
-            <Head name="Runs" fill={runs30 ? `${runs30} in 30 days` : "None yet"} />
-            <Head name="Credits" fill={spentAll ? `${spentAll} spent` : "None spent"} />
-            <Head name="Last run" fill={lastAt ? whenWords(lastAt, nowMs) : "None yet"} />
-            <Head name="On" fill={`${nOn} of ${v.flows.length}`} />
+            <Head s={wfSort} k="say" name="Workflow, in plain words" fill={first ? "None yet" : `${v.flows.length} ${v.flows.length === 1 ? "workflow" : "workflows"}`} />
+            <Head s={wfSort} k="runs" name="Runs" fill={runs30 ? `${runs30} in 30 days` : "None yet"} />
+            <Head s={wfSort} k="credits" name="Credits" fill={spentAll ? `${spentAll} spent` : "None spent"} />
+            <Head s={wfSort} k="last" name="Last run" fill={lastAt ? whenWords(lastAt, nowMs) : "None yet"} />
+            <Head s={wfSort} k="on" name="On" fill={`${nOn} of ${v.flows.length}`} />
             <span role="columnheader" className="al-h" />
           </div>
           {first && (
@@ -205,7 +208,7 @@ export function WorkflowsTab({
               <span role="cell">No workflow yet. Pick a recipe above, or New workflow. A workflow only spends credits on a step that shows a price, and you can set a monthly limit.</span>
             </div>
           )}
-          {v.flows.map((f) => (
+          {wfSort.rows.map((f) => (
             <FlowRowView key={f.id} f={f} v={v} busy={busy} open={open === f.id} toggle={() => setOpen(open === f.id ? null : f.id)} onEdit={() => onBuild(fromRow(f))} act={run} openCompany={openCompany} nowMs={nowMs} />
           ))}
         </div>
@@ -215,14 +218,22 @@ export function WorkflowsTab({
   );
 }
 
-function Head({ name, fill }: { name: string; fill: string }) {
+function Head({ name, fill, s, k }: { name: string; fill: string; s?: Sorter<FlowRow> | null; k?: string }) {
   return (
-    <span role="columnheader" className="al-h">
+    <SortHeader as="span" s={s} k={k ?? name} className="al-h" extra={<span className="al-h-f">{fill}</span>}>
       <span className="al-h-n">{name}</span>
-      <span className="al-h-f">{fill}</span>
-    </span>
+    </SortHeader>
   );
 }
+
+/** The workflows' columns as their headers sort them. */
+const WF_SORT: SortCol<FlowRow>[] = [
+  { key: "say", label: "Workflow", get: (f) => f.say },
+  { key: "runs", label: "Runs", kind: "number", get: (f) => f.runs30 },
+  { key: "credits", label: "Credits", kind: "number", get: (f) => f.spent30 },
+  { key: "last", label: "Last run", kind: "date", get: (f) => f.last },
+  { key: "on", label: "On", kind: "number", get: (f) => (f.on ? 1 : 0) },
+];
 
 function FlowRowView({ f, v, busy, open, toggle, onEdit, act, openCompany, nowMs }: { f: FlowRow; v: WorkflowsView; busy: boolean; open: boolean; toggle: () => void; onEdit: () => void; act: (a: Record<string, unknown>) => Promise<void>; openCompany: (pub: string) => void; nowMs: number }) {
   const ceil = runCeiling(f.steps, f.scope, v.prices);

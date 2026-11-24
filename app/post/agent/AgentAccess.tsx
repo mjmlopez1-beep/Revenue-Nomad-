@@ -32,6 +32,7 @@ import { copyText } from "../hooks";
 import { useApp, stripGone, type ShellPage } from "../shell/pages";
 import { useNetwork } from "../network/useNetwork";
 import { CreditsMeterBar } from "../credits/Meter";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "./agent.css";
 
 /* ---------- the agents Merlin knows how to connect ---------- */
@@ -464,11 +465,37 @@ function applyFlip(v: AgentView, key: string, on: boolean): AgentView {
 
 /* ---------- What your agent can do ---------- */
 
+/** The tools as their headers sort them. Cost: what one use earns or spends, earning first. */
+const COST_RANK: Record<string, number> = { earn5: 5, earn: 4, free: 3, c1: 2, c2: 1, close: 0 };
+const TOOL_SORT: SortCol<AgentView["tools"][number]>[] = [
+  { key: "name", label: "Tool", get: (t) => t.name },
+  { key: "d", label: "What it does", get: (t) => t.d },
+  { key: "cost", label: "Cost", kind: "number", get: (t) => COST_RANK[t.cost] ?? null },
+  { key: "used", label: "Used, 30 days", kind: "number", get: (t) => t.used30 || null },
+  { key: "on", label: "On", kind: "number", get: (t) => (t.on ? 1 : 0) },
+];
+/** The log as its headers sort it: what each cell shows. */
+function logSortCols(limit: number | null): SortCol<AgentLogRow>[] {
+  return [
+    { key: "when", label: "When", kind: "date", get: (r) => r.at },
+    { key: "agent", label: "Agent", get: (r) => r.a ?? "Your agent" },
+    { key: "what", label: "What it did", get: (r) => rowWords(r, limit).t },
+    { key: "credits", label: "Credits", kind: "number", get: (r) => r.c || null },
+    { key: "where", label: "Where it landed", get: (r) => AGENT_LAND(r)?.label ?? null },
+  ];
+}
+
 function Tools({ view, first, grp, setGrp, flip }: { view: AgentView; first: boolean; grp: AgentGroup; setGrp: (g: AgentGroup) => void; flip: (key: string, on: boolean) => void }) {
   const total = view.tools.length;
   const groupOn = (g: AgentGroup) => view.groups.find((x) => x.id === g)?.on ?? true;
   const live = view.tools.filter((t) => t.on).length;
-  const shown = view.tools.filter((t) => t.group === grp);
+  // Click a header to sort the tools by it, both ways.
+  const toolSort = useSort(
+    useMemo(() => view.tools.filter((t) => t.group === grp), [view.tools, grp]),
+    TOOL_SORT,
+    { storageKey: "agent.tools" },
+  );
+  const shown = toolSort.rows;
   const gName = view.groups.find((g) => g.id === grp)?.name ?? "";
   const gOn = groupOn(grp);
   const liveHere = shown.filter((t) => t.on).length;
@@ -543,13 +570,13 @@ function Tools({ view, first, grp, setGrp, flip }: { view: AgentView; first: boo
       </div>
       <div className="ag-table" role="table" aria-label={`${gName} · ${grp === "spend" ? `${shown.length} kinds` : `${shown.length} tools`}`}>
         <div className="ag-tr ag-th ag-tools-row" role="row">
-          <span role="columnheader">
+          <SortHeader as="span" s={toolSort} k="name">
             {gName} · {grp === "spend" ? `${shown.length} kinds` : `${shown.length} tools`}
-          </span>
-          <span role="columnheader">What it does</span>
-          <span role="columnheader">Cost and asking</span>
-          <span role="columnheader">Used, 30 days</span>
-          <span role="columnheader">On</span>
+          </SortHeader>
+          <SortHeader as="span" s={toolSort} k="d">What it does</SortHeader>
+          <SortHeader as="span" s={toolSort} k="cost">Cost and asking</SortHeader>
+          <SortHeader as="span" s={toolSort} k="used">Used, 30 days</SortHeader>
+          <SortHeader as="span" s={toolSort} k="on">On</SortHeader>
         </div>
         {shown.map((t) => (
           <ToolRow key={t.key} t={t} first={first} gOn={gOn} flip={flip} />
@@ -599,7 +626,14 @@ function ToolRow({ t, first, gOn, flip }: { t: AgentView["tools"][number]; first
 
 function Log({ view, first, tab, setTab }: { view: AgentView; first: boolean; tab: LogTab; setTab: (t: LogTab) => void }) {
   const c = useApp();
-  const rows = view.log.filter((r) => tab === "all" || tabOf(r) === tab);
+  // Click a header to sort the log by it, both ways (the example rows keep their order).
+  const logCols = useMemo((): SortCol<AgentLogRow>[] => logSortCols(view.limit), [view.limit]);
+  const logSort = useSort(
+    useMemo(() => view.log.filter((r) => tab === "all" || tabOf(r) === tab), [view.log, tab]),
+    logCols,
+    { storageKey: "agent.log" },
+  );
+  const rows = logSort.rows;
   const examples = view.log.length === 0;
   const TABS: [LogTab, string][] = [
     ["all", "All"],
@@ -630,11 +664,11 @@ function Log({ view, first, tab, setTab }: { view: AgentView; first: boolean; ta
       </div>
       <div className="ag-table" role="table" aria-label="Agent activity">
         <div className="ag-tr ag-th ag-log-row" role="row">
-          <span role="columnheader">When</span>
-          <span role="columnheader">Agent</span>
-          <span role="columnheader">What it did</span>
-          <span role="columnheader">Credits</span>
-          <span role="columnheader">Where it landed</span>
+          <SortHeader as="span" s={examples ? null : logSort} k="when">When</SortHeader>
+          <SortHeader as="span" s={examples ? null : logSort} k="agent">Agent</SortHeader>
+          <SortHeader as="span" s={examples ? null : logSort} k="what">What it did</SortHeader>
+          <SortHeader as="span" s={examples ? null : logSort} k="credits">Credits</SortHeader>
+          <SortHeader as="span" s={examples ? null : logSort} k="where">Where it landed</SortHeader>
         </div>
         {examples
           ? EXAMPLE_ROWS.filter((r) => tab === "all" || tabOfExample(r.kind) === tab).map((r) => (

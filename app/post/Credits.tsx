@@ -24,6 +24,7 @@ import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
 import { Prop, Spot } from "../ui/fractions/lazy";
 import { PageHead, Stat } from "../ui/system";
+import { SortHeader, useSort, type SortCol } from "../ui/sortable";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
 export const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;
@@ -84,6 +85,13 @@ function dayLabel(iso: string): string {
 }
 const amount = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
 
+const HISTORY_SORT: SortCol<{ l: LedgerRow; after: number }>[] = [
+  { key: "time", label: "Time", kind: "date", get: (r) => r.l.at },
+  { key: "what", label: "What happened", get: (r) => ledgerLine(r.l, 0).text },
+  { key: "credits", label: "Credits", kind: "number", get: (r) => r.l.delta },
+  { key: "balance", label: "Balance", kind: "number", get: (r) => r.after },
+];
+
 function History({ ledger, credits, owed, starter, earnCap, first }: { ledger: LedgerRow[]; credits: number; owed: number; starter: number; earnCap: number; first: number }) {
   const [all, setAll] = useState(false);
   // The ledger is newest first, so the balance after each line is worked back from today's (below 0 while credits are owed).
@@ -94,7 +102,10 @@ function History({ ledger, credits, owed, starter, earnCap, first }: { ledger: L
     return { l, after };
   });
   const opening = bal;
-  const shown = all ? rows : rows.slice(0, first);
+  // Click a header to sort, both ways; the day lines show only while it reads by time.
+  const hs = useSort(rows, HISTORY_SORT, { storageKey: "credits.history" });
+  const byTime = !hs.key || hs.key === "time";
+  const shown = all ? hs.rows : hs.rows.slice(0, first);
   const hiddenN = rows.length - shown.length;
   return (
     <section className="tp-card tp-ledger" aria-labelledby="cr-history">
@@ -106,20 +117,20 @@ function History({ ledger, credits, owed, starter, earnCap, first }: { ledger: L
         <table className="tp-ltable">
           <thead>
             <tr>
-              <th scope="col">Time</th>
-              <th scope="col">What happened</th>
-              <th scope="col" className="num">
+              <SortHeader s={hs} k="time">Time</SortHeader>
+              <SortHeader s={hs} k="what">What happened</SortHeader>
+              <SortHeader s={hs} k="credits" className="num">
                 Credits
-              </th>
-              <th scope="col" className="num">
+              </SortHeader>
+              <SortHeader s={hs} k="balance" className="num">
                 Balance
-              </th>
+              </SortHeader>
             </tr>
           </thead>
           <tbody>
             {shown.map(({ l, after }, k) => {
               const s = ledgerLine(l, earnCap);
-              const newDay = k === 0 || dayKey(shown[k - 1].l.at) !== dayKey(l.at);
+              const newDay = byTime && (k === 0 || dayKey(shown[k - 1].l.at) !== dayKey(l.at));
               const time = new Date(l.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
               return [
                 newDay && (

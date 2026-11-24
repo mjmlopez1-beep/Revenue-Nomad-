@@ -38,6 +38,8 @@ export function Toolbar(o: {
   filterPanel: () => ReactNode;
   sort: SortKey;
   sortOptions?: SortKey[];
+  /** A column header sorts the list ("Rate, high to low"): the Sort button says so, and no menu item is ticked. */
+  sortWords?: string | null;
   onSort: (s: SortKey) => void;
   alertText: string;
   onAlert: (() => void) | null;
@@ -50,7 +52,7 @@ export function Toolbar(o: {
   const toggle = (m: NonNullable<typeof menu>) => setMenu((x) => (x === m ? null : m));
   const cur = o.views.find((v) => v.key === o.view);
   const sorts = sortsFor(o.type).filter((s) => !o.sortOptions || o.sortOptions.includes(s.key));
-  const sortLabel = sorts.find((s) => s.key === o.sort)?.label ?? "Sort";
+  const sortLabel = o.sortWords ?? sorts.find((s) => s.key === o.sort)?.label ?? "Sort";
   const close = () => setMenu(null);
   return (
     <div className="wb-toolbar" role="toolbar" aria-label="Table">
@@ -137,8 +139,8 @@ export function Toolbar(o: {
               key={s.key}
               type="button"
               role="menuitemradio"
-              aria-checked={s.key === o.sort}
-              className={`wb-mi${s.key === o.sort ? " on" : ""}`}
+              aria-checked={!o.sortWords && s.key === o.sort}
+              className={`wb-mi${!o.sortWords && s.key === o.sort ? " on" : ""}`}
               onClick={() => {
                 o.onSort(s.key);
                 close();

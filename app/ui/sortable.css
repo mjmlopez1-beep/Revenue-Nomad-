@@ -1,0 +1,64 @@
+/* A column header that sorts (app/ui/sortable.tsx SortHeader): the header's own words in a real
+   button, an arrow on the column in use, a faint one on hover or focus. */
+.sh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-chip, 6px);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: background var(--t, 0.12s), color var(--t, 0.12s);
+}
+/* The header's words keep the header's look, whatever a table says about spans in its headers. */
+.sh .sh-btn .sh-l {
+  display: inline;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+}
+.sh-arrow {
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--t, 0.12s), transform var(--t, 0.12s);
+}
+.sh-arrow.up {
+  transform: rotate(180deg);
+}
+.sh-btn:hover {
+  background: var(--surface-2, rgba(7, 63, 47, 0.06));
+  color: var(--ink, inherit);
+}
+.sh-btn:hover .sh-arrow,
+.sh-btn:focus-visible .sh-arrow {
+  opacity: 0.35;
+}
+.sh-btn.on {
+  color: var(--ink, inherit);
+}
+.sh-btn.on .sh-arrow {
+  opacity: 1;
+}
+.sh-btn:focus-visible {
+  outline: 2px solid var(--pine, #073f2f);
+  outline-offset: 1px;
+}
+/* A right-aligned (number) column keeps its words against the numbers: the arrow goes first. */
+.num > .sh-btn,
+.sh.num .sh-btn {
+  flex-direction: row-reverse;
+}
+/* Phones and touch screens: a 44px target. */
+@media (max-width: 720px), (pointer: coarse) {
+  .sh-btn {
+    min-height: 44px;
+  }
+}

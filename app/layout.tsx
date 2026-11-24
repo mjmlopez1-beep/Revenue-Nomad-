@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/schibsted-grotesk/wght.css";
 import "@fontsource-variable/red-hat-mono/wght.css";
 import "./globals.css";
+// Sortable table headers (app/ui/sortable.tsx), here so the component stays free of a CSS import (the in-process tests load it).
+import "./ui/sortable.css";
 
 const TITLE = "Merlin · The data exchange for fractional operators";
 const DESCRIPTION =

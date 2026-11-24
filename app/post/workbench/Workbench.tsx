@@ -9,6 +9,7 @@
  */
 import { memo, type ReactNode } from "react";
 import { IconChevron } from "../../ui/shared";
+import { SortHeader, type Sorter } from "../../ui/sortable";
 import type { RecordType, Row, SortKey } from "../model";
 import type { ColumnDef } from "./columns";
 import { companyCell, personCell, seatCell } from "./cells";
@@ -33,6 +34,8 @@ export interface WorkbenchProps {
   onOpen: (r: Row) => void;
   sort: SortKey;
   onSort?: (s: SortKey) => void;
+  /** Click a header to sort by it (useWorkbenchSort): every column with a sort, both ways. Without it, the headers with a list sort use onSort. */
+  sorter?: Sorter<Row> | null;
   onAddColumn: () => void;
   /** First visit: the one row whose company cell is the highlighted "Open your first company". */
   hero?: { key: string; node: ReactNode } | null;
@@ -86,7 +89,7 @@ const WbRow = memo(function WbRow({ r, n, type, cols, mine, on, onPick, onOpen, 
   );
 });
 
-export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, onAddColumn, hero, fillNote, fresh, start = 0, cell, rowClass, canPick }: WorkbenchProps) {
+export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll, onOpen, sort, onSort, sorter, onAddColumn, hero, fillNote, fresh, start = 0, cell, rowClass, canPick }: WorkbenchProps) {
   const pickRows = canPick ? rows.filter(canPick) : rows;
   const all = pickRows.length > 0 && pickRows.every((r) => selected.has(r.key));
   const some = !all && pickRows.some((r) => selected.has(r.key));
@@ -121,6 +124,13 @@ export function Workbench({ type, rows, cols, mine, selected, onPick, onPickAll,
               <span aria-hidden>#</span>
             </th>
             {cols.map((c) => {
+              const thCls = `wb-th${fresh?.has(c.id) ? " wb-th-fresh" : ""}${c.num ? " num" : ""}`;
+              if (sorter)
+                return (
+                  <SortHeader key={c.id} s={sorter} k={c.id} className={thCls} title={c.tip} style={{ minWidth: minPx(c.width) }}>
+                    {c.label}
+                  </SortHeader>
+                );
               const by = onSort && c.sort;
               const on = !!by && sort === c.sort;
               const az = !!c.sort && AZ.includes(c.sort);

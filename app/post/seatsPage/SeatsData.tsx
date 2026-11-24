@@ -38,6 +38,7 @@ import { Toolbar, type ViewOption } from "../workbench/Toolbar";
 import { ToolsPanel } from "../workbench/ToolsPanel";
 import type { ToolDo, ToolTab } from "../workbench/tools";
 import { Workbench } from "../workbench/Workbench";
+import { useWorkbenchSort } from "../workbench/useWorkbenchSort";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { ENDED_MONTHS, endedBand, endedFilters, monthWords, sortEnded, type SeatTab } from "./seatsModel";
 
@@ -85,13 +86,15 @@ export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bott
 
   // The list is the table's: ended lately reads newest end first unless the member picked a sort.
   const sorted = useMemo(() => (ended && !t.sortPicked ? sortEnded(t.rows) : t.rows), [ended, t.sortPicked, t.rows]);
-  const inView = sorted.slice(0, limit);
+  const cols = visibleColumns("engagements", picked);
+  // A header click sorts every seat by that column, both ways; the Sort menu's pick clears it.
+  const colSort = useWorkbenchSort(sorted, cols, "seats");
+  const inView = colSort.rows.slice(0, limit);
   useEffect(() => {
     setLimit(pageSize);
     setSelected(new Set());
     setVerify(null);
   }, [tab, t.filters, pageSize]);
-  const cols = visibleColumns("engagements", picked);
   const pickedRows = inView.filter((r) => selected.has(r.key));
   const saveCols = (next: string[]) => {
     setPicked(next);
@@ -301,7 +304,8 @@ export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bott
         filterN={Math.max(0, filterN)}
         filterPanel={filterPanel}
         sort={t.sort}
-        onSort={(s: SortKey) => t.setSort(s)}
+        sortWords={colSort.words}
+        onSort={(s: SortKey) => (colSort.clear(), t.setSort(s))}
         alertText={savedHere?.email || alerted ? (ended ? "Alert on · a seat ends" : "Alert on") : "Save as alert"}
         onAlert={() => setSaveOpen(true)}
         toolsOpen={toolsOpen && !verify}
@@ -365,7 +369,8 @@ export function SeatsData({ tab, bottom }: { tab: Exclude<SeatTab, "mine">; bott
               onPickAll={(on) => setSelected(on ? new Set(inView.map((r) => r.key)) : new Set())}
               onOpen={(r) => c.openCompany(r.i.c.id, r.key)}
               sort={t.sort}
-              onSort={(s) => t.setSort(s)}
+              onSort={(s) => (colSort.clear(), t.setSort(s))}
+              sorter={colSort}
               onAddColumn={() => (setVerify(null), setToolsOpen(true), setRun(null), setToolsTab("enrich"))}
               fresh={fresh}
               cell={cell}

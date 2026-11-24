@@ -31,8 +31,14 @@ import { EvidenceUpgrade } from "./Upgrade";
 import { Wizard } from "./Wizard";
 import { companyName, companyRows, coverageOf, evidenceOpen, isFirstVisit, readResume, resumeAt, searchRows, wizKey, type CompanyRow, type WizResume } from "./evidenceModel";
 import type { Study, TagCatalogue } from "./types";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "./evidence.css";
 
+// Click a header to sort, both ways: by the client's name, or by how many case studies it has (a company with none sorts last).
+const EV_SORT: SortCol<CompanyRow>[] = [
+  { key: "company", label: "Company", get: (r) => r.name || null },
+  { key: "cases", label: "Case studies", kind: "number", get: (r) => r.cases.length || null },
+];
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const store = {
   get(k: string): string | null {
@@ -193,6 +199,9 @@ function Bank() {
     setEditing({ row: r.key, draft: blankStudy({ name: r.name, companyId: r.logoId, industry: f?.industry ?? r.seat?.industry, size: f?.size ?? r.seat?.size, revenue: f?.revenue ?? r.seat?.revenue, role: f?.role ?? r.seat?.role }) });
   };
 
+  // The rows the search leaves, in the order a header click picks (none: companies with case studies first).
+  const sortBase = useMemo(() => (cases ? searchRows(companyRows(cases, seats), q) : []), [cases, seats, q]);
+  const evSort = useSort(sortBase, EV_SORT, { storageKey: "evidence" });
   if (!cases)
     return (
       <div className="ev">
@@ -214,7 +223,7 @@ function Bank() {
     );
 
   const rows = companyRows(cases, seats);
-  const shown = searchRows(rows, q);
+  const shown = evSort.rows;
   const review = cases.filter((x) => x.review).length;
   const blanks = cases.filter((x) => !x.review && x.blanks.length).length;
   const withCases = rows.filter((r) => r.cases.length).length;
@@ -306,8 +315,12 @@ function Bank() {
           </div>
           <div className="ev-table" role="table" aria-label="Your case studies by client">
             <div className="ev-thead" role="row">
-              <span role="columnheader">Company</span>
-              <span role="columnheader">Case studies</span>
+              <SortHeader as="span" s={evSort} k="company">
+                Company
+              </SortHeader>
+              <SortHeader as="span" s={evSort} k="cases">
+                Case studies
+              </SortHeader>
             </div>
             {shown.map((r) => {
               const newHere = editing && "row" in editing && editing.row === r.key ? editing.draft : null;

@@ -42,6 +42,7 @@ import { useKnown, usePaths } from "../network/usePaths";
 import { openWay } from "../network/useWays";
 import { stripGone, useApp } from "../shell/pages";
 import { Workbench } from "../workbench/Workbench";
+import { useWorkbenchSort, type ExtraSorts } from "../workbench/useWorkbenchSort";
 import { ToolsPanel } from "../workbench/ToolsPanel";
 import { SelectionBar } from "../workbench/SelectionBar";
 import { StatusLine } from "../workbench/StatusLine";
@@ -53,6 +54,8 @@ import {
   type Chip, type PeopleRow, type PeopleView,
 } from "./peopleModel";
 import { takePeopleStart } from "./start";
+
+const WARM_RANK: Record<string, number> = { Hot: 4, Warm: 3, Fading: 2, Cold: 1 };
 import "../workbench/workbench.css";
 import "./people.css";
 
@@ -149,15 +152,6 @@ export function PeoplePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [scoped, view, aside, chips, pipeIds, words, sort, paths],
   );
-  const shown = listed.slice(0, limit);
-  useEffect(() => {
-    setLimit(PAGE);
-    setSelected(new Set());
-    setWho(null);
-  }, [view, scope, chips, words, sort]);
-  const examples = first && !hasSources && view === "known" && !aside;
-  const pickedRows = shown.filter((r) => selected.has(r.key));
-
   /* ----- the columns ----- */
   const order = view === "known" ? COLS_KNOWN : COLS_ALL;
   const reg = visibleColumns("people", order);
@@ -174,6 +168,39 @@ export function PeoplePage() {
           ? { ...col, label: "Company" }
           : col,
     );
+
+  // Every column sorts from its header, by what the row shows (the member's own people by their own words); the Sort button clears it.
+  const pplSorts: ExtraSorts = useMemo(() => {
+    const own = (f: "email" | "profile", x: "email" | "linkedin") => (r: Row) => ((r as PeopleRow).own ? (r as PeopleRow).k?.[f] ?? null : r.p?.cells[x]?.s === "value" ? r.p.cells[x].v : null);
+    const ofP = (x: string) => (r: Row) => (r.p?.cells[x]?.s === "value" ? r.p.cells[x].v : null);
+    return {
+      name: { get: (r) => nameOf(r as PeopleRow) },
+      know: {
+        kind: "number",
+        get: (r) => {
+          const pr = r as PeopleRow;
+          if (knows(pr)) return 100 + (WARM_RANK[pr.k!.warmth ?? "Cold"] ?? 1);
+          const w = paths?.counts[r.i.c.id]?.n ?? 0;
+          return w && !r.i.c.hidden ? w : null;
+        },
+      },
+      last: { kind: "date", get: (r) => (knows(r as PeopleRow) ? (r as PeopleRow).k!.last ?? null : null) },
+      pipe: { get: (r) => stageOf.get(r.i.c.id) ?? null },
+      email: { get: own("email", "email") },
+      linkedin: { get: own("profile", "linkedin") },
+      phone: { get: ofP("phone") },
+      relationship: { get: ofP("relationship") },
+    };
+  }, [paths, stageOf]);
+  const colSort = useWorkbenchSort(listed, cols, `people.${view}`, pplSorts);
+  const shown = colSort.rows.slice(0, limit);
+  useEffect(() => {
+    setLimit(PAGE);
+    setSelected(new Set());
+    setWho(null);
+  }, [view, scope, chips, words, sort]);
+  const examples = first && !hasSources && view === "known" && !aside;
+  const pickedRows = shown.filter((r) => selected.has(r.key));
 
   /* ----- the bubble ----- */
   const rowByKey = useMemo(() => new Map(listed.map((r) => [r.key, r])), [listed]);
@@ -516,9 +543,9 @@ export function PeoplePage() {
           <button type="button" className={`wb-tb${chips.size ? " on" : ""}`} aria-expanded={fOpen} onClick={() => setFOpen(!fOpen)}>
             Filter{chips.size ? ` · ${chips.size}` : ""}
           </button>
-          <button type="button" className="wb-tb" onClick={() => setSort((x) => (x + 1) % 3)}>
+          <button type="button" className="wb-tb" onClick={() => (colSort.key ? colSort.clear() : setSort((x) => (x + 1) % 3))}>
             <span>
-              Sort<span className="wb-tb-sub">: {PEOPLE_SORTS[sort]}</span>
+              Sort<span className="wb-tb-sub">: {colSort.words ?? PEOPLE_SORTS[sort]}</span>
             </span>
           </button>
           <button type="button" className="ppl-earn" onClick={() => c.openAdd({ mode: "person" })}>
@@ -636,6 +663,7 @@ export function PeoplePage() {
                 onPickAll={(on) => setSelected(on ? new Set(shown.map((r) => r.key)) : new Set())}
                 onOpen={(r) => openWho(r)}
                 sort="title"
+                sorter={colSort}
                 onAddColumn={() => (setSide("tools"), setRun(null), setToolsTab("enrich"))}
                 cell={cell}
                 rowClass={(r) => ((r as PeopleRow).own ? "ppl-own-row" : "")}

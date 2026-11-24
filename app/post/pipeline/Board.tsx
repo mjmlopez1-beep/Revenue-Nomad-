@@ -30,6 +30,8 @@ import { loadPipeline, pipelineAct, usePipeline } from "../pipelineStore";
 import { usePlans } from "../network/useWays";
 import { Workbench } from "../workbench/Workbench";
 import { COMPANY_COLUMNS, type ColumnDef } from "../workbench/columns";
+import { workbenchSortCols, type ExtraSorts } from "../workbench/useWorkbenchSort";
+import { dirWords, sorterOf, useSortState, type SortKind, type SortState, type SortStore } from "../../ui/sortable";
 import { Intros } from "../Pipeline";
 import type { Example } from "../examples";
 import {
@@ -84,6 +86,8 @@ export function PipelineBoard() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [fOpen, setFOpen] = useState(false);
   const [sort, setSort] = useState<SortKey>("due");
+  // The table's header sort (DealTable), kept here so the Sort button says it and clears it.
+  const tableSort = useSortState("pipeline");
   const [panel, setPanel] = useState<Panel>(null);
   const [showLost, setShowLost] = useState(false);
   const [moving, setMoving] = useState<string | null>(null);
@@ -204,8 +208,8 @@ export function PipelineBoard() {
       <button type="button" className={`wb-tb${filter !== "all" ? " on" : ""}`} aria-expanded={fOpen || filter !== "all"} onClick={() => (setFOpen(!fOpen), fOpen && setFilter("all"))}>
         {filter === "all" ? "Filter" : `Filter · ${FILTERS.find((f) => f.key === filter)!.label}`}
       </button>
-      <button type="button" className="wb-tb" onClick={() => setSort(SORTS[(SORTS.findIndex((s) => s.key === sort) + 1) % SORTS.length].key)}>
-        {SORTS.find((s) => s.key === sort)!.label}
+      <button type="button" className="wb-tb" onClick={() => (mode === "table" && tableSort.state ? tableSort.set(null) : setSort(SORTS[(SORTS.findIndex((s) => s.key === sort) + 1) % SORTS.length].key))}>
+        {(mode === "table" && pipeSortWords(tableSort.state)) || SORTS.find((s) => s.key === sort)!.label}
       </button>
       <span className="pl2-sum" role="status">
         <span>{last ? `Moved ${last.name} to ${STAGE_WORDS[last.to]}. You marked it.` : summaryWords(view, routes)}</span>
@@ -269,7 +273,7 @@ export function PipelineBoard() {
         )}
       </section>
     ) : mode === "table" ? (
-      <DealTable deals={shown} infos={c.infos} waiting={c.waiting} today={today} routes={routes} first={first} cur={cur?.id ?? null} onOpen={(r) => setPanel({ kind: "deal", id: r.id })} busy={busy} />
+      <DealTable sortStore={tableSort} deals={shown} infos={c.infos} waiting={c.waiting} today={today} routes={routes} first={first} cur={cur?.id ?? null} onOpen={(r) => setPanel({ kind: "deal", id: r.id })} busy={busy} />
     ) : (
       <div className="pl2-board">
         {STACKS.map((stack) => (
@@ -592,7 +596,20 @@ function ExampleDeal({ x, on, onOpen }: { x: Example<ExampleCard>; on: boolean; 
 
 /* ---------- the table ---------- */
 
+/** The deals table's columns as its header sort reads them: label and kind. */
+const PIPE_SORT: Record<string, [string, SortKind]> = {
+  company: ["Company", "text"],
+  plStage: ["Stage", "number"],
+  plValue: ["Value a month", "money"],
+  plWay: ["Your way in", "text"],
+  plNext: ["Next move", "date"],
+  plPaper: ["Proposal or contract", "text"],
+  plHow: ["How Merlin knows", "text"],
+};
+const pipeSortWords = (s: SortState | null) => (s && PIPE_SORT[s.key] ? `${PIPE_SORT[s.key][0]}, ${dirWords(PIPE_SORT[s.key][1], s.dir).toLowerCase()}` : null);
+
 function DealTable({
+  sortStore,
   deals,
   infos,
   waiting,
@@ -603,6 +620,7 @@ function DealTable({
   onOpen,
   busy,
 }: {
+  sortStore: SortStore;
   deals: PipelineRec[];
   infos: CoInfo[];
   waiting: boolean;
@@ -668,6 +686,16 @@ function DealTable({
     }
     return undefined;
   };
+  // Every column sorts from its header, by what it shows; the toolbar's Sort button clears it.
+  const pipeSorts: ExtraSorts = {
+    plStage: { kind: "number", get: (r) => (dl(r) ? LINE.indexOf(dl(r)!.stage) : null) },
+    plValue: { kind: "money", get: (r) => (dl(r) && shownMonthly(dl(r)!) > 0 ? dl(r)!.monthly : null) },
+    plWay: { get: (r) => (dl(r) ? wayOf(dl(r)!, routes.get(dl(r)!.company)) ?? null : null) },
+    plNext: { kind: "date", get: (r) => dl(r)?.due ?? null },
+    plPaper: { get: (r) => dl(r)?.paper?.state ?? null },
+    plHow: { get: (r) => dl(r)?.how ?? null },
+  };
+  const sorter = sorterOf(rows, workbenchSortCols(cols, pipeSorts), sortStore);
   const sel = deals.filter((d) => picked.has(d.id));
   if (first)
     return (
@@ -714,7 +742,7 @@ function DealTable({
       )}
       <Workbench
         type="companies"
-        rows={rows}
+        rows={sorter.rows}
         cols={cols}
         mine={null}
         selected={picked}
@@ -732,6 +760,7 @@ function DealTable({
           if (d) onOpen(d);
         }}
         sort="name"
+        sorter={sorter}
         onAddColumn={() => toast("Pipeline keeps these columns. Add more on Companies.")}
         cell={cell}
         rowClass={(r) => (cur === r.key ? "pl2-tr-cur" : "")}

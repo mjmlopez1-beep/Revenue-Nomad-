@@ -29,6 +29,7 @@ import { ServiceIcon, type Service } from "../../ui/ServiceIcon";
 import type { RadarEmail } from "@/lib/radar/types";
 import { alertGroups, countingWords, headLines, onFree, recipes, sinceWords, statusLine, type Chip, type Group, type Row, type StarterRef } from "./model";
 import { WorkflowBuilder, WorkflowPills, WorkflowsTab, blankBuild, useWorkflows, type WfBuild } from "./Workflows";
+import { SortHeader, sorterOf, useSortState, type SortCol, type Sorter } from "../../ui/sortable";
 import "./alerts.css";
 
 /* ---------- the server ---------- */
@@ -76,6 +77,8 @@ export function AlertsPage() {
   const [integ, setInteg] = useState<IntegrationsView | null>(null);
   const [close, setClose] = useState<CloseInboxView | null>(null);
   const [av, setAv] = useState<AlertsView | null>(null);
+  // Click a header to sort the alerts by it inside each group, both ways.
+  const alSort = useSortState("alerts");
   const [tab, setTab] = useState<"alerts" | "flows">("alerts");
   const [dest, setDest] = useState<boolean | null>(null);
   const [only, setOnly] = useState(false);
@@ -123,7 +126,10 @@ export function AlertsPage() {
 
   const starters: StarterRef[] = useMemo(() => (c.waiting ? [] : starterLists(me, c.infos).map((s) => ({ key: s.key, name: s.name, kind: s.kind, place: s.place, criteria: s.criteria }))), [me, c.infos, c.waiting]);
   const nowMs = Date.now();
-  const groups = alertGroups({ me, email: !!c.view.email, digest: !!c.view.scan?.digest, integ, close, alerts: av, starters, nowMs });
+  const groups0 = alertGroups({ me, email: !!c.view.email, digest: !!c.view.scan?.digest, integ, close, alerts: av, starters, nowMs });
+  const alCols = alertSortCols(av);
+  const alS = sorterOf(groups0.flatMap((g) => g.rows), alCols, alSort);
+  const groups = alS.key ? groups0.map((g) => ({ ...g, rows: sorterOf(g.rows, alCols, alSort).rows })) : groups0;
   const heads = headLines(groups, av, nowMs);
   const rows = groups.flatMap((g) => g.rows);
   const slackOn = !!(integ?.slack || integ?.webhook);
@@ -455,12 +461,12 @@ export function AlertsPage() {
               <div role="table" aria-label="Alerts" className="al-table">
                 <div role="row" className="al-row al-head">
                   <span role="columnheader" className="al-c-sel" />
-                  <Head name="Alert and what it watches" fill={heads.alerts} />
-                  <Head name="Trigger" fill={heads.trigger} />
-                  <Head name="Where it goes" fill={heads.where} />
-                  <Head name="How often" fill={heads.often} />
-                  <Head name="Last fired" fill={heads.last} />
-                  <Head name="On" fill={heads.on} />
+                  <Head s={alS} k="name" name="Alert and what it watches" fill={heads.alerts} />
+                  <Head s={alS} k="trig" name="Trigger" fill={heads.trigger} />
+                  <Head s={alS} k="where" name="Where it goes" fill={heads.where} />
+                  <Head s={alS} k="often" name="How often" fill={heads.often} />
+                  <Head s={alS} k="last" name="Last fired" fill={heads.last} />
+                  <Head s={alS} k="on" name="On" fill={heads.on} />
                 </div>
                 {groups.map((g) => (
                   <GroupRows
@@ -527,13 +533,24 @@ export function AlertsPage() {
   );
 }
 
-function Head({ name, fill }: { name: string; fill: string }) {
+function Head({ name, fill, s, k }: { name: string; fill: string; s?: Sorter<Row> | null; k?: string }) {
   return (
-    <span role="columnheader" className="al-h">
+    <SortHeader as="span" s={s} k={k ?? name} className="al-h" extra={<span className="al-h-f">{fill}</span>}>
       <span className="al-h-n">{name}</span>
-      <span className="al-h-f">{fill}</span>
-    </span>
+    </SortHeader>
   );
+}
+
+/** The alerts' columns as their headers sort them: what each cell shows. */
+function alertSortCols(av: AlertsView | null): SortCol<Row>[] {
+  return [
+    { key: "name", label: "Alert", get: (r) => r.name },
+    { key: "trig", label: "Trigger", get: (r) => r.trig },
+    { key: "where", label: "Where it goes", kind: "number", get: (r) => r.chips.filter((c) => c.on).length },
+    { key: "often", label: "How often", get: (r) => r.every.label },
+    { key: "last", label: "Last fired", kind: "date", get: (r) => av?.last[r.logKey]?.at ?? null },
+    { key: "on", label: "On", kind: "number", get: (r) => (r.on ? 1 : 0) },
+  ];
 }
 
 function GroupRows({

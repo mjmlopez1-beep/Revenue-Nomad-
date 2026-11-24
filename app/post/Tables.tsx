@@ -37,6 +37,8 @@ import { VerifyName } from "./Verify";
 import { companyLater, fnChipPlan, freeCompanyNow } from "./display";
 import { leadPhrase, monthYear, type LeadLine } from "@/lib/leaders/types";
 import { Chip, LIKELIHOOD_TONE, type Likelihood } from "../ui/system";
+import { SortHeader, type SortCol, type Sorter } from "../ui/sortable";
+import { rowSortCols } from "./rowSort";
 
 /**
  * How fractional friendly a company is, as a plain label. Hover for the reason and the score.
@@ -757,90 +759,102 @@ function HeadTip({ label, tip }: { label: string; tip: string }) {
 }
 
 /** Column headers, in sentence case. `num` right-aligns the column. `tip` says what a short header means. `rates` links to Rate benchmarks. */
-const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: SortKey; rates?: boolean }[]> = {
+const HEAD: Record<string, { id: string; label: string; cls?: string; tip?: string; sort?: SortKey; rates?: boolean }[]> = {
   // Held by comes right after Company: at 1440, with the filters open, it is on screen without scrolling.
   companies: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the latest seat. Free to see once the company is open: who it was and the role they held." },
-    { label: "Latest seat", cls: "w-seat", sort: "start" },
-    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
-    { label: "Industry", cls: "w-ind" },
-    { label: "Employees", cls: "w-emp num", sort: "employees" },
-    { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
-    { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
-    { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
-    { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "heldBy", label: "Held by", cls: "w-op", tip: "The fractional who held the latest seat. Free to see once the company is open: who it was and the role they held." },
+    { id: "seat", label: "Latest seat", cls: "w-seat", sort: "start" },
+    { id: "fns", label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
+    { id: "industry", label: "Industry", cls: "w-ind" },
+    { id: "employees", label: "Employees", cls: "w-emp num", sort: "employees" },
+    { id: "revenue", label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
+    { id: "hq", label: "HQ", cls: "w-hq c-lo", sort: "hq" },
+    { id: "history", label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
+    { id: "rate", label: "Rate", cls: "w-rate num", rates: true },
+    { id: "decider", label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
   // Recently hired: the same columns, with the hire each company matched in place of the latest seat. Held by and Rate are that seat's.
   hiredCompanies: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the recent hire's seat, a possible referral partner. Free to see once the company is open." },
-    { label: "Recent hire", cls: "w-seat w-hire", sort: "hired", tip: "The most recent fractional hire that fits the sentence above, and the month it started. The role shows once you can see it." },
-    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
-    { label: "Industry", cls: "w-ind" },
-    { label: "Employees", cls: "w-emp num", sort: "employees" },
-    { label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
-    { label: "HQ", cls: "w-hq c-lo", sort: "hq" },
-    { label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
-    { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "hireHeldBy", label: "Held by", cls: "w-op", tip: "The fractional who held the recent hire's seat, a possible referral partner. Free to see once the company is open." },
+    { id: "hire", label: "Recent hire", cls: "w-seat w-hire", sort: "hired", tip: "The most recent fractional hire that fits the sentence above, and the month it started. The role shows once you can see it." },
+    { id: "fns", label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for, 3 at most, then how many more. A dashed chip means none in your function is on file yet." },
+    { id: "industry", label: "Industry", cls: "w-ind" },
+    { id: "employees", label: "Employees", cls: "w-emp num", sort: "employees" },
+    { id: "revenue", label: "Revenue", cls: "w-rev num c-lo", sort: "revenue" },
+    { id: "hq", label: "HQ", cls: "w-hq c-lo", sort: "hq" },
+    { id: "history", label: "History", cls: "w-fit", tip: "How often this company hires fractionals (not how well it fits your profile). It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
+    { id: "hireRate", label: "Rate", cls: "w-rate num", rates: true },
+    { id: "decider", label: "Decision maker", cls: "w-ppl c-lo", tip: "The decision maker on file" },
   ],
   // The radar's day: what happened at each company, two facts, and its one action (Unlock company or Open), fitted to the page.
   signalCompanies: [
-    { label: "Company", cls: "tp-sticky w-co" },
-    { label: "What happened", cls: "rd-w-what" },
-    { label: "Employees", cls: "w-emp num" },
-    { label: "HQ", cls: "w-hq" },
-    { label: "", cls: "rd-w-act" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co" },
+    { id: "what", label: "What happened", cls: "rd-w-what" },
+    { id: "employees", label: "Employees", cls: "w-emp num" },
+    { id: "hq", label: "HQ", cls: "w-hq" },
+    { id: "act", label: "", cls: "rd-w-act" },
   ],
   hiringCompanies: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Open role", cls: "w-seat", tip: "The role, and when we first saw it listed" },
-    { label: "Function", cls: "w-fn" },
-    { label: "Type", cls: "w-type" },
-    { label: "Posted hours", cls: "w-hrs num", tip: "Hours a week, as the job posting gives them" },
-    { label: "Posted rate", cls: "w-rate num", tip: "The rate the job posting gives" },
-    { label: "Industry", cls: "w-ind" },
-    { label: "Employees", cls: "w-emp num", sort: "employees" },
-    { label: "Revenue", cls: "w-rev num", sort: "revenue" },
-    { label: "HQ", cls: "w-hq", sort: "hq" },
-    { label: "Decision maker", cls: "w-ppl", tip: "The decision maker on file" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "openRole", label: "Open role", cls: "w-seat", tip: "The role, and when we first saw it listed" },
+    { id: "openFn", label: "Function", cls: "w-fn" },
+    { id: "openType", label: "Type", cls: "w-type" },
+    { id: "postedHours", label: "Posted hours", cls: "w-hrs num", tip: "Hours a week, as the job posting gives them" },
+    { id: "postedRate", label: "Posted rate", cls: "w-rate num", tip: "The rate the job posting gives" },
+    { id: "industry", label: "Industry", cls: "w-ind" },
+    { id: "employees", label: "Employees", cls: "w-emp num", sort: "employees" },
+    { id: "revenue", label: "Revenue", cls: "w-rev num", sort: "revenue" },
+    { id: "hq", label: "HQ", cls: "w-hq", sort: "hq" },
+    { id: "decider", label: "Decision maker", cls: "w-ppl", tip: "The decision maker on file" },
   ],
   engagements: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Function", cls: "w-fn", sort: "fn" },
-    { label: "Role", cls: "w-role" },
-    { label: "Type", cls: "w-type" },
-    { label: "Status", cls: "w-status" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Free to see once the company is open: who it was and the role they held." },
-    { label: "Start", cls: "w-date", sort: "start" },
-    { label: "End", cls: "w-date" },
-    { label: "Rate", cls: "w-rate num", rates: true },
-    { label: "Hours a week", cls: "w-hrs num c-lo" },
-    { label: "Job posting", cls: "w-post" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "function", label: "Function", cls: "w-fn", sort: "fn" },
+    { id: "role", label: "Role", cls: "w-role" },
+    { id: "type", label: "Type", cls: "w-type" },
+    { id: "status", label: "Status", cls: "w-status" },
+    { id: "operator", label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Free to see once the company is open: who it was and the role they held." },
+    { id: "start", label: "Start", cls: "w-date", sort: "start" },
+    { id: "end", label: "End", cls: "w-date" },
+    { id: "rate", label: "Rate", cls: "w-rate num", rates: true },
+    { id: "hours", label: "Hours a week", cls: "w-hrs num c-lo" },
+    { id: "posting", label: "Job posting", cls: "w-post" },
   ],
   hiringEngagements: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Function", cls: "w-fn", sort: "fn" },
-    { label: "Role", cls: "w-role" },
-    { label: "Type", cls: "w-type" },
-    { label: "Listed", cls: "w-listed", tip: "When we first saw the job posting, or the day it was posted" },
-    { label: "Posted hours", cls: "w-hrs num", tip: "Hours a week, as the job posting gives them" },
-    { label: "Posted rate", cls: "w-rate num", tip: "The rate the job posting gives" },
-    { label: "Job posting", cls: "w-post" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "function", label: "Function", cls: "w-fn", sort: "fn" },
+    { id: "role", label: "Role", cls: "w-role" },
+    { id: "type", label: "Type", cls: "w-type" },
+    { id: "listed", label: "Listed", cls: "w-listed", tip: "When we first saw the job posting, or the day it was posted" },
+    { id: "hours", label: "Posted hours", cls: "w-hrs num", tip: "Hours a week, as the job posting gives them" },
+    { id: "rate", label: "Posted rate", cls: "w-rate num", tip: "The rate the job posting gives" },
+    { id: "posting", label: "Job posting", cls: "w-post" },
   ],
   people: [
-    { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Name and title", cls: "w-name", sort: "title", tip: "1 credit shows a person's name and title together. Their LinkedIn, email and phone open after that, 1 credit each." },
-    { label: "Relationship", cls: "w-rel", tip: "Their part in hiring the fractional" },
-    { label: "LinkedIn", cls: "w-li" },
-    { label: "Email", cls: "w-email" },
-    { label: "Phone", cls: "w-phone" },
+    { id: "company", label: "Company", cls: "tp-sticky w-co", sort: "name" },
+    { id: "name", label: "Name and title", cls: "w-name", sort: "title", tip: "1 credit shows a person's name and title together. Their LinkedIn, email and phone open after that, 1 credit each." },
+    { id: "relationship", label: "Relationship", cls: "w-rel", tip: "Their part in hiring the fractional" },
+    { id: "linkedin", label: "LinkedIn", cls: "w-li" },
+    { id: "email", label: "Email", cls: "w-email" },
+    { id: "phone", label: "Phone", cls: "w-phone" },
   ],
 };
 
 const NO_LINES: string[] = [];
+
+/**
+ * Every header of a list's tables (each layout of the companies list, of seats, of people), as
+ * header sorts: TradingPost sorts the whole list with them before the page is cut, and DataTable's
+ * headers click them. A header with no sort (what happened, the action) is left out.
+ */
+export function tableSortCols(type: "companies" | "engagements" | "people", hire: HireCtx | null): SortCol<Row>[] {
+  const keys = type === "companies" ? ["companies", "hiredCompanies", "signalCompanies", "hiringCompanies"] : type === "engagements" ? ["engagements", "hiringEngagements"] : ["people"];
+  const seen = new Map<string, { id: string; label: string }>();
+  for (const k of keys) for (const h of HEAD[k]) if (!seen.has(h.id)) seen.set(h.id, { id: h.id, label: h.label });
+  return rowSortCols([...seen.values()], { hire });
+}
 
 /** Every row is an open role (Hiring now, or the Open now filter): the open-role columns. */
 export const allOpenRoles = (rows: Row[]) => rows.length > 0 && rows.every((r) => !!openRoleOf(r));
@@ -857,6 +871,7 @@ export function DataTable({
   hire = null,
   sort,
   onSort,
+  sorter = null,
   signals = null,
 }: {
   type: "companies" | "engagements" | "people";
@@ -874,6 +889,8 @@ export function DataTable({
   /** The sort in use, and how to change it from a column header (headers stay plain text without it). */
   sort?: SortKey;
   onSort?: (s: SortKey) => void;
+  /** Click any header to sort the whole list by it, both ways (tableSortCols). With it, onSort is not used. */
+  sorter?: Sorter<Row> | null;
   /** The radar's day: each company's lines and its one action, in their own columns. */
   signals?: SignalRows | null;
 }) {
@@ -884,6 +901,20 @@ export function DataTable({
   const openPage = useOpenPage();
   // A header that sorts is a button: name A to Z, everything else highest or newest first.
   const head: ReactNode = HEAD[key].map((h) => {
+    if (sorter && sorter.can(h.id)) {
+      // Where rates show, the medians stay one click away (LOGIC-7), beside the sort.
+      const ratesLink =
+        h.rates && openPage ? (
+          <button type="button" className="tp-th-tip tp-th-rates" onClick={() => openPage("rates")} title="See rate benchmarks: medians by function and client revenue" aria-label="Open rate benchmarks">
+            <IconChevron size={12} dir="right" />
+          </button>
+        ) : null;
+      return (
+        <SortHeader key={h.id} s={sorter} k={h.id} className={h.cls} title={h.tip} extra={(ratesLink || h.tip) && <>{ratesLink}{h.tip && <HeadTip label={h.label} tip={h.tip} />}</>}>
+          {h.label}
+        </SortHeader>
+      );
+    }
     const by = onSort && h.sort;
     const on = !!by && sort === h.sort;
     // Names, functions, titles and places go A to Z. Everything else highest or newest first.

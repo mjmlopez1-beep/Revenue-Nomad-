@@ -19,6 +19,7 @@ import type { Action } from "@/lib/tableTypes";
 import { CADENCES, CADENCE_PHRASE, CADENCE_WORDS, type Cadence, type JobId, type JobRow, type JobsPanel } from "@/lib/schedule";
 import { useToast } from "../ui/shared";
 import { useUi } from "./ui";
+import { SortHeader, useSort, type SortCol } from "../ui/sortable";
 
 const DAY = 24 * 60 * 60 * 1000;
 /** The hours UTC in the order the viewer's clock reads them, midnight first. */
@@ -242,6 +243,15 @@ interface OwnData {
   usable: boolean;
 }
 
+const NO_ROWS: OwnRow[] = [];
+const OWN_SORT: SortCol<OwnRow>[] = [
+  { key: "Seat holder", label: "Seat holder", get: (r) => r.name || null },
+  { key: "Email", label: "Email", get: (r) => r.email },
+  { key: "Site", label: "Site", get: (r) => r.site },
+  { key: "How", label: "How", get: (r) => r.how },
+  { key: "When", label: "When", kind: "date", get: (r) => r.at },
+];
+
 /** Own sites: counts, a short sample of found emails (admins only) and Undo for all of them. Read when opened. */
 function OwnSiteFinds({ stamp }: { stamp: string }) {
   const toast = useToast();
@@ -279,6 +289,8 @@ function OwnSiteFinds({ stamp }: { stamp: string }) {
   };
   const n = (x: number) => x.toLocaleString("en-US");
   const st = data?.stats;
+  // Click a header to sort the found emails by it, both ways.
+  const os = useSort(data?.rows ?? NO_ROWS, OWN_SORT, { storageKey: "admin.ownsites" });
   return (
     <details className="tp-small" style={{ marginTop: 8 }} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary>Own sites: counts and found emails</summary>
@@ -299,14 +311,14 @@ function OwnSiteFinds({ stamp }: { stamp: string }) {
                 <thead>
                   <tr>
                     {["Seat holder", "Email", "Site", "How", "When"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", padding: "2px 8px 2px 0" }}>
+                      <SortHeader key={h} s={os} k={h} style={{ textAlign: "left", padding: "2px 8px 2px 0" }}>
                         {h}
-                      </th>
+                      </SortHeader>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((r) => (
+                  {os.rows.map((r) => (
                     <tr key={`${r.email}-${r.at}`}>
                       <td style={{ padding: "2px 8px 2px 0" }}>{r.name || "Name off"}</td>
                       <td style={{ padding: "2px 8px 2px 0" }}>{r.email}</td>

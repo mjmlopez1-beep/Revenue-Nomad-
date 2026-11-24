@@ -28,6 +28,7 @@ import { atTime } from "./hooks";
 import "./pages.css";
 import { Prop } from "../ui/fractions/lazy";
 import { PageHead } from "../ui/system";
+import { SortHeader, sorterOf, useSortState, type SortCol } from "../ui/sortable";
 
 /** Whole dollars with separators ("$7,500", "$205"). Amounts arrive rounded to $250 or $5, so nothing is rounded again here. */
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -330,10 +331,25 @@ function MyRates({ rates, view }: { rates: BenchRate[]; view: View }) {
   );
 }
 
+/** The figures as their headers sort them: a median or range not shown (below the floor, or Pro) sorts last. */
+const BM_SORT: SortCol<BenchmarkRow>[] = (["m", "h"] as const).reduce<SortCol<BenchmarkRow>[]>(
+  (out, side) => {
+    const st = (r: BenchmarkRow) => (side === "m" ? r.monthly : r.hourly);
+    out.push(
+      { key: `${side}Mid`, label: side === "m" ? "Median per month" : "Median per hour", kind: "number", get: (r) => st(r).median ?? null },
+      { key: `${side}Low`, label: side === "m" ? "Middle half per month" : "Middle half per hour", kind: "number", get: (r) => (st(r).p75 !== undefined ? st(r).p25 ?? null : null) },
+      { key: `${side}N`, label: side === "m" ? "People per month" : "People per hour", kind: "number", get: (r) => st(r).n },
+    );
+    return out;
+  },
+  [{ key: "fn", label: "Function", get: (r) => r.function }],
+);
+
 export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promise<void> }) {
   const ui = useUi();
   const [band, setBand] = useState("All");
   const [sharing, setSharing] = useState(false);
+  const bmStore = useSortState("benchmarks");
   const b = view.benchmarks;
   if (!b) return null;
   const rangeN = b.rangeN ?? RATE_RANGE_FLOOR;
@@ -343,7 +359,13 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
   // A function with no figure either way is one name in a line under the table, not two rows of
   // empty bars (17 of them ran about 2,000px on a phone). The member's own function keeps its row.
   const figure = (r: BenchmarkRow) => r.monthly.median !== undefined || r.hourly.median !== undefined;
-  const rows = all.filter((r) => figure(r) || r.function === mine);
+  // Click a header to sort, both ways; a figure not shown yet sorts last.
+  const bm = sorterOf(
+    all.filter((r) => figure(r) || r.function === mine),
+    BM_SORT,
+    bmStore,
+  );
+  const rows = bm.rows;
   const later = all.filter((r) => !rows.includes(r));
   const stats = rows.flatMap((r) => [r.monthly, r.hourly]);
   const toShare = () => document.getElementById("tp-bm-share")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -416,9 +438,9 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
           </colgroup>
           <thead>
             <tr className="bm-groups">
-              <th scope="col" rowSpan={2} className="bm-th-fn">
+              <SortHeader s={bm} k="fn" rowSpan={2} className="bm-th-fn">
                 Function
-              </th>
+              </SortHeader>
               <th scope="colgroup" colSpan={3} className="bm-m">
                 <span className="bm-span">{CAP.m}</span>
               </th>
@@ -428,15 +450,15 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
             </tr>
             <tr className="bm-cols">
               {(["m", "h"] as const).map((side) => [
-                <th key={`${side}1`} scope="col" className={`bm-${side}`}>
+                <SortHeader key={`${side}1`} s={bm} k={`${side}Mid`} className={`bm-${side}`}>
                   Median
-                </th>,
-                <th key={`${side}2`} scope="col" className={`bm-${side}`} title="The middle half of people in the group charge within this range">
+                </SortHeader>,
+                <SortHeader key={`${side}2`} s={bm} k={`${side}Low`} className={`bm-${side}`} title="The middle half of people in the group charge within this range">
                   Middle half
-                </th>,
-                <th key={`${side}3`} scope="col" className={`bm-${side}`} title="Different people with a rate in this figure">
+                </SortHeader>,
+                <SortHeader key={`${side}3`} s={bm} k={`${side}N`} className={`bm-${side}`} title="Different people with a rate in this figure">
                   People
-                </th>,
+                </SortHeader>,
               ])}
             </tr>
           </thead>

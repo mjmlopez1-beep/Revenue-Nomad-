@@ -9,7 +9,7 @@
  * Two lists let an admin act: who added the most this week (with "Remove everything this
  * member added", behind a confirm), and the open roles members said they took.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
 import { IconChevron, Num } from "../ui/shared";
 import { useUi } from "./ui";
@@ -21,6 +21,7 @@ import { NetworkMetrics } from "./network/Network"; // [google network]
 import { AutoJobs } from "./AdminJobs";
 import { Health } from "./AdminHealth";
 import { PageHead, Stat } from "../ui/system";
+import { SortHeader, useSort, type SortCol } from "../ui/sortable";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
 /** Facts added for each fact unlocked, to two places. No unlocks yet reads as a dash. */
@@ -101,6 +102,14 @@ function Bars({ items, tone, unit, empty }: { items: { field: string; n: number 
 type BoardRow = { source: string; fetched: number | null; matched: number | null; lastOkAt: string | null; problem: string | null; error: boolean };
 
 /** The last run's boards and every board's health in one list: what it read, when it last ran clean, and what is wrong. */
+const BOARD_SORT: SortCol<BoardRow>[] = [
+  { key: "source", label: "Job board" },
+  { key: "fetched", label: "Postings read", kind: "number" },
+  { key: "matched", label: "Roles kept", kind: "number" },
+  { key: "lastOkAt", label: "Last clean scan", kind: "date" },
+  { key: "problem", label: "Problem", get: (b) => b.problem || null },
+];
+
 function boardRows(a: AdminStats): BoardRow[] {
   const health = new Map((a.boards ?? []).map((b) => [b.source, b]));
   const names = [...new Set([...a.scan.sources.map((x) => x.source), ...health.keys()])];
@@ -143,7 +152,8 @@ function Radar({ r }: { r: NonNullable<AdminStats["radar"]> }) {
 /** The open-roles scan: the last run, the open roles, each job board. Run now is in Automatic jobs. */
 function Scan({ a, lastOkAt }: { a: AdminStats; lastOkAt: string | null | undefined }) {
   const s = a.scan;
-  const boards = boardRows(a);
+  const bs = useSort(useMemo(() => boardRows(a), [a]), BOARD_SORT, { storageKey: "admin.boards" });
+  const boards = bs.rows;
   const distrusted = boards.some((b) => b.problem && !b.error);
   return (
     <Card title="Open roles scan" span={6}>
@@ -165,15 +175,15 @@ function Scan({ a, lastOkAt }: { a: AdminStats; lastOkAt: string | null | undefi
               <table className="tp-pm-table">
                 <thead>
                   <tr>
-                    <th scope="col">Job board</th>
-                    <th scope="col" className="num">
+                    <SortHeader s={bs} k="source">Job board</SortHeader>
+                    <SortHeader s={bs} k="fetched" className="num">
                       Postings read
-                    </th>
-                    <th scope="col" className="num">
+                    </SortHeader>
+                    <SortHeader s={bs} k="matched" className="num">
                       Roles kept
-                    </th>
-                    <th scope="col">Last clean scan</th>
-                    <th scope="col">Problem</th>
+                    </SortHeader>
+                    <SortHeader s={bs} k="lastOkAt">Last clean scan</SortHeader>
+                    <SortHeader s={bs} k="problem">Problem</SortHeader>
                   </tr>
                 </thead>
                 <tbody>
@@ -480,8 +490,18 @@ function AddsItem({ r }: { r: RecentAdd }) {
   );
 }
 
-function RecentAdds({ rows }: { rows: RecentAdd[] }) {
+const ADDS_SORT: SortCol<RecentAdd>[] = [
+  { key: "name", label: "Member", get: (r) => r.name },
+  { key: "adds24h", label: "Last 24 hours", kind: "number" },
+  { key: "adds7", label: "7 days", kind: "number" },
+  { key: "privateRates", label: "Private rates", kind: "number" },
+  { key: "lastAt", label: "Last add", kind: "date" },
+];
+
+function RecentAdds({ rows: given }: { rows: RecentAdd[] }) {
   const phone = useUi().layout === "phone";
+  const as = useSort(given, ADDS_SORT, { storageKey: "admin.adds" });
+  const rows = as.rows;
   return (
     <Card title="Most facts added this week" span={6}>
       {rows.length === 0 ? (
@@ -499,17 +519,17 @@ function RecentAdds({ rows }: { rows: RecentAdd[] }) {
               <table className="tp-pm-table tp-pm-people">
                 <thead>
                   <tr>
-                    <th scope="col">Member</th>
-                    <th scope="col" className="num">
+                    <SortHeader s={as} k="name">Member</SortHeader>
+                    <SortHeader s={as} k="adds24h" className="num">
                       Last 24 hours
-                    </th>
-                    <th scope="col" className="num">
+                    </SortHeader>
+                    <SortHeader s={as} k="adds7" className="num">
                       7 days
-                    </th>
-                    <th scope="col" className="num">
+                    </SortHeader>
+                    <SortHeader s={as} k="privateRates" className="num">
                       Private rates
-                    </th>
-                    <th scope="col">Last add</th>
+                    </SortHeader>
+                    <SortHeader s={as} k="lastAt">Last add</SortHeader>
                     <th scope="col">
                       <span className="sr-only">Remove</span>
                     </th>
@@ -536,8 +556,16 @@ const claimState = (c: RoleClaim, seats: boolean) =>
 const claimKey = (c: RoleClaim) => `${c.engagementId}.${c.memberId}.${c.at}`;
 
 /** Open roles members said they took, or (`seats`) seats Revenue Nomad found that members claimed as theirs. */
-function RoleClaims({ rows, seats = false }: { rows: RoleClaim[]; seats?: boolean }) {
+function RoleClaims({ rows: given, seats = false }: { rows: RoleClaim[]; seats?: boolean }) {
   const phone = useUi().layout === "phone";
+  const cols = useMemo((): SortCol<RoleClaim>[] => [
+    { key: "name", label: "Member", get: (c) => c.name },
+    { key: "company", label: "Company", get: (c) => c.company || null },
+    { key: "at", label: "When", kind: "date", get: (c) => c.at },
+    { key: "what", label: "What happened", get: (c) => claimState(c, seats) },
+  ], [seats]);
+  const cs = useSort(given, cols, { storageKey: seats ? "admin.seatClaims" : "admin.roleClaims" });
+  const rows = cs.rows;
   return (
     <Card title={seats ? "Seats members claimed" : "Open roles members said they took"} span={6}>
       {rows.length === 0 ? (
@@ -565,10 +593,10 @@ function RoleClaims({ rows, seats = false }: { rows: RoleClaim[]; seats?: boolea
               <table className="tp-pm-table tp-pm-people">
                 <thead>
                   <tr>
-                    <th scope="col">Member</th>
-                    <th scope="col">Company</th>
-                    <th scope="col">When</th>
-                    <th scope="col">What happened</th>
+                    <SortHeader s={cs} k="name">Member</SortHeader>
+                    <SortHeader s={cs} k="company">Company</SortHeader>
+                    <SortHeader s={cs} k="at">When</SortHeader>
+                    <SortHeader s={cs} k="what">What happened</SortHeader>
                   </tr>
                 </thead>
                 <tbody>

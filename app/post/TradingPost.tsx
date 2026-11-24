@@ -61,7 +61,8 @@ import { RadarPage, radarRows, useRadarDay } from "./Radar";
 import { SIG_DAY_RE, YOUR_FEATURE, type RadarRange } from "@/lib/radar/types";
 import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
-import { DataTable } from "./Tables";
+import { DataTable, tableSortCols } from "./Tables";
+import { useSort } from "../ui/sortable";
 import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { MyCredits, signInLink, useCopy } from "./Credits";
@@ -777,20 +778,25 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * company renames it, and "1 of 7" must not turn into "3 of 7" under the member. A new sort,
    * view, search or filter takes a fresh order. Closing the record lets the rows settle.
    */
+  // A header click sorts the whole list by that column, both ways (Tables.tsx tableSortCols); a Sort menu pick clears it.
+  // The old look only: the new look's pages sort their own tables (workbench/useWorkbenchSort), and the shell's rows reach them as the list sorts them.
+  const headCols = useMemo(() => (me.ui2 ? [] : tableSortCols(recordType, hireCtx)), [me.ui2, recordType, hireCtx]);
+  const colSort = useSort(sortedLive, headCols, { storageKey: `tables.${recordType}` });
+  const pickSort = (s: SortKey | null) => (colSort.clear(), setSort(s));
   const fKey = encodeFilters(filters);
-  const listKey = `${recordType}|${tab}|${sort}|${q}|${fKey}|${fnOnly}|${lifted}`;
+  const listKey = `${recordType}|${tab}|${sort}|${colSort.key}:${colSort.dir}|${q}|${fKey}|${fnOnly}|${lifted}`;
   const frozen = useRef<{ key: string; at: Map<string, number> } | null>(null);
   if (!drawer) frozen.current = null;
-  else if (!frozen.current || frozen.current.key !== listKey) frozen.current = { key: listKey, at: new Map(sortedLive.map((r, k) => [r.key, k])) };
+  else if (!frozen.current || frozen.current.key !== listKey) frozen.current = { key: listKey, at: new Map(colSort.rows.map((r, k) => [r.key, k])) };
   const frozenAt = frozen.current?.at ?? null;
   const sorted = useMemo(() => {
-    if (!frozenAt) return sortedLive;
+    if (!frozenAt) return colSort.rows;
     const pos = (r: Row, k: number) => frozenAt.get(r.key) ?? 1e9 + k;
-    return sortedLive
+    return colSort.rows
       .map((r, k) => ({ r, at: pos(r, k) }))
       .sort((a, b) => a.at - b.at)
       .map((x) => x.r);
-  }, [sortedLive, frozenAt]);
+  }, [colSort.rows, frozenAt]);
   const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
   /** How many rows the list has: the whole table's count while only its first page is here. */
   const listN = first ? first.n : sorted.length;
@@ -2025,7 +2031,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const sortMenu = (
     <>
       <button ref={sortRef} type="button" className="tp-sortbtn" onClick={() => setSortOpen((x) => !x)} aria-haspopup="menu" aria-expanded={sortOpen}>
-        <span className="tp-sortbtn-l">Sort</span> {SORTS.find((s) => s.key === sort)!.label} <IconChevron size={12} />
+        <span className="tp-sortbtn-l">Sort</span> {colSort.words ?? SORTS.find((s) => s.key === sort)!.label} <IconChevron size={12} />
       </button>
       {sortOpen && sortRef.current && (
         <Anchored anchor={sortRef.current} onClose={() => setSortOpen(false)} width={200} className="tp-menu" align="end">
@@ -2034,9 +2040,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               key={s.key}
               type="button"
               role="menuitemradio"
-              aria-checked={sort === s.key}
-              className={`tp-menu-item${sort === s.key ? " on" : ""}`}
-              onClick={() => (setSort(s.key), setSortOpen(false))}
+              aria-checked={!colSort.key && sort === s.key}
+              className={`tp-menu-item${!colSort.key && sort === s.key ? " on" : ""}`}
+              onClick={() => (pickSort(s.key), setSortOpen(false))}
             >
               {s.label}
             </button>
@@ -2997,7 +3003,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                   notMine={eff.notMine}
                   hire={hireCtx}
                   sort={sort}
-                  onSort={setSort}
+                  onSort={pickSort}
+                  sorter={colSort}
                 />
                 {more}
                 {proFoot}
@@ -3568,7 +3575,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               </h3>
               <div className="tp-psort-opts" role="radiogroup" aria-labelledby="tp-psort-h">
                 {sortList.map((s) => (
-                  <button key={s.key} type="button" role="radio" aria-checked={sort === s.key} className={`chip tp-psort-o${sort === s.key ? " chip-on" : ""}`} onClick={() => setSort(s.key)}>
+                  <button key={s.key} type="button" role="radio" aria-checked={!colSort.key && sort === s.key} className={`chip tp-psort-o${!colSort.key && sort === s.key ? " chip-on" : ""}`} onClick={() => pickSort(s.key)}>
                     {s.label}
                   </button>
                 ))}

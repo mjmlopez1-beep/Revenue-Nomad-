@@ -34,6 +34,7 @@ import { rowsFor, type Row } from "../model";
 import { stripGone, useApp } from "../shell/pages";
 import { Workbench } from "../workbench/Workbench";
 import { COMPANY_COLUMNS, type ColumnDef } from "../workbench/columns";
+import { useWorkbenchSort, type ExtraSorts } from "../workbench/useWorkbenchSort";
 import { pipelineAct } from "../pipelineStore";
 import { ConnectPanel, type SourceKey } from "./ConnectPanel";
 import { startGoogle } from "./Network";
@@ -624,6 +625,21 @@ function WarmTable({ rows, ex, cur, onPick }: { rows: WarmRow[]; ex: boolean; cu
     col("wpFresh", "Fresh", "minmax(100px, 0.6fr)", (w) => (w.fresh?.word ? "value" : "empty")),
     col("wpNext", "Next", "minmax(150px, 0.8fr)", () => "value"),
   ];
+  // Every column sorts from its header, by what the row shows there (a locked way in sorts last).
+  const wpSorts: ExtraSorts = useMemo(() => {
+    const now = Date.now();
+    const w = (r: Row) => byRow.get(r.i.c.id);
+    return {
+      wpZone: { get: (r) => (w(r) ? QUADRANTS[w(r)!.zone].title : null) },
+      wpWay: { get: (r) => (w(r) && w(r)!.best !== null && !w(r)!.locked ? w(r)!.person?.name ?? w(r)!.via : null) },
+      wpEst: { kind: "number", get: (r) => w(r)?.best ?? null },
+      wpFit: { kind: "number", get: (r) => w(r)?.fit ?? null },
+      wpWhy: { get: (r) => (w(r) && w(r)!.best !== null ? w(r)!.band : null) },
+      wpFresh: { kind: "date", get: (r) => (w(r)?.fresh?.days != null ? now - w(r)!.fresh!.days! * 86_400_000 : null) },
+      wpNext: { get: (r) => (w(r) ? (w(r)!.locked ? "Open the company" : w(r)!.plan ? "Open your plan" : w(r)!.best === null ? "Find a way in" : "Ask for an intro") : null) },
+    };
+  }, [byRow]);
+  const colSort = useWorkbenchSort(tRows, cols, "warm", wpSorts);
   if (ex)
     return (
       <section className="wp-tablewrap" aria-label="Paths table">
@@ -729,7 +745,7 @@ function WarmTable({ rows, ex, cur, onPick }: { rows: WarmRow[]; ex: boolean; cu
       )}
       <Workbench
         type="companies"
-        rows={tRows}
+        rows={colSort.rows}
         cols={cols}
         mine={c.me.function ?? null}
         selected={new Set(tRows.filter((r) => picked.has(r.i.c.id)).map((r) => r.key))}
@@ -746,6 +762,7 @@ function WarmTable({ rows, ex, cur, onPick }: { rows: WarmRow[]; ex: boolean; cu
         onPickAll={(on) => setPicked(on ? new Set(tRows.map((r) => r.i.c.id)) : new Set())}
         onOpen={(r) => onPick(r.i.c.id)}
         sort="name"
+        sorter={colSort}
         onAddColumn={() => toast("Warm paths keeps these columns. Add more on Companies.")}
         cell={cell}
         rowClass={(r) => (cur?.id === r.i.c.id ? "wp-tr-cur" : "")}
