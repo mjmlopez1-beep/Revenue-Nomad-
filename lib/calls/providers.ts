@@ -16,6 +16,12 @@ import { RECORDER_NAMES, TRANSCRIPT_MAX, type CallRecorder, type EndedCall, type
 
 type Who = { id: string; email: string; name: string };
 const ownDomains = (m: Who) => new Set([domainOf(m.email)].filter((x): x is string => !!x));
+/** Who else was on it, paired (the member left out, real addresses only), for the one-tap start's "who signs". */
+const peopleOf = (m: Who, people: { name?: string; email: string }[]) =>
+  people
+    .filter((p) => !!domainOf(p.email) && p.email.toLowerCase() !== m.email.toLowerCase())
+    .slice(0, 8)
+    .map((p) => ({ name: String(p.name ?? "").trim().slice(0, 80), email: p.email.toLowerCase() }));
 /** The people on a call as the trigger reads them: emails, their work domains (not free mail, not the member's own), names. */
 const participants = (m: Who, people: { name?: string; email: string }[]) => {
   const own = ownDomains(m);
@@ -33,7 +39,7 @@ const granola: CallRecorder = {
   async listEndedSince(m, sinceMs, nowMs, max) {
     const { endedCallsFor } = await import("../granola");
     const calls = await endedCallsFor(m.id, sinceMs, nowMs, max);
-    return calls.map((c): EndedCall => ({ id: c.id, recorder: "granola", ...(c.title ? { title: c.title } : {}), startedAt: c.startedAt, endedAt: c.endedAt, participants: participants(m, c.with) }));
+    return calls.map((c): EndedCall => ({ id: c.id, recorder: "granola", ...(c.title ? { title: c.title } : {}), startedAt: c.startedAt, endedAt: c.endedAt, participants: participants(m, c.with), people: peopleOf(m, c.with) }));
   },
   async transcript(m, id) {
     // Granola's reader pages through get_meeting_transcript (or the REST API's pages) itself, up to Merlin's cap.
@@ -50,7 +56,7 @@ const fathom: CallRecorder = {
   connected: (s, memberId) => !!fathomLinkOf(s, memberId),
   async listEndedSince(m, sinceMs, nowMs, max) {
     const ms = await fathomEnded(m, sinceMs, nowMs, max);
-    return ms.map((x): EndedCall => ({ id: x.id, recorder: "fathom", ...(x.title ? { title: x.title } : {}), startedAt: x.startedAt, endedAt: x.endedAt, participants: participants(m, x.others) }));
+    return ms.map((x): EndedCall => ({ id: x.id, recorder: "fathom", ...(x.title ? { title: x.title } : {}), startedAt: x.startedAt, endedAt: x.endedAt, participants: participants(m, x.others), people: peopleOf(m, x.others) }));
   },
   async transcript(m, id) {
     return { text: await fathomTranscript(m.id, id, TRANSCRIPT_MAX), next: null };

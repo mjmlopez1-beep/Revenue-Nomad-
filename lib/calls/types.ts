@@ -30,6 +30,8 @@ export interface EndedCall {
   endedAt: string;
   /** Who else was on it: their emails and the work domains of those emails (the member's own left out). */
   participants: { emails: string[]; domains: string[]; names: string[] };
+  /** The same people paired, name with email, at most 8 (the one-tap start's "who signs"). Never stored. */
+  people?: { name: string; email: string }[];
 }
 /** One page of a transcript: "Name: what they said" lines, and the cursor to the next page (null at the end). */
 export interface TranscriptPage {

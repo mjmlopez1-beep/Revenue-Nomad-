@@ -9,7 +9,8 @@
  * Pure, no React: the editor, the connector and the tests read it.
  */
 import type { Benchmarks, View } from "../tableTypes";
-import { chargeView, money, ownRates, per, sitsWords, type Figure, type OwnRate, type RateKind } from "@/app/post/chargeModel";
+import { chargeView, chargeWorking, hoursMonth, hoursOf, money, ownRates, per, sitsWords, type Figure, type OwnRate, type RateKind } from "@/app/post/chargeModel";
+import { FUNCTIONS, RN_REVENUE } from "../tableFields";
 import { moneyOf, templateDef } from "./library";
 
 export interface RateSuggestion {
@@ -86,11 +87,19 @@ export function adviceFromView(
   view: Pick<View, "benchmarks" | "me" | "companies">,
   p: { company: { id: string | null }; fields: Record<string, string>; templateId: string | null },
 ): PricingAdvice {
-  const me = view.me;
-  const fn = me?.function ?? null;
+  const fn = view.me?.function ?? null;
+  return pricingAdvice(view.benchmarks, fn, revenueOf(view, p), p.fields, p.templateId, fn ? ownOfView(view, fn) : {});
+}
+
+/** The company's revenue band from its record as the member sees it, else the band typed into the proposal. */
+export function revenueOf(view: Pick<View, "companies">, p: { company: { id: string | null }; fields: Record<string, string> }): string | null {
   const rec = p.company.id ? view.companies.find((c) => c.id === p.company.id) : undefined;
   const cell = rec?.cells.revenue;
-  const revenue = (cell && cell.s === "value" ? String(cell.v) : null) ?? (p.fields["company.revenue"] || null);
+  return (cell && cell.s === "value" ? String(cell.v) : null) ?? (p.fields["company.revenue"] || null);
+}
+
+/** The member's own rates in a function: shared privately, or on their own seats. Theirs alone. */
+export function ownOfView(view: Pick<View, "me" | "companies">, fn: string): Partial<Record<RateKind, OwnRate>> {
   const seats = view.companies.flatMap((c) =>
     c.engagements
       .filter((e) => e.yours)
@@ -101,6 +110,67 @@ export function adviceFromView(
         return { company: c.hidden ? "one of your seats" : c.name, engagementId: e.id, fn: fnCell?.s === "value" ? String(fnCell.v) : null, rate: r?.s === "value" && r.mine ? String(r.v) : null, pricing: pr?.s === "value" ? String(pr.v) : null };
       }),
   );
-  const own = fn ? ownRates(fn, me?.benchRates ?? [], seats) : {};
-  return pricingAdvice(view.benchmarks, fn, revenue, p.fields, p.templateId, own);
+  return ownRates(fn, view.me?.benchRates ?? [], seats);
+}
+
+/* ---------- a proposal's price: ONE calculation with "What should I charge" ---------- */
+
+/**
+ * The price a new proposal opens with, and the math it shows, from the same working as the Rate
+ * benchmarks' "What should I charge" (app/post/chargeModel.ts chargeWorking): the member's function,
+ * the company's revenue band, the hours the call (or their last proposal) gave. The fee is what the
+ * call agreed when it said one, else the member's own monthly rate, else the top of Merlin's ask
+ * ("open at the high end"). Hours a month and the hourly figure are the working's own arithmetic
+ * (hoursMonth). Nothing here is a figure of its own: no benchmark, no ask.
+ */
+export interface ProposalRate {
+  fn: string | null;
+  band: string;
+  /** The monthly fee to open with, or null when nothing answers (then the proposal keeps a blank). */
+  fee: number | null;
+  source: "call" | "yours" | "merlin" | null;
+  /** Merlin's ask for this group (the working's amounts), when it answered. */
+  ask: { from: number; to: number } | null;
+  /** The ask in words ("Ask $9,000 to $11,000 a month"), and the working's steps. */
+  big: string | null;
+  steps: { t: string; s: string }[];
+  hoursWeek: number | null;
+  hoursMonth: number | null;
+  /** The fee over the hours a month, to the dollar. */
+  hourly: number | null;
+  /** The shown math, in a line: "2 days a week is about 69 hours a month, so $10,500 is about $152 an hour." */
+  math: string;
+  /** From month 4, about a third lower (the pricing shape that won), on $250. */
+  stepDown: number | null;
+}
+
+/** Hours a week said in words ("two days a week", "20 hours a week"), as chargeModel reads them. */
+export const hoursWeekOf = (allocation: string | null | undefined): number | null => (allocation ? hoursOf(allocation) : null);
+
+/** The math line for a fee and the hours, the same words everywhere the rate shows. */
+export function rateMath(fee: number | null, allocation: string | null | undefined): { hoursWeek: number | null; hoursMonth: number | null; hourly: number | null; math: string } {
+  const hw = hoursWeekOf(allocation);
+  const hm = hw ? hoursMonth(hw) : null;
+  const hourly = fee && hm ? Math.round(fee / hm) : null;
+  const math = fee && hm && hourly ? `${String(allocation).trim()} is about ${hm} hours a month, so ${money(fee)} is about ${money(hourly)} an hour.` : fee ? `${money(fee)} a month. Add the days or hours it covers to see it by the hour.` : "No fee yet.";
+  return { hoursWeek: hw, hoursMonth: hm, hourly, math };
+}
+
+export function proposalRate(
+  view: Pick<View, "benchmarks" | "me" | "companies">,
+  p: { company: { id: string | null }; fields: Record<string, string>; callFee?: number | null },
+): ProposalRate {
+  const fn = view.me?.function ?? null;
+  const rev = revenueOf(view, p);
+  const band = rev && RN_REVENUE.includes(rev) ? rev : "All";
+  const allocation = p.fields["pricing.allocation"] || null;
+  const hw = hoursWeekOf(allocation);
+  const own = fn ? ownOfView(view, fn) : {};
+  const w = view.benchmarks && fn && FUNCTIONS.includes(fn) ? chargeWorking(view.benchmarks, { fn, band, kind: "monthly", hours: hw, company: null, industry: false }, own) : null;
+  const ask = w?.answered ? w.ask : null;
+  const callFee = p.callFee ?? null;
+  const fee = callFee ?? own.monthly?.amount ?? ask?.to ?? null;
+  const source: ProposalRate["source"] = callFee ? "call" : own.monthly ? "yours" : ask ? "merlin" : null;
+  const m = rateMath(fee, allocation);
+  return { fn, band, fee, source, ask, big: w?.answered ? w.big : null, steps: w?.steps ?? [], ...m, stepDown: fee ? Math.round((fee * 2) / 3 / 250) * 250 : null };
 }

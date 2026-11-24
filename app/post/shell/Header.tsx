@@ -24,12 +24,12 @@ export interface Crumb {
 }
 
 /** Bell, credits and Add, for the header and for a page that draws its own header (AppCtx.headerActions). */
-export function HeaderActions({ bell, credits, onAdd, phone }: { bell: ReactNode; credits: ReactNode; onAdd: () => void; phone?: boolean }) {
+export function HeaderActions({ bell, credits, onAdd, phone, hideAdd }: { bell: ReactNode; credits: ReactNode; onAdd: () => void; phone?: boolean; /** Not on this page (the one-screen Proposals keeps to the proposal). */ hideAdd?: boolean }) {
   return (
     <div className="ws-hacts">
       {bell}
       {credits}
-      {!phone && (
+      {!phone && !hideAdd && (
         <button type="button" className="ws-add" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> Add what you know
         </button>

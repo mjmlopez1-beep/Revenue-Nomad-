@@ -30,6 +30,7 @@ import { IconChevron, IconPlus, IconX } from "../../ui/shared";
 import { blockState, firstName } from "./model";
 import { ClientPreview } from "./ClientPreview";
 import { ProofPanel } from "./ProofPanel";
+import { Sheet } from "../ui";
 import "./proposalsPage.css";
 
 export type SideTab = "change" | "pricing" | "send";
@@ -78,6 +79,12 @@ export interface EditorFrameProps {
   onChangeIt: () => void;
   /** Proof holds these Evidence Bank cases now, with their lines (ProofPanel). */
   onProof: (ids: string[], text: string) => void;
+  /**
+   * The one-screen Proposals (RN_PROPOSALS2): the document and the rail of what Merlin used (a
+   * bottom sheet on phones) in place of the outline and the tabs; the progress line in place of the
+   * fix line; Send for signature opens the one Send sheet.
+   */
+  v2?: { rail: ReactNode; progress: ReactNode; onSend: () => void; phone: boolean };
 }
 
 export function EditorFrame(x: EditorFrameProps) {
@@ -90,6 +97,8 @@ export function EditorFrame(x: EditorFrameProps) {
   const [sel, setSel] = useState<string | null>(null);
   const [client, setClient] = useState(false);
   const [more, setMore] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
+  const v2 = x.v2;
   const moreRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!more) return;
@@ -152,10 +161,10 @@ export function EditorFrame(x: EditorFrameProps) {
   const planText = plan?.name === "trial" && plan.trialDaysLeft != null ? `Proposals are part of Close. Included in your ${TRIAL_NAME}: ${plan.trialDaysLeft} ${plan.trialDaysLeft === 1 ? "day" : "days"} left, then $${PRICES.closeMonth} a month.` : data.canBuild ? "Close plan · proposals, contracts and signing" : "";
 
   return (
-    <div className="pz-ed">
+    <div className="pz-ed" data-v2={v2 ? "" : undefined}>
       <div className="pz-ed-top">
         <button type="button" className="pz-back" onClick={x.onBack}>
-          <IconChevron dir="left" /> All proposals
+          <IconChevron dir="left" /> {v2 ? "Proposals" : "All proposals"}
         </button>
         <div className="pz-ed-title">
           <input className="pz-title" aria-label="Proposal title" title={p.title} value={p.title} readOnly={x.readOnly} maxLength={160} onChange={(e) => x.onTitle(e.target.value.replace(/\s*\n\s*/g, " "))} />
@@ -174,6 +183,11 @@ export function EditorFrame(x: EditorFrameProps) {
           </span>
         </div>
         <span className="pz-ed-acts">
+          {v2?.phone && (
+            <button type="button" className="btn" data-rail-open onClick={() => setRailOpen(true)}>
+              What Merlin used
+            </button>
+          )}
           <button type="button" className="btn" onClick={() => setClient(true)}>
             See it as {who} will
           </button>
@@ -202,23 +216,24 @@ export function EditorFrame(x: EditorFrameProps) {
             )}
           </div>
           {p.status === "client_signed" ? (
-            <button type="button" className="btn btn-pine btn-lg" onClick={() => setTab("send")}>
+            <button type="button" className="btn btn-pine btn-lg" onClick={() => (v2 ? (v2.phone ? setRailOpen(true) : document.querySelector(".p2-rail")?.scrollIntoView({ behavior: "smooth" })) : setTab("send"))}>
               Countersign
             </button>
           ) : x.out && !x.changing ? (
-            <button type="button" className="btn btn-lg" onClick={() => setTab("send")}>
+            <button type="button" className="btn btn-lg" onClick={() => (v2 ? (v2.phone ? setRailOpen(true) : document.querySelector(".p2-rail")?.scrollIntoView({ behavior: "smooth" })) : setTab("send"))}>
               Sent to {who}
             </button>
           ) : canSendNow ? (
-            <button type="button" className="btn btn-pine btn-lg" onClick={() => setTab("send")}>
+            <button type="button" className="btn btn-pine btn-lg" data-send-open onClick={() => (v2 ? v2.onSend() : setTab("send"))}>
               Send for signature
             </button>
           ) : null}
         </span>
       </div>
       {x.banners}
-      {x.fixLine}
-      <div className="pz-ed-cols">
+      {v2 ? v2.progress : x.fixLine}
+      <div className="pz-ed-cols" data-v2={v2 ? "" : undefined}>
+        {!v2 && (
         <aside className="pz-ed-left" aria-label="Sections">
           <div className="pz-ol">
             <span className="pz-ol-h">
@@ -278,6 +293,7 @@ export function EditorFrame(x: EditorFrameProps) {
             )}
           </section>
         </aside>
+        )}
 
         <section className="pz-ed-doc" aria-label="The proposal as the client reads it">
           {x.previewing && (
@@ -309,6 +325,13 @@ export function EditorFrame(x: EditorFrameProps) {
           </article>
         </section>
 
+        {v2 ? (
+          !v2.phone && (
+            <aside className="pz-ed-right p2-right" aria-label="What Merlin used">
+              {v2.rail}
+            </aside>
+          )
+        ) : (
         <aside className="pz-ed-right" aria-label="Change, price and send">
           <div className="pz-tabs" role="tablist" aria-label="Proposal tools">
             {(
@@ -355,7 +378,14 @@ export function EditorFrame(x: EditorFrameProps) {
             )}
           </div>
         </aside>
+        )}
       </div>
+      {v2?.phone && railOpen && (
+        <Sheet title="What Merlin used" onClose={() => setRailOpen(false)} className="p2-rail-sheet">
+          {v2.rail}
+        </Sheet>
+      )}
+      {!v2 && (
       <div className="pz-ed-foot">
         <span>
           Version {p.version} · {x.blocks.length} sections{sentWords ? ` · ${sentWords}` : ""}
@@ -371,6 +401,7 @@ export function EditorFrame(x: EditorFrameProps) {
           </span>
         )}
       </div>
+      )}
       {client && <ClientPreview p={p} close={data.canSend} me={data.me} onClose={() => setClient(false)} />}
     </div>
   );

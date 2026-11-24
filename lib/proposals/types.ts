@@ -275,6 +275,12 @@ export interface StoredProposal {
    * {{caseStudies}}, one or two (lib/proposals/proof.ts). Absent: Proof isn't from Evidence Bank.
    */
   proofCases?: string[];
+  /**
+   * The call it was drafted from (RN_PROPOSALS2's one-tap start, or the "A call ends" trigger): the
+   * recorder and its call id, so the home marks that call "Draft ready" and a second tap opens this
+   * one instead of a copy. Never the transcript.
+   */
+  fromCall?: { recorder: string; id: string };
 }
 
 /** A version kept so it can be compared or restored: what the document said, and what changed after it. */
@@ -365,6 +371,8 @@ export interface ProposalRec {
   history: ProposalSendRec[];
   /** Earlier versions that can be compared and restored, newest first (their text: POST op "versions"). */
   versions?: { version: number; at: string; note: string }[];
+  /** The call it was drafted from (StoredProposal.fromCall). */
+  fromCall?: { recorder: string; id: string };
 }
 
 /**
@@ -426,6 +434,8 @@ export interface ProposalsView {
   me: { name: string; title: string; function: string | null; email: string };
   /** Their saved signature (Close), or null. */
   mySignature: SignatureView | null;
+  /** The one-screen Proposals (RN_PROPOSALS2, lib/proposals/flag.ts). Left out while it is off. */
+  v2?: true;
 }
 
 /* ---------- what the client who signs gets ---------- */
