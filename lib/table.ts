@@ -77,7 +77,7 @@ import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type F
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
-  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, PEERS_FREE, NAME_HIDDEN, OPENS_RULE, type Entity,
+  SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, TRIAL_OPENS_DAILY, TRIAL_OPENS_USED, PAID_DETAILS, PEERS_FREE, NAME_HIDDEN, OPENS_RULE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
 import { STANDARD_FIELDS, toStandard } from "./industryMap";
@@ -102,6 +102,7 @@ import { cleanNote, connectText, notePitch } from "./partners";
 import type { Icp } from "./tableTypes";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
+import { usageStats } from "./usageGuard";
 import { healthStats } from "./health";
 import {
   ENDING_DAYS, SUMMARY_DAYS, canClose, keepTier, paidName, planName, TRIAL_NAME, type CloseUse, grandfatherClose, tierNow, tierPrice, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TOPUP_CREDITS, annualLine, dueGrantRef, emptyBilling, extendTrial, hourlyOf, keepTrialEnd, pauseState, proStartsLater, startTrial, trialEnding,
@@ -303,9 +304,11 @@ export interface LedgerEntry {
    * (company unlocks): Free's one Crystal Ball company a UTC day, opened in full (delta 0; every fact
    * there is in State.unlocks with no line of its own). Neither counts toward the day's unlock limit. pending (fills): a fact
    * the member added at a company where their own new seat waits to be confirmed (pendingSeats):
-   * it earns 0 until then, and is paid when the seat is confirmed (confirmSeat).
+   * it earns 0 until then, and is paid when the seat is confirmed (confirmSeat). plan (company
+   * opens): opened in full in the trial (delta 0, State.planOpens holds the open), not counted
+   * toward the day's unlock limit; only TRIAL_OPENS_DAILY bounds those.
    */
-  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "crystal" | "crystalFull" | "pending";
+  why?: "closed" | "removed" | "offbar" | "ongoing" | "retract" | "name" | "duplicate" | "leader" | "free" | "crystal" | "crystalFull" | "pending" | "plan";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
   /** A workflow spent it (lib/workflows): the workflow's name, for the credit history. */
@@ -518,7 +521,7 @@ export interface State extends MessagingState {
   /** Weekly email: last run, emails sent in all, and each member's last one. */
   digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
   /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
-  flags: { starterFloor?: number; closeTier?: boolean; reachStage?: boolean };
+  flags: { starterFloor?: number; closeTier?: boolean; reachStage?: boolean; planOpens?: boolean };
   /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
   connector?: ConnectorState;
   /** Fractional firms kept because a member holds a seat there (lib/firmRemoval.ts), for an admin to review. */
@@ -537,6 +540,20 @@ export interface State extends MessagingState {
    * Shown only with RN_OWNSITES=1, as an unlockable email on the seat holder's record (ownSitePeople).
    */
   ownEmails?: Record<string, OwnEmail>;
+  /**
+   * Companies opened in the trial (accessOf "trial"), by member, then company id, with when: kept
+   * apart from State.unlocks (what was paid for), so they open everything there only while the
+   * trial lasts. When it ends without an upgrade, or Pro or Close is cancelled, these lock again;
+   * what the member paid credits for, added or held a seat at stays theirs (knownCompanies).
+   */
+  planOpens?: Record<string, Record<string, string>>;
+  /**
+   * The email finder, a member's private tool: the people whose email Merlin found for this member
+   * (a likely email from the company's pattern, or one from the person's own website), by member,
+   * then person id, with when. Only that member ever sees such an email: never another member, the
+   * exchange, the connector for anyone else, an email or a digest, and never for a credit.
+   */
+  finds?: Record<string, Record<string, string>>;
   /** The own-sites job (lib/ownsites): each person's last try, the last run and dry run, the start-up dry runs done. Admins only. */
   ownSitesJob?: OwnSitesState;
   /**
@@ -1156,6 +1173,11 @@ export async function loadState(): Promise<State> {
       if (n) console.log(`Moved ${n} referral${n === 1 ? "" : "s"} from a peer, not written to yet, to To reach out.`);
       s.flags.reachStage = true;
     }
+    // Open data on paid plans: companies the trial, Pro or Close opened free under the old rules move to State.planOpens, once.
+    {
+      const moved = movePlanOpens(s, seedNow ?? null);
+      if (moved) console.log(`Moved ${moved} compan${moved === 1 ? "y" : "ies"} opened free on a plan apart from paid unlocks, so they lock again if the plan ends.`);
+    }
     // An ongoing seat's end month is free now. Whoever paid to see one gets that credit back, once.
     if (seedNow) {
       const back = refundOngoingEnds(s, seedNow);
@@ -1544,6 +1566,10 @@ function graph(seed: Seed, s: State): Graph {
   // Fractionals: each seat knows its graph, so a cell can find the fractional it belongs to (personIndex).
   graphSeeds.set(g, seed);
   for (const e of g.engagements.values()) engGraphs.set(e, g);
+  // Every record knows its graph too, so a cell can tell whether the trial opened its company (planSees).
+  for (const e of g.engagements.values()) nodeGraphs.set(e, g);
+  for (const p of g.contacts.values()) nodeGraphs.set(p, g);
+  for (const c of g.companies.values()) nodeGraphs.set(c, g);
   return g;
 }
 
@@ -1552,6 +1578,8 @@ function graph(seed: Seed, s: State): Graph {
 /** The seed and the graph each seat was built in, for personIndex (a cell is read from its node alone). */
 const graphSeeds = new WeakMap<Graph, Seed>();
 const engGraphs = new WeakMap<Node, Graph>();
+/** The graph each record (company, seat or person) was built in. */
+const nodeGraphs = new WeakMap<Node, Graph>();
 /** Each seat's one-way person key (SeedEngagement.holderKey), read defensively: only "p_" and hex. Never sent anywhere. */
 const holderKeyIndex = new WeakMap<Seed, Map<string, string>>();
 function seedHolderKeys(seed: Seed): Map<string, string> {
@@ -1662,8 +1690,11 @@ function personFree(s: State, me: Member | null, node: Node | undefined, entity:
  */
 function peerPrivate(s: State, node: Node | undefined): boolean {
   const at = personOf(s, node);
-  if (!at?.gr.member) return false;
-  const p = s.profiles[at.gr.member];
+  if (!at) return false;
+  // One fractional, one profile: a research record under a member's own join name (foundOf) is theirs, so their choice holds there too.
+  const id = at.gr.member ?? foundOf(graphSeeds.get(at.g)!, s, at.g).get(at.p.groupOf.get(node!.id)!);
+  if (!id) return false;
+  const p = s.profiles[id];
   return p?.fractionals === false || (p?.fractionals === undefined && !!p?.partnersOff);
 }
 /**
@@ -2455,10 +2486,10 @@ function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; 
   let used = 0;
   // Counted in credits: a company (COMPANY_PRICE) counts as that many unlocks, so day one's limit stays the starter credits.
   // The free company of the day counts the same as a paid one. A company opened free from Crystal Ball doesn't count (the member's own Crystal Ball bounds those),
-  // and nor do Pro's free opens (PRO_OPENS_DAILY bounds those).
-  const pro = proOpens(s, memberId, nowMs);
+  // and nor do the trial's opens (TRIAL_OPENS_DAILY bounds those), or the free opens Pro had before it opened everything.
   for (const l of s.ledger)
-    if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY && !CRYSTAL_WHY.has(l.why ?? "") && !(pro && l.why === "free")) used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
+    if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY && !CRYSTAL_WHY.has(l.why ?? "") && l.why !== "plan" && !(l.why === "free" && planOpenAt(s, memberId, l.at)))
+      used += l.why === "free" ? COMPANY_PRICE : Math.max(1, -l.delta);
   const joinedAt = s.members.find((m) => m.id === memberId)?.at;
   const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
   return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
@@ -2475,25 +2506,143 @@ function freeCompanyLeft(s: State, memberId: string, nowMs: number): boolean {
   return freeCompaniesLeft(s, memberId, nowMs) > 0;
 }
 /**
- * Free company opens left today (UTC day). Trial and Pro (billing live): PRO_OPENS_DAILY a day, any
- * company, fair use (Crystal Ball's stay free and don't count). Billing off: the one free company
- * of the day, as before. Free while billing is live: none (its free one is Crystal Ball's).
+ * Free company opens left today (UTC day). The trial: TRIAL_OPENS_DAILY a day, each opened in full
+ * (trialOpensLeft). Pro and Close: none, as nothing is locked. Billing off: the one free company of
+ * the day, as before. Free while billing is live: none (its free one is Crystal Ball's).
  */
 function freeCompaniesLeft(s: State, memberId: string, nowMs: number): number {
-  // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves it out, for the suites that check what paid unlocks cost.
+  const acc = accessFor(s, memberId, nowMs);
+  if (acc === "open") return 0;
+  if (acc === "trial") return trialOpensLeft(s, memberId, nowMs);
+  // A test server only (RN_SCAN_TEST=1): RN_FREE_COMPANY=off leaves the free company of the day out, for the suites that check what paid unlocks cost.
   if (process.env.RN_SCAN_TEST === "1" && process.env.RN_FREE_COMPANY === "off") return 0;
   if (gated(planRec(s, memberId), nowMs)) return 0;
   const today = new Date(nowMs).toISOString().slice(0, 10);
   const used = s.ledger.filter((l) => l.memberId === memberId && l.reason === "unlock" && l.why === "free" && l.at.slice(0, 10) === today).length;
-  return Math.max(0, (proOpens(s, memberId, nowMs) ? PRO_OPENS_DAILY : 1) - used);
+  return Math.max(0, 1 - used);
 }
-/** Pro and the trial with billing live: companies open free, up to PRO_OPENS_DAILY a UTC day (freeCompaniesLeft). */
-const proOpens = (s: State, memberId: string, nowMs: number) => billingLive() && hasPro(planRec(s, memberId), nowMs);
+/** For Health: companies the trial opened today (UTC), and members who used all of today's. Counts only. */
+function trialOpenStats(s: State, nowMs: number): { trialOpens: number; trialCapped: number } {
+  let trialOpens = 0;
+  let trialCapped = 0;
+  for (const id of Object.keys(s.planOpens ?? {})) {
+    const n = trialOpensToday(s, id, nowMs);
+    trialOpens += n;
+    if (n >= TRIAL_OPENS_DAILY) trialCapped++;
+  }
+  return { trialOpens, trialCapped };
+}
+/** The trial with billing live: companies open in full, up to TRIAL_OPENS_DAILY a UTC day (trialOpensLeft). */
+const proOpens = (s: State, memberId: string, nowMs: number) => accessFor(s, memberId, nowMs) === "trial";
 
-/** Me's plan counts: Pro's free company opens left today. (Free has no earning taper: it earns up to EARN_CAP a day like every plan.) */
-function planCounts(s: State, _g: Graph, _idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens"> {
-  const out: Pick<Me, "proOpens"> = {};
-  if (proOpens(s, memberId, nowMs)) out.proOpens = { left: freeCompaniesLeft(s, memberId, nowMs), of: PRO_OPENS_DAILY };
+/* ---------- open data on paid plans ("Pro opens everything") ---------- */
+
+/**
+ * What a member's plan opens (tableFields OPEN_LINE), with billing live:
+ *   "open"     Pro and Close: everything on Merlin shows, with no credit and no daily cap, except a
+ *              person's email and phone (PAID_DETAILS, 1 credit each, where a fellow fractional added them).
+ *   "trial"    the trial: the same, at companies the member opened in the trial (State.planOpens, up
+ *              to TRIAL_OPENS_DAILY a UTC day) or already knows (knownCompanies). Others stay locked.
+ *   "credits"  Free, and every member while billing isn't live: credits, give to get, as before.
+ * A paused plan reads as Free (planOf), and so does a cancelled one once its paid period ends.
+ */
+export type Access = "open" | "trial" | "credits";
+export function accessOf(rec: PlanRecord | undefined, nowMs: number): Access {
+  if (!billingLive()) return "credits";
+  const p = planOf(rec, nowMs);
+  return p === "pro" ? "open" : p === "trial" ? "trial" : "credits";
+}
+/** accessOf for a member in a state in hand. Kept per committed state for a few seconds, since every cell asks. */
+let accessMemo: { s: State; at: number; by: Map<string, Access> } | null = null;
+function accessFor(s: State, memberId: string, nowMs = Date.now()): Access {
+  if (s !== stateCache) return accessOf(planRec(s, memberId), nowMs);
+  if (!accessMemo || accessMemo.s !== s || Math.abs(nowMs - accessMemo.at) > 5_000) accessMemo = { s, at: nowMs, by: new Map() };
+  let a = accessMemo.by.get(memberId);
+  if (!a) accessMemo.by.set(memberId, (a = accessOf(planRec(s, memberId), nowMs)));
+  return a;
+}
+/** Pro or Close now, with billing live: everything opens but email and phone. */
+export const openPlan = (s: State, memberId: string, nowMs = Date.now()) => accessFor(s, memberId, nowMs) === "open";
+/** The member opened this company in the trial (State.planOpens). It counts only while the trial lasts (accessFor "trial"). */
+const trialOpened = (s: State, memberId: string, companyId: string) => !!s.planOpens?.[memberId]?.[companyId];
+/** Companies the member opened in the trial on the UTC day of `nowMs`. */
+function trialOpensToday(s: State, memberId: string, nowMs: number): number {
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  let n = 0;
+  for (const at of Object.values(s.planOpens?.[memberId] ?? {})) if (at.slice(0, 10) === today) n++;
+  return n;
+}
+/** Companies the trial still opens in full today. */
+const trialOpensLeft = (s: State, memberId: string, nowMs: number) => Math.max(0, TRIAL_OPENS_DAILY - trialOpensToday(s, memberId, nowMs));
+/** The member was on the trial, Pro or Close when this happened (with billing live): a free open then was the plan's, not theirs for good. */
+const planOpenAt = (s: State, memberId: string, at: string) => billingLive() && planOf(planRec(s, memberId), Date.parse(at)) !== "free";
+/**
+ * The member's plan opens this gated fact with no credit: Pro and Close anywhere, the trial at a
+ * company it opened (or the member knows). Never a person's email or phone (PAID_DETAILS), and
+ * never who held a seat for a fractional who keeps out of the directory (peerPrivate): their
+ * privacy choice holds on every plan. People in California and names the US-only rule leaves out
+ * are never on the record at all, so no plan opens them.
+ */
+function planSees(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): boolean {
+  if (!me || !node) return false;
+  if (entity === "contact" && (PAID_DETAILS as readonly string[]).includes(key)) return false;
+  if (entity === "engagement" && (key === "operator" || key === "role") && seatBundled(node, s) && peerPrivate(s, node)) return false;
+  const acc = accessFor(s, me.id);
+  if (acc === "open") return true;
+  if (acc !== "trial") return false;
+  const companyId = entity === "company" ? node.id : (node as EngNode | PersonNode).companyId;
+  if (trialOpened(s, me.id, companyId)) return true;
+  const g = nodeGraphs.get(node);
+  const seed = g ? graphSeeds.get(g) : undefined;
+  return !!g && !!seed && !identityHidden(g, s, memberIndex(seed, s), null as unknown as Tracks, me, companyId);
+}
+/**
+ * One-time move (State.flags.planOpens): companies that opened free on the trial, Pro or Close
+ * under the old rules (ledger why "free" or "crystal" while on a paid plan or the trial) were kept
+ * in State.unlocks like paid ones. They move to State.planOpens, with the postings and posted rates
+ * that came with them, so they lock again when the plan ends. Anything the member paid credits
+ * for stays in State.unlocks. Only once billing is live (before that, nobody was on a plan).
+ */
+function movePlanOpens(s: State, seed: Seed | null): number {
+  if (s.flags.planOpens || !billingLive()) return 0;
+  let n = 0;
+  const coOfEng = new Map<string, string>();
+  for (const e of seed?.engagements ?? []) coOfEng.set(e.id, e.companyId);
+  for (const e of s.engagements) coOfEng.set(e.id, e.companyId);
+  const paidRefs = new Set<string>();
+  for (const l of s.ledger) if (l.reason === "unlock" && l.delta < 0) paidRefs.add(`${l.memberId}|${l.ref}`);
+  for (const l of s.ledger) {
+    if (l.reason !== "unlock" || (l.why !== "free" && l.why !== "crystal") || !l.ref.endsWith(".identity")) continue;
+    if (!planOpenAt(s, l.memberId, l.at)) continue;
+    const companyId = l.ref.slice(0, -".identity".length);
+    const list = s.unlocks[l.ref];
+    if (list?.includes(l.memberId) && !paidRefs.has(`${l.memberId}|${l.ref}`)) {
+      const left = list.filter((m) => m !== l.memberId);
+      if (left.length) s.unlocks[l.ref] = left;
+      else delete s.unlocks[l.ref];
+    }
+    // What came with the open: each open role's posting and posted rate there, unless paid for apart.
+    for (const k of Object.keys(s.unlocks)) {
+      const dot = k.lastIndexOf(".");
+      if (!["posting", "rate"].includes(k.slice(dot + 1)) || coOfEng.get(k.slice(0, dot)) !== companyId) continue;
+      if (!s.unlocks[k].includes(l.memberId) || paidRefs.has(`${l.memberId}|${k}`)) continue;
+      const left = s.unlocks[k].filter((m) => m !== l.memberId);
+      if (left.length) s.unlocks[k] = left;
+      else delete s.unlocks[k];
+    }
+    ((s.planOpens ??= {})[l.memberId] ??= {})[companyId] ??= l.at;
+    n++;
+  }
+  s.flags.planOpens = true;
+  return n;
+}
+
+/** Me's plan counts: Pro and Close open everything (openAll); the trial's companies left today, of TRIAL_OPENS_DAILY. */
+function planCounts(s: State, _g: Graph, _idx: MemberIndex, memberId: string, nowMs: number): Pick<Me, "proOpens" | "openAll"> {
+  const out: Pick<Me, "proOpens" | "openAll"> = {};
+  const acc = accessFor(s, memberId, nowMs);
+  if (acc === "open") out.openAll = true;
+  if (acc === "trial") out.proOpens = { left: trialOpensLeft(s, memberId, nowMs), of: TRIAL_OPENS_DAILY };
   return out;
 }
 /**
@@ -2559,15 +2708,18 @@ export const CRYSTAL_NOT_IN = `That company isn't in your ${FEATURE_NAME}, so it
 export const FREE_COMPANY_USED = "That was your free company today, so it cost no credits. The next one is free tomorrow.";
 /** Fractionals: a fellow fractional's name and work history cost nothing (PEERS_FREE). */
 export const FRACTIONALS_FREE = "Fellow fractionals are free to see on Merlin, so nothing was spent.";
-/** Trial and Pro: said after a company opened free (PRO_OPENS_DAILY a day), with how many are left today. */
-export const PRO_OPEN_FREE = "It opened free.";
+/** The email finder (perform "findEmail"): people a member can look up a day, and its words. */
+export const FINDS_DAILY = 25;
+export const FOUND_EMAIL = "Found. Only you see this email: it is never shared, sold or shown to anyone else on Merlin.";
+export const FIND_NONE_EMAIL = "Merlin has no email to find for this person.";
+export const FINDS_USED = `You've used the email finder ${FINDS_DAILY} times today. It finds more tomorrow.`;
+/** The trial: a request for more companies than today still opens (refused whole, nothing spent). */
+export const trialOpensOver = (left: number) =>
+  `Your trial opens ${left} more ${left === 1 ? "company" : "companies"} today (${TRIAL_OPENS_DAILY} a day). Open ${left === 1 ? "that one" : `up to ${left}`} now, and the rest tomorrow.`;
+/** The trial: said after a company opened in full (TRIAL_OPENS_DAILY a day), with how many are left today. */
+export const PRO_OPEN_FREE = "Free in your trial.";
 export const proOpenLine = (left: number) =>
-  // The day's first free open says the rule (OPENS_RULE); the rest count down.
-  left === PRO_OPENS_DAILY - 1
-    ? `${PRO_OPEN_FREE} ${OPENS_RULE}`
-    : left > 0
-      ? `${PRO_OPEN_FREE} ${left} of today's ${PRO_OPENS_DAILY} free opens left.`
-      : `${PRO_OPEN_FREE} That was the last of today's ${PRO_OPENS_DAILY}. More open free tomorrow.`;
+  left > 0 ? `${PRO_OPEN_FREE} ${left} of today's ${TRIAL_OPENS_DAILY} companies left.` : `${PRO_OPEN_FREE} That was the last of today's ${TRIAL_OPENS_DAILY}. More open tomorrow.`;
 
 /** What a member sees of their balance: never a negative number. A shortfall is shown as credits owed. */
 const shownBalance = (bal: number) => ({ credits: Math.max(0, bal), owed: Math.max(0, -bal) });
@@ -2912,6 +3064,8 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (!free && me && entity === "engagement" && (key === "operator" || (key === "role" && seatBundled(node, s))) && personShown(s, node)) free = true;
   // Fellow fractionals: who held a seat, with the role, free once the member sees the company.
   if (!free && peerFree(s, me, node, entity, key, peer)) free = true;
+  // Pro and Close open everything but email and phone; the trial does at the companies it opened (planSees).
+  if (!free && planSees(s, me, node, entity, key)) free = true;
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -2943,6 +3097,16 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
         : fromScan
           ? ({ from: "posting" } as const)
           : {};
+  // The email finder is a member's private tool: an email Merlin found (a likely one from the company's pattern, or one from
+  // the person's own website) shows only to the member who ran it (State.finds), never in the exchange and never for a credit.
+  // A member who paid for one before this rule keeps it.
+  if ((ownEmail || likely) && !mine) {
+    const had = !!me && ((byField(s, "unlocks", node!.id, f.key) ?? []).includes(me.id) || ownEmailHeld(s, me, node, entity, key));
+    // The finder ran for this person: on this record, or (a seat holder's own-site record) on another of their seats.
+    const ran = !!me && (!!s.finds?.[me.id]?.[node!.id] || !!own?.peers.some((id) => !!s.finds?.[me.id]?.[id]));
+    if (!had && !ran) return { s: "empty", find: true };
+    return { s: "value", v: v.value, ver, ...from, found: true };
+  }
   // A person's title comes with their name, and the name with the title (PERSON_BUNDLE). A seat's role comes with who held it, and the other way round (SEAT_BUNDLE).
   const paid =
     !!me &&
@@ -3454,6 +3618,10 @@ const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !=
  */
 function identityHidden(g: Graph, s: State, idx: MemberIndex, _tracks: Tracks, me: Member | null, companyId: string, asMember = false): boolean {
   if (!me || (isAdmin(me) && !asMember)) return false;
+  // Pro and Close: every company shows. The trial: the ones it opened (State.planOpens) while it lasts.
+  const acc = accessFor(s, me.id);
+  if (acc === "open") return false;
+  if (acc === "trial" && trialOpened(s, me.id, companyId)) return false;
   // The committed state never changes, so its answer is kept. A draft inside mutate() changes in place: asked one company at a time.
   if (s === stateCache) return !knownCompanies(g, s, idx, me).has(companyId);
   return !knowsCompany(g, s, idx, me, companyId);
@@ -3500,6 +3668,22 @@ function knownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<s
     if (knownCache.byMember.size > 5000) knownCache.byMember.clear();
     knownCache.byMember.set(me.id, out);
   }
+  return out;
+}
+
+/**
+ * The companies whose identity shows to a member: the ones they know (knownCompanies), and by their
+ * plan (accessOf) every company on Pro and Close, or the ones the trial opened while it lasts. The
+ * same answer identityHidden gives, for a whole table at once.
+ */
+function seenCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<string> {
+  const acc = accessFor(s, me.id);
+  if (acc === "open") return new Set(g.companies.keys());
+  const known = knownCompanies(g, s, idx, me);
+  const opened = acc === "trial" ? Object.keys(s.planOpens?.[me.id] ?? {}) : [];
+  if (!opened.length) return known;
+  const out = new Set(known);
+  for (const id of opened) if (g.companies.has(id)) out.add(id);
   return out;
 }
 
@@ -3886,7 +4070,7 @@ function sharedPart(seed: Seed, s: State): Promise<SharedPart> {
  * their whole table would build it.
  */
 function ownCompanies(g: Graph, s: State, idx: MemberIndex, me: Member): Set<string> {
-  const out = new Set(knownCompanies(g, s, idx, me));
+  const out = new Set(seenCompanies(g, s, idx, me));
   const coOf = (nodeId: string) => (g.companies.has(nodeId) ? nodeId : (g.engagements.get(nodeId)?.companyId ?? g.contacts.get(nodeId)?.companyId));
   const add = (nodeId: string | null | undefined) => {
     const c = nodeId ? coOf(nodeId) : undefined;
@@ -4276,7 +4460,7 @@ async function fullView(
   /** Companies the viewer created (the same test as exemptPick in perform). */
   const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
   /** Companies whose identity the viewer sees (identityHidden). Null for admins and signed out: nothing is locked. */
-  const known = me && !admin ? knownCompanies(g, s, idx, me) : null;
+  const known = me && !admin ? seenCompanies(g, s, idx, me) : null;
   let peopleCount = 0;
   /** Signed out: every company with its name and site, for the landing preview (never sent). */
   const forPreview: PreviewCompany[] | null = me ? null : [];
@@ -4587,7 +4771,7 @@ async function fullView(
         continue;
       }
       // The free company of the day: "Free company of the day", then the company (theirs now).
-      if (l.reason === "unlock" && l.why === "free") {
+      if (l.reason === "unlock" && (l.why === "free" || l.why === "plan")) {
         put(l, { at: l.at, delta: l.delta, reason: freeOpenLine(planRec(s, me.id), Date.parse(l.at)), company: companyNameOf(id), field: "" });
         continue;
       }
@@ -5014,15 +5198,19 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     leaders: leadersStats(s, g, nowMs),
     funding: fundingAdminStats(s.funding, nowMs),
     // Health (lib/health.ts): the funnel, retention, facts, credits, invites and plans, counts only.
-    health: healthStats({
-      s,
-      nowMs,
-      starter: STARTER_CREDITS,
-      entityOf,
-      isMember: (id) => idx.byId.has(id),
-      billing: billingLive(),
-      seatImports: seed.engagements.filter((e) => e.addedAt).map((e) => ({ at: e.addedAt!, facts: Object.values(e.fields).filter(Boolean).length })),
-    }),
+    health: {
+      ...healthStats({
+        s,
+        nowMs,
+        starter: STARTER_CREDITS,
+        entityOf,
+        isMember: (id) => idx.byId.has(id),
+        billing: billingLive(),
+        seatImports: seed.engagements.filter((e) => e.addedAt).map((e) => ({ at: e.addedAt!, facts: Object.values(e.fields).filter(Boolean).length })),
+      }),
+      // Heavy usage (lib/usageGuard.ts), and the trial's company opens today: counts only.
+      usage: { ...usageStats(nowMs), ...trialOpenStats(s, nowMs) },
+    },
     radar: radarStats(
       s.radar,
       s.signals,
@@ -5610,6 +5798,8 @@ export async function perform(
      * role they hold, and (SEAT_SCAN_ROLE_FREE) the role of a found seat nobody is named on.
      */
     const freeFor = (entity: Entity, id: string, field: string) =>
+      // Pro and Close (and the trial at a company it opened): everything but email and phone.
+      planSees(s, me, entity === "company" ? g.companies.get(id) : entity === "engagement" ? g.engagements.get(id) : g.contacts.get(id), entity, field) ||
       (entity === "contact" &&
         (holdsPersonPartner(s, me, g.contacts.get(id), entity, field) || samePersonHeld(s, me, g.contacts.get(id), entity, field) || ownEmailHeld(s, me, g.contacts.get(id), entity, field))) ||
       (entity === "engagement" &&
@@ -5639,7 +5829,8 @@ export async function perform(
           v.by === me.id ||
           (s.unlocks[fkey(node.id, f)] ?? []).includes(me.id) ||
           holdsPersonPartner(s, me, node, "contact", f) ||
-          samePersonHeld(s, me, node, "contact", f)
+          samePersonHeld(s, me, node, "contact", f) ||
+          planSees(s, me, node, "contact", f)
         );
       });
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
@@ -6085,7 +6276,8 @@ export async function perform(
                 (nv.by === me.id ||
                   (s.unlocks[fkey(node.id, "name")] ?? []).includes(me.id) ||
                   holdsPersonPartner(s, me, node, "contact", "name") ||
-                  samePersonHeld(s, me, node, "contact", "name"));
+                  samePersonHeld(s, me, node, "contact", "name") ||
+                  planSees(s, me, node, "contact", "name"));
             if (!seesName) throw new ActionError(FILL_NAME_FIRST);
           }
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
@@ -6103,6 +6295,19 @@ export async function perform(
             capped,
             cells,
           };
+        }
+        case "findEmail": {
+          // The email finder: private to the member who runs it, free, FINDS_DAILY a UTC day. Never in the shared exchange.
+          const node = nodeOf("contact", a.id);
+          const cell = cellOf(s, me, node, "contact", "email", idx0);
+          if (cell.s === "value") return { message: "You already see this email.", cells: [changed("contact", node, "email")] };
+          if (cell.s !== "empty" || !cell.find) throw new ActionError(FIND_NONE_EMAIL);
+          if (!knowsPerson(node)) throw new ActionError(NAME_FIRST);
+          const today = new Date(nowMs).toISOString().slice(0, 10);
+          const mine = ((s.finds ??= {})[me.id] ??= {});
+          if (Object.values(mine).filter((at) => at.slice(0, 10) === today).length >= FINDS_DAILY) throw new ActionError(FINDS_USED);
+          mine[node.id] = now;
+          return { message: FOUND_EMAIL, cells: [changed("contact", node, "email")] };
         }
         case "undoUnlock": {
           /*
@@ -6128,6 +6333,11 @@ export async function perform(
           )
             throw new ActionError(UNDO_AFTER);
           const back = -lines.reduce((n, i) => n + Math.min(0, s.ledger[i].delta), 0);
+          // A company the trial opened with it locks again too (State.planOpens).
+          for (const i of lines) {
+            const l = s.ledger[i];
+            if (l.why === "plan" && s.planOpens?.[me.id]) delete s.planOpens[me.id][l.ref.slice(0, l.ref.lastIndexOf("."))];
+          }
           for (const i of [...lines].sort((x, y) => y - x)) s.ledger.splice(i, 1);
           const cells: ReturnType<typeof changed>[] = [];
           for (const k of rec.keys) {
@@ -6195,7 +6405,9 @@ export async function perform(
            * for 0 credits (crystalFree), its people and seat holders cost what they cost, and the free
            * company of the day stays. Free: one a UTC day opens in full (crystalFull, above). Billing off: an ordinary unlock.
            */
-          const crystalMode = crystalMod ? crystalOf(s, me.id, nowMs) : null;
+          // Pro and Close open everything, so nothing here is Crystal Ball's to open; the trial's Crystal Ball companies open as its other companies do (TRIAL_OPENS_DAILY a day).
+          const acc = accessFor(s, me.id, nowMs);
+          const crystalMode = crystalMod && acc === "credits" ? crystalOf(s, me.id, nowMs) : null;
           const crystalFree = new Set<string>();
           if (crystalMod && crystalMode) {
             const ball = crystalMod.crystalCompanyIds(seed, s, me, nowMs);
@@ -6294,6 +6506,8 @@ export async function perform(
             const cur = valueOf(node, s, f.key);
             if (!cur || cur.status !== "live") return;
             if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) return;
+            // The email finder's emails are private to whoever runs it (findEmail), never for sale.
+            if (it.entity === "contact" && f.key === "email" && finderEmail(node, s)) return;
             if (freeFor(it.entity, node.id, f.key)) return; // your own seat, an ongoing end, the posting of a closed role, the other half of a pair: already visible
             const wait = waitsFor(it.entity, node, f.key);
             if (wait) {
@@ -6343,25 +6557,44 @@ export async function perform(
             // Nothing more opened: what still waits is refused (this throws), and nothing is spent.
             if (waiting.length === before) take(waiting[0].it, waiting[0].node, true);
           }
+          /*
+           * The trial: each company this opens, opens in full (State.planOpens), up to TRIAL_OPENS_DAILY a UTC day,
+           * for 0 credits and outside the day's unlock limit. A request for more companies than today still opens is
+           * refused whole (nothing is spent), in words that say how many still open: the bulk quote (lib/unlockQuote.ts)
+           * then offers the ones that fit. What else the request asked for at those companies opens with them
+           * (planSees), except a person's email and phone, 1 credit each as on Pro.
+           */
+          const trialCos = new Set<string>();
+          if (acc === "trial") {
+            const coTodo = todo.filter((t) => t.field === "identity");
+            const left = trialOpensLeft(s, me.id, nowMs);
+            if (coTodo.length && !left) throw new ActionError(TRIAL_OPENS_USED);
+            if (coTodo.length > left) throw new ActionError(trialOpensOver(left));
+            for (const t of coTodo) trialCos.add(t.node.id);
+            const keep = (t: { entity: Entity; node: Node; field: string }) => {
+              const co = companyOf(t.entity, t.node.id);
+              return t.field === "identity" || !trialCos.has(co) || (t.entity === "contact" && (PAID_DETAILS as readonly string[]).includes(t.field));
+            };
+            todo.splice(0, todo.length, ...todo.filter(keep));
+            free.splice(0, free.length, ...free.filter((x) => !trialCos.has(companyOf("engagement", x.node.id))));
+          }
           if (!todo.length && !free.length) {
-            if (a.type === "unlock") throw new ActionError("Nothing here is locked, so no credit was spent.");
+            if (a.type === "unlock") throw new ActionError(acc === "open" ? "Nothing here is locked on your plan, so no credit was spent." : "Nothing here is locked, so no credit was spent.");
             return { message: "You can already see all of these, so no credits were spent." };
           }
           // What this unlock costs: 1 credit per fact, with each open role one purchase, and COMPANY_PRICE for each company.
           // A company opened from Crystal Ball on Trial or Pro (crystalFree) costs nothing and isn't counted toward the day's limit.
           const fromBall = (t: { field: string; node: Node }) => t.field === "identity" && crystalFree.has(t.node.id);
-          // Free opens (freeCompaniesLeft): on Trial and Pro the first PRO_OPENS_DAILY other companies of the UTC day, which
-          // don't count toward the day's limit; with billing off the first one, which still does.
-          const pro = proOpens(s, me.id, nowMs);
-          const opensLeft = freeCompaniesLeft(s, me.id, nowMs);
+          /** A company the trial opens in full in this request (trialCos): 0 credits, not counted toward the day's limit. */
+          const fromTrial = (t: { field: string; node: Node }) => t.field === "identity" && trialCos.has(t.node.id);
+          // The free company of the day (freeCompaniesLeft), on Free with billing off: the first one, which counts toward the day's limit.
+          const opensLeft = acc === "credits" ? freeCompaniesLeft(s, me.id, nowMs) : 0;
           const freeKs = new Set(todo.filter((t) => t.field === "identity" && !fromBall(t)).slice(0, opensLeft).map((t) => t.k));
           const freeK = freeKs.size ? [...freeKs][0] : null;
-          const units = (t: { field: string; node: Node }) => (fromBall(t) ? 0 : t.field === "identity" ? COMPANY_PRICE : 1);
+          const units = (t: { field: string; node: Node }) => (fromBall(t) || fromTrial(t) ? 0 : t.field === "identity" ? COMPANY_PRICE : 1);
           const cost = (t: { k: string; field: string; node: Node }) => (freeKs.has(t.k) ? 0 : units(t));
           const need = todo.reduce((n, t) => n + cost(t), 0);
-          const room = todo.reduce((n, t) => n + (pro && freeKs.has(t.k) ? 0 : units(t)), 0);
-          // Past today's free opens on Pro, a company is COMPANY_PRICE again: a company in this request that pays says so.
-          const proPast = pro && todo.some((t) => t.field === "identity" && !fromBall(t) && !freeKs.has(t.k));
+          const room = todo.reduce((n, t) => n + units(t), 0);
           if (room) {
             // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
             const { left, firstDay } = unlockRoom(s, me.id, nowMs);
@@ -6389,14 +6622,21 @@ export async function perform(
             }
           }
           for (const t of todo) {
+            // The trial's opens: a line for the credit history, and the open kept apart from paid unlocks (State.planOpens).
+            if (fromTrial(t)) {
+              s.ledger.push({ memberId: me.id, delta: 0, reason: "unlock", ref: t.k, at: now, why: "plan" });
+              ((s.planOpens ??= {})[me.id] ??= {})[t.node.id] = now;
+              continue;
+            }
             s.ledger.push({ memberId: me.id, delta: cost(t) ? -cost(t) : 0, reason: "unlock", ref: t.k, at: now, ...(freeKs.has(t.k) ? { why: "free" as const } : fromBall(t) ? { why: "crystal" as const } : {}) });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
-          /** Open a fact at no further charge. False when there is nothing there. */
+          /** Open a fact at no further charge. False when there is nothing there. At a company the trial opened, it shows through the open (nothing is recorded). */
           const give = (node: Node, field: string) => {
             const k = fkey(node.id, field);
             const cur = valueOf(node, s, field);
             if (!cur || cur.status !== "live") return false;
+            if (trialCos.has(companyOf("engagement", node.id))) return true;
             if (cur.by !== me.id && !(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
             return true;
           };
@@ -6426,7 +6666,7 @@ export async function perform(
           // "for 1 credit", or nothing when the member had already paid for part of an open role.
           const price = need ? ` for ${need} credit${need > 1 ? "s" : ""}` : "";
           const ballOpened = todo.filter(fromBall).length;
-          const noCharge = need || freeK || ballOpened ? "" : " You had already paid for this open role, so no credit was spent.";
+          const noCharge = need || freeK || ballOpened || trialCos.size ? "" : " You had already paid for this open role, so no credit was spent.";
           const companyName = (t: { node: Node }) => g.companies.get(t.node.id)?.name ?? "the company";
           // Each purchase is one fact: a person's name and title count once, and so do who held a seat and their role.
           let message =
@@ -6449,10 +6689,14 @@ export async function perform(
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
           // The free company of the day: no credits for it, and it is said so. So is a company opened from Crystal Ball.
-          // Trial and Pro: free up to PRO_OPENS_DAILY a day, then said once the day's are used.
-          if (freeK && pro) message += ` ${proOpenLine(opensLeft - freeKs.size)}`;
-          else if (freeK) message += ` ${FREE_COMPANY_USED}`;
-          if (proPast) message += ` ${PRO_OPENS_USED}`;
+          if (freeK) message += ` ${FREE_COMPANY_USED}`;
+          // The trial: what it opened, in full, and how many of today's are left.
+          if (trialCos.size) {
+            const only = todo.length === trialCos.size && !free.length;
+            const named = trialCos.size === 1 ? g.companies.get([...trialCos][0])?.name ?? "the company" : `${trialCos.size} companies`;
+            const line = proOpenLine(trialOpensLeft(s, me.id, nowMs));
+            message = only ? `Opened ${named} with everything on ${trialCos.size === 1 ? "it" : "them"}. ${line}` : `${message} ${named === "the company" ? "The company" : named} opened with everything on ${trialCos.size === 1 ? "it" : "them"}. ${line}`;
+          }
           if (ballOpened) message += ` ${ballOpened === 1 ? "The company" : `${ballOpened} companies`} opened free from your ${FEATURE_NAME}.`;
           return {
             message,
@@ -6468,6 +6712,11 @@ export async function perform(
                 .filter(Boolean)
                 .flatMap((e) => ["operator", "role"].map((field) => changed("engagement", e, field))),
               ...companies.flatMap((t) => [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", t.node, field))),
+              // The trial opened these in full: every gated fact there shows now (but email and phone).
+              ...[...trialCos].flatMap((co) => [
+                ...[...g.engagements.values()].filter((e) => e.companyId === co).flatMap((e) => ENG_GATED.filter((f) => valueOf(e, s, f)?.status === "live").map((f) => changed("engagement", e, f))),
+                ...[...g.contacts.values()].filter((p) => p.companyId === co).flatMap((p) => CONTACT_GATED.filter((f) => valueOf(p, s, f)?.status === "live").map((f) => changed("contact", p, f))),
+              ]),
               // Fellow fractionals: who held each seat there, with the role, shows now that the company is open.
               ...(PEERS_FREE
                 ? companies.flatMap((t) =>
@@ -6979,7 +7228,8 @@ export async function perform(
           const cur = valueOf(node, s, f.key);
           // A hidden company's website, LinkedIn and full HQ are not on show to this member (the answer would hand them over).
           if (a.entity === "company" && (IDENTITY_FIELDS.has(f.key) || f.key === "hq") && hiddenFor(node.id)) throw new ActionError("There's nothing here to confirm. You can only confirm a fact you can see.");
-          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
+          // (Or it shows to them some other way: their plan opens it, or the email finder found it for them.)
+          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key) || cellOf(s, me, node, a.entity, f.key, idx0).s === "value";
           if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("There's nothing here to confirm. You can only confirm a fact you can see.");
           if (cur.by === me.id) throw new ActionError("You added this one, so another member has to confirm it.");
           // "I know this is right" on a name from public profiles: from a member who says the seat is theirs it would be their own word twice.
@@ -8026,7 +8276,8 @@ export async function perform(
       out.undo = now;
     }
     // Value in the trial's last days (a warm path unlocked: who held a seat or a person's name; an invite sent) extends it once.
-    if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.ref.endsWith(".operator") || l.ref.endsWith(".person") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
+    // In the trial a company opens in full (why "plan"): its seat holders and people with it, so that open is the value too.
+    if (billingLive() && (a.type === "invite" || s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.reason === "unlock" && (l.why === "plan" || l.ref.endsWith(".operator") || l.ref.endsWith(".person") || (l.ref.startsWith("p_") && l.ref.endsWith(".name"))))))
       valueMoment(s, me.id, nowMs);
     // The credits meter's bell: once a period at 80% used, and at 0 (lib/creditsMeter.ts).
     if (!opts.dryRun && !refusal.message && s.ledger.slice(ledgerAt).some((l) => l.memberId === me.id && l.delta < 0)) meterBellIn(s, me.id, nowMs);
@@ -8193,6 +8444,9 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   del(s.notMine);
   del(s.found);
   del(s.findMisses);
+  // The companies their trial opened, and what the email finder found for them alone.
+  del(s.planOpens);
+  del(s.finds);
   del(s.digest?.members);
   // Google, LinkedIn, the network, and everything private to them.
   del(s.network);
@@ -8343,7 +8597,9 @@ export const tableInternals = {
   // Own sites (lib/ownsites): Undo takes every found email back, with refunds; members whose own choice keeps them out of view are never read.
   refundOwnEmails, privateMemberKeys,
   // Peers (lib/peers.ts): a passed lead's company opens for the peer free; the passer's credits go within the daily earning cap.
-  giftCompany, grant, knownCompanies, releaseHeld,
+  giftCompany, grant, knownCompanies, seenCompanies, releaseHeld,
+  // Open data on paid plans: what the member's plan opens (accessOf), the trial's opens.
+  accessFor, openPlan, planSees, trialOpensLeft,
   // Closing an account (lib/account.ts): its personal data deleted after CLOSURE_DAYS; the member index rebuilt after a restore.
   purgeMember,
   memberIndexReset: () => void (memberIndexCache = null),
@@ -8356,7 +8612,8 @@ export const tableInternals = {
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */
-export const fractionalInternals = { viewGraph, personIndex, boughtSeat, personShown, invitable, knownCompanies, openByStatus, foundOf, stateNow: () => stateCache };
+// knownCompanies here is the companies the member sees (seenCompanies: what they know, and what their plan opens).
+export const fractionalInternals = { viewGraph, personIndex, boughtSeat, personShown, invitable, knownCompanies: seenCompanies, openByStatus, foundOf, stateNow: () => stateCache };
 
 /* ---------- claim links (/claim/<token>) and Remove my name ---------- */
 
@@ -10875,6 +11132,12 @@ function ownEmailOff(s: State, seed: Seed, engId: string, now: string) {
   refundOwnEmails(s, now, seatsByKey(seed).get(k) ?? [engId]);
 }
 
+/**
+ * The email on file is one the email finder made, not one a member added: a likely one from the
+ * company's pattern, or one from the person's own firm's website. Private to whoever runs the
+ * finder (State.finds), never sold (cellOf, perform).
+ */
+const finderEmail = (node: Node, s: State) => likelyGuess(node, s) || (!!(node as PersonNode).own && valueOf(node, s, "email")?.by === "seed");
 /** The email on file is a likely one built from the pattern (lib/leaders/likely.ts), not a fact anyone added. */
 const likelyGuess = (node: Node, s: State) => !!(node as PersonNode).likely && !byField(s, "values", node.id, "email");
 

@@ -11,7 +11,7 @@
 import { SignatureSettings } from "./MySignature";
 import { useEffect, useRef, useState } from "react";
 import type { LedgerRow, View } from "@/lib/tableTypes";
-import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef, OPENS_RULE } from "@/lib/tableFields";
+import { COMPANY_PRICE, EARN_CAP, FREE_EARN_RULE, OPEN_LINE, TRIAL_OPENS_DAILY, REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
 import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
@@ -296,19 +296,27 @@ export function MyCredits({ view, refresh, onUseInClaude, onNotifications }: { v
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing. Every answer on a seat you held earns 1, and so do company facts like the HQ or size, or a hiring contact."],
-    ["−1", "minus", "You unlock a fact, like a person's name and title, or their email, phone or LinkedIn. It stays unlocked for you from then on."],
-    [
-      `−${COMPANY_PRICE}`,
-      "minus",
-      `You unlock a company: its name and website, with the job posting of each open role there. ${
-        // Free (billing live): the free one a day is Crystal Ball's, with everything on it. Trial and Pro: any company free, up to PRO_OPENS_DAILY a day, and Crystal Ball's on top.
-        me.crystal === "one" || me.crystal === "used"
-          ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. ${OPENS_RULE}`
-          : me.proOpens
-            ? `${OPENS_RULE} Past ${PRO_OPENS_DAILY}, a company is ${COMPANY_PRICE} credits until tomorrow.`
-            : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
-      }`,
-    ],
+    ...(me.openAll
+      ? // Pro and Close: everything opens; credits are only for email and phone (OPEN_LINE).
+        ([
+          ["0", "flat", `${OPEN_LINE} Every company, seat, rate and person shows on your plan, with no daily limit.`],
+          ["−1", "minus", "You unlock a person's email or phone number, where a fellow fractional added it. It stays unlocked for you from then on."],
+        ] as [string, "plus" | "minus" | "flat", string][])
+      : ([
+          ["−1", "minus", "You unlock a fact, like a person's name and title, or their email, phone or LinkedIn. It stays unlocked for you from then on."],
+          [
+            `−${COMPANY_PRICE}`,
+            "minus",
+            `You unlock a company: its name and website, with the job posting of each open role there. ${
+              // Free (billing live): the free one a day is Crystal Ball's, with everything on it. The trial: up to TRIAL_OPENS_DAILY a day, in full.
+              me.proOpens
+                ? `In your trial a company opens free with everything on it, up to ${TRIAL_OPENS_DAILY} a day. ${OPEN_LINE}`
+                : me.crystal === "one" || me.crystal === "used"
+                  ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. ${OPEN_LINE}`
+                  : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
+            }`,
+          ],
+        ] as [string, "plus" | "minus" | "flat", string][])),
     ["0", "flat", "Fellow fractionals are free: who held a seat and the role they held show once you can see the company, and the Fractionals directory never costs a credit."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company already on Merlin. They get ${REFERRAL_BONUS} too.`],

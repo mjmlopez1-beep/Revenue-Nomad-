@@ -43,7 +43,7 @@ import { forgetView, memberView, type MemberView } from "./view";
 import { spendGate } from "./log";
 import { publicBase, webLink } from "../links";
 import { firstOf, inviteNote, seatOpener } from "../partners";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, PRO_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, OPEN_LINE, TRIAL_OPENS_DAILY, TRIAL_OPENS_USED, REFERRAL_BONUS } from "../tableFields";
 import { benchRead, parseRate } from "../rates";
 import { FEATURE_NAME } from "../radar/types";
 import { NetworkProblem, accountLine, myNetworkForClaude, saveFromClaude } from "../google"; // [google network]
@@ -813,31 +813,33 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     earned_today: `${me.earned24h} of ${me.earnCap}`,
     ...(me.earnResetsAt ? { earning_opens_again_at: me.earnResetsAt } : {}),
     ...(me.unlocksLeft !== null && me.unlocksLeft !== undefined ? { unlocks_left_today: me.unlocksLeft } : {}),
-    // Trial and Pro (and everyone while billing is off): one company a UTC day unlocks free, anywhere (it counts toward the day's unlocks).
-    // Free (trial over): none here. Its free one a day opens in full from Crystal Ball in the Merlin app only.
-    free_company_today:
-      me.crystal === "one" || me.crystal === "used"
-        ? `none on the Free plan: every company unlock here costs ${COMPANY_PRICE_SAY}. Free opens one company a day from the member's ${FEATURE_NAME} in the Merlin app, with everything on it (${me.crystal === "one" ? "today's is left" : "today's is used"}). Pro opens companies free, up to ${PRO_OPENS_DAILY} a day, plus every company in their ${FEATURE_NAME}.`
-        : me.proOpens
-          ? me.proOpens.left > 0
-            ? `${me.proOpens.left} of ${me.proOpens.of} left: on their plan any company opens free, up to ${me.proOpens.of} a UTC day (${FEATURE_NAME} companies don't count and stay free). Past that a company is ${COMPANY_PRICE_SAY}.`
-            : `none left today: ${PRO_OPENS_USED}`
-        : me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE
-          ? "1 left: the next company unlock today costs no credits"
-          : "used today: the next one is free tomorrow (UTC)",
+    // Pro and Close open everything (open data on paid plans); the trial opens TRIAL_OPENS_DAILY companies a UTC day in full;
+    // Free: credits, and one company a day in full from Crystal Ball in the Merlin app; billing off: the first company each day free.
+    free_company_today: me.openAll
+      ? `not needed: on their plan every company is open, with everything on it. ${OPEN_LINE}`
+      : me.proOpens
+        ? me.proOpens.left > 0
+          ? `${me.proOpens.left} of ${me.proOpens.of} left: in their trial a company opens in full, free, up to ${me.proOpens.of} a UTC day. Past that, more open tomorrow (nothing is spent).`
+          : `none left today: ${TRIAL_OPENS_USED}`
+        : me.crystal === "one" || me.crystal === "used"
+          ? `none on the Free plan: every company unlock here costs ${COMPANY_PRICE_SAY}. Free opens one company a day from the member's ${FEATURE_NAME} in the Merlin app, with everything on it (${me.crystal === "one" ? "today's is left" : "today's is used"}). ${OPEN_LINE}`
+          : me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE
+            ? "1 left: the next company unlock today costs no credits"
+            : "used today: the next one is free tomorrow (UTC)",
     ...(me.crystal === "all" ? { crystal_ball: `Every company in the member's ${FEATURE_NAME} opens free (0 credits) on their plan: unlock quotes 0 for it. Who held its seats then shows free, and its people cost what they cost.` } : {}),
     ...(me.pending ? { credits_waiting: `${me.pending}, paid when the member's seat at a company new to Merlin is confirmed` } : {}),
     ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
     facts_added: me.added,
     facts_unlocked: me.unlocked,
-    how_credits_work:
-      `Adding a missing fact earns 1 credit (up to 25 a day, on every plan and for as long as the member is one). Seeing a fact someone else added costs 1: a person's name comes with their title for that one credit, and their LinkedIn, email and phone are 1 credit each after it. Fellow fractionals are free: who held a seat and the role they held show at no charge once the member can see the company, and the Fractionals page never costs a credit. A company is ${COMPANY_PRICE_SAY}, ${
-        me.crystal === "one" || me.crystal === "used"
-          ? `and on Free one company a day from ${FEATURE_NAME} opens in full, free, in the Merlin app`
-          : me.proOpens
-            ? `and on their plan companies open free, up to ${PRO_OPENS_DAILY} a day, plus every company in ${FEATURE_NAME}`
-            : `and the first company each day is free${me.crystal === "all" ? `, and every company in ${FEATURE_NAME} opens free` : ""}`
-      }. A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
+    how_credits_work: me.openAll
+      ? `${OPEN_LINE} On their plan every company, seat, rate, end month, posting and person (name, title, LinkedIn) shows with no credit and no daily cap. A person's email or phone is 1 credit each, and exists only where a fellow fractional added it. Adding a missing fact earns 1 credit (up to 25 a day). A fractional who keeps out of the directory stays hidden on every plan.`
+      : `Adding a missing fact earns 1 credit (up to 25 a day, on every plan and for as long as the member is one). Seeing a fact someone else added costs 1: a person's name comes with their title for that one credit, and their LinkedIn, email and phone are 1 credit each after it. Fellow fractionals are free: who held a seat and the role they held show at no charge once the member can see the company, and the Fractionals page never costs a credit. A company is ${COMPANY_PRICE_SAY}, ${
+          me.proOpens
+            ? `but in their trial a company opens in full for 0 credits, up to ${TRIAL_OPENS_DAILY} a day, and then everything there shows but email and phone`
+            : me.crystal === "one" || me.crystal === "used"
+              ? `and on Free one company a day from ${FEATURE_NAME} opens in full, free, in the Merlin app`
+              : `and the first company each day is free${me.crystal === "all" ? `, and every company in ${FEATURE_NAME} opens free` : ""}`
+        }. ${OPEN_LINE} A fractional you invite earns you both 10 credits when they add their first fact to a company already on Merlin. Your own seats are free to you. A seat you add at a company new to Merlin earns once another member or an admin confirms it.`,
     seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.filter((f) => f !== "introducedBy").map((f) => outKey(SEAT_KEYS, f)) })),
     following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
     saved_searches: alerts.length,
@@ -973,7 +975,7 @@ export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: s
         would_spend: cost,
         credits_now: me.credits,
         would_open: what,
-        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : r.message.includes(PRO_OPEN_FREE) ? ` It opens free on the member's plan (${PRO_OPENS_DAILY} a day).` : ""}${r.message.includes(PRO_OPENS_USED) ? ` ${PRO_OPENS_USED}` : ""}${ballSay} Nothing was spent.${more}${over}`,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`}${r.message.includes(FREE_COMPANY_USED) ? " It uses the member's free company of the day." : r.message.includes(PRO_OPEN_FREE) ? ` It opens in full, free, in the member's trial (${TRIAL_OPENS_DAILY} companies a day).` : ""}${ballSay} Nothing was spent.${more}${over}`,
         next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
       };
     }

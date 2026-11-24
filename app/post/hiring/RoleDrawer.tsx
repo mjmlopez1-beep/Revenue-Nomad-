@@ -244,7 +244,7 @@ export function RoleDrawer({
             <span className="hn-open">
               <UnlockCompany id={c.id} rate={rate !== "none"} roles />
               <span className="hn-sub">
-                Normally {COMPANY_PRICE} credits.{opens ? ` ${opens.of - opens.left} of ${opens.of} free opens used today.` : ""} It also opens the posting{roles > 1 ? " for every open role here." : ", its rate and hours."}
+                {opens ? `Free in your trial: ${opens.left} of ${opens.of} companies left today, each with everything on it.` : `Normally ${COMPANY_PRICE} credits.`} It also opens the posting{roles > 1 ? " for every open role here." : ", its rate and hours."}
               </span>
             </span>
           ) : (

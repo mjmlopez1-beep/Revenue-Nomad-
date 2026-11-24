@@ -140,7 +140,7 @@ export function roleTermsLine(cells: Record<string, { s: string; v?: unknown } |
  */
 export function trialCardLine(daysLeft: number | null, opens: { left: number; of: number } | null | undefined, crystal = 0): string {
   const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
-  const left = opens ? (opens.left > 0 ? ` ${opens.left} of ${opens.of} free opens left today.` : ` Today's ${opens.of} free opens are used. More open free tomorrow.`) : "";
+  const left = opens ? (opens.left > 0 ? ` ${opens.left} of ${opens.of} companies left to open today.` : ` Today's ${opens.of} companies are open. More open tomorrow.`) : "";
   const ball = crystal > 0 ? ` ${crystal === 1 ? "1 company is" : `${crystal} companies are`} in your ${FEATURE_NAME} today.` : "";
   return `Your trial runs ${days === 1 ? "until tomorrow" : `${days} more days`}. ${OPENS_RULE}${left}${ball}`;
 }

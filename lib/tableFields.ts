@@ -275,18 +275,32 @@ export const COMPANY_PRICE = 2;
 /** "2 credits", for copy. */
 export const COMPANY_PRICE_SAY = `${COMPANY_PRICE} credits`;
 /**
- * Pro and the trial open any company free, up to this many a UTC day (fair use). Companies opened
- * from Crystal Ball don't count and stay free. Past it a company is COMPANY_PRICE again until tomorrow.
+ * Open data on paid plans (the owner's decision of 2026-11-24, "Pro opens everything"). Pro and
+ * Close see everything on Merlin with no credit and no daily cap: company names, websites, logos
+ * and LinkedIn pages, every seat fact, who held each seat and the role, rates, end months, people's
+ * names, titles and LinkedIn profiles, decision makers and postings. Only a person's email and phone
+ * cost 1 credit each (PAID_DETAILS), and those exist only where a fellow fractional added them.
+ * The trial is like Pro for up to TRIAL_OPENS_DAILY companies a UTC day, each opened in full. Free
+ * is unchanged: credits are give to get (lib/table.ts accessOf).
  */
-export const PRO_OPENS_DAILY = 15;
+export const TRIAL_OPENS_DAILY = 40;
+/** The facts that still cost 1 credit on Pro and Close (and in the trial): a person's email and phone. */
+export const PAID_DETAILS = ["email", "phone"] as const;
+/** The one line, everywhere the plans are described (landing, billing, Credits, onboarding, the connector). */
+export const OPEN_LINE = "Pro opens everything. Credits are only for email and phone numbers, which come from fellow fractionals.";
+/** The trial's rule, said beside OPEN_LINE. */
+export const TRIAL_RULE = `Your trial opens up to ${TRIAL_OPENS_DAILY} companies a day, with everything on them.`;
+/** @deprecated The old name: companies a UTC day the trial opens in full (TRIAL_OPENS_DAILY). */
+export const PRO_OPENS_DAILY = TRIAL_OPENS_DAILY;
 /**
- * The one description of the free opens, everywhere it is said (Home, Credits, the unlock toasts,
- * onboarding, the landing page): lib/table.ts proOpens is Pro, Close and the trial (hasPro), up to
- * PRO_OPENS_DAILY a UTC day, and a company opened from Crystal Ball is not counted (fromBall).
+ * The one description of what each plan opens, everywhere it is said (Home, Credits, the unlock
+ * toasts, onboarding, the landing page): OPEN_LINE, then the trial's daily companies.
  */
-export const OPENS_RULE = `On Pro, Close and the trial, any company opens free, up to ${PRO_OPENS_DAILY} a day, and your Crystal Ball companies don't count toward that.`;
-/** Said at a company once today's free opens on Pro are used. */
-export const PRO_OPENS_USED = `You've opened ${PRO_OPENS_DAILY} companies today. More open tomorrow, or use ${COMPANY_PRICE_SAY}.`;
+export const OPENS_RULE = `${OPEN_LINE} The trial opens up to ${TRIAL_OPENS_DAILY} companies a day, with everything on them.`;
+/** Said when the trial's companies for today are used (the 41st is refused, nothing is spent). */
+export const TRIAL_OPENS_USED = `You've opened ${TRIAL_OPENS_DAILY} companies today, the most your trial opens in a day. More open tomorrow. Pro opens everything, with no daily limit.`;
+/** @deprecated The old name of TRIAL_OPENS_USED. */
+export const PRO_OPENS_USED = TRIAL_OPENS_USED;
 /**
  * Fellow fractionals are free to see, on every plan (the owner's call): who held a seat and the
  * role they held open at no charge once the member can see the company, and Fractionals never

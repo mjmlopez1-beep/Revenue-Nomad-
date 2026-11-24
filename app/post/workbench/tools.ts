@@ -4,7 +4,7 @@
  * the server first), and scripts/test-workbench.mts checks the words and the mapping.
  *
  * The mapping (BUILD_PLAN F3): Company name and website is the company's own unlock (2 credits,
- * free on the trial and Pro up to 15 a day); Who held the seat is free once the company is open;
+ * free in the trial up to 40 a day, and open already on Pro and Close); Who held the seat is free once the company is open;
  * Decision maker is the person's name and title (one purchase); Work email opens after the name;
  * Rate paid is the seat's rate. Signals are list alerts (F5). Actions are Add to pipeline, Draft
  * notes, Start a proposal (Close), Refer it to a peer.
@@ -19,7 +19,7 @@
  * from GET /api/evidence/closest, free); on Free and Pro they show with the Close pill and open the
  * upgrade, never hidden.
  */
-import { COMPANY_PRICE, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import { COMPANY_PRICE, TRIAL_OPENS_DAILY } from "@/lib/tableFields";
 import type { Me } from "@/lib/tableTypes";
 import type { RecordType } from "../model";
 
@@ -127,7 +127,7 @@ function peopleItems(ctx: ToolCtx): ToolItem[] {
 /** The tabs a list's Tools panel shows: People has no For you or Signals (its alert is in Actions). */
 export const toolTabsFor = (type: RecordType) => (type === "people" ? TOOL_TABS.filter((t) => t.key === "enrich" || t.key === "sources" || t.key === "actions") : TOOL_TABS);
 
-/** Trial and Pro: companies open free up to PRO_OPENS_DAILY a day (Me.proOpens). */
+/** The trial: companies open free up to TRIAL_OPENS_DAILY a day, in full (Me.proOpens). */
 export const opensFree = (me: Pick<Me, "proOpens">) => !!me.proOpens && me.proOpens.left > 0;
 /** The member's plan has Pro's features (the trial does). Billing off: nothing is gated. */
 export const proNow = (me: Pick<Me, "plan">) => !me.plan || me.plan.tier !== "free";
@@ -135,7 +135,7 @@ export const proNow = (me: Pick<Me, "plan">) => !me.plan || me.plan.tier !== "fr
 /** "Free on trial", "Free today" (Pro), or "2 / row". */
 export function companyCost(me: Pick<Me, "proOpens" | "plan">): { cost: string; tone: CostTone } {
   if (!opensFree(me)) return { cost: `${COMPANY_PRICE} / row`, tone: "paid" };
-  return { cost: me.plan?.name === "trial" ? "Free on trial" : "Free today", tone: "free" };
+  return { cost: "Free on trial", tone: "free" };
 }
 
 export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
@@ -146,7 +146,7 @@ export function toolItems(type: RecordType, ctx: ToolCtx): ToolItem[] {
   const items: ToolItem[] = [
     // For you: short recipes that start the right drill-in.
     { id: "you-dm", tab: "you", label: "Who decides", sub: "The decision maker, where members added one", cost: "1 / row", tone: "paid", do: { kind: "run", col: "decider" } },
-    { id: "you-open", tab: "you", label: "Open these companies", sub: `See each name, website and job posting${opensFree(ctx.me) ? `, free up to ${PRO_OPENS_DAILY} a day` : ""}`, cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
+    { id: "you-open", tab: "you", label: "Open these companies", sub: `See each name, website and job posting${opensFree(ctx.me) ? `, free in your trial, up to ${TRIAL_OPENS_DAILY} a day` : ""}`, cost: co.cost, tone: co.tone, do: { kind: "run", col: "company" } },
     { id: "you-watch", tab: "you", label: "Watch this list", sub: "Tell me when a company on it posts a fractional role", cost: "Free", tone: "free", do: { kind: "alert", trigger: "role" } },
     // Sources: other record types over the same filters, and the member's own contacts.
     ...(type !== "people" ? [{ id: "src-people", tab: "sources" as const, label: "People at these companies", sub: "Leaders and who decides, with the same filters", cost: "Free", tone: "free" as const, do: { kind: "type" as const, type: "people" as const } }] : []),

@@ -130,6 +130,15 @@ async function main() {
 
   /* ---------- Someone you know on Home and Warm paths ---------- */
   console.log("\nSomeone you know changed jobs, on Home and Warm paths");
+  // Open data on paid plans: on Pro no company is locked, so Jordan's Pro is paused here (Free's rules) to check the locked company's words.
+  const pause = (on: boolean) =>
+    t.tableInternals.mutate((st: { billing?: { members: Record<string, { pausedUntil?: string }> } }) => {
+      const rec = st.billing!.members.mem_jordan;
+      if (on) rec.pausedUntil = iso(t0 + 2 * DAY);
+      else delete rec.pausedUntil;
+      return null;
+    });
+  await pause(true);
   const v = await KV.knownFor("tok-jordan-known", t0);
   const lines = (v?.list ?? []).map((x) => x.line);
   const all = JSON.stringify(v);
@@ -188,6 +197,9 @@ async function main() {
   const gBox = (s1.inbox?.mem_gee ?? []).filter((x) => x.alert === "known");
   check("the watch's alert: the same lines in the bell", jBox.some((x) => x.line === "Sam Ortiz, someone you know, is a new Marketing leader at Northwind Clinics") && jBox.some((x) => /^Someone you know started at a locked /.test(x.line)), jBox.map((x) => x.line));
   check("  a Google move goes to that member alone, unnamed at a locked company", !JSON.stringify(s1.inbox ?? {}).match(/Robin|Hale/) && gBox.length === 0 && jBox.some((x) => /locked Freight & Trucking/.test(x.line)));
+  await pause(false);
+  const onPro = ((await KV.knownFor("tok-jordan-known", t0))?.list ?? []).map((x) => x.line);
+  check("on Pro the same move names the person and the company (every company is open)", onPro.includes("Dana Reyes, someone you know, is a new Sales leader at Cedar and Pine"), onPro);
 
   // The pages: Home's Today and Warm paths draw it, from GET /api/table?known=1.
   const home = src("app/post/Home2.tsx");

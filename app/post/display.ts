@@ -79,13 +79,15 @@ export function postingToOpen(i: CoInfo, focus: string | null): { e: EngagementR
  * is below their credits (25 on an account's first day, then 100 in any 24 hours; lib/table.ts
  * unlockRoom). Null when the credits run out first, or no limit is in play.
  */
-export function unlocksLeft(me: Pick<Me, "credits" | "unlocksLeft">): number | null {
+export function unlocksLeft(me: Pick<Me, "credits" | "unlocksLeft"> & Partial<Pick<Me, "openAll">>): number | null {
+  // Pro and Close open everything: no "N unlocks left today" (email and phone keep the day's limit on the server).
+  if (me.openAll) return null;
   const left = me.unlocksLeft;
   return left === null || left === undefined || left >= me.credits ? null : left;
 }
 
 /** "25 unlocks left today", near the balance and on the record's unlock line. Null when the limit doesn't bind. */
-export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft">): string | null {
+export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft"> & Partial<Pick<Me, "openAll">>): string | null {
   const left = unlocksLeft(me);
   if (left === null) return null;
   return left === 0 ? "No unlocks left today" : `${left} ${left === 1 ? "unlock" : "unlocks"} left today`;
@@ -97,7 +99,7 @@ export function unlocksLeftWords(me: Pick<Me, "credits" | "unlocksLeft">): strin
  * limit, every unlock button says "Unlocks again tomorrow", this one too.
  */
 export function freeCompanyNow(me: Pick<Me, "freeCompany" | "unlocksLeft"> & Partial<Pick<Me, "proOpens">>): boolean {
-  // Trial and Pro: free opens have their own daily count (PRO_OPENS_DAILY), outside the day's unlock limit.
+  // The trial: its opens have their own daily count (TRIAL_OPENS_DAILY), outside the day's unlock limit.
   if (me.proOpens) return me.proOpens.left > 0;
   return !!me.freeCompany && (me.unlocksLeft ?? Infinity) >= COMPANY_PRICE;
 }
@@ -114,11 +116,11 @@ export const UNLOCK_FREE = "Unlock free · 1 left today";
 /** The same, said once near the balance and on Get started. */
 export const FREE_COMPANY_TODAY = "1 free company today";
 /** The unlock button's words while a free open is left: Pro's count, else the free company of the day. */
-export const unlockFreeWords = (me: Partial<Pick<Me, "proOpens">>) => (me.proOpens ? `Unlock free · ${me.proOpens.left} left today` : UNLOCK_FREE);
-/** Near the balance and on Get started: "14 free companies today on Pro", else the free company of the day. */
+export const unlockFreeWords = (me: Partial<Pick<Me, "proOpens">>) => (me.proOpens ? `Open free · ${me.proOpens.left} of ${me.proOpens.of} left today` : UNLOCK_FREE);
+/** Near the balance and on Get started: the trial's "39 of 40 companies left today", else the free company of the day. */
 export const freeTodayWords = (me: Partial<Pick<Me, "proOpens">>) =>
-  me.proOpens ? `${me.proOpens.left} free ${me.proOpens.left === 1 ? "company" : "companies"} today` : FREE_COMPANY_TODAY;
-/** Pro's free opens are used for today: the line at a company's unlock (PRO_OPENS_USED). */
+  me.proOpens ? `${me.proOpens.left} of ${me.proOpens.of} companies left today` : FREE_COMPANY_TODAY;
+/** The trial's companies are used for today: the line at a company's unlock (TRIAL_OPENS_USED). */
 export const proOpensUsed = (me: Partial<Pick<Me, "proOpens">>) => !!me.proOpens && me.proOpens.left <= 0;
 
 /** Why a balance can't all be spent today, for the tooltips beside "25 unlocks left today". */

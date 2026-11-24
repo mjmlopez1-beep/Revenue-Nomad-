@@ -356,7 +356,8 @@ async function main() {
   check("Tess (Trial, no Google): the High companies with a way in on file, in Crystal Ball's order", same(tes0.moves.map((m) => m.id), [P.tall, P.salt, P.copp]), tes0.moves.map((m) => nameOf(m.id)));
   check("her ways in: an open role, then a seat holder on file twice", same(tes0.moves.map((m) => m.way.kind), ["role", "holder", "holder"]));
   check("a Low company with a seat holder on file doesn't jump the queue, and one with nothing waits", !tes0.moves.some((m) => m.id === P.blue || m.id === P.nort));
-  check("Trial sees each company named, as in her Crystal Ball, and still locked", tes0.moves.every((m) => m.hidden && m.name === nameOf(m.id) && m.do === "open" && m.title === "Open the company"), tes0.moves);
+  // Open data on paid plans: the trial names only the companies it opened (up to 40 a day, each in full); the rest stay locked and unnamed.
+  check("Trial keeps each company locked and unnamed until she opens it", tes0.moves.every((m) => m.hidden && m.name === null && m.do === "open" && m.title === "Open the company"), tes0.moves);
   check("the seat holder isn't named while locked", tes0.moves.every((m) => m.way.kind !== "holder" || m.way.name === null) && M.holderOnFile("Sales") === "The fractional who held their Sales seat is on file");
   check("no person from anyone's network in her moves", !found(tes0.today, NETWORK_WORDS).length && tes0.today.moves!.list.every((w) => !w.know), found(tes0.today, NETWORK_WORDS));
   check("the connector is on and she hasn't connected: one line offers it", tes0.today.moves!.google === "connect");
@@ -432,8 +433,9 @@ async function main() {
   const harbRec = mor.recs.find((c) => c.id === P.harb)!;
   const harbRow = mor.today.moves!.list.find((w) => w.id === P.harb)!.row;
   const noPerson = M.buildMove(harbRec, harbRow, undefined, mor.today.me);
-  check("an open role whose posting is locked: See the posting first, and no link", noPerson.way.kind === "role" && noPerson.way.posting === "locked" && noPerson.do === "seePosting" && !JSON.stringify(noPerson).includes("harborline.example/jobs"), noPerson);
-  check("with the person she knows there, the note goes to them and still has no posting link or rate", mHarb.open?.posting === "locked" && !JSON.stringify(mHarb).includes("harborline.example/jobs") && !RATE.test(JSON.stringify(mHarb)));
+  // A company she can see is open in full in her trial (open data on paid plans): its open role's posting shows with it.
+  check("an open role at a company she can see: the posting shows in her trial, so the move is to reply", noPerson.way.kind === "role" && noPerson.way.posting !== "locked" && noPerson.do !== "seePosting", noPerson);
+  check("with the person she knows there, the note goes to them, the posting open", mHarb.open?.posting !== "locked");
   const none = (await homeMoves(FEW)).moves[1];
   check("nothing on file: No way in yet, Open the company", none.way.kind === "none" && none.do === "open" && none.hidden);
 
@@ -454,21 +456,18 @@ async function main() {
   await act(TES, { type: "unlock", entity: "company", id: P.embr, field: "identity", from: "crystal" });
   embr = await recOf(TES, P.embr);
   bm = M.buildMove(embr, embrRow, undefined, tesMe);
-  check("opened: the buyer is the way in, ahead of nothing, with the price before the click", bm.way.kind === "buyer" && bm.do === "seeBuyer" && bm.title === "See who hired them" && /^1 credit shows their name and title, and their email is 1 more\./.test(bm.line) && (await credits(TES)) === tesC0, [bm.title, bm.line]);
-  check("still nobody named, and no address", !found(bm, ["Rhea", "rhea@"]).length && M.noteFacts(bm, embrRow, tesMe, BASE) === null);
+  // Opened in the trial: everything there shows but email and phone, so the buyer is named at once, for 0 credits.
+  check("opened: the buyer is the way in, named with the company, 0 credits: Write to Rhea, who hired their fractional CMO", bm.way.kind === "buyer" && bm.do === "buyer" && bm.title === "Write to Rhea" && bm.line.startsWith("Rhea, CEO, hired their fractional CMO.") && /Their email is 1 credit on the record/.test(bm.line) && (await credits(TES)) === tesC0, [bm.title, bm.line]);
   check("a buyer on file means nothing to look up", bm.find === null && M.findBuyer(embr, tesMe) === null);
   const rhea = (bm.way as { personId: string }).personId;
-  await act(TES, { type: "unlock", entity: "contact", id: rhea, field: "name" });
-  check("their name and title: 1 credit, one purchase", (await credits(TES)) === tesC0 - 1, [tesC0, await credits(TES)]);
-  embr = await recOf(TES, P.embr);
-  bm = M.buildMove(embr, embrRow, undefined, tesMe);
-  check("then: Write to Rhea, who hired their fractional Marketing leader (the seat's role is still locked, so it isn't said)", bm.do === "buyer" && bm.title === "Write to Rhea" && bm.line.startsWith("Rhea, CEO, hired their fractional Marketing leader.") && /Their email is 1 credit on the record/.test(bm.line), [bm.title, bm.line]);
+  check("their name and title: nothing to buy in the trial", /Nothing here is locked/.test(String(await act(TES, { type: "unlock", entity: "contact", id: rhea, field: "name" }).catch((e: Error) => e.message))) && (await credits(TES)) === tesC0, [tesC0, await credits(TES)]);
   let bf = M.noteFacts(bm, embrRow, tesMe, BASE)!;
   let bd = M.draftNote(bf, null);
   check("the note is the buyer's, to her by name, with no address yet", bf.kind === "buyer" && bf.to?.name === "Rhea Vance" && bf.to.email === null && bd.body.startsWith("Hi Rhea,\n\n"), bf.to);
   check(
     "it says why now from the signal and the pattern the company fits, in the member's words",
-    /I saw Emberline Software just raised a round\./.test(bd.body) && bd.body.includes("When a SaaS company is past $5M and has a fractional Marketing leader and no fractional RevOps seat yet, RevOps is usually what needs an owner next.") && !/CMO/.test(bd.body) && /a fractional Head of RevOps/.test(bd.body),
+    // The seat's role shows in the trial (the company is open in full), so the pattern names it.
+    /I saw Emberline Software just raised a round\./.test(bd.body) && bd.body.includes("When a SaaS company is past $5M and has a fractional CMO and no fractional RevOps seat yet, RevOps is usually what needs an owner next.") && /a fractional Head of RevOps/.test(bd.body),
     bd.body,
   );
   const bShort = M.draftNote(bf, VOICES_SHORT);
@@ -477,7 +476,7 @@ async function main() {
   check("after a hire signal it says what follows the hire, not the hire twice", M.patternLine(bf.pattern, "RevOps", true)!.neutral === "When a SaaS company past $5M makes that hire, RevOps is usually what needs an owner next.");
   check("no rate (the revenue band is a free fact), no address, nothing she hasn't opened", !RATE.test(bd.body.replace("past $5M", "")) && M.revenueWord("$5M–$20M") === "past $5M" && M.revenueWord("Under $1M") === null && M.industryWord("SaaS") === "SaaS" && M.industryWord("Manufacturing") === "manufacturing" && !/@/.test(bd.body) && !found(bd.body, ["Bastian", "Philippa", "Marisol", "Ivo"]).length);
   await act(TES, { type: "unlock", entity: "contact", id: rhea, field: "email" });
-  check("their email: 1 credit after the name", (await credits(TES)) === tesC0 - 2);
+  check("their email: 1 credit", (await credits(TES)) === tesC0 - 1);
   embr = await recOf(TES, P.embr);
   bm = M.buildMove(embr, embrRow, undefined, tesMe);
   bf = M.noteFacts(bm, embrRow, tesMe, BASE)!;
@@ -678,10 +677,10 @@ async function main() {
   const saltFacts = M.noteFacts(moveOf(tes, P.salt), rowOf(tes, P.salt), tes.today.me, BASE)!;
   check("a seat holder whose email she hasn't unlocked: To is empty", to(saltFacts) === null && !/to=/.test(M.gmailLink(to(saltFacts), "s", "b")) && M.mailtoLink(to(saltFacts), "s", "b").startsWith("mailto:?subject="), M.gmailLink(to(saltFacts), "s", "b"));
   check("an open role with nobody to write to: To is empty", M.noteFacts(moveOf(tes, P.tall), rowOf(tes, P.tall), tes.today.me, BASE)!.to === null);
-  // She unlocks the person on file with Hana's name, then her email: now the address is hers to use.
+  // The person on file with Hana's name shows in her trial (the company is open in full); then she unlocks her email: now the address is hers to use.
   const salt = (await T.buildView(TES)).companies.find((c) => c.id === P.salt)!;
   const hanaRec = salt.engagements.flatMap((e) => e.people).find((p) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Seat holder")!;
-  await act(TES, { type: "unlock", entity: "contact", id: hanaRec.id, field: "name" });
+  check("her name shows free in the trial", hanaRec.cells.name?.s === "value", hanaRec.cells.name);
   check("the name alone opens no address", to(M.noteFacts(moveOf(await homeMoves(TES), P.salt), rowOf(tes, P.salt), tes.today.me, BASE)) === null);
   await act(TES, { type: "unlock", entity: "contact", id: hanaRec.id, field: "email" });
   tes = await homeMoves(TES);
@@ -749,7 +748,8 @@ async function main() {
   const app = (await movesFor(MOR))!;
   // A move's words as the connector may say them: without the person, when the person comes from the member's Google account.
   const said = (m: Move) => (m.way.kind === "know" && m.way.person.google ? M.moveWithoutPerson(m, app.me) : { title: m.title, line: m.line });
-  check("todays_moves is Home's moves: the same companies, in the same order, with the same why", same(tm.moves.map((m) => [m.company_id, m.company, m.why_now]), app.moves.map((m) => [m.id, m.name, m.why])), tm.moves.map((m) => m.company));
+  // A company the trial hasn't opened is "Locked company" in the connector and unnamed on Home.
+  check("todays_moves is Home's moves: the same companies, in the same order, with the same why", same(tm.moves.map((m) => [m.company_id, m.company, m.why_now]), app.moves.map((m) => [m.id, m.name ?? "Locked company", m.why])), tm.moves.map((m) => m.company));
   check("and the same move, said without the person where the person is from Google", same(tm.moves.map((m) => [m.your_move, m.how]), app.moves.map((m) => [said(m).title, said(m).line])), tm.moves.map((m) => [m.your_move, m.how]));
   check("and the same as ?today=1's", same(tm.moves.map((m) => m.company_id), (await todayView(MOR))!.moves!.list.map((w) => w.id)) && tm.moves_done_this_month === app.wire.month);
   const noteOf = (id: string) => tm.moves.find((m) => m.company_id === id)?.note as { to: string; facts: Record<string, unknown>; merlin_draft?: unknown } | undefined;
@@ -798,17 +798,17 @@ async function main() {
 
   // The buyer and "Find who runs RevOps", through the connector (Olga, Pro: the buyer on file, and nobody who decides on file).
   const OLD = "tok-old-moves";
-  for (const id of [P.embr, P.quay]) await act(OLD, { type: "unlock", entity: "company", id, field: "identity", from: "crystal" });
+  // Olga is on Pro: every company is open already (open data on paid plans), so nothing needs opening and the buyer is named at once.
   let tmOld = (await tools.todaysMoves(await ctxOf(OLD))) as { moves: Record<string, unknown>[] };
   const oldWay = (id: string) => tmOld.moves.find((m) => m.company_id === id)!.way_in as Record<string, unknown>;
-  check("todays_moves: the buyer as the way in, its unlock and price, and no name while it is locked", oldWay(P.embr).kind === "the buyer: a decision maker on file" && oldWay(P.embr).who === "hired their fractional Marketing leader" && /^locked, 1 credit/.test(String(oldWay(P.embr).name)) && same(oldWay(P.embr).unlock, { entity: "person", id: (await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way.kind === "buyer" ? ((await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way as { personId: string }).personId : "", field: "name" }) && !found(tmOld, ["Rhea", "rhea@"]).length, oldWay(P.embr));
+  check("todays_moves on Pro: the buyer as the way in, named at once (everything is open)", oldWay(P.embr).kind === "the buyer: a decision maker on file" && oldWay(P.embr).who === "hired their fractional CMO" && oldWay(P.embr).name === "Rhea Vance", oldWay(P.embr));
   const oldRhea = ((await movesFor(OLD))!.moves.find((m) => m.id === P.embr)!.way as { personId: string }).personId;
-  await act(OLD, { type: "unlock", entity: "contact", id: oldRhea, field: "name" });
+  check("her name has nothing to buy on Pro", /Nothing here is locked/.test(String(await act(OLD, { type: "unlock", entity: "contact", id: oldRhea, field: "name" }).catch((e: Error) => e.message))));
   await act(OLD, { type: "unlock", entity: "contact", id: oldRhea, field: "email" });
   tmOld = (await tools.todaysMoves(await ctxOf(OLD))) as { moves: Record<string, unknown>[] };
   const embrTm = tmOld.moves.find((m) => m.company_id === P.embr)!;
   const embrNote = embrTm.note as { to: string; situation: string; facts: Record<string, unknown>; merlin_draft: { body: string } };
-  check("once opened: named, with the note to them and the pattern's free facts, and still no address", oldWay(P.embr).name === "Rhea Vance" && embrTm.your_move === "Write to Rhea" && embrNote.to === "Rhea Vance" && /decision maker on file/.test(embrNote.situation) && (embrNote.facts.company_pattern as { hired: string }).hired === "a fractional Marketing leader" && /When a SaaS company is past \$5M/.test(embrNote.merlin_draft.body) && !/@/.test(JSON.stringify(tmOld)), embrTm);
+  check("once opened: named, with the note to them and the pattern's free facts, and still no address", oldWay(P.embr).name === "Rhea Vance" && embrTm.your_move === "Write to Rhea" && embrNote.to === "Rhea Vance" && /decision maker on file/.test(embrNote.situation) && (embrNote.facts.company_pattern as { hired: string }).hired === "a fractional CMO" && /When a SaaS company is past \$5M/.test(embrNote.merlin_draft.body) && !/@/.test(JSON.stringify(tmOld)), embrTm);
   const quayTm = tmOld.moves.find((m) => m.company_id === P.quay)! as Record<string, unknown> & { find_the_buyer: Record<string, string> };
   check("todays_moves: nobody who decides on file comes with where to look, said as a search to open", !!quayTm.find_the_buyer && quayTm.find_the_buyer.what === "Find who runs RevOps at Quayside Labs" && quayTm.find_the_buyer.linkedin_people_search.startsWith("https://www.linkedin.com/search/results/people/?keywords=") && quayTm.find_the_buyer.website === "https://quayside.example/" && /not facts Merlin holds/.test(quayTm.find_the_buyer.then), quayTm);
   const gcQuay = (await tools.getCompany(await ctxOf(OLD), { company: P.quay })) as { warm_paths: Record<string, unknown>[] };

@@ -26,7 +26,8 @@ import { IconCheck, IconLock, IconX, useToast, errorText } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { PLANS, PLAN_ROWS, PRO_LEAVES_OUT, landingMoreRows } from "@/lib/billing/compare";
+import { PLANS, PLAN_ROWS, PRO_LEAVES_OUT, TRIAL_SAY, landingMoreRows } from "@/lib/billing/compare";
+import { OPEN_LINE } from "@/lib/tableFields";
 import { AI_PACK_LINE, CLOSE_AI_LINE, PRICES, PRO_STORY, TIER_NAME, TRIAL_NAME, keepVerb, keepWords, paidName, planName } from "@/lib/billing/rules";
 
 /**
@@ -229,7 +230,7 @@ function leadFor(plan: PlanView, a: Ask): string {
       return keepOf(plan) === "close"
         ? `All of Close is yours until your trial ends ${when}. You've been building proposals in Merlin: keep Close now and it carries straight on after, with nothing to do that day.`
         : `Your ${TRIAL_NAME} ends ${when}. Choose Pro now and it starts straight after, with nothing to do that day. Sending for signature and the rest of Close stop then, unless you keep Close.`;
-    if (a.from === "credits") return `Pro adds ${plan.prices.proCredits} credits each paid month, on top of what you earn. They start with your first paid month.`;
+    if (a.from === "credits") return `${OPEN_LINE} Pro adds ${plan.prices.proCredits} credits each paid month for them, on top of what you earn. They start with your first paid month.`;
     return `${leadFor({ ...plan, name: "free", notLooking: false }, a)} It's yours in the trial until ${day(plan.trialEndsAt)}.`;
   }
   if (plan.notLooking) return "Not looking for a client right now? Free is a fine plan. Pro is here for when you are, and it pauses any month your book is full.";
@@ -238,11 +239,11 @@ function leadFor(plan: PlanView, a: Ask): string {
       ? `A second view here would have caught ${a.caught} new ${a.caught === 1 ? "role" : "roles"} in the last 30 days. Free keeps one view; Pro keeps one for every market you work, with alerts as roles open.`
       : "Free keeps one saved view. Pro keeps one for every market you work, with alerts as roles open.";
   if (a.from === "bench") return "Free shows the median for each function. Pro shows the range, by function and by client size.";
-  if (a.from === "credits") return `Buy ${plan.prices.topupCredits} credits once, or get Pro: ${plan.prices.proCredits} credits each paid month, on top of what you earn.`;
+  if (a.from === "credits") return `Buy ${plan.prices.topupCredits} credits once, or get Pro. ${OPEN_LINE}`;
   if (a.from === "slack") return "Free posts the weekly roles to Slack. Pro posts every alert: messages, your seats, and new roles as they open.";
   if (a.from === "claude") return "Free gives Claude 20 requests a day. Pro has no daily cap.";
-  if (a.from === "radar") return `Everyone gets every ${FEATURE_NAME} signal each morning, and Free opens one of its companies a day, fully. Pro opens every company in your ${FEATURE_NAME} free, and posts signals to Slack as they happen.`;
-  if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. Pro opens every company in your ${FEATURE_NAME} free.`;
+  if (a.from === "radar") return `Everyone gets every ${FEATURE_NAME} signal each morning, and Free opens one of its companies a day, fully. ${OPEN_LINE} Pro also posts signals to Slack as they happen.`;
+  if (a.from === "crystal") return `Free opens one ${FEATURE_NAME} company a day, with everything on it. ${OPEN_LINE}`;
   if (a.from === "proposals")
     return plan.hadTrial || plan.name !== "free"
       ? "Building proposals in Merlin is on Close: new ones, from Merlin's templates or your own. It drafts them from your call, opens your own templates and contracts, and sends them for e-signature. Your proposals and saved templates are kept, and come back when you upgrade."
@@ -456,6 +457,8 @@ function PricingSheet({ plan, a, onClose }: { plan: PlanView; a: Ask; onClose: (
             : leadFor(plan, a)}
         </p>
         {!plan.notLooking && !onPro && a.from !== "billing" && a.from !== "trial" && <p className="bl-value">{VALUE_LINE}</p>}
+        {/* Open data on paid plans: the one line, on every plans sheet. */}
+        <p className="bl-value">{plan.name === "trial" ? `${OPEN_LINE} ${TRIAL_SAY}` : OPEN_LINE}</p>
         {!onPro && a.from === "credits" && <TopupLine plan={plan} emphasis />}
         {(!onPro || canMove) && <PlanCards plan={plan} from={a.from} onDone={onClose} />}
         <CompareTable current={plan.tier} />

@@ -31,7 +31,7 @@ const PICK_LABELS = new Set(ALL_FIELDS.filter(({ entity, f }) => entity === "com
 const PRIVATE_RATE = "Private rate";
 /** The free company of the day's row (lib/table.ts FREE_COMPANY_LINE). */
 const FREE_COMPANY = "Free company of the day";
-/** Trial, Pro and Close: a company opened free, up to 15 a day, named by the plan it opened on (lib/table.ts openedFreeLine). They don't count toward the day's unlocks. */
+/** The trial (and Pro and Close before they opened everything): a company opened free, named by the plan it opened on (lib/table.ts openedFreeLine). They don't count toward the day's unlocks. */
 const PRO_OPEN = /^Opened free (on|in your) /;
 /** A company opened free from Crystal Ball on Trial or Pro, and Free's one a day (lib/table.ts CRYSTAL_LINE, CRYSTAL_FULL_LINE). */
 const CRYSTAL = `Opened free from ${FEATURE_NAME}`;

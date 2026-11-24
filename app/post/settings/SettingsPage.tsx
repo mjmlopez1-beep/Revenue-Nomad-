@@ -1103,7 +1103,7 @@ function PlanSec() {
   const cur = p.name === "trial" ? "close" : p.tier;
   const plans: { k: "free" | "pro" | "close"; n: string; price: string; lines: string[] }[] = [
     { k: "free", n: "Free", price: "$0", lines: ["Spend and earn credits", "A company costs 2 credits to open", "1 Crystal Ball company a day, in full", "Slack: a weekly post of new roles"] },
-    { k: "pro", n: "Pro", price: `$${p.prices.month}`, lines: ["Any company opens free, up to 15 a day", "Crystal Ball companies always open free", "Every alert in Slack, as it happens", "Your agent: no daily cap"] },
+    { k: "pro", n: "Pro", price: `$${p.prices.month}`, lines: ["Everything opens: every company, seat, rate and person", "Credits only for email and phone numbers", "Every alert in Slack, as it happens", "Your agent: no daily cap"] },
     { k: "close", n: "Close", price: `$${p.prices.closeMonth}`, lines: ["Everything in Pro", "Proposals from a call or a template", "Contracts and signing, with your signature", "Alerts when a client opens or signs"] },
   ];
   return (
@@ -1144,7 +1144,7 @@ function PlanSec() {
             : `You are on ${planName(p)}. Billing and receipts are in Credits and usage.`}
         </span>
       </div>
-      <Side kicker="TODAY" label="Today" foot="A company costs 2 credits to open once you are past the free opens of the day, or on Free.">
+      <Side kicker="TODAY" label="Today" foot="On Free a company costs 2 credits to open. Pro opens everything; your trial opens up to 40 companies a day.">
         <span className="st-big">
           <strong className="num">{me.credits.toLocaleString("en-US")}</strong>
           <span>credits to spend</span>

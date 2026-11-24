@@ -31,7 +31,8 @@ import type { ListAlert, ListKind } from "./mcp/alerts";
  *   (so the screen can say "You reported this"). Left out otherwise.
  */
 export type Cell =
-  | { s: "empty" }
+  /** `find`: a person's email the email finder can look for, for this member only (perform "findEmail": free, private to them). */
+  | { s: "empty"; find?: true }
   | {
       s: "locked";
       ver: number;
@@ -57,6 +58,8 @@ export type Cell =
       likely?: number;
       /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */
       paid?: boolean;
+      /** An email the email finder found for this viewer only (State.finds): private to them, never shared, never sold. */
+      found?: true;
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
       claimed?: boolean;
       /**
@@ -279,8 +282,10 @@ export interface Me {
    * of them). Never on Free while billing is live: there the free one is Crystal Ball's (`crystal`).
    */
   freeCompany?: boolean;
-  /** Trial and Pro, billing live: free company opens left today, of PRO_OPENS_DAILY. Crystal Ball's don't count. Left out otherwise. */
+  /** The trial, billing live: companies it still opens in full today, of TRIAL_OPENS_DAILY. Left out otherwise. */
   proOpens?: { left: number; of: number };
+  /** Pro and Close, billing live: everything opens with no credit and no daily cap, except a person's email and phone (1 credit each). */
+  openAll?: true;
   /** Get started: a first note went out (a deal at Sent, an invite or a conversation), and Google or LinkedIn connections are in. */
   started?: {
     note: boolean;
@@ -1044,6 +1049,11 @@ export type Action =
    * credits; Free opens one a UTC day in full (Me.crystal). Refused for a company not in it.
    */
   | { type: "unlock"; entity: Entity; id: string; field: string; from?: "crystal" }
+  /**
+   * The email finder, a member's private tool: show this member the email Merlin found for a person (Cell.find), free.
+   * Only they ever see it (State.finds): never another member, the exchange or the connector for anyone else.
+   */
+  | { type: "findEmail"; id: string }
   /** Admins: confirm a member's own seat at a company that was new to Merlin, so its credits are paid (AdminStats.pendingSeats). */
   | { type: "confirmSeat"; engagementId: string }
   /** A locked company's record was opened, or its card expanded: counted for Pilot metrics (once a member, company and day). */

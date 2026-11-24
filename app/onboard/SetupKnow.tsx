@@ -324,7 +324,7 @@ export function FirstScreen(p: {
     <>
       <Head eyebrow={`Step 5 of ${SETUP_STEPS}`} title="Open your first company">
         {fromBall
-          ? `${ball!.length >= 3 ? "Three" : ball!.length === 1 ? "One" : "Two"} from your Crystal Ball: companies likely to need ${p.fn && p.fn !== "Other" ? p.fn : "you"} next${p.ideal ? ", inside your ideal client" : ""}.${me.crystal === "all" ? " Each opens free and does not count toward your 15 a day." : ""}${ball!.length < 3 && rows.length > ball!.length ? " Your first view fills in the rest." : ""}`
+          ? `${ball!.length >= 3 ? "Three" : ball!.length === 1 ? "One" : "Two"} from your Crystal Ball: companies likely to need ${p.fn && p.fn !== "Other" ? p.fn : "you"} next${p.ideal ? ", inside your ideal client" : ""}.${me.crystal === "all" ? " Each opens free in your trial, with everything on it." : ""}${ball!.length < 3 && rows.length > ball!.length ? " Your first view fills in the rest." : ""}`
           : "Three companies from your first view: they hired a fractional before and fit what you picked."}
       </Head>
       {!p.ready || !ball ? (

@@ -423,7 +423,17 @@ async function main() {
   served = fa.view;
   await store.load(true);
 
-  const boTable0 = await t.buildView(BO);
+  // Open data on paid plans: on Pro every company and person is open, so Bo's view is checked on Free's rules (his plan paused for the look).
+  const pauseBo = (on: boolean) =>
+    t.tableInternals.mutate((st: { billing?: { members: Record<string, { pausedUntil?: string }> } }) => {
+      const rec = st.billing!.members.mem_bo;
+      if (on) rec.pausedUntil = new Date(Date.now() + 2 * DAY).toISOString();
+      else delete rec.pausedUntil;
+      return null;
+    });
+  await pauseBo(true);
+  const boTable0 = await t.buildView(BO, { fresh: true });
+  await pauseBo(false);
   const boLark = deriveAll(boTable0.companies).find((i) => i.c.id === lark.c.id)!;
   check("a member who knows nobody there sees no people, whatever the store holds for someone else", !boTable0.companies.find((c) => c.id === lark.c.id)!.name.includes("Larkfield") && !JSON.stringify(boTable0).includes("Dana Whitfield") && !!boLark);
 
@@ -581,7 +591,9 @@ async function main() {
   check("her own ended seat never reads as the seat that may be open again on Your network", !!tallNet && !/seat ended|open again/i.test(tallNet.odds?.why ?? "") && tallNet.odds?.saw?.kind !== "seat", tallNet?.odds);
   const ballRow = radar.crystalRowsOf(await t.loadSeed(), await t.loadState(), (await t.memberById("mem_ana"))!, Date.now()).get("c_tall");
   check("nor in her Crystal Ball", !ballRow || (ballRow.kind !== "seat" && ballRow.kind !== "rehire"), ballRow);
+  await pauseBo(true);
   const boAfter1 = await t.buildView(BO, { fresh: true });
+  await pauseBo(false);
   check("other members see the seat by the usual rules: its function free, her name behind its lock; who she met is nowhere", (() => {
     const c = boAfter1.companies.find((x) => x.id === tallCo.id)!;
     const e = c.engagements.find((x) => x.cells.operator?.s === "locked");
@@ -741,7 +753,8 @@ async function main() {
   const qv = cy("Quarry Labs");
   check("Cy herself (her own address at her client, her own name) is never one of her people there, nor suggested on her seat", !qv.people.some((p) => p.name === "Cy Client" || /^cy\.client@/.test(p.email ?? "")) && !offerHtml.includes("Cy Client") && !cv.seats.some((g) => g.with.some((w) => w.name === "Cy Client")), qv.people.map((p) => p.name));
   check("someone already on file at her seat says so, with what an Add would still fill in", qv.people.find((p) => p.name === "Omar Reyes")?.onFile?.mine === false && qv.people.find((p) => p.name === "Omar Reyes")!.onFile!.empty.length === 0 && JSON.stringify(qv.people.find((p) => p.name === "Lena Park")?.onFile?.empty) === '["relationship"]' && !qv.people.find((p) => p.name === "Nora Vance")?.onFile, qv.people.map((p) => [p.name, p.onFile]));
-  check("each suggestion is one row, and says what it will do: a new person Add +3 credits, someone on file Confirm with what it earns", count(offerRaw, 'class="np-offer"') === 3 && /Nora Vance CEO who you report to .*\+3 credits Add/.test(offerHtml) && /Omar Reyes On file Confirms their name Confirm/.test(offerHtml) && /Lena Park On file who you report to .*\+1 credit Confirm/.test(offerHtml) && !/Omar Reyes[^+]*\+2 credits/.test(offerHtml), offerHtml.slice(0, 900));
+  // Open data on paid plans: Cy is on Pro, so Omar and Lena show by name on the record already and only the new person is offered.
+  check("each suggestion is one row, and says what it will do: a new person Add +3 credits; people on file show on the record by name on Pro, so they aren't offered", count(offerRaw, 'class="np-offer"') === 1 && /Nora Vance CEO who you report to .*\+3 credits Add/.test(offerHtml) && !/Omar Reyes On file|Lena Park On file/.test(offerHtml), offerHtml.slice(0, 2400));
   check("her confirmed seat offers who she works with there, as contributions she chooses, and Nora is not on the record before the click", /Nora Vance CEO/.test(offerHtml) && /credits/.test(offerHtml) && !quarryInfo.people.some(({ p }) => p.cells.name?.s === "value" && p.cells.name.v === "Nora Vance") && !JSON.stringify((await t.loadState()).values).includes("Nora Vance"), offerHtml.slice(0, 400));
   const added = await t.perform(CY, { type: "addPerson", companyId: quarry.id, engagementId: seatId, person: { name: "Nora Vance", title: "CEO", relationship: "Reported to" } });
   check("her click adds Nora as who she reports to, with the usual credits", /Added Nora Vance at Quarry Labs/.test(added.message) && /You earned/.test(added.message), added.message);
@@ -762,7 +775,9 @@ async function main() {
   }
   check("after those answers the card draws again without failing, and nobody is offered twice", !threw && /Your seat/.test(after9) && !/Omar Reyes/.test(after9) && !/Lena Park/.test(after9) && !/Nora Vance/.test(after9), threw ? String((threw as Error).stack) : after9.slice(0, 500));
   check("Omar is confirmed by her now, with nothing left to add: off the card for good", cy("Quarry Labs").people.find((p) => p.name === "Omar Reyes")?.onFile?.confirmed === true && PT.offerOf(cy("Quarry Labs").people.find((p) => p.name === "Omar Reyes")!) === null);
+  await pauseBo(true);
   check("other members see only what she added, by the usual locks; Bo's network is untouched", !JSON.stringify(await G.networkView(BO)).includes("Nora") && !JSON.stringify((await t.buildView(BO, { fresh: true })).companies.find((c) => c.id === quarry.id)).includes("Nora Vance"));
+  await pauseBo(false);
   // Privacy: nothing of Cy's network in another member's view, the export or the connector beyond what it allows.
   check("another member's table, network and Crystal Ball: the same bytes after all of Cy's marks and reads (before her own Add)", boCy0 === boAfterMarks);
   const exp8 = JSON.stringify(await t.exportState());

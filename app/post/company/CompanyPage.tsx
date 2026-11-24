@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Benchmarks, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { KnownPersonView } from "@/lib/paths/types";
-import { FOUND_NOTE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import { FOUND_NOTE, COMPANY_PRICE_SAY, TRIAL_OPENS_DAILY } from "@/lib/tableFields";
 import { CompanyLogo, IconChevron, IconExternal, IconX, hrefFor, post, val } from "../../ui/shared";
 import { COMPANY_GTM, fitReason, fnGap, namedFn, shown, type CoInfo, type SeatInfo } from "../model";
 import { Pro, useUi } from "../ui";
@@ -274,15 +274,17 @@ export function CompanyRecord(props: CompanyRecordProps) {
           <li>Open roles: title and date listed</li>
         </ul>
       </div>
+      {/* The trial opens a company in full (open data on paid plans): everything there but email and phone. */}
       <div className="co-gate">
         <span className="co-gate-h">
           <strong>Opens with the company</strong>
-          <span className="co-sub">{freeOpen ? `${COMPANY_PRICE_SAY} · free for you today` : COMPANY_PRICE_SAY}</span>
+          <span className="co-sub">{trial ? "Free in your trial" : freeOpen ? `${COMPANY_PRICE_SAY} · free for you today` : COMPANY_PRICE_SAY}</span>
         </span>
         <ul>
           <li>Its name, website and logo</li>
           <li>Who held each seat, and their role</li>
           <li>Job postings, with rate and hours</li>
+          {trial && <li>Who decides, seat rates and end dates</li>}
         </ul>
       </div>
       <div className="co-gate">
@@ -291,18 +293,35 @@ export function CompanyRecord(props: CompanyRecordProps) {
           <span className="co-sub">1 credit each</span>
         </span>
         <ul>
-          <li>A decision maker&apos;s name and title</li>
-          <li>Their email, phone or profile link</li>
-          <li>What a seat paid, how it was found</li>
-          <li>The end date of a seat that ended</li>
+          {trial ? (
+            <>
+              <li>A person&apos;s email</li>
+              <li>A person&apos;s phone number</li>
+            </>
+          ) : (
+            <>
+              <li>A decision maker&apos;s name and title</li>
+              <li>Their email, phone or profile link</li>
+              <li>What a seat paid, how it was found</li>
+              <li>The end date of a seat that ended</li>
+            </>
+          )}
         </ul>
       </div>
       <div className="co-gate-go tp-dactions">
         {fromBall ? <CrystalOpen id={c.id} name={c.shownName} /> : <UnlockCompany id={c.id} rate={postedRate} roles={hiringHere} />}
         <span className="co-sub">
-          {freeOpen ? (
+          {freeOpen || trial ? (
             <>
-              <strong>{trial ? "Free on your trial." : "Free for you today."}</strong> It normally costs {COMPANY_PRICE_SAY}. Your {plural(ui.me.credits, "credit")} stay{ui.me.credits === 1 ? "s" : ""} as they are, and it stays open for you.
+              {trial ? (
+                <>
+                  <strong>Free in your trial,</strong> with everything on it. Your {plural(ui.me.credits, "credit")} stay{ui.me.credits === 1 ? "s" : ""} as they are. Pro opens everything.
+                </>
+              ) : (
+                <>
+                  <strong>Free for you today.</strong> It normally costs {COMPANY_PRICE_SAY}. Your {plural(ui.me.credits, "credit")} stay{ui.me.credits === 1 ? "s" : ""} as they are, and it stays open for you.
+                </>
+              )}
             </>
           ) : (
             <>It costs {COMPANY_PRICE_SAY}, once. It stays open for you, and who held each seat shows at no charge after that.</>
@@ -610,7 +629,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
           <span>{factsLine(i, plan.items.length)}</span>
           {opens && (
             <span>
-              {trial ? "Trial" : "Pro"}: {Math.max(0, opens.of - opens.left)} of {opens.of || PRO_OPENS_DAILY} free opens used today
+              Trial: {opens.left} of {opens.of || TRIAL_OPENS_DAILY} companies left today
             </span>
           )}
           <a

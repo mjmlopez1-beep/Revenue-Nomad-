@@ -30,7 +30,7 @@ export interface Nudge {
 
 /** Out of credits, the three ways to get one (Billing.tsx GetCredits says the same). */
 export const EARN_ONE = "Earn one: add a fact";
-export const PRO_COMPANIES_FREE = "Pro: companies free";
+export const PRO_COMPANIES_FREE = "Pro: everything opens";
 export const topupWords = (plan: Pick<PlanView, "prices">) => `${plan.prices.topupCredits} for $${plan.prices.topup.toLocaleString("en-US")}`;
 /** The three choices for a member at 0 credits: earning always, the top-up when it is set up, Pro off Pro. */
 export function creditChoices(plan: PlanView | undefined): NonNullable<Nudge["choices"]> {
@@ -65,7 +65,8 @@ export function pickNudge(x: NudgeInput): Nudge | null {
         ? { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you keep Close.`, cta: "Keep Close", action: "plans" }
         : { kind: "trial", text: `Your ${TRIAL_NAME} ${when}. Then you're on Free, unless you ${keepVerb("pro")}.`, cta: keepWords("pro"), action: "plans" };
   }
-  if (x.credits <= LOW_CREDITS) {
+  // The out-of-credits wall is Free's only: on Pro, Close and the trial everything opens without credits but email and phone.
+  if (x.credits <= LOW_CREDITS && plan?.name !== "pro" && plan?.name !== "trial") {
     // At 0: three ways out in one line (earn one, the top-up, Pro).
     if (x.credits <= 0) return { kind: "credits", text: "You're out of credits.", choices: creditChoices(plan) };
     return { kind: "credits", text: `${credits(x.credits)} left. Add a fact you know and earn one.`, cta: "Earn credits", action: "earn" };

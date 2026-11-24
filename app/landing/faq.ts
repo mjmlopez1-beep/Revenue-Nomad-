@@ -3,7 +3,7 @@
  * the landing page and in the app's "Questions and feedback" sheet). Pure, so
  * scripts/test-prices.mts can check what they say about prices.
  */
-import { COMPANY_PRICE_SAY, EARN_CAP, NAME_HIDDEN_SAY, PRO_OPENS_DAILY, REFERRAL_BONUS, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
+import { COMPANY_PRICE_SAY, EARN_CAP, NAME_HIDDEN_SAY, OPEN_LINE, TRIAL_OPENS_DAILY, REFERRAL_BONUS, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
 import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, TOPUP_CREDITS, TRIAL_LABEL, WORKFLOW_PLAN } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
@@ -61,7 +61,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What does an open role cost?",
-      "Its title is free, and so are the company's industry, size, revenue and region. The company's name is locked, as every company's is until you unlock it. 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. On Pro and the trial, companies open free, up to ${PRO_OPENS_DAILY} a day. The people there open after the company, and so do who held its seats, free. The preview on the homepage names a few hiring companies as a sample.",
+      `Its title is free, and so are the company's industry, size, revenue and region. On Free the company's name is locked until you unlock it: 2 credits show the company and the job posting of each open role there, with the posted rate and hours when the posting gave them. The people there open after the company, and so do who held its seats, free. ${OPEN_LINE} Your trial opens up to ${TRIAL_OPENS_DAILY} companies a day, with everything on them. The preview on the homepage names a few hiring companies as a sample.`,
     ],
     [
       "What does a seat cost to see?",

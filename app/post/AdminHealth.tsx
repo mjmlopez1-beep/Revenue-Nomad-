@@ -238,6 +238,40 @@ export function Health({ h }: { h: Health }) {
               <p className="tp-small muted">Deal tracking not live yet.</p>
             )}
           </HCard>
+          <HCard title="Heavy usage today" span={6}>
+            {/* Per-member read limits (lib/usageGuard.ts) and the trial's company opens: counts only, never who. Since this server started. */}
+            {h.usage ? (
+              <>
+                <dl className="tp-pm-rows">
+                  {(
+                    [
+                      ["Members who read today", n0(h.usage.readers)],
+                      [`Members past ${n0(h.usage.limits.heavyDay)} reads`, n0(h.usage.heavy)],
+                      ["Members a limit stopped", n0(h.usage.trippedMembers)],
+                      ["Stopped: table", n0(h.usage.trips.table)],
+                      ["Stopped: company records", n0(h.usage.trips.company)],
+                      ["Stopped: people and Fractionals", n0(h.usage.trips.people)],
+                      ["Stopped: Claude connector", n0(h.usage.trips.mcp)],
+                      ["Companies opened in trials today", n0(h.usage.trialOpens)],
+                      ["Trials at today's limit", n0(h.usage.trialCapped)],
+                    ] as const
+                  ).map(([l, v]) => (
+                    <div key={l}>
+                      <dt>{l}</dt>
+                      <dd>
+                        <Num>{v}</Num>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="tp-small muted">
+                  Limits: {h.usage.limits.perMinute} reads a minute and {h.usage.limits.perHour} an hour per member. Counted on this server since it started.
+                </p>
+              </>
+            ) : (
+              <p className="tp-small muted">No usage counted yet.</p>
+            )}
+          </HCard>
           <HCard title="Claude this month" span={6}>
             {/* Drafting with Claude on Merlin's server (lib/proposals/aiUsage.ts aiUsageTotals): counts and dollars, never whose. Admin only. */}
             {h.ai ? (

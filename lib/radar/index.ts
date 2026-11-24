@@ -206,14 +206,14 @@ const PIPELINE_PATH = "/?p=pipeline";
 
 /** A member's cards for one UTC day: every link opens that day's companies; a named one also links to its record. */
 function cardContext(c: Ctx, m: Member, day: string, logos: Map<string, string> = new Map()): CardContext {
-  // Trial and Pro: every card names its company, free. Naming it on the card doesn't make it theirs
-  // or charge: the table keeps it locked, and its people and seat holders still need their own unlocks.
+  // Pro and Close: every company shows (open data on paid plans), so every card names its company. The trial: a
+  // card names a company the trial opened; the rest stay locked until opened (free, up to the trial's companies a day).
   const pro = isPro(c.s, m.id, c.nowMs);
   // Free (trial over, billing live): one Crystal Ball company a day opens in full, free, while today's is left. Billing off: neither.
   const free = gated(planRecord(c.s, m.id), c.nowMs) && T.crystalOf(c.s, m.id, c.nowMs) === "one";
   return {
     // The member's own table, as a member: a company locked for them stays unnamed (an admin's too), unless they are on Pro.
-    visible: (companyId) => pro || knownTo(c, m, companyId),
+    visible: (companyId) => knownTo(c, m, companyId),
     // Trial and Pro open any Crystal Ball company free; Free opens one a day, in full.
     opens: (companyId) => (knownTo(c, m, companyId) ? null : pro ? "free" : free ? "one" : null),
     cardId: (key) => cardId(m.id, key),
@@ -460,7 +460,8 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const since = ranged ? [...kept].reverse().find((d) => (byDay.get(d) ?? []).length > 0) ?? null : null;
   const range: RadarRange | null = !ranged || inKeep ? null : (radarRangeOf(rangeAsked) ?? ranges.find((r) => r.companies > 0)?.range ?? "30d");
   const shown = range ? cut(RADAR_RANGES.find((r) => r.range === range)!.days) : { rows: byDay.get(day) ?? [], dayOf: null };
-  const proName = (co: string) => (pro && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {});
+  // Pro and Close see every company (identityHidden is false for them), so nothing is named here apart; the trial names only what it opened.
+  const proName = (co: string) => (pro && T.openPlan(c.s, m.id, nowMs) && T.identityHidden(c.g, c.s, c.idx, c.tracks, m, co, true) ? { name: c.g.companies.get(co)?.name ?? undefined } : {});
   // "Why not" (lib/radar/out.ts): a range, and the latest day Home and the rail read, leave out the companies the member
   // left out (a day's link from an email or Slack lists what it listed).
   const outs = s.radar?.members?.[m.id]?.out ?? {};

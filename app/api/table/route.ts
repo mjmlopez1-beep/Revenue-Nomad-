@@ -8,6 +8,7 @@ import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
 import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
+import { memberRead } from "@/lib/usageGuard";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packedViewJson } from "@/lib/viewWire";
@@ -289,6 +290,14 @@ export const GET = guarded(async (req: NextRequest) => {
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
   if (limited(`get:${ip}`, 120, 60_000)) return err(SLOW, 429);
+  // Per member too (lib/usageGuard.ts): generous for a person, stops scripted bulk reads of what a plan opens.
+  {
+    const who = token ? (await memberForToken(token))?.id : undefined;
+    const q = req.nextUrl.searchParams;
+    const kind = q.has("about") || q.has("notes") || q.has("find") ? "company" : q.has("fractionals") || q.has("peers") || q.has("paths") ? "people" : "table";
+    const stop = who ? memberRead(who, kind) : null;
+    if (stop) return err(stop, 429);
+  }
   // A company's About, loaded when its record opens (the table leaves the text out, lib/table.ts aboutCells).
   const aboutIds = req.nextUrl.searchParams.get("about");
   if (aboutIds !== null) {

@@ -45,7 +45,7 @@ const HOLD_BACK = /\bsav(e|ing) (your |their )?credits|conserve|hold back|carefu
 const co = (n: number) => ({ id: `c_m${n}`, fields: { name: `Meterco ${n}`, website: `meterco${n}.example`, hq: "Denver, CO", industry: "SaaS", employees: "51–200", revenue: "$5M–$20M" } });
 const companies = Array.from({ length: 8 }, (_, i) => co(i));
 const engagements = companies.map((c, i) => ({ id: `e_m${i}`, companyId: c.id, verified: false, fields: { source: "Member success story", operator: "Sam Example", role: "Fractional CMO", function: "Marketing", type: "Fractional", start: "2024-02", end: "2024-12", status: "Ended" } }));
-const contacts = companies.map((c, i) => ({ id: `p_m${i}`, companyId: c.id, engagementId: null, fields: { name: `Dana Example${i}`, title: "CEO", relationship: "Decision maker" } }));
+const contacts = companies.map((c, i) => ({ id: `p_m${i}`, companyId: c.id, engagementId: null, fields: { name: `Dana Example${i}`, title: "CEO", relationship: "Decision maker", email: `dana${i}@meterco${i}.example`, phone: `303.555.01${String(i).padStart(2, "0")}` } }));
 const M = (id: string, name: string) => ({ id, name, email: `${id}.meter@example.com`, title: "Fractional VP Sales", token: `tok-${id}-meter` });
 const members = [M("mem_jordan", "Jordan Avery"), M("mem_pro", "Riley Stone")];
 const onb = { onboarded: true, function: "Sales", title: "Fractional VP Sales" };
@@ -282,20 +282,20 @@ async function main() {
   {
     const p = await agent("mem_pro");
     const pid = ((await p.call("search_companies", { limit: 10 })).out.companies as { id: string }[])[0].id;
+    // Open data on paid plans: on Pro the company and its people are open already; only email and phone cost a credit each.
     const open = await p.call("unlock", { entity: "company", id: pid, field: "identity", confirm: true });
-    // The test server's RN_FREE_COMPANY=off: Pro's free opens are off here, so the company is 2 credits.
-    check("a company for 2 credits on Pro: 108 credits left (98% of this month's)", open.out.confirmed === true && open.texts[1] === "108 credits left (98% of this month's).", open.texts.slice(1));
+    check("a company on Pro costs nothing: it is open already", open.out.confirmed !== true && open.texts.length === 1, open.texts);
     const co = (await p.call("get_company", { company: pid })).out as Record<string, unknown>;
     const people = (JSON.stringify(co).match(/"(p_[A-Za-z0-9_-]+|[A-Za-z0-9_-]{8,})"/g) ?? []).map((x) => x.slice(1, -1));
-    let named: string[] = [];
+    let mailed: string[] = [];
     for (const id of [...new Set(people)]) {
-      const r = await p.call("unlock", { entity: "person", id, field: "name", confirm: true });
+      const r = await p.call("unlock", { entity: "person", id, field: "email", confirm: true });
       if (r.out.confirmed === true) {
-        named = r.texts;
+        mailed = r.texts;
         break;
       }
     }
-    check("a name for 1 credit: 107 credits left (97% of this month's)", named[1] === "107 credits left (97% of this month's).", { named, co: JSON.stringify(co).slice(0, 400) });
+    check("an email for 1 credit: 109 credits left (99% of this month's)", mailed[1] === "109 credits left (99% of this month's).", { mailed, co: JSON.stringify(co).slice(0, 400) });
     await p.client.close();
   }
 

@@ -65,7 +65,8 @@ export function SelectionBar({
   }, [sig]);
   // Before the quote: the bar's own estimate, from the plan's free opens (the quote is the server's word).
   const isCo = type === "companies" || what === "cos";
-  const coGuess = (n: number) => (n - (me.proOpens ? Math.min(n, me.proOpens.left) : 0)) * COMPANY_PRICE;
+  // The trial opens companies free, up to its daily count (past it the quote says how many fit); Free pays COMPANY_PRICE each.
+  const coGuess = (n: number) => (me.proOpens ? 0 : n * COMPANY_PRICE);
   const guess = type === "companies" ? coGuess(own.items.length) : own.items.length;
   const noun = isCo ? NOUN.companies : NOUN[type];
   const label =

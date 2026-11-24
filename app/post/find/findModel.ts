@@ -344,8 +344,8 @@ export interface PreviewRow {
   sig: string | null;
 }
 
-/** What opening a locked company costs this member now: free on the trial and Pro while free opens are left, else 2 credits. */
-export const openWord = (me: Me) => (me.proOpens && me.proOpens.left > 0 ? "Free" : `${COMPANY_PRICE} credits`);
+/** What opening a locked company costs this member now: free in the trial (past today's companies, it opens tomorrow), else 2 credits. Pro and Close: nothing is locked. */
+export const openWord = (me: Me) => (me.proOpens ? (me.proOpens.left > 0 ? "Free" : "Tomorrow") : `${COMPANY_PRICE} credits`);
 
 export function previewRow(kind: FindKind, r: Row, me: Me, like?: { why: string; like: string | null } | null): PreviewRow {
   const co = coLine(r.i);
@@ -449,7 +449,7 @@ export const HEADS: Record<FindKind, [string, string, string, string]> = {
 export const NOTES: Record<FindKind, (first: boolean) => string> = {
   companies: (first) =>
     first
-      ? "Names stay hidden in the preview. Save the list, then open your first company from the table. It is free on Trial, Pro and Close, up to 15 a day."
+      ? "Names stay hidden in the preview. Save the list, then open your first company from the table. On Pro and Close everything is open; your trial opens up to 40 a day free."
       : "Names stay hidden in the preview. Saving the list keeps them locked until you choose what to open.",
   people: () => "A name and title open together for 1 credit, once the company is open. An email or a phone number is 1 credit each.",
   seats: () => "Function, dates and hours are free. Who held a seat opens with the company. A rate is 1 credit where a member shared one.",

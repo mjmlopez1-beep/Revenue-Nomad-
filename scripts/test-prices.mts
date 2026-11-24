@@ -176,7 +176,8 @@ async function main() {
       /Contact details \(email, phone, LinkedIn\) and the company's own people \(decision makers, leaders, the hiring exec\) keep their prices/.test(INSTRUCTIONS) &&
       /LinkedIn, email and phone open only after that/.test(INSTRUCTIONS) &&
       /its people open only after the company, and who held its seats shows free once it is open/.test(INSTRUCTIONS) &&
-      /up to 15 a UTC day for fair use/.test(INSTRUCTIONS) &&
+      INSTRUCTIONS.includes("Pro opens everything. Credits are only for email and phone numbers, which come from fellow fractionals.") &&
+      /up to 40 companies a UTC day, each opened in full/.test(INSTRUCTIONS) &&
       /end month while the seat is still going/.test(INSTRUCTIONS),
   );
   check("the instructions keep the rule: never spend a credit without asking", /Never spend a credit without asking/.test(INSTRUCTIONS));
@@ -218,8 +219,8 @@ async function main() {
   // Free's free company a day is Crystal Ball's, fully open; Pro opens every company in it free.
   const cost = fq.get("What does it cost?") ?? "";
   check(
-    "Questions: Free opens one Crystal Ball company a day, Pro every company in it",
-    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && /On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that\./.test(cost) && !/unlock one company a day for free/.test(cost),
+    "Questions: Free opens one Crystal Ball company a day, Pro opens everything, the trial 40 companies a day",
+    /open one company a day from your Crystal Ball for free, with everything on it/.test(cost) && cost.includes("Pro opens everything. Credits are only for email and phone numbers, which come from fellow fractionals. The trial opens up to 40 companies a day, with everything on them.") && !/unlock one company a day for free/.test(cost),
     cost,
   );
   // Fellow fractionals are free (PEERS_FREE).
