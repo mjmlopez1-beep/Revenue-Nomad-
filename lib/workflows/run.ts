@@ -56,6 +56,8 @@ export interface WfEvent {
   follows?: boolean;
   /** A proposal's own words (its title), for an Evidence Bank draft. */
   title?: string;
+  /** A call that ended (lib/calls): the call, its company and its transcript, in memory for the run only. Never stored. */
+  call?: import("../calls").CallCtx;
 }
 
 /** The plan's workflow gates for the member now. Everything is open while billing isn't live. */
@@ -71,6 +73,7 @@ export function matches(f: Pick<Workflow, "trigger" | "scope">, ev: WfEvent): bo
   if (sc.kind === "list") return !!sc.list && !!ev.lists?.includes(sc.list);
   if (sc.kind === "radar") return !!ev.radar;
   if (sc.kind === "follows") return !!ev.follows;
+  if (sc.kind === "calls") return !!ev.call;
   return true;
 }
 
@@ -195,6 +198,13 @@ async function runOne(ev: WfEvent, wfId: string, origin: string | undefined, now
     }
   }
 
+  // A call ends (lib/calls): its conditions and its call steps, then the ready email and bell line. A call this workflow doesn't build for: no run.
+  if (f.trigger === "call") {
+    if (!ev.call) return false;
+    const { runCallFlow } = await import("../calls");
+    const r = await runCallFlow({ m, f, call: ev.call, run, keys, status, put, bells: bells as Parameters<typeof runCallFlow>[0]["bells"], origin, nowMs });
+    if (r.skip) return false;
+  }
   await freeSteps(cx, keys, status, put, run);
   run.steps = keys.map((k) => status.get(k) ?? { key: k, status: "skipped" as const, note: "Nothing to do.", credits: 0 });
   if (keys.includes("tell")) await tell(cx, run, bells);

@@ -18,6 +18,7 @@ import { AgentPrefsProblem, agentViewIn, setPrefs } from "@/lib/mcp/log";
 import { networkOn } from "@/lib/google/types";
 import { pathsOn } from "@/lib/paths";
 import { granolaOn } from "@/lib/granola/types";
+import { callTriggersOn } from "@/lib/calls";
 
 export const dynamic = "force-dynamic";
 const noStore = { "cache-control": "no-store" };
@@ -25,7 +26,7 @@ const SIGNED_OUT = "You're signed out. Sign in again to see your agents.";
 
 async function viewFor(memberId: string) {
   const [s, apps, cap] = await Promise.all([loadState(), connectedApps(memberId), claudePerDay(memberId).catch(() => null)]);
-  return agentViewIn(s, memberId, apps, { network: networkOn(), paths: pathsOn(), granola: granolaOn() }, cap);
+  return agentViewIn(s, memberId, apps, { network: networkOn(), paths: pathsOn(), granola: granolaOn(), calls: callTriggersOn() }, cap);
 }
 
 export const GET = guarded(async (req: NextRequest) => {

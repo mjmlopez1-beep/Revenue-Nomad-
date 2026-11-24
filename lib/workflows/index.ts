@@ -20,6 +20,7 @@ import {
 import { WfAnswer, approveRun, capWorkflows, monthSpent, planFor, remindersDue, runEvents, wfIn, workflowsOn, type WfEvent } from "./run";
 import { newWfId } from "./steps";
 import { hasKnownSources } from "../notify/knownView";
+import { callTriggersOn, callsInfo } from "../calls";
 
 export { workflowsOn, runEvents, approveRun, remindersDue, type WfEvent };
 
@@ -61,6 +62,7 @@ export function viewOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Wor
       steps: f.steps,
       cap: f.cap,
       warn: f.warn,
+      ...(f.call ? { call: f.call } : {}),
       runs30: recent.length,
       spent30: recent.reduce((n, r) => n + r.spent, 0),
       spentMonth: monthSpent(w, f.id, nowMs),
@@ -85,6 +87,7 @@ export function viewOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Wor
     waiting: runs.filter((r) => r.ask && !r.ask.answer).length,
     drafts: w?.drafts.length ?? 0,
     credits: T.balance(s, m.id),
+    ...(callTriggersOn() ? { calls: callsInfo(s, m, nowMs) } : {}),
   };
 }
 const fundingOn = () => process.env.RN_FUNDING === "1";
@@ -130,11 +133,13 @@ export async function performWorkflow(token: string | null, a: { type: string } 
         const held = Object.entries(holds.steps)[0] as [keyof typeof STEPS, string] | undefined;
         if (held) throw new ActionError(`${STEPS[held[0]].name} is ${held[1].toLowerCase()}. On your plan a workflow runs the free steps.`);
         if (TRIGGERS[c.trigger].funding && !fundingOn()) throw new ActionError("Funding filings aren't switched on yet, so nothing would set this off.");
+        if (TRIGGERS[c.trigger].calls && !callTriggersOn()) throw new ActionError("Calls aren't switched on for Merlin yet, so nothing would set this off.");
         const lists = listsOf(s0, m.id);
         if (c.scope.kind === "list" && !lists.some((l) => l.id === c.scope.list)) throw new ActionError("That list isn't one of yours anymore. Pick another.");
         const listName = c.scope.kind === "list" ? lists.find((l) => l.id === c.scope.list)?.name ?? null : null;
         const id = typeof a.id === "string" ? a.id : "";
-        const name = c.name || sayFlow(c, listName);
+        const recipe = c.trigger === "call" ? RECIPES.find((r) => r.trigger === "call" && r.title && r.steps.map((x) => x.key).join() === c.steps.map((x) => x.key).join()) : undefined;
+        const name = c.name || recipe?.title || sayFlow(c, listName);
         const on = a.on !== false;
         const msg = await T.mutate((d) => {
           const w = wfIn(d, m.id);
@@ -144,6 +149,7 @@ export async function performWorkflow(token: string | null, a: { type: string } 
             throw new ActionError(plan.flows === 1 ? "Free keeps one workflow. Change the one you have, or see what Pro includes." : `Your plan keeps ${plan.flows} workflows. Remove one first.`);
           if (cur) {
             Object.assign(cur, { ...c, name, on, updatedAt: at });
+            if (c.trigger !== "call") delete cur.call;
             if (cur.warn !== c.warn) delete cur.warned;
             return `Saved. ${on ? "It is on." : "It is off."}`;
           }

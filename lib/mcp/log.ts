@@ -300,6 +300,8 @@ export interface AgentOffer {
   network: boolean;
   paths: boolean;
   granola: boolean;
+  /** The call triggers (RN_CALL_TRIGGERS): get_call_pack. */
+  calls?: boolean;
 }
 
 export function agentViewIn(
@@ -338,7 +340,7 @@ export function agentViewIn(
       perApp.set(k, x);
     }
   }
-  const tools = AGENT_TOOLS.filter((t) => !t.needs || offer[t.needs]).map((t) => ({ ...t, on: !off.has(t.key) && !off.has(`g:${t.group}`), self: !off.has(t.key), used30: used.get(t.key) ?? 0 }));
+  const tools = AGENT_TOOLS.filter((t) => !t.needs || !!offer[t.needs]).map((t) => ({ ...t, on: !off.has(t.key) && !off.has(`g:${t.group}`), self: !off.has(t.key), used30: used.get(t.key) ?? 0 }));
   return {
     apps: apps.map((a) => ({ ...a, requestsToday: perApp.get(a.name.slice(0, 40))?.requests ?? 0, creditsToday: perApp.get(a.name.slice(0, 40))?.credits ?? 0 })),
     tools,

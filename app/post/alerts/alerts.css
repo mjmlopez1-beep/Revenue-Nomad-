@@ -1413,3 +1413,42 @@
 .wf-b-price .wf-cost {
   white-space: normal;
 }
+
+/* A call ends (RN_CALL_TRIGGERS): which calls, what was agreed, the template, the transcript, and what a run built. */
+.wf-call {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-call .wf-chips {
+  flex-wrap: wrap;
+}
+.wf-tpl {
+  flex-wrap: wrap;
+}
+.wf-tpl .input {
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.wf-sub-check {
+  margin: 4px 0 0 30px;
+  width: calc(100% - 30px);
+}
+.wf-card-sub {
+  display: block;
+  margin-top: 6px;
+}
+.wf-run-built {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.wf-run-built a {
+  color: var(--pine, #073f2f);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

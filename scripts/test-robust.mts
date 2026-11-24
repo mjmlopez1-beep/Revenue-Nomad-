@@ -719,6 +719,8 @@ console.log("\nThe API's routes");
     // A link in the weekly email or an email's footer: a signed grant for one member, 7 days, used once (lib/emailIn.ts); it only ever goes to a path in the app.
     "api/go",
     "api/health", "api/integrations",
+    // Fathom (lib/calls/fathom.ts): the member's cookie for their own key; off (404) unless RN_FATHOM=1.
+    "api/integrations/fathom/[op]",
     // [google network] Your network (lib/google): the member's cookie, and Google's OAuth flow (a one-time state bound to the member and the browser).
     "api/integrations/google", "api/integrations/google/callback", "api/integrations/google/start",
     // Granola (lib/granola): the member's cookie for their own key and calls; off (404) unless RN_GRANOLA=1.
