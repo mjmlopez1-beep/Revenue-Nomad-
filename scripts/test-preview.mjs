@@ -46,7 +46,10 @@ async function call(method, path, { token, body, headers = {} } = {}) {
   const h = { "x-forwarded-for": nextIp(), ...headers };
   if (token) h.cookie = `rn_table=${token}`;
   if (body !== undefined) h["content-type"] = "application/json";
-  const r = await fetch(BASE + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+  const go = () => fetch(BASE + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+  // A kept-alive socket the server closed as idle just as this request went out ("other side
+  // closed"): a race in the test's own connection pool, not an answer from the app. Ask once more.
+  const r = await go().catch((e) => (/UND_ERR_SOCKET|ECONNRESET/.test(String(e?.cause?.code)) ? go() : Promise.reject(e)));
   const text = await r.text();
   let json = null;
   try {
