@@ -7884,7 +7884,8 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   // Proposals are a member's own and a client's signature: never in the export. Documents to sign and a member's own templates neither, nor a member's AI usage.
   // A member's notes on companies (lib/companyNotes.ts) are theirs alone as well, and so is their Evidence Bank (lib/evidence) and its AI agreement.
   // The bell's inbox (lines that name what the member opened) and the watch pass's keys and queues are theirs alone too; the alert log (counts) and the alerts' switches stay.
-  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, granolaApp: _granolaApp, evidence: _evidence, evidenceAi: _evidenceAi, messageAi: _messageAi, inbox: _inbox, alertWatch: _alertWatch, ...rest } = s as State & { paths?: unknown; granola?: unknown; granolaApp?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // A member's outbox (lib/send: who they wrote to, the sealed permission to send) is theirs alone as well.
+  const { signins: _signins, emailGrants: _emailGrants, network: _network, voice: _voice, companyNotes: _companyNotes, moves: _moves, paths: _paths, routes: _routes, pipeline: _pipeline, proposals: _proposals, documents: _documents, myTemplates: _myTemplates, memberSignatures: _memberSignatures, aiDrafts: _aiDrafts, aiUsage: _aiUsage, peers: _peers, close: _close, granola: _granola, granolaApp: _granolaApp, evidence: _evidence, evidenceAi: _evidenceAi, messageAi: _messageAi, inbox: _inbox, alertWatch: _alertWatch, outbox: _outbox, ...rest } = s as State & { paths?: unknown; granola?: unknown; granolaApp?: unknown; outbox?: unknown }; // eslint-disable-line @typescript-eslint/no-unused-vars
   // Peers: who passed what to whom, teams and circles stay; what members wrote in them (a pass's note, a team's draft, a circle post) does not.
   const peers = s.peers && {
     ...s.peers,
@@ -7967,6 +7968,8 @@ function purgeMember(s: State, seed: Seed, id: string, nowIso: string): { member
   // Their Granola key (lib/granola; account closure deletes it at once already).
   del((s as State & { granola?: Record<string, unknown> }).granola);
   del((s as State & { paths?: Record<string, unknown> }).paths);
+  // Approve and send (lib/send): their outbox, its records and the sealed permission to send.
+  del((s as State & { outbox?: Record<string, unknown> }).outbox);
   del(s.moves);
   del(s.pipeline);
   // Your way in (lib/paths/plan.ts): every plan of theirs. State.routeStats stays: it counts outcomes by a step's shape only, no member in it.

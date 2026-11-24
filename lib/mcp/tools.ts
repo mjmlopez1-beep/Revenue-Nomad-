@@ -20,6 +20,7 @@
  * - an end month that only says the seat is still going is free (the server shows it).
  * Results are small JSON objects with each record's public id for follow-up calls.
  */
+import { sendWords } from "./send";
 import { randomBytes } from "crypto";
 import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, loadState, onFreePlan, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
@@ -1597,7 +1598,8 @@ export async function todaysMoves(ctx: Ctx): Promise<ToolOut> {
     moves,
     moves_done_this_month: mv.wire.month,
     ...(voice ? { voice: styleOf(voice) } : { voice: "None saved. save_my_voice can learn it from the member's sent mail, with their go-ahead." }),
-    how_to_use:
+    how_to_use: sendWords(
       "These are the member's moves on Merlin's Home today, best first. For a move with a note you can draft it in the member's voice (my_voice), from note.facts only: never add a company fact, a name, a rate or a contact detail that isn't in them, and never guess the name of a locked company or a locked seat holder. Where a move's way_in has no name and says the person is on Merlin's Home, they come from the calendar and contacts the member connected to Merlin: Merlin shows their name, title and history to the member in the app and doesn't pass them on here, so don't guess or look them up; help with the wording, leave [their first name] where the name goes, and point the member to Home for the name and Merlin's own draft. The member sends each note themselves, from their own mail or on Merlin. Merlin never sends for them, and neither should you unless they ask you to in their own mail tool. Done and Snooze are theirs to press on Merlin.",
+    ),
   };
 }

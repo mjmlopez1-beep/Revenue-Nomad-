@@ -300,6 +300,8 @@ export interface AgentOffer {
   network: boolean;
   paths: boolean;
   granola: boolean;
+  /** Approve, then send (RN_SEND): queue_note. */
+  send?: boolean;
 }
 
 export function agentViewIn(

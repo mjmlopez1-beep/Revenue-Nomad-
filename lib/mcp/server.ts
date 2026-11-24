@@ -22,6 +22,8 @@ import { registerEvidenceTools } from "./evidence";
 import { registerPeerTools } from "./peers";
 import { registerWayTools } from "./ways";
 import { registerGranolaTools } from "./granola";
+import { registerSendTools, sendWords } from "./send";
+import { sendOn } from "../send";
 import { agentCall } from "./log";
 import { publicBase } from "../links";
 import { granolaOn } from "../granola/types";
@@ -97,7 +99,7 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
 export function makeServer(ctx: T.Ctx): McpServer {
-  const server = new McpServer({ name: "merlin", title: "Merlin", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "merlin", title: "Merlin", version: "1.0.0", websiteUrl: ctx.origin }, { instructions: sendWords(INSTRUCTIONS) });
   // Agent access (lib/mcp/log.ts): every tool, here and in the files below, goes through agentCall: a tool the member
   // switched off refuses in plain words, unlock checks the daily spend limit, and each call leaves a row in the log
   // (the tool, when, credits, outcome and app; never the arguments or what came back).
@@ -412,7 +414,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Today's moves",
       description:
-        "The member's moves for today, exactly as Merlin's Home shows them: up to three companies from their Crystal Ball, best first, each with why now, how likely (or Hiring now), the best way in on file (someone the member already knows there from their own network, the fractional who held a seat, an open role, or nothing yet), the one move to make, and for a move with a note the facts that note may use plus Merlin's own draft. You can draft each note in the member's voice (my_voice) from those facts only: never add a fact that isn't there, never a rate, and never guess a locked company's or a locked seat holder's name. The member sends every note themselves; Merlin never sends for them. The address of someone they know stays on Merlin, and so does everything about a person who comes from the member's Google Calendar or Contacts: for those the way in says only that the member knows someone there, how warm it is and whether they decide, with no name, title or history and no draft. Their name and the drafted note are on Merlin's Home; never guess a name, and leave [their first name] where it goes. Done and Snooze are the member's to press on Merlin.",
+        sendWords(
+          "The member's moves for today, exactly as Merlin's Home shows them: up to three companies from their Crystal Ball, best first, each with why now, how likely (or Hiring now), the best way in on file (someone the member already knows there from their own network, the fractional who held a seat, an open role, or nothing yet), the one move to make, and for a move with a note the facts that note may use plus Merlin's own draft. You can draft each note in the member's voice (my_voice) from those facts only: never add a fact that isn't there, never a rate, and never guess a locked company's or a locked seat holder's name. The member sends every note themselves; Merlin never sends for them. The address of someone they know stays on Merlin, and so does everything about a person who comes from the member's Google Calendar or Contacts: for those the way in says only that the member knows someone there, how warm it is and whether they decide, with no name, title or history and no draft. Their name and the drafted note are on Merlin's Home; never guess a name, and leave [their first name] where it goes. Done and Snooze are the member's to press on Merlin.",
+        ),
       inputSchema: {},
       annotations: { title: "Today's moves", ...READ },
     },
@@ -502,6 +506,8 @@ export function makeServer(ctx: T.Ctx): McpServer {
   if (pathsOn()) registerWayTools(server, ctx, run);
   // The member's recent Granola calls (lib/mcp/granola.ts), read only. Only with RN_GRANOLA=1.
   if (granolaOn()) registerGranolaTools(server, ctx, run);
+  // Approve, then send (lib/mcp/send.ts): an agent queues a note for the member's tap, never sends one. Only with RN_SEND=1.
+  if (sendOn()) registerSendTools(server, ctx, run);
 
   return server;
 }
