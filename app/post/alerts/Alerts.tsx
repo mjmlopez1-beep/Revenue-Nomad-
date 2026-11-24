@@ -296,7 +296,7 @@ export function AlertsPage() {
             {watched ? (
               <span className="ws-strip-t">
                 <strong>Step 5 done. Merlin is watching {watched}.</strong> You hear by email and in the bell when it changes.
-                {me.plan?.canClose ? " Next, write your first evidence case. It fills the Proof part of every proposal." : ""}
+                {me.plan?.canClose ? " Next, write your first case study. It fills the Proof part of every proposal." : ""}
               </span>
             ) : (
               <span className="ws-strip-t">

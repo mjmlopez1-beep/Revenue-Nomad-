@@ -791,7 +791,7 @@ export function EvidenceCard({ companyId, onOpen }: { companyId: string; onOpen:
   const r = closestOf(companyId);
   return (
     <section className="co-side-card co-ev" aria-labelledby="co-ev-h">
-      <span className="co-side-k">Closest evidence case · private</span>
+      <span className="co-side-k">Closest case study · private</span>
       {!summary ? (
         <>
           <h2 id="co-ev-h">Closest evidence</h2>

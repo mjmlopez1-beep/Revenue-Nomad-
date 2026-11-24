@@ -246,7 +246,7 @@ async function main() {
   const { readFileSync } = await import("node:fs");
   const drawer = readFileSync(new URL("../app/post/hiring/RoleDrawer.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../app/post/hiring/HiringNow.tsx", import.meta.url), "utf8");
-  check("the drawer's Closest evidence case shows only on Close", /\{close && <ClosestCase companyId=\{c\.id\} \/>\}/.test(drawer) && /aria-label="Closest evidence case"/.test(drawer) && !/Part of the Close plan/.test(drawer) && !/Evidence Bank is coming/.test(drawer));
+  check("the drawer's Closest case study shows only on Close", /\{close && <ClosestCase companyId=\{c\.id\} \/>\}/.test(drawer) && /aria-label="Closest case study"/.test(drawer) && !/Part of the Close plan/.test(drawer) && !/Evidence Bank is coming/.test(drawer));
   check("…it reads the member's own closest case, with why, and goes to Evidence Bank (no placeholder)", /useClosest\(\[companyId\], true\)/.test(drawer) && /It goes into your note and the Proof part of a proposal\./.test(drawer) && /openPage\("evidence"\)/.test(drawer));
   check("the column asks only on Close, and only while it shows", /useClosest\(close && extras\.includes\("evidence"\)/.test(page) && /if \(!close\) return <span className="wb-pill-gate">Close<\/span>;/.test(page));
   check("the Closest evidence column is added only on Close (else the plans)", /if \(id === "evidence" && !close\) return openPlans\("proposals"\);/.test(page));

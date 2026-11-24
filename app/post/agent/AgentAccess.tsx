@@ -807,7 +807,7 @@ function Asks({ view, first, tab, setTab, firstQ }: { view: AgentView; first: bo
     { tab: "find", q: "What is new in open Sales roles this week?", n: "Free." },
     { tab: "find", q: "What does a fractional RevOps lead charge?", n: "Free. From rate benchmarks." },
     { tab: "find", q: "Who decides at [a company I have opened]? Tell me the cost first.", n: "Asks first. 1 credit a person." },
-    { tab: "add", q: "Add my seat. I was the fractional [your title] at [a client you worked with] from [month and year] to [month and year].", n: "Each seat becomes a way in and a draft evidence case.", tag: "Earns credits" },
+    { tab: "add", q: "Add my seat. I was the fractional [your title] at [a client you worked with] from [month and year] to [month and year].", n: "Each seat becomes a way in and a draft case study.", tag: "Earns credits" },
     { tab: "add", q: "Set up alerts on fractional Sales roles at SaaS companies from $5M to $20M.", n: "Free. Alerts come by email or Slack.", link: { page: "alerts", label: "Open your alerts" } },
     { tab: "add", q: "Move [a company in my pipeline] to Replied and add a note: [what happened].", n: "Free." },
     { tab: "add", q: "Follow [a company] and tell me when it posts a fractional role.", n: "Free." },

@@ -38,8 +38,8 @@ function ClosestCase({ companyId }: { companyId: string }) {
       </button>
     ) : null;
   return (
-    <section className="hn-sec" aria-label="Closest evidence case">
-      <h3 className="hn-k">Closest evidence case</h3>
+    <section className="hn-sec" aria-label="Closest case study">
+      <h3 className="hn-k">Closest case study</h3>
       {!summary ? (
         <span className="hn-sub">Looking in your Evidence Bank.</span>
       ) : !summary.ready ? (
