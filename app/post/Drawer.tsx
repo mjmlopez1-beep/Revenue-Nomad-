@@ -331,7 +331,7 @@ export function Drawer({
           {/* What fractionals in the member's function were paid at companies this size (the Rate benchmarks' own figures and rules). */}
           <Charge i={i} benchmarks={benchmarks} seats={mySeats} />
           <WriteProposal i={i} />
-          {/* Not my fit? Pass it to a peer, or team up on it (PeerSheets.tsx). After Write a proposal, before How they sell. */}
+          {/* Not my fit? Refer it to a peer, or team up on it (PeerSheets.tsx). After Write a proposal, before How they sell. */}
           <PeerSection i={i} crystal={crystal} />
           <GtmSection i={i} />
           <FunctionsSection i={i} />

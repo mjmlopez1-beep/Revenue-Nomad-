@@ -61,7 +61,7 @@ function template(f: DraftFacts): { long: string[]; short: number[] } {
       };
     case "lead":
       return {
-        long: [`I found you in the Fractionals directory.`, `I'm ${me}.${kinds}`, `When I meet a company that isn't my fit and could be yours, I'd like to pass it to you.`, `What makes a company a good fit for you?`],
+        long: [`I found you in the Fractionals directory.`, `I'm ${me}.${kinds}`, `When I meet a company that isn't my fit and could be yours, I'd like to refer it to you.`, `What makes a company a good fit for you?`],
         short: [2, 3],
       };
     case "peer":
@@ -79,7 +79,7 @@ function reply(f: DraftFacts): { long: string[]; short: number[] } {
   switch (f.kind) {
     case "intro":
       return f.mine
-        ? { long: ["Thank you.", "I'll give them a few days, then follow up once.", "If it turns into work, you'll hear it from me first.", "And when a seat that fits you comes up on my side, I'll pass it to you."], short: [0, 1] }
+        ? { long: ["Thank you.", "I'll give them a few days, then follow up once.", "If it turns into work, you'll hear it from me first.", "And when a seat that fits you comes up on my side, I'll refer it to you."], short: [0, 1] }
         : { long: ["Glad to.", `I'll write a short note about you to the person who hires at ${co} and copy you.`, "Good luck with it."], short: [0, 1] };
     case "lead":
       if (f.lead?.side === "out") return { long: ["Glad it fits.", "Tell me how the first call goes."], short: [1] };
@@ -95,7 +95,7 @@ function reply(f: DraftFacts): { long: string[]; short: number[] } {
     case "invite":
       return { long: ["Welcome to Merlin.", "Good to have someone to swap notes with.", "If a seat comes my way that I can't take, you'll hear first."], short: [0, 2] };
     default:
-      return { long: ["Good to hear from you.", "When a company comes my way that fits you better, I'll pass it on.", "What makes a company a good fit for you?"], short: [1, 2] };
+      return { long: ["Good to hear from you.", "When a company comes my way that fits you better, I'll refer it to you.", "What makes a company a good fit for you?"], short: [1, 2] };
   }
 }
 

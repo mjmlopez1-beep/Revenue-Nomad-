@@ -25,6 +25,7 @@ import type { IntegrationsView } from "@/lib/notify/types";
 import type { CloseInboxView } from "@/lib/close/types";
 import type { AlertsView } from "@/lib/inbox";
 import { EVERY_WORDS, TRIGGER_DETAIL, TRIGGER_WORDS, type AlertEvery, type AlertTrigger, type ListAlert } from "@/lib/mcp/alerts";
+import { ServiceIcon, type Service } from "../../ui/ServiceIcon";
 import type { RadarEmail } from "@/lib/radar/types";
 import { alertGroups, countingWords, headLines, onFree, recipes, sinceWords, statusLine, type Chip, type Group, type Row, type StarterRef } from "./model";
 import { WorkflowBuilder, WorkflowPills, WorkflowsTab, blankBuild, useWorkflows, type WfBuild } from "./Workflows";
@@ -744,12 +745,13 @@ function Destinations({ integ, email, first, onOp, onTest }: { integ: Integratio
         <strong>Where alerts go.</strong> {lead}
       </span>
       <div className="al-dests">
-        <Dest t="Email" state={email ? "On" : "Not set up"} ok={!!email} line={email ?? "Merlin doesn't send email yet."} sub="Every email links back to this page. One click in it turns that alert off." />
+        <Dest t="Email" svc="email" state={email ? "On" : "Not set up"} ok={!!email} line={email ?? "Merlin doesn't send email yet."} sub="Every email links back to this page. One click in it turns that alert off." />
         {integ && !integ.allowed ? (
-          <Dest t="Slack" state="Not on your plan" ok={false} line="Alerts in Slack aren't part of your plan." sub="" />
+          <Dest t="Slack" svc="slack" state="Not on your plan" ok={false} line="Alerts in Slack aren't part of your plan." sub="" />
         ) : slack ? (
           <Dest
             t="Slack"
+            svc="slack"
             state={slack.broken ? "Needs attention" : "Connected"}
             ok={!slack.broken}
             line={slack.channel ? `${slack.channel}${slack.team ? ` in ${slack.team}` : ""}` : slack.masked}
@@ -763,7 +765,7 @@ function Destinations({ integ, email, first, onOp, onTest }: { integ: Integratio
             </button>
           </Dest>
         ) : (
-          <Dest t="Slack" state="Not connected" ok={false} line="Posts to one channel or DM you pick." sub="It cannot read your messages, channels or contacts. A Slack webhook URL works too." highlight={first}>
+          <Dest t="Slack" svc="slack" state="Not connected" ok={false} line="Posts to one channel or DM you pick." sub="It cannot read your messages, channels or contacts. A Slack webhook URL works too." highlight={first}>
             {integ?.slackApp && (
               <a className="btn btn-sm btn-pine" href="/api/integrations/slack/start">
                 Connect Slack
@@ -778,13 +780,13 @@ function Destinations({ integ, email, first, onOp, onTest }: { integ: Integratio
             )}
           </Dest>
         )}
-        <Dest t="The bell" state="Always on" ok line="In Merlin, at the top of every page." sub="The number on the bell is what you have not read yet.">
+        <Dest t="The bell" svc="bell" state="Always on" ok line="In Merlin, at the top of every page." sub="The number on the bell is what you have not read yet.">
           <button type="button" className="btn btn-sm btn-outline" onClick={onTest}>
             Send a test
           </button>
         </Dest>
         {hook ? (
-          <Dest t="Webhook" state={hook.broken ? "Needs attention" : "Connected"} ok={!hook.broken} line={hook.masked} sub={hook.problem ?? "Gets the same alerts as Slack, as plain fields. The full URL is never shown again."}>
+          <Dest t="Webhook" svc="webhook" state={hook.broken ? "Needs attention" : "Connected"} ok={!hook.broken} line={hook.masked} sub={hook.problem ?? "Gets the same alerts as Slack, as plain fields. The full URL is never shown again."}>
             <button type="button" className="btn btn-sm btn-outline" disabled={busy} onClick={() => void run({ op: "test", field: "webhook" })}>
               Send a test
             </button>
@@ -793,7 +795,7 @@ function Destinations({ integ, email, first, onOp, onTest }: { integ: Integratio
             </button>
           </Dest>
         ) : (
-          <Dest t="Webhook" state="Not connected" ok={false} line="Zapier, Make or any tool that takes a webhook." sub="Paste its URL. Merlin sends a test before it saves.">
+          <Dest t="Webhook" svc="webhook" state="Not connected" ok={false} line="Zapier, Make or any tool that takes a webhook." sub="Paste its URL. Merlin sends a test before it saves.">
             {paste === "webhook" ? (
               pasteForm("webhook")
             ) : integ && !integ.allowed ? null : (
@@ -809,10 +811,11 @@ function Destinations({ integ, email, first, onOp, onTest }: { integ: Integratio
   );
 }
 
-function Dest({ t, state, ok, line, sub, children, highlight }: { t: string; state: string; ok: boolean; line: string; sub: string; children?: ReactNode; highlight?: boolean }) {
+function Dest({ t, svc, state, ok, line, sub, children, highlight }: { t: string; /** Its icon: only Slack has a brand one (ServiceIcon). */ svc: Service; state: string; ok: boolean; line: string; sub: string; children?: ReactNode; highlight?: boolean }) {
   return (
     <div className={`al-d${highlight ? " hi" : ""}`}>
       <span className="al-d-top">
+        <ServiceIcon service={svc} size={18} className="al-d-icon" />
         <strong>{t}</strong>
         <span className={`al-d-state${ok ? " ok" : ""}`}>{state}</span>
       </span>

@@ -2,11 +2,11 @@
 
 /**
  * Messages in the new look (Messages.dc.html; the old look is Messages.tsx). Three columns on a
- * wide screen: the conversations with their kind (intro request, lead passed, question, team up,
+ * wide screen: the conversations with their kind (intro request, referral, question, team up,
  * fellow fractional, invite claimed), filters with counts and a search; the conversation with its
  * intro line, its lead and the composer; and the context column: the fractional's card, then This
  * thread (companies in common, the company or lead in question with its actions: add to pipeline,
- * pass a lead, open the company), Suggested (fractionals to write to) and Leads (every lead between
+ * refer it to a peer, open the company), Suggested (fractionals to write to) and Referrals (every referral between
  * the member and other fractionals).
  *
  * The composer drafts with Merlin in the member's voice: from a template (lib/messagesDraft.ts), or
@@ -340,7 +340,7 @@ export function Messages2() {
     );
 
   const passesLeft = peers?.passesLeft ?? PASS_DAILY;
-  const passLeft = `${passesLeft} of ${PASS_DAILY} passes left today`;
+  const passLeft = `${passesLeft} of ${PASS_DAILY} referrals left today`;
   const lead = open ? tctx.leads.get(open.id) ?? null : null;
   const kind: Kind | null = open ? kindOf(open, tctx) : null;
   const wp = m === "compose" ? (to ? { id: to.memberId, name: to.name, first: to.first, title: to.title } : null) : open ? open.with : null;
@@ -509,7 +509,7 @@ export function Messages2() {
           [
             ["about", m === "compose" ? "This draft" : "This thread"],
             ["sug", `Suggested · ${picks.length}`],
-            ["leads", `Leads · ${leads.length}`],
+            ["leads", `Referrals · ${leads.length}`],
           ] as [Ctab, string][]
         ).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={`ms2-ctab${tab === k ? " on" : ""}`} onClick={() => setCtab(k)}>
@@ -567,15 +567,15 @@ export function Messages2() {
       )}
       {tab === "leads" && (
         <div className="ms2-pane">
-          <p className="ms2-small">{leads.length ? "Every lead between you and other fractionals, newest first." : "Leads you pass and leads passed to you are listed here. You have none yet, so this row is an example."}</p>
+          <p className="ms2-small">{leads.length ? "Every referral between you and other fractionals, newest first." : "Referrals sent and referrals for you are listed here. You have none yet, so this row is an example."}</p>
           {leads.length ? leads.slice(0, 20).map((l) => <LeadRow key={l.id} l={l} />) : <LeadRow example />}
           <div className="ms2-note-box">
             <strong>{passLeft}</strong>
-            <span>Passing costs no credits. The company opens free for the fractional you pick, and you earn 5 credits when they take it.</span>
+            <span>Referring costs no credits. The company opens free for the fractional you pick, and you earn 5 credits when they take it.</span>
           </div>
           {ctxCo && app.byId.get(ctxCo) && !app.byId.get(ctxCo)!.c.hidden && (
             <button type="button" className="ms2-btn ms2-btn-line" onClick={() => setPassing(ctxCo)}>
-              Pass {app.byId.get(ctxCo)!.c.name}
+              Refer {app.byId.get(ctxCo)!.c.name} to a peer
             </button>
           )}
         </div>
@@ -607,7 +607,7 @@ export function Messages2() {
 
   const strip = (
     <PageStrip page="messages" own={all.length}>
-      Writing to fellow fractionals on Merlin. Ask for an intro, pass a company that is not your fit, or ask about a seat. Sending costs no credits, and nobody sees your email or phone.
+      Writing to fellow fractionals on Merlin. Ask for an intro, refer a company that is not your fit to a peer, or ask about a seat. Sending costs no credits, and nobody sees your email or phone.
     </PageStrip>
   );
   const pass = passing ? <PassSheet company={passing} from="record" infos={app.infos} onClose={() => (setPassing(null), void load())} /> : null;
@@ -632,7 +632,7 @@ export function Messages2() {
         {side}
       </div>
       <div className="ms2-status">
-        <span>{m === "thread" ? "Checked for new replies just now" : "Nothing is sent until you press Send"} · Sending and passing a lead cost no credits · {passLeft}</span>
+        <span>{m === "thread" ? "Checked for new replies just now" : "Nothing is sent until you press Send"} · Sending and referring a company cost no credits · {passLeft}</span>
         <span className="ms2-status-r">Your email and phone are never shown to another member.</span>
       </div>
       {pass}
@@ -834,7 +834,7 @@ function ThreadPane({ c, kind, lead, justSent, put, composer, onBack }: { c: Con
   );
 }
 
-/** A lead passed in this conversation: open for the member, free, with Add to pipeline and Not for me; or one they passed, and where it stands. */
+/** A referral in this conversation: open for the member, free, with Add to pipeline and Not for me; or one they sent, and where it stands. */
 function LeadCard({ l, first }: { l: LeadRec; first: string }) {
   const app = useApp();
   const toast = useToast();
@@ -853,7 +853,7 @@ function LeadCard({ l, first }: { l: LeadRec; first: string }) {
         {l.name ? initials(l.name) : "?"}
       </span>
       <div className="ms2-lead-main">
-        <span className="ms2-label">{inn ? `Lead from ${first} · open for you, free` : `Lead you passed to ${first}`}</span>
+        <span className="ms2-label">{inn ? `Referred to you by ${first} · open for you, free` : `Referred to ${first}`}</span>
         {l.name ? (
           <button type="button" className="ms2-lead-name" onClick={() => app.openCompany(l.company)}>
             {name}
@@ -879,11 +879,11 @@ function LeadCard({ l, first }: { l: LeadRec; first: string }) {
             {inn
               ? l.status === "taken"
                 ? `In your pipeline${l.stage ? ` at ${l.stage}` : ""}. ${first} earns 5 credits for thinking of you.`
-                : `You passed on it. ${first} sees that and nothing else. The company stays open for you.`
+                : `You turned it down. ${first} sees that and nothing else. The company stays open for you.`
               : l.status === "taken"
                 ? `${first} took it. It is in their pipeline${l.credited ? ", and you earned 5 credits" : ""}.`
                 : l.status === "declined"
-                  ? `${first} passed on it.`
+                  ? `${first} turned it down.`
                   : `Waiting for ${first} to answer. You earn 5 credits when they take it.`}
           </span>
           {!inn && l.status === "taken" && !!l.credited && <span className="ms2-earn">+{l.credited} credits</span>}
@@ -902,7 +902,7 @@ function LeadCard({ l, first }: { l: LeadRec; first: string }) {
 
 const REASONS: { key: Reason; t: string; b: string; eg: string; btn: string; icon: string; earn?: boolean }[] = [
   { key: "intro", t: "Ask for an intro", b: "A fractional who held a seat at a company knows who hires there. Ask them to introduce you.", eg: "Best for a company on your list.", btn: "Draft an intro request", icon: "M5 18a2 2 0 1 0 0-4a2 2 0 0 0 0 4zM19 10a2 2 0 1 0 0-4a2 2 0 0 0 0 4zM7 16c4 0 6-8 10-8" },
-  { key: "lead", t: "Pass a lead", b: "A company that is not your fit is right for someone else. Line up who you will send it to.", eg: "To pass a company you have opened, use Pass a lead on its card.", btn: "Draft a lead note", icon: "M4 12h14M13 6l6 6-6 6", earn: true },
+  { key: "lead", t: "Refer it to a peer", b: "A company that is not your fit is right for someone else. Line up who you will refer it to.", eg: "To refer a company you have opened, use Refer it to a peer on its card.", btn: "Draft a referral note", icon: "M4 12h14M13 6l6 6-6 6", earn: true },
   { key: "q", t: "Ask a question", b: "Ask what a seat was like, how they won it, or what the CEO cared about.", eg: "What a seat paid stays on the seat, as a fact you can open.", btn: "Draft a question", icon: "M5 5h14v11H10l-5 4z" },
 ];
 
@@ -1345,7 +1345,7 @@ function CompanyCard({ id, label, fallbackName, seat, entries, onPass }: { id: s
               </button>
             )}
             <button type="button" className="ms2-btn ms2-btn-line ms2-btn-l" onClick={() => onPass(id)}>
-              Pass a lead
+              Refer it to a peer
             </button>
             <button type="button" className="ms2-link" onClick={() => app.openCompany(id)}>
               Open the company
@@ -1359,7 +1359,7 @@ function CompanyCard({ id, label, fallbackName, seat, entries, onPass }: { id: s
             <span className="ms2-co-cell">
               <FactCell t={{ entity: "company", id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />
             </span>
-            <span className="ms2-small ms2-muted ms2-full">Then you can add it to your pipeline or pass it on{app.me.proOpens ? `. ${app.me.proOpens.left} of ${app.me.proOpens.of} free opens left today` : ""}.</span>
+            <span className="ms2-small ms2-muted ms2-full">Then you can add it to your pipeline or refer it to a peer{app.me.proOpens ? `. ${app.me.proOpens.left} of ${app.me.proOpens.of} free opens left today` : ""}.</span>
           </>
         ) : (
           <button type="button" className="ms2-link" onClick={() => app.openCompany(id)}>

@@ -1231,3 +1231,25 @@
     transition: none;
   }
 }
+
+/* A source's switch (ConnToggle), at the right of its card's top line, and what the switch said. */
+.wp-scard-top > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.wp-scard-top > .ctg {
+  margin: -8px -4px -8px auto;
+}
+.wp-scard .ctg-ask {
+  font-size: 13px;
+  padding: 10px 12px;
+}
+.wp-said {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wp-said.bad {
+  color: #b3261e;
+}

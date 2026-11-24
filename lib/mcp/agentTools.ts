@@ -41,7 +41,7 @@ export const AGENT_GROUPS: { id: AgentGroup; name: string; d: string }[] = [
   { id: "read", name: "Read", d: "Look things up. Changes nothing." },
   { id: "add", name: "Add", d: "Save what you know and your work. Never spends." },
   { id: "spend", name: "Spend", d: "Open companies and facts with your credits." },
-  { id: "send", name: "Send", d: "Send for signature, or pass a lead to a peer." },
+  { id: "send", name: "Send", d: "Send for signature, or refer a company to a peer." },
 ];
 
 const T = (group: AgentGroup, key: string, name: string, d: string, did: string, more: Partial<AgentTool> = {}): AgentTool => ({
@@ -69,7 +69,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   T("read", "my_voice", "Your writing voice", "Greeting, sign-off, length and tone. Never message text", "Read your writing voice", { land: "settings" }),
   T("read", "my_network", "Your network", "Who you saved, with counts and dates only", "Read your network", { land: "warm", needs: "network" }),
   T("read", "list_peers", "Your peers", "Fellow fractionals you could work with", "Listed your peers", { land: "fractionals" }),
-  T("read", "leads_passed_to_me", "Leads passed to you", "Companies a peer handed to you", "Read the leads passed to you", { land: "fractionals" }),
+  T("read", "leads_passed_to_me", "Referrals for you", "Companies a peer referred to you", "Read your referrals", { land: "fractionals" }),
   T("read", "get_proposal_kit", "Proposal kit", "The template, rate band and company facts for one proposal", "Read a proposal kit", { land: "proposals" }),
   T("read", "list_proposal_templates", "Proposal templates", "Your templates and the ones Merlin has", "Listed proposal templates", { land: "proposals" }),
   T("read", "get_proposal", "Read a proposal", "One proposal, and what it still needs before it can go", "Read a proposal", { land: "proposals" }),
@@ -97,7 +97,7 @@ export const AGENT_TOOLS: AgentTool[] = [
 
   T("send", "send_proposal_for_signature", "Send a proposal for signature", "Emails the signing link to the client you name", "Sent a proposal for signature", { cost: "close", asked: "Asked to send a proposal for signature", draft: true, land: "proposals" }),
   T("send", "send_document_for_signature", "Send a contract for signature", "Emails a contract to sign, with its audit trail", "Sent a contract for signature", { cost: "close", asked: "Asked to send a contract for signature", draft: true, land: "contracts" }),
-  T("send", "pass_lead", "Pass a lead to a peer", "Hands a company that is not your fit to a fellow fractional", "Passed a lead to a peer", { cost: "earn5", asked: "Asked to pass a lead to a peer", draft: true, land: "fractionals" }),
+  T("send", "pass_lead", "Refer it to a peer", "Refers a company that is not your fit to a fellow fractional", "Referred a company to a peer", { cost: "earn5", asked: "Asked to refer a company to a peer", draft: true, land: "fractionals" }),
 ];
 
 export const TOOL_BY_KEY = new Map(AGENT_TOOLS.map((t) => [t.key, t]));

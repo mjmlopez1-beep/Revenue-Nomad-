@@ -179,7 +179,7 @@ export function Notifications({ view, onIntegrations }: { view: View; onIntegrat
               <Row id="nt-msg" title="Messages" desc="When a member writes to you, at most one an hour for each conversation. It never shows your email address to them.">
                 <Switch id="nt-msg" on={messageEmail} onChange={(on) => void save("messageEmail", on)} />
               </Row>
-              <Row id="nt-peer" title="From your peers" desc="When a peer passes you a lead or asks you to team up. One email each, never with your email address in it.">
+              <Row id="nt-peer" title="From your peers" desc="When a peer refers a company to you or asks you to team up. One email each, never with your email address in it.">
                 <Switch id="nt-peer" on={peerEmail} onChange={(on) => void save("peerEmail", on)} />
               </Row>
             </ul>

@@ -301,7 +301,7 @@ export function RolesTable({ i, onTab }: { i: CoInfo; onTab: (t: TabKey) => void
                     <span className="co-sub">Open the company first</span>
                   ) : (
                     <button type="button" className="tp-tbtn" onClick={() => document.getElementById("pe-dsec-h")?.scrollIntoView({ block: "center", behavior: "smooth" })}>
-                      Pass it on
+                      Refer it to a peer
                     </button>
                   )
                 ) : (
@@ -329,7 +329,7 @@ export function RolesNote({ i }: { i: CoInfo }) {
   return (
     <p className="co-note">
       <strong>Not your function.</strong> The open {open.length === 1 ? "role is" : "roles are"} {fns.join(" and ")} and you are {mine}. No {mine} role is posted here, so your way in is a person, not a posting.
-      {!i.c.hidden && " Know a fractional who fits? Pass it on, free for them."}
+      {!i.c.hidden && " Know a fractional who fits? Refer it to a peer, free for them."}
     </p>
   );
 }

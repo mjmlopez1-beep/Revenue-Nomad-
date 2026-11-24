@@ -2,7 +2,7 @@
 
 /**
  * Home's "From your peers", above Since your last visit (GET ?peers=home, lib/peers.ts peersHome):
- * leads passed to the member ("Ana passed you Acme: open Sales role, posted $9k/mo", opened free for
+ * referrals for the member ("Ana referred Acme to you: open Sales role, posted $9k/mo", opened free for
  * them) with Take it, leads of theirs a peer took since they last looked, team-up asks, and new posts
  * in their circle's thread. Nothing at all when there is nothing.
  */
@@ -80,7 +80,7 @@ export function FromYourPeers({ openCompany }: { openCompany: (id: string) => vo
               <div className="pe-lead-main">
                 <p className="pe-lead-line">
                   <b>
-                    {l.who.first} took the lead you passed{l.name ? `: ${l.name}` : ""}
+                    {l.who.first} took the company you referred{l.name ? `: ${l.name}` : ""}
                   </b>
                 </p>
                 <p className="pe-muted pe-lead-meta">{l.credited ? `You earned ${l.credited} credits. Thank you for thinking of them.` : "Thank you for thinking of them."}</p>

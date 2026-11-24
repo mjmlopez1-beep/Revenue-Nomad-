@@ -6,7 +6,7 @@
  * as them. This page draws, over what Connected apps (ConnectedApps.tsx) and Use it in Claude
  * (UseInClaude.tsx) had:
  *
- *   Your agents        each connected agent, its use today, Revoke (asks once, inline); the agents
+ *   Your agents        each connected agent, its use today, its switch (off asks once, inline, then revokes); the agents
  *                      not connected yet, each with How to connect: three steps with the address
  *                      to copy and Check the connection (reads the agents again).
  *   What it can do     the tools in four groups (read, add, spend, send), a switch for each group
@@ -22,6 +22,8 @@
  * cannot do, and four rows labelled Example in the log (never sent, never counted).
  * Data: GET and POST /api/agent, POST /api/oauth/apps { revoke }.
  */
+import { ServiceIcon, type Service } from "../../ui/ServiceIcon";
+import { ConnToggle } from "../../ui/ConnToggle";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { COST_WORDS, LIMIT_CHOICES, TOOL_BY_KEY, askWords, rowWords, tabOf, type AgentGroup, type AgentLogRow, type AgentView, type LogTab } from "@/lib/mcp/agentTools";
 import type { VoiceProfile } from "@/lib/voice";
@@ -49,6 +51,8 @@ const KINDS: KindDef[] = [
   { id: "code", name: "Claude Code", where: "In your terminal", how: "Run this command. Then type /mcp in Claude Code and pick merlin.", code: (a) => `claude mcp add --transport http merlin ${a}`, tip: "You have 30 minutes to allow it. The sign-in opens in your browser, not in the terminal." },
   { id: "cursor", name: "Cursor", where: "In Cursor Settings, under MCP", how: "Pick Add new MCP server, or add this to your mcp.json. Then pick Connect next to merlin.", code: (a) => JSON.stringify({ mcpServers: { merlin: { url: a } } }), tip: "You have 30 minutes to allow it. If merlin shows a red dot, pick Connect again." },
 ];
+/** Each agent's icon, read from its own site (ServiceIcon). */
+const AGENT_ICON: Record<Kind, Service> = { claude: "claude", chatgpt: "chatgpt", code: "claude-code", cursor: "cursor" };
 /** Which kind a connected app is, by the name it registered. */
 export function kindOf(name: string): Kind | null {
   if (/claude\s*code/i.test(name)) return "code";
@@ -250,7 +254,7 @@ export function AgentAccess() {
     setBusy(null);
     setAsking(null);
     if (r.error) return toast(r.error, true);
-    setSaid(`Disconnected ${name}. It cannot use your account any more.`);
+    setSaid(`${name} is off. It cannot use your account any more.`);
     await reload();
   };
   const check = async () => {
@@ -275,7 +279,7 @@ export function AgentAccess() {
   const steps = [
     { n: 1, t: "Copy your address", d: "It works in every agent. You sign in to Merlin in your browser, so there is no key to paste.", done: addrCopied || curOn, code: addr, codeLabel: "Connector address", hot: !!first && !addrCopied && !curOn, onCopy: () => setAddrCopied(true) },
     { n: 2, t: `Add it in ${cur.name}`, d: cur.how, done: curOn, code: cur.code?.(addr), codeLabel: `Text to paste for ${cur.name}`, note: `${cur.where}.` },
-    { n: 3, t: "Sign in to Merlin and allow it", d: `Pick Connect. Merlin opens in your browser and asks if ${cur.name} may use your account. Pick Allow, or Do not allow to stop there.`, done: curOn, go: !curOn, note: curOn ? `${cur.name} is connected. Revoke it above at any time.` : cur.tip },
+    { n: 3, t: "Sign in to Merlin and allow it", d: `Pick Connect. Merlin opens in your browser and asks if ${cur.name} may use your account. Pick Allow, or Do not allow to stop there.`, done: curOn, go: !curOn, note: curOn ? `${cur.name} is connected. Turn it off above at any time.` : cur.tip },
   ];
   const nowStep = curOn ? 0 : addrCopied ? 2 : 1;
 
@@ -321,7 +325,7 @@ export function AgentAccess() {
         <div className="ag-head">
           <h2 id="ag-conn">Your agents</h2>
           <span className={`ag-pill ${connected.length ? "ag-pill-free" : "ag-pill-grey"}`}>{connected.length ? `${connected.length} connected` : "None connected yet"}</span>
-          <span className="ag-sub">One address works in every agent. Revoke one and it stops at once. An agent you do not use for 30 days is signed out and has to ask again.</span>
+          <span className="ag-sub">One address works in every agent. Turn one off and it stops at once. An agent you do not use for 30 days is signed out and has to ask again.</span>
         </div>
         {said && (
           <div className="ag-said" role="status">
@@ -336,7 +340,7 @@ export function AgentAccess() {
               <div key={key} className={`ag-tile${picked ? " ag-picked" : ""}`}>
                 <div className="ag-tile-top">
                   <span className={`ag-mark ag-mark-${def?.id ?? "other"}`}>
-                    <AgentIcon />
+                    {def ? <ServiceIcon service={AGENT_ICON[def.id]} size={22} fallback={<AgentIcon />} /> : <AgentIcon />}
                   </span>
                   <span className="ag-tile-name">
                     <strong>{app?.name ?? def?.name}</strong>
@@ -351,28 +355,28 @@ export function AgentAccess() {
                   </span>
                 )}
                 <div className="ag-tile-acts">
-                  {app && !isAsking && (
-                    <button type="button" className="btn btn-sm" aria-label={`Disconnect ${app.name}`} onClick={() => setAsking(app.id)}>
-                      Revoke
-                    </button>
+                  {/* On is connected: off asks first, then revokes it; on shows the three steps to connect it. */}
+                  {!isAsking && (
+                    <ConnToggle
+                      name={app?.name ?? def?.name ?? "Agent"}
+                      on={!!app}
+                      pending={!!picked}
+                      disabled={!!busy}
+                      onFlip={() => (app ? setAsking(app.id) : picked ? setStepsOpen(false) : def && (setPick(def.id), setStepsOpen(true)))}
+                    />
                   )}
                   {app && isAsking && (
-                    <span className="ag-ask" role="group" aria-label={`Disconnect ${app.name}`}>
-                      <strong>Disconnect {app.name}?</strong>
-                      <button type="button" className="btn btn-sm btn-pine" disabled={!!busy} aria-busy={busy === app.id} onClick={() => void revoke(app.id, app.name)}>
-                        {busy === app.id ? "Disconnecting" : "Disconnect"}
+                    <span className="ag-ask" role="group" aria-label={`Turn off ${app.name}`}>
+                      <strong>Turn off {app.name}? Its access stops at once.</strong>
+                      <button type="button" className="btn btn-sm ctg-red" disabled={!!busy} aria-busy={busy === app.id} onClick={() => void revoke(app.id, app.name)}>
+                        {busy === app.id ? "Turning off" : "Turn off"}
                       </button>
-                      <button type="button" className="btn btn-sm btn-ghost" disabled={!!busy} onClick={() => setAsking(null)}>
-                        Keep it
+                      <button type="button" className="btn btn-sm btn-pine" disabled={!!busy} onClick={() => setAsking(null)}>
+                        Keep it on
                       </button>
                     </span>
                   )}
-                  {!app && def && (
-                    <button type="button" className={`btn btn-sm${picked ? " ag-copied" : ""}`} aria-pressed={picked} onClick={() => (setPick(def.id), setStepsOpen(true))}>
-                      {picked ? "Steps below" : "How to connect"}
-                    </button>
-                  )}
-                  {!isAsking && <span className={`ag-pill ag-right ${app ? "ag-pill-free" : "ag-pill-grey"}`}>{app ? "Connected" : "Not connected"}</span>}
+                  {!isAsking && <span className={`ag-pill ag-right ${app ? "ag-pill-free" : "ag-pill-grey"}`}>{app ? "Connected" : picked ? "Steps below" : "Not connected"}</span>}
                 </div>
               </div>
             );
@@ -814,7 +818,7 @@ function Asks({ view, first, tab, setTab, firstQ }: { view: AgentView; first: bo
     { tab: "close", q: "Use my [template name] template and draft a proposal for [company] from my call with [who you spoke to].", n: "Close plan, and on the trial. Lands in Proposals as a draft." },
     { tab: "close", q: "Change the [company] proposal: add a second pricing option at [price] a month.", n: "Close plan, and on the trial." },
     { tab: "close", q: "Send the [company] proposal to [who signs] for signature.", n: "Asks first. It shows who it goes to." },
-    { tab: "close", q: "Pass [a company that is not my fit] to a peer who does RevOps.", n: "Asks first. Earns 5 credits when it is picked up." },
+    { tab: "close", q: "Refer [a company that is not my fit] to a peer who does RevOps.", n: "Asks first. Earns 5 credits when it is picked up." },
     ...(has("save_my_network")
       ? [{ tab: "teach" as const, q: TEACH_NETWORK, n: "Needs your mail connected in your agent. Merlin never gets message text.", link: { page: "warm" as ShellPage, label: "See your warm paths" } }]
       : []),

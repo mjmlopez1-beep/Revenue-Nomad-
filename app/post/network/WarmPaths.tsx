@@ -36,6 +36,11 @@ import { Workbench } from "../workbench/Workbench";
 import { COMPANY_COLUMNS, type ColumnDef } from "../workbench/columns";
 import { pipelineAct } from "../pipelineStore";
 import { ConnectPanel, type SourceKey } from "./ConnectPanel";
+import { startGoogle } from "./Network";
+import { useOffSwitch } from "./sourceSwitch";
+import { ServiceIcon, type Service } from "../../ui/ServiceIcon";
+import { ConnToggle } from "../../ui/ConnToggle";
+import { OFF_ASK, REMOVE, staysOff, type RemoveCall } from "../settings/model";
 import { ExportPanel } from "./ExportPanel";
 import { useExport } from "./useExport";
 import { useNetwork } from "./useNetwork";
@@ -1043,13 +1048,34 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
   const [li, setLi] = useState(false);
   const lx = useExport().view?.info ?? null;
   const [lxOpen, setLxOpen] = useState(false);
+  // A switch turned on whose connect flow is open (a file picker, the export's screen), and what was said.
+  const [pend, setPend] = useState<string | null>(null);
+  const [said, setSaid] = useState<{ t: string; bad: boolean } | null>(null);
   const g = net.view?.google ?? null;
   const gOn = !net.off && !!g && g.status !== "reconnect";
   const paths = (k: WaySource) => {
     const x = v.bySource[k] ?? 0;
     return x === 1 ? "1 path" : `${n(x)} paths`;
   };
-  type Card = { k: string; name: string; on: boolean; status: string; count: string; meta: string; btn?: { t: string; go: () => void; primary?: boolean }; link?: { t: string; go: () => void }; paths?: string };
+  const stopped = (name: string) => (why?: string) => {
+    setPend(null);
+    onOpen(null);
+    setLxOpen(false);
+    setSaid({ t: staysOff(name, why), bad: !!why });
+  };
+  type Card = {
+    k: string;
+    name: string;
+    on: boolean;
+    status: string;
+    count: string;
+    meta: string;
+    btn?: { t: string; go: () => void; primary?: boolean };
+    link?: { t: string; go: () => void };
+    paths?: string;
+    /** Its switch: on is in. Turning it on starts its connect flow; off asks, then runs its own remove. */
+    sw?: { name: string; turnOn: () => void; ask: string; removes: RemoveCall[]; disabled?: boolean };
+  };
   const cards: Card[] = [
     {
       k: "google",
@@ -1057,9 +1083,10 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       on: gOn,
       status: net.off ? "Not on for Merlin yet" : gOn ? "Connected" : "Not connected",
       count: gOn ? (g?.syncedAt ? `Read ${fmtDay(g.syncedAt)}` : "Reading now") : "Contacts and calendar names only.",
-      meta: gOn ? "Merlin reads it again each day." : net.off ? "Your LinkedIn file or a CSV works without it." : "About 1 minute. Disconnect any time.",
+      meta: gOn ? "Merlin reads it again each day." : net.off ? "Your LinkedIn file or a CSV works without it." : net.view && !net.view.configured ? "Not set up on Merlin yet." : "About 1 minute. Turn it off any time.",
       // Google's settings, Read again and Disconnect and delete are in Settings / Connections (settings/SettingsPage.tsx).
-      btn: net.off ? undefined : { t: gOn ? "Manage in Settings" : "Connect Google", go: () => (gOn ? openSettings(c.openPage, "conn", "google") : onOpen("google")), primary: first && !gOn },
+      btn: gOn ? { t: "Manage in Settings", go: () => openSettings(c.openPage, "conn", "google") } : undefined,
+      sw: net.off ? undefined : { name: "Google", turnOn: () => (setPend("google"), startGoogle()), ask: OFF_ASK.google, removes: [REMOVE.google], disabled: !net.view?.configured },
       paths: gOn ? paths("google") : undefined,
     },
     {
@@ -1078,7 +1105,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
           ? `Names and profile links only. A contacts file${net.view?.configured ? " or Google" : ""} finds more.`
           : "Has companies and titles. Newer files have names and profile links only."
         : "Names and profile links. Three steps, about 10 minutes.",
-      btn: { t: pv?.linkedin ? "Upload a newer file" : "Add your file", go: () => onOpen("linkedin"), primary: first && net.off },
+      btn: pv?.linkedin ? { t: "Upload a newer file", go: () => onOpen("linkedin") } : undefined,
+      sw: { name: "Your LinkedIn connections file", turnOn: () => (setPend("linkedin"), setLxOpen(false), onOpen("linkedin")), ask: OFF_ASK.linkedin, removes: [REMOVE.linkedin] },
       paths: pv?.linkedin ? paths("linkedin") : undefined,
     },
     {
@@ -1089,7 +1117,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       status: lx ? `Brought in ${fmtDay(lx.at)}` : "Not added",
       count: lx ? [lx.counts.warm ? `Warmth for ${n(lx.counts.warm)} people` : "", lx.counts.invites ? `${n(lx.counts.invites)} invited` : "", lx.counts.vouch ? `${n(lx.counts.vouch)} who vouched` : ""].filter(Boolean).join(" · ") || "Nothing ticked" : "The whole .zip from your LinkedIn.",
       meta: lx ? "Read on your device. A message's words never leave it." : "Request it early: exports from December 2026 leave out companies and titles.",
-      btn: { t: lx ? "Manage your export" : "Bring in your export", go: () => (onOpen(null), setLxOpen(!lxOpen)) },
+      btn: lx ? { t: "Manage your export", go: () => (onOpen(null), setLxOpen(!lxOpen)) } : undefined,
+      sw: { name: "Your LinkedIn data export", turnOn: () => (setPend("export"), onOpen(null), setLxOpen(true)), ask: OFF_ASK.lix, removes: [REMOVE.lix] },
     },
     {
       k: "csv",
@@ -1098,7 +1127,8 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       status: pv?.csv ? `Added ${fmtDay(pv.csv.at)}` : "Not added",
       count: pv?.csv ? `${n(pv.csv.rows)} rows · ${n(pv.csv.matched)} at companies on Merlin` : "A list from your CRM or a spreadsheet.",
       meta: pv?.csv ? "Import a newer one any time." : "Name and company are enough.",
-      btn: { t: pv?.csv ? "Import a newer CSV" : "Import a CSV", go: () => onOpen("csv") },
+      btn: pv?.csv ? { t: "Import a newer CSV", go: () => onOpen("csv") } : undefined,
+      sw: { name: "Your contacts file", turnOn: () => (setPend("csv"), setLxOpen(false), onOpen("csv")), ask: OFF_ASK.csv, removes: [REMOVE.csv] },
       paths: pv?.csv ? paths("csv") : undefined,
     },
     {
@@ -1122,6 +1152,10 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
       paths: paths("fellow"),
     },
   ];
+  // Came in: the switch is simply on.
+  useEffect(() => {
+    if (pend && cards.find((x) => x.k === pend)?.on) setPend(null);
+  });
   return (
     <section id="wp-sources" className={cx("wp-src", first && "wp-src-first")} aria-label="Sources">
       <div className="wp-src-head">
@@ -1145,50 +1179,30 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
           </span>
         )}
       </div>
+      {said && (
+        <p className={cx("wp-said", said.bad && "bad")} role="status">
+          {said.t}
+        </p>
+      )}
       <div className="wp-src-cards">
         {cards.map((x) => (
-          <div key={x.k} className={cx("wp-scard", x.btn?.primary && "primary", open === x.k && "open")} data-source={x.k}>
-            <div className="wp-scard-top">
-              <span className="wp-sicon" aria-hidden>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#073F2F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={ICONS[x.k]} />
-                </svg>
-              </span>
-              <strong>{x.name}</strong>
-            </div>
-            <span className="wp-scard-st">
-              <span className={cx("wp-spill", x.on && "on")}>{x.status}</span>
-              {x.paths && <strong>{x.paths}</strong>}
-            </span>
-            <span className="wp-scard-c">{x.count}</span>
-            <span className="wp-sub">{x.meta}</span>
-            {x.btn && (
-              <button type="button" className={cx("btn", x.btn.primary ? "btn-pine" : "btn-outline", "wp-scard-b")} aria-expanded={x.k === "export" ? lxOpen : open === x.k} onClick={x.btn.go}>
-                {x.btn.t}
-              </button>
-            )}
-            {x.link && (
-              <button type="button" className="wp-link wp-scard-b" onClick={x.link.go}>
-                {x.link.t}
-              </button>
-            )}
-          </div>
+          <SourceCard key={x.k} x={x} first={first} open={x.k === "export" ? lxOpen : open === x.k} pending={pend === x.k && !x.on} onSaid={(t, bad) => setSaid({ t, bad: !!bad })} onCancel={stopped(x.sw?.name ?? x.name)} />
         ))}
       </div>
       {lxOpen && !open && (
         <div className="wp-src-panel">
-          <button type="button" className="wp-src-close" aria-label="Close" onClick={() => setLxOpen(false)}>
+          <button type="button" className="wp-src-close" aria-label="Close" onClick={() => (pend === "export" ? stopped("Your LinkedIn data export")() : setLxOpen(false))}>
             <IconX size={16} />
           </button>
-          <ExportPanel onClose={() => setLxOpen(false)} />
+          <ExportPanel onClose={() => setLxOpen(false)} autoPick={pend === "export"} onStop={pend === "export" ? stopped("Your LinkedIn data export") : undefined} />
         </div>
       )}
       {open && (
         <div className="wp-src-panel">
-          <button type="button" className="wp-src-close" aria-label="Close" onClick={() => onOpen(null)}>
+          <button type="button" className="wp-src-close" aria-label="Close" onClick={() => (pend === open && open ? stopped(open === "csv" ? "Your contacts file" : "Your LinkedIn connections file")() : onOpen(null))}>
             <IconX size={16} />
           </button>
-          <ConnectPanel key={open} start={open} variant="inline" onNext={() => (onOpen(null), onRead())} nextLabel="See your map" onSeeKnown={() => c.start.run("network")} />
+          <ConnectPanel key={open} start={open} variant="inline" autoPick={pend === open} onStop={pend === open ? stopped(open === "csv" ? "Your contacts file" : "Your LinkedIn connections file") : undefined} onNext={() => (onOpen(null), onRead())} nextLabel="See your map" onSeeKnown={() => c.start.run("network")} />
         </div>
       )}
       <div className="wp-src-foot">
@@ -1218,6 +1232,62 @@ function Sources({ v, first, open, onOpen, onRead }: { v: WarmView; first: boole
         </ol>
       )}
     </section>
+  );
+}
+
+const CARD_ICON: Record<string, Service> = { google: "google", linkedin: "linkedin", export: "linkedin", csv: "csv" };
+
+/** One source's card: its icon, status and count, its switch (or its link), and the question before it turns off. */
+function SourceCard({
+  x,
+  first,
+  open,
+  pending,
+  onSaid,
+  onCancel,
+}: {
+  x: { k: string; name: string; on: boolean; status: string; count: string; meta: string; btn?: { t: string; go: () => void; primary?: boolean }; link?: { t: string; go: () => void }; paths?: string; sw?: { name: string; turnOn: () => void; ask: string; removes: RemoveCall[]; disabled?: boolean } };
+  first: boolean;
+  open: boolean;
+  pending: boolean;
+  onSaid: (t: string, bad?: boolean) => void;
+  onCancel: () => void;
+}) {
+  const off = useOffSwitch({ name: x.sw?.name ?? x.name, ask: x.sw?.ask ?? "", removes: x.sw?.removes ?? [], onSaid });
+  const icon = CARD_ICON[x.k];
+  return (
+    <div className={cx("wp-scard", first && x.sw && !x.on && x.k === "google" && "primary", open && "open")} data-source={x.k}>
+      <div className="wp-scard-top">
+        <span className="wp-sicon" aria-hidden>
+          {icon ? (
+            <ServiceIcon service={icon} size={16} />
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#073F2F" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d={ICONS[x.k]} />
+            </svg>
+          )}
+        </span>
+        <strong>{x.name}</strong>
+        {x.sw && <ConnToggle name={x.sw.name} on={x.on} pending={pending} busy={off.busy} disabled={x.sw.disabled} onFlip={() => (x.on ? off.ask() : pending ? onCancel() : x.sw!.turnOn())} />}
+      </div>
+      <span className="wp-scard-st">
+        <span className={cx("wp-spill", x.on && "on")}>{pending ? "Connecting" : x.status}</span>
+        {x.paths && <strong>{x.paths}</strong>}
+      </span>
+      <span className="wp-scard-c">{x.count}</span>
+      <span className="wp-sub">{x.meta}</span>
+      {off.el}
+      {x.btn && (
+        <button type="button" className={cx("btn", x.btn.primary ? "btn-pine" : "btn-outline", "wp-scard-b")} aria-expanded={open} onClick={x.btn.go}>
+          {x.btn.t}
+        </button>
+      )}
+      {x.link && (
+        <button type="button" className="wp-link wp-scard-b" onClick={x.link.go}>
+          {x.link.t}
+        </button>
+      )}
+    </div>
   );
 }
 

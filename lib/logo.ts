@@ -421,13 +421,14 @@ function release() {
 }
 
 /** The answer when the queue was full: not kept, so it is tried again later. */
-const BUSY = Symbol("busy");
+export const BUSY = Symbol("busy");
 
 /**
  * A domain's icon: from memory, else the data volume, else the company's own site (unless
  * RN_LOGO_LOOKUP=off), kept either way. An old answer is still used when the site can't be asked.
+ * `opts`: how the site is read (lib/serviceIcon.ts passes its test server's on a test server); by default iconTest's.
  */
-export async function logoImage(domain: string, nowMs = Date.now()): Promise<Img | null | typeof BUSY> {
+export async function logoImage(domain: string, nowMs = Date.now(), opts?: FetchOpts): Promise<Img | null | typeof BUSY> {
   const hit = memory.get(domain);
   if (hit && fresh(hit, nowMs)) return hit.img;
   const running0 = inFlight.get(domain);
@@ -441,7 +442,7 @@ export async function logoImage(domain: string, nowMs = Date.now()): Promise<Img
   if (!(await slot())) return disk?.img ?? BUSY;
   const p = (async () => {
     try {
-      const img = await fetchSiteIcon(domain);
+      const img = await fetchSiteIcon(domain, opts);
       // A site that sends nothing this time keeps the icon it had.
       const kept: Kept = { at: Date.now(), img: img ?? disk?.img ?? null };
       remember(domain, kept);
@@ -466,15 +467,10 @@ export function forgetIcons(): void {
  * console with errors; the page draws the company's tile instead (CompanyLogo, app/ui/shared.tsx).
  * `keep`: the answer is final for an hour (a busy moment is not).
  */
-const NO_LOGO = (keep: boolean) => new Response(null, { status: 204, headers: { "cache-control": keep ? "public, max-age=3600" : "no-store" } });
+export const NO_LOGO = (keep: boolean) => new Response(null, { status: 204, headers: { "cache-control": keep ? "public, max-age=3600" : "no-store" } });
 
-/** The answer to GET /api/logo/<id>: the image, a 204 for no logo, or a 429 past the per-address limit. */
-export async function logoResponse(req: Request, publicId: string): Promise<Response> {
-  if (limited(`logo:${clientIp(req)}`, LOGO_PER_MINUTE, 60_000)) return new Response(null, { status: 429, headers: { "retry-after": "60", "cache-control": "no-store" } });
-  const domain = publicId.startsWith(PREVIEW_LOGO_PREFIX) ? await (await import("./preview")).previewLogoDomain(publicId) : await logoDomain(publicId);
-  const img = domain ? await logoImage(domain) : null;
-  if (img === BUSY) return NO_LOGO(false);
-  if (!img) return NO_LOGO(true);
+/** An icon as we send it: the bytes and our own headers only (never the site's), kept by browsers for a day. */
+export function iconResponse(img: Img): Response {
   return new Response(img.body.slice(0), {
     status: 200,
     headers: {
@@ -486,4 +482,14 @@ export async function logoResponse(req: Request, publicId: string): Promise<Resp
       "cross-origin-resource-policy": "same-origin",
     },
   });
+}
+
+/** The answer to GET /api/logo/<id>: the image, a 204 for no logo, or a 429 past the per-address limit. */
+export async function logoResponse(req: Request, publicId: string): Promise<Response> {
+  if (limited(`logo:${clientIp(req)}`, LOGO_PER_MINUTE, 60_000)) return new Response(null, { status: 429, headers: { "retry-after": "60", "cache-control": "no-store" } });
+  const domain = publicId.startsWith(PREVIEW_LOGO_PREFIX) ? await (await import("./preview")).previewLogoDomain(publicId) : await logoDomain(publicId);
+  const img = domain ? await logoImage(domain) : null;
+  if (img === BUSY) return NO_LOGO(false);
+  if (!img) return NO_LOGO(true);
+  return iconResponse(img);
 }

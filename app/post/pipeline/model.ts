@@ -102,7 +102,7 @@ export interface RouteHint {
 export function wayOf(r: PipelineRec, route?: RouteHint | null): string | null {
   if (route) return `Your route ${route.via}`;
   if (r.intro) return `Through ${r.intro.by}'s intro${r.intro.status === "made" ? "" : r.intro.status === "declined" ? ", declined" : ", asked"}`;
-  if (r.lead) return `A lead ${first(r.lead.by)} passed you`;
+  if (r.lead) return `Referred to you by ${first(r.lead.by)}`;
   if (r.team) return `Teamed with ${r.team.with}`;
   return null;
 }

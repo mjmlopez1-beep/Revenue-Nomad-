@@ -1,7 +1,9 @@
 /**
  * "Works with": the tools Merlin truly connects to, in one quiet line under the hero. Each is the
- * product's name beside a plain glyph drawn here (a calendar, a chat bubble, a spark, a note), in
- * one color: no brand artwork, no image files, nothing loaded from anywhere.
+ * product's name beside its own icon (<ServiceIcon>: read by our server from that product's own
+ * website and sent from our own address, GET /api/logo/svc/<key>, never from an icon service).
+ * Until it loads, or when there is none, a plain glyph drawn here shows instead (a calendar, a chat
+ * bubble, a spark, a note).
  *
  *  - Google (Calendar, Contacts, Gmail): only when the server's signed-out answer says Google is
  *    on (View.live.google).
@@ -13,6 +15,7 @@
  * LinkedIn is never named here.
  */
 import "./worksWith.css";
+import { ServiceIcon } from "../ui/ServiceIcon";
 
 type Live = { google: boolean; granola: boolean };
 
@@ -51,12 +54,12 @@ function Note() {
 }
 
 /** The tools as the line shows them, in order: only those the server has on. */
-export function worksWithTools(live: Live): { name: string; detail?: string; glyph: "calendar" | "chat" | "spark" | "note" }[] {
+export function worksWithTools(live: Live): { name: string; detail?: string; glyph: "calendar" | "chat" | "spark" | "note"; service: "google" | "slack" | "claude" | "granola" }[] {
   return [
-    ...(live.google ? [{ name: "Google", detail: "Calendar, Contacts, Gmail", glyph: "calendar" as const }] : []),
-    { name: "Slack", glyph: "chat" as const },
-    { name: "Claude", detail: "and other AI assistants", glyph: "spark" as const },
-    ...(live.granola ? [{ name: "Granola", glyph: "note" as const }] : []),
+    ...(live.google ? [{ name: "Google", detail: "Calendar, Contacts, Gmail", glyph: "calendar" as const, service: "google" as const }] : []),
+    { name: "Slack", glyph: "chat" as const, service: "slack" as const },
+    { name: "Claude", detail: "and other AI assistants", glyph: "spark" as const, service: "claude" as const },
+    ...(live.granola ? [{ name: "Granola", glyph: "note" as const, service: "granola" as const }] : []),
   ];
 }
 
@@ -75,7 +78,7 @@ export default function WorksWith({ live }: { live: Live }) {
             const G = GLYPHS[t.glyph];
             return (
               <li key={t.name} className="lp-works-item">
-                <G />
+                <ServiceIcon service={t.service} size={18} fallback={<G />} />
                 <span className="lp-works-name">{t.name}</span>
                 {t.detail ? <span className="lp-works-detail">{t.detail}</span> : null}
               </li>

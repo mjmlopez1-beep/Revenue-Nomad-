@@ -2,7 +2,7 @@
 
 /**
  * The bar over the table while rows are picked: Unlock N with what it costs, Add to pipeline,
- * Draft notes, Pass as a lead, and Clear. There is no Export: members cannot export data from
+ * Draft notes, Refer it to a peer, and Clear. There is no Export: members cannot export data from
  * Merlin (the owner's decision).
  *
  * Unlock is one quote, one confirm, one button: pressing it only asks the server for a quote (a dry
@@ -42,7 +42,7 @@ export function SelectionBar({
   onPass: () => void;
   /** A run finished: what it opened and spent, for the status line. */
   onDone?: (x: { done: number; spent: number }) => void;
-  /** A page's own buttons after Pass as a lead (Hiring now's Mark as seen). */
+  /** A page's own buttons after Refer it to a peer (Hiring now's Mark as seen). */
   extra?: ReactNode;
 }) {
   const ui = useUi();
@@ -131,7 +131,7 @@ export function SelectionBar({
             Draft notes
           </button>
           <button type="button" className="wb-sel-btn" onClick={onPass}>
-            Pass as a lead
+            Refer it to a peer
           </button>
           {extra}
         </>

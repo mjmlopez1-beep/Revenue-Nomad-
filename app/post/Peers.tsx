@@ -4,15 +4,15 @@
  * Peers (page "peers"; the Fractionals directory's old address, ?p=fractionals, opens its Every
  * fractional view): fellow fractionals to work with, from GET /api/table?peers=1 (lib/peers.ts).
  *
- *   Passed to you        leads peers passed the member, and team-up asks waiting on them
+ *   Referrals for you    companies peers referred to the member, and team-up asks waiting on them
  *   Fractionals you already know   from the member's own LinkedIn, Google contacts and conversations (only they see this)
  *   Peers who serve your kind of clients   complementary functions, their Crystal Ball first
  *   Your circle          a small group with a monthly thread, or Join a circle
  *   Your teams           companies pursued with a peer
- *   Leads you passed     and what came of them
+ *   Referrals sent       and what came of them
  *
  * Each person: name, function, what they're working on (their current seats), companies you both
- * know, where your conversation stands, and Message, Pass a lead and Team up. Every fractional on
+ * know, where your conversation stands, and Message, Refer it to a peer and Team up. Every fractional on
  * file is a tap away (the directory, Fractionals.tsx). The art: one page-head prop and the quiet
  * empty-state spots, never by a data row.
  */
@@ -80,7 +80,7 @@ function PeersOld({ infos, waiting, all, onAll, onProfile, openCompany }: { info
   };
   return (
     <div className="page-wide pe-page">
-      <PageHead title="Peers" lead={<>Fractionals to do your best work with. Pass a lead that isn&apos;t your fit, team up on a pitch, and keep a small circle close.</>} art={<Prop name="camp" height={72} on="bg" />} />
+      <PageHead title="Peers" lead={<>Fractionals to do your best work with. Refer a company that isn&apos;t your fit to a peer, team up on a pitch, and keep a small circle close.</>} art={<Prop name="camp" height={72} on="bg" />} />
       <div className="pe-tabs" role="tablist" aria-label="Which peers">
         <button type="button" role="tab" aria-selected className="pe-tab on">
           Your peers
@@ -102,7 +102,7 @@ function PeersOld({ infos, waiting, all, onAll, onProfile, openCompany }: { info
           {(newLeads.length > 0 || asks.length > 0) && (
             <section className="pe-sec pe-sec-inbox" aria-labelledby="pe-in-h">
               <h2 className="pe-h2" id="pe-in-h">
-                Passed to you
+                Referrals for you
               </h2>
               <ul className="pe-leads">
                 {newLeads.map((l) => (
@@ -203,7 +203,7 @@ function PeersOld({ infos, waiting, all, onAll, onProfile, openCompany }: { info
           )}
 
           {view.muted.length > 0 && <Muted list={view.muted} />}
-          <p className="pe-limits num">You can pass {view.passesLeft} more {view.passesLeft === 1 ? "lead" : "leads"} today.</p>
+          <p className="pe-limits num">You can refer {view.passesLeft} more {view.passesLeft === 1 ? "company" : "companies"} today.</p>
         </>
       )}
       {openTeam && <TeamSpace t={openTeam} onClose={() => setSpace(null)} openCompany={openCompany} />}
@@ -262,7 +262,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
       )}
       {r.passed && (
         <p className="pe-line pe-muted">
-          {[r.passed.toThem ? `You passed ${r.first} ${r.passed.toThem === 1 ? "a lead" : `${r.passed.toThem} leads`}` : "", r.passed.fromThem ? `${r.first} passed you ${r.passed.fromThem === 1 ? "one" : r.passed.fromThem}` : ""].filter(Boolean).join(". ")}
+          {[r.passed.toThem ? `You referred ${r.passed.toThem === 1 ? "a company" : `${r.passed.toThem} companies`} to ${r.first}` : "", r.passed.fromThem ? `${r.first} referred ${r.passed.fromThem === 1 ? "one" : r.passed.fromThem} to you` : ""].filter(Boolean).join(". ")}
         </p>
       )}
       <div className="pe-card-acts">
@@ -270,7 +270,7 @@ function PeerCard({ r, infos }: { r: PeerRec; infos: CoInfo[] }) {
           <>
             <ConnectButton member={{ id: r.memberId, first: r.first }} conversationId={r.thread?.id ?? null} label="Message" className={`btn btn-sm ${pine}`} />
             <button type="button" className="btn btn-sm" onClick={() => setSheet("pass")}>
-              Pass a lead
+              Refer it to a peer
             </button>
             <button type="button" className="btn btn-sm" onClick={() => setSheet("team")}>
               Team up
@@ -321,14 +321,14 @@ export function LeadCard({ l, focus, openCompany }: { l: LeadRec; focus?: boolea
       : l.status === "taken"
         ? `${l.who.first} took it${l.credited ? `. You earned ${l.credited} credits` : ""}.`
         : l.status === "declined"
-          ? `${l.who.first} passed on it.`
+          ? `${l.who.first} turned it down.`
           : `Waiting for ${l.who.first}.`
     : l.won
       ? "You won it."
       : l.status === "taken"
         ? "In your pipeline."
         : l.status === "declined"
-          ? "You passed on it."
+          ? "You turned it down."
           : null;
   return (
     <li id={`lead-${l.id}`} className={`pe-lead${focus ? " pe-lead-focus" : ""}${l.status === "new" && !mine ? " pe-lead-new" : ""}`}>

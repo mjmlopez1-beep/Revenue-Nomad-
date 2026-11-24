@@ -615,7 +615,7 @@ async function main() {
     check("and a lead passed to her is refused", !!passOff && /not taking leads/.test(passOff), passOff);
     const picks = await pe.peerPicks(ROBIN, pub("c_kite"), null, false);
     const teamPicks = await pe.peerPicks(ROBIN, pub("c_kite"), null, true);
-    check("Pass a lead never offers her; Team up still may", !!picks && !picks.picks.some((x) => x.id === pub("mem_dana")) && !!teamPicks, picks?.picks.map((x) => x.name));
+    check("Refer it to a peer never offers her; Team up still may", !!picks && !picks.picks.some((x) => x.id === pub("mem_dana")) && !!teamPicks, picks?.picks.map((x) => x.name));
     await t.perform(DANA, { type: "settings", leads: true }, BASE);
     check("on again: open", (await danaOf("mem_robin"))?.leads === "open");
 

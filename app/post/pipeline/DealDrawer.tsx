@@ -5,7 +5,7 @@
  * tap, as Move to always was), how Merlin knows and "Not right?", the next move with its due date
  * and the follow-ups, what it is worth a month and the seat pitched (the member's own words), the
  * proposal or contract and what happened to it, the way in, private notes and the log, then Mark
- * won, Lost and Pass it. The Example drawer says what an example is and takes the examples away.
+ * won, Lost and Refer it to a peer. The Example drawer says what an example is and takes the examples away.
  */
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";

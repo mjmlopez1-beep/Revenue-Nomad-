@@ -116,7 +116,7 @@ export function RoleDrawer({
   onAddPerson: () => void;
   onWay: () => void;
   onRates: () => void;
-  /** What just happened here ("Passed to Rita. You earn 5 credits when they pick it up."), with its link. */
+  /** What just happened here ("Referred to Rita. You earn 5 credits when they pick it up."), with its link. */
   line: { text: string; go?: { label: string; do: () => void } } | null;
 }) {
   const i = r.i;
@@ -259,7 +259,7 @@ export function RoleDrawer({
             {inPipe ? (status.k === "pitched" ? "In pipeline · Reached out" : "In pipeline · Target") : "Add to pipeline"}
           </button>
           <button type="button" className={`${btn("pass")} hn-wide`} onClick={onPass}>
-            Pass to a fractional who fits better
+            Refer it to a peer who fits better
           </button>
           {line && (
             <span role="status" className="hn-line">

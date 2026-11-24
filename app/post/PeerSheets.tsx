@@ -3,7 +3,7 @@
 /**
  * Working with peers, from wherever a company is (lib/peers.ts, lib/peersCore.ts):
  *
- *  - PassSheet: "Not my fit? Pass it to someone great". Pick a peer (the best fits for the function
+ *  - PassSheet: "Refer it to a peer". Pick a peer (the best fits for the function
  *    the company needs come first), say which open role when there is one, add a note. It opens free
  *    for them, lands in their Messages and on their Home, and they can take it into their pipeline.
  *  - TeamSheet: "Team up": ask a peer to pursue the company with you.
@@ -70,7 +70,7 @@ function CompanyPick({ infos, onPick }: { infos: CoInfo[]; onPick: (id: string) 
           ))}
         </ul>
       ) : (
-        <p className="pe-muted">{q.trim() ? "No company you can see by that name. Open it first, then pass it on." : "Companies you've opened that are hiring show here. Search for any other."}</p>
+        <p className="pe-muted">{q.trim() ? "No company you can see by that name. Open it first, then refer it." : "Companies you've opened that are hiring show here. Search for any other."}</p>
       )}
     </div>
   );
@@ -91,7 +91,7 @@ function PickList({ picks, value, onPick, label }: { picks: PeerPick[]; value: s
               Best fit
             </Chip>
           )}
-          {p.passed && <Chip className="pe-chip">Passed before</Chip>}
+          {p.passed && <Chip className="pe-chip">Referred before</Chip>}
           {p.teamed && <Chip className="pe-chip">On a team here</Chip>}
         </button>
       ))}
@@ -100,7 +100,7 @@ function PickList({ picks, value, onPick, label }: { picks: PeerPick[]; value: s
 }
 
 /**
- * "Not my fit? Pass it to someone great." `company` (a public id) when it comes from a record, a deal,
+ * "Refer it to a peer." `company` (a public id) when it comes from a record, a deal,
  * a role or a Crystal Ball card; without it, the member picks one first (from a person's card, `to`).
  */
 export function PassSheet({ company: company0, role: role0, from, to, infos, onClose }: { company?: string | null; role?: string | null; from: PassFrom; to?: { id: string; first: string } | null; infos?: CoInfo[]; onClose: () => void }) {
@@ -145,16 +145,16 @@ export function PassSheet({ company: company0, role: role0, from, to, infos, onC
   const list = data ? (to ? data.picks.filter((p) => p.id === to.id).concat(data.picks.filter((p) => p.id !== to.id)) : data.picks) : [];
   return (
     <Sheet
-      title={<span className="pe-sheet-t">Not my fit? Pass it to someone great</span>}
+      title={<span className="pe-sheet-t">Refer it to a peer</span>}
       onClose={onClose}
       dialog
       className="pe-sheet"
       footer={
         company ? (
           <div className="pe-sheet-foot">
-            <span className="pe-muted num">{data ? `${data.passesLeft} of 10 passes left today` : ""}</span>
+            <span className="pe-muted num">{data ? `${data.passesLeft} of 10 referrals left today` : ""}</span>
             <button type="button" className="btn btn-pine" onClick={() => void send()} disabled={!peer || busy || !data?.passesLeft} aria-busy={busy}>
-              Pass it{toName ? ` to ${toName}` : ""}
+              {toName ? `Refer it to ${toName}` : "Refer it"}
             </button>
           </div>
         ) : null
@@ -186,7 +186,7 @@ export function PassSheet({ company: company0, role: role0, from, to, infos, onC
             </label>
           )}
           {list.length ? (
-            <PickList picks={list} value={peer} onPick={(p) => setPeer(p.id)} label="Pass it to" />
+            <PickList picks={list} value={peer} onPick={(p) => setPeer(p.id)} label="Refer it to" />
           ) : (
             <p className="pe-muted">No peer in that function yet. Invite one from Peers, or message someone you know.</p>
           )}
@@ -300,13 +300,13 @@ export function TeamBlockOffer({ company, has, onAdd }: { company: string | null
   );
 }
 
-/** One small "Pass it" button (a Crystal Ball card, a deal's row): the pass sheet for that company. */
+/** One small "Refer it to a peer" button (a Crystal Ball card, a deal's row): the referral sheet for that company. */
 export function PassButton({ company, role, from, className = "btn btn-sm" }: { company: string; role?: string | null; from: PassFrom; className?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)} title="Not your fit? Pass it to someone great, free for them.">
-        Pass it
+      <button type="button" className={className} onClick={() => setOpen(true)} title="Not your fit? Refer it to a peer, free for them.">
+        Refer it to a peer
       </button>
       {open && <PassSheet company={company} role={role ?? null} from={from} onClose={() => setOpen(false)} />}
     </>
@@ -323,7 +323,7 @@ export function PeerActions({ company, role, from, compact }: { company: string;
   return (
     <div className={`pe-acts${compact ? " pe-acts-compact" : ""}`}>
       <button ref={btn} type="button" className="btn btn-sm" onClick={() => setSheet("pass")}>
-        Pass it to a peer
+        Refer it to a peer
       </button>
       {team ? (
         <button type="button" className="btn btn-sm pe-teamed" onClick={() => ui.openPage("peers")}>

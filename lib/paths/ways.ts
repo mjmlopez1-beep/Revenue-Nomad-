@@ -1472,7 +1472,7 @@ export async function wayIn(token: string | null, pub: unknown, nowMs = Date.now
   const id = internalOf(w.seed, w.s, pub);
   if (!id) return { none: true };
   const v = wayInOf(w.seed, w.s, w.m, id, nowMs);
-  // How many peers serve companies like this one (Pass it to a peer's own picks): a count only.
+  // How many peers serve companies like this one (Refer it to a peer's own picks): a count only.
   if (!v.locked)
     try {
       const picks = await peerPicks(token, v.id, null);

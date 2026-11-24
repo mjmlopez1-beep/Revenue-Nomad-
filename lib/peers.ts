@@ -252,7 +252,7 @@ function leadRec(x: Ctx, q: LeadPass): LeadRec {
     kind: x.companyKind(q.companyId),
     role: role?.fn ?? null,
     rate: role?.rate ?? null,
-    line: toMe ? leadLine({ from: otherName, company: name ?? x.companyKind(q.companyId) ?? "a company", role: role?.fn, rate: role?.rate }) : `You passed ${name ?? "a company"} to ${firstOf(otherName)}`,
+    line: toMe ? leadLine({ from: otherName, company: name ?? x.companyKind(q.companyId) ?? "a company", role: role?.fn, rate: role?.rate }) : `You referred ${name ?? "a company"} to ${firstOf(otherName)}`,
     note: q.note,
     from: q.from,
     at: q.at,
@@ -516,7 +516,7 @@ export async function peersHome(token: string | null, nowMs = Date.now()): Promi
   return me ? homeOf(seed, s, me, nowMs) : null;
 }
 
-/* ---------- who to pass a company to, or team up with ---------- */
+/* ---------- who to refer a company to, or team up with ---------- */
 
 function picksOf(seed: Seed, s: State, me: Member, companyPub: string, rolePub: string | null, forTeam: boolean, nowMs: number): PeerPicks | null {
   const x = ctxOf(seed, s, me, nowMs);
@@ -587,10 +587,10 @@ export async function peerPicks(token: string | null, companyPub: string, rolePu
 
 /* ---------- the emails ---------- */
 
-const why = "You get these when a peer passes you a lead or asks you to team up. Turn them off in Notifications on Merlin.";
+const why = "You get these when a peer refers a company to you or asks you to team up. Turn them off in Notifications on Merlin.";
 const from = "Merlin is a data exchange for fractional operators, from Revenue Nomad.";
 
-/** "Ana passed you Acme: open Sales role, posted $9k/mo", with her note and a link that signs the peer in. Never an email address. */
+/** "Ana referred Acme to you: open Sales role, posted $9k/mo", with her note and a link that signs the peer in. Never an email address. */
 export function leadEmail(o: { line: string; first: string; note: string; link: string; settingsUrl?: string }) {
   const line = oneLine(o.line).slice(0, 160);
   const first = oneLine(o.first).slice(0, 40) || "A peer";
@@ -605,7 +605,7 @@ export function leadEmail(o: { line: string; first: string; note: string; link: 
     mailH(escHtml(line)),
     mailP(escHtml(lead), "margin-bottom:24px;"),
     ...(note ? [`<p style="margin:0 0 24px;padding:12px 16px;border-left:3px solid ${MAIL.volt};background:${MAIL.page};font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${escHtml(note)}</p>`] : []),
-    mailButton(link, "See the lead", "margin:0 0 16px"),
+    mailButton(link, "See the referral", "margin:0 0 16px"),
   ].join("\n");
   const html = mailShell({ title: subject, preheader: lead, body, link, footer: [escHtml(why), settingsLink(settings), escHtml(from), foot ? escHtml(foot) : ""] });
   return { subject, text, html };
@@ -686,11 +686,11 @@ export async function performPeer(token: string | null, raw: Action, origin?: st
         const them = peer(a.memberId);
         const coId = company(a.companyId);
         const first = firstOf(them.name);
-        if (x.hiddenCo(coId)) throw new ActionError("Open the company first. Then you can pass it to someone great.");
+        if (x.hiddenCo(coId)) throw new ActionError("Open the company first. Then you can refer it to a peer.");
         if (!x.peerOk(them.id)) throw new ActionError(`${first} isn't in Peers right now.`);
         if (x.mutedBy(them.id, me.id) || x.leadsOff(them.id)) throw new ActionError(NOT_TAKING);
-        if (p.passes.some((q) => q.by === me.id && q.to === them.id && q.companyId === coId && q.status === "new")) throw new ActionError(`You passed this one to ${first} already.`);
-        if (p.passes.filter((q) => q.by === me.id && nowMs - Date.parse(q.at) < DAY).length >= PASS_DAILY) throw new ActionError(`You can pass ${PASS_DAILY} leads a day. Pass more tomorrow.`);
+        if (p.passes.some((q) => q.by === me.id && q.to === them.id && q.companyId === coId && q.status === "new")) throw new ActionError(`You referred this one to ${first} already.`);
+        if (p.passes.filter((q) => q.by === me.id && nowMs - Date.parse(q.at) < DAY).length >= PASS_DAILY) throw new ActionError(`You can refer ${PASS_DAILY} companies a day. Refer more tomorrow.`);
         const roleId = a.roleId ? x.pubSeat.get(String(a.roleId)) : undefined;
         if (a.roleId && (!roleId || !openRolesAt(x, coId).some((e) => e.id === roleId))) throw new ActionError("That role isn't open anymore.");
         const note = cleanText(a.note, NOTE_MAX);
@@ -709,30 +709,30 @@ export async function performPeer(token: string | null, raw: Action, origin?: st
         const mail = emailOk(them.id)
           ? { to: them.email, ...leadEmail({ line, first: firstOf(me.name), note, link: link(them.id, `/?p=peers&lead=${q.id}`), settingsUrl: link(them.id, NOTIFICATIONS_PATH) }) }
           : undefined;
-        return { message: `Passed to ${first}. It opens free for them, and you earn ${PASS_CREDIT} credits if they take it.`, mail, convId: c.id, me: me.id };
+        return { message: `Referred to ${first}. It opens free for them, and you earn ${PASS_CREDIT} credits if they take it.`, mail, convId: c.id, me: me.id };
       }
       case "peer.answer": {
         const q = p.passes.find((y) => y.id === String(a.id ?? "") && y.to === me.id);
-        if (!q) throw new ActionError("That lead isn't there anymore.");
-        if (q.status !== "new") return { message: q.status === "taken" ? "It's in your pipeline already." : "You passed on this one.", me: me.id };
+        if (!q) throw new ActionError("That referral isn't there anymore.");
+        if (q.status !== "new") return { message: q.status === "taken" ? "It's in your pipeline already." : "You turned this one down.", me: me.id };
         const by = x.idx.byId.get(q.by);
         const first = firstOf(by?.name ?? "They");
         q.answeredAt = now;
         if (!a.take) {
           q.status = "declined";
-          return { message: `Got it. ${first} sees you passed on it.`, me: me.id };
+          return { message: `Got it. ${first} sees you turned it down.`, me: me.id };
         }
         q.status = "taken";
         const log = ((s.pipeline ??= {})[me.id] ??= emptyPipeline());
         const had = entryAt(log, q.companyId);
         if (had && (isOpen(had.stage) || had.stage === "quiet")) {
           had.lead ??= { passId: q.id, by: q.by };
-          had.log.push({ at: now, text: `${first} passed you this lead` });
+          had.log.push({ at: now, text: `${first} referred this to you` });
           q.entryId = had.id;
         } else {
           // A peer's lead lands at To reach out: nothing went out from the member yet. Their note moves it to Sent (openEntry).
           const { entry } = openLead(log, { id: newId("pl"), companyId: q.companyId, nowMs, lead: { passId: q.id, by: q.by }, ...(q.conversationId ? { conversationId: q.conversationId } : {}) });
-          entry.log.push({ at: now, text: `${first} passed you this lead` });
+          entry.log.push({ at: now, text: `${first} referred this to you` });
           q.entryId = entry.id;
         }
         // The passer's credits: once per peer and company, within their daily earning cap (the rest is held and paid later).

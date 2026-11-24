@@ -89,7 +89,7 @@ export const isChannel = (v: unknown): v is Channel => typeof v === "string" && 
  */
 export type Via = "note" | "message" | "gmail" | "calendar" | "proposal" | "seat" | "auto" | "you" | "peer";
 export const VIA_WORDS: Record<Via, string> = {
-  peer: "Passed to you by a peer",
+  peer: "Referred to you by a peer",
   note: "From your note",
   message: "From Merlin messages",
   gmail: "Detected from your Gmail",
@@ -410,7 +410,7 @@ export function openLead(log: PipelineLog, o: { id: string; companyId: string; n
     createdAt: at,
     updatedAt: at,
   };
-  logLine(entry, "To reach out: a lead a peer passed you", o.nowMs);
+  logLine(entry, "To reach out: a peer referred this to you", o.nowMs);
   log.entries.push(entry);
   if (log.entries.length > PIPELINE_LIMITS.entries) {
     const closed = log.entries.filter((e) => !isOpen(e.stage) && e.stage !== "won").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
@@ -435,7 +435,7 @@ export function migrateLeadsToReach(log: PipelineLog | undefined): number {
     e.dates = { reach: e.dates.sent ?? e.createdAt };
     e.via = { reach: "peer" };
     e.due = null;
-    e.log.push({ at: e.updatedAt, text: "To reach out: a lead a peer passed you" });
+    e.log.push({ at: e.updatedAt, text: "To reach out: a peer referred this to you" });
     n++;
   }
   return n;
@@ -1478,7 +1478,7 @@ export interface PipelineRec {
   seat?: string;
   /** The intro it came through: who made it, and its status. */
   intro?: { id: string; by: string; status: IntroStatus };
-  /** A lead a peer passed: who passed it ("Passed to you by Ana"). */
+  /** A company a peer referred: who referred it ("Referred to you by Ana"). */
   lead?: { id: string; by: string };
   /** A team at this company (lib/peers.ts): "Teamed with Ana". */
   team?: { id: string; with: string };

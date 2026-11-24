@@ -134,7 +134,7 @@ check("not taking intros: said plainly, nothing wrong with the note, other ways 
 check("blocked and Not now say so", /^You blocked Rita\./.test(M.closedNote(list[7])!.text) && /^You said not now\./.test(M.closedNote(conv({ id: "y", status: "closed", closedBy: "you" }))!.text) && M.closedNote(list[0]) === null);
 check("a draft kept here shows as Draft on its row", M.lastLine(list[1], "My draft") === "Draft: My draft" && M.lastLine(list[0]) === "Sent. I copied you." && M.lastLine(conv({ id: "z", messages: [{ id: "r", mine: true, at: now, text: "", removed: true }] })) === "You: An admin removed this message.");
 check("the example rows are labelled examples, one for each reason, and name nobody", M.EXAMPLE_ROWS.length === 3 && M.EXAMPLE_ROWS.every((e) => e.example === true) && M.EXAMPLE_ROWS.map((e) => e.reason).join() === "intro,lead,q" && !M.EXAMPLE_ROWS.some((e) => /[A-Z][a-z]+ [A-Z][a-z]+/.test(e.about)));
-check("lead status words", M.leadStatus(lead({ status: "new" })) === "Waiting for you" && M.leadStatus(lead({ side: "from-you", status: "taken" })) === "Taken" && M.leadStatus(lead({ side: "from-you", status: "declined" })) === "Passed on");
+check("lead status words", M.leadStatus(lead({ status: "new" })) === "Waiting for you" && M.leadStatus(lead({ side: "from-you", status: "taken" })) === "Taken" && M.leadStatus(lead({ side: "from-you", status: "declined" })) === "Turned down");
 
 /* ---------- Draft with Merlin: the template in the member's voice ---------- */
 console.log("\nDraft with Merlin, from a template");

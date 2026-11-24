@@ -159,14 +159,14 @@ export function DataFlows() {
               Inside Merlin: Fractionals and Peers
             </h2>
             <p className="cl-p">
-              When you pass a lead to another fractional, team up with one on a company, or post in a circle, Merlin keeps who, which company and what you wrote. Only
+              When you refer a company to another fractional, team up with one on a company, or post in a circle, Merlin keeps who, which company and what you wrote. Only
               the members in it see it: the two of you for a lead or a team-up, a circle&apos;s members for its posts. None of it goes to an outside service, except the
               email that tells the other member, and Revenue Nomad&apos;s copy for admins leaves out what members wrote.
             </p>
             <p className="cl-p">
               Your card in Fractionals can carry one line about you and where you are based, both written by you and optional, and whether you are open to
               leads. Members see the line and the place only while you are in the directory; leave them empty and nothing shows. Emails, links and phone
-              numbers are refused there, because members write to you in Messages. Turn Open to leads off and nobody can pass you a company. A fractional who
+              numbers are refused there, because members write to you in Messages. Turn Open to leads off and nobody can refer you a company. A fractional who
               stays out of the directory, or hides their name on their seats, is not listed to other members at all. All of it is deleted with your profile when you close your account.
             </p>
           </section>

@@ -5,14 +5,14 @@
  * Peers, drawn in place of both for ?p=peers, ?p=fractionals and ?p=partners (Peers.tsx PeersPage
  * hands over here while the new look is on).
  *
- *   Leads           a strip on top: leads passed to you (Take it, Not for me; team-up asks) and the
- *                   ones you passed, with what came of them
+ *   Referrals       a strip on top: referrals for you (Take it, Not for me; team-up asks) and the
+ *                   referrals you sent, with what came of them
  *   Views           All, Serve the same clients as you, You know (the member's own sources, and the
- *                   sources themselves: "Your network" lives here), Passed you a lead
+ *                   sources themselves: "Your network" lives here), Referred you a company
  *   The list        a table (Name, Function, Seats held, Companies in common, Industries, Evidence
  *                   shown, Open to leads, and How you know them as an eighth column) or cards, with
  *                   chips that narrow it and Ask Merlin, which sets the chips from plain words
- *   The card        a row opens it on the right: Message, Pass a lead, Team up, Mute, and tabs
+ *   The card        a row opens it on the right: Message, Refer it to a peer, Team up, Mute, and tabs
  *                   Seats, Evidence (only the cases they chose to show, the client hidden) and
  *                   Connection (how you are connected)
  *   Your card       what other members see of you, with the privacy switches, your one line and
@@ -244,7 +244,7 @@ export function FractionalsPage() {
     <section aria-label="About this page" className={`wb-strip${stage ? " wb-strip-done" : ""}`}>
       {stage === 0 ? (
         <span className="wb-strip-t">
-          <strong>What this page is for.</strong> Every fractional on Merlin&apos;s files, free to see on any plan. Find the ones who serve the same clients as you, message them, and pass each other the leads that are not your fit. Start with your own card.
+          <strong>What this page is for.</strong> Every fractional on Merlin&apos;s files, free to see on any plan. Find the ones who serve the same clients as you, message them, and refer each other the companies that are not your fit. Start with your own card.
         </span>
       ) : stage === 1 ? (
         <>
@@ -258,7 +258,7 @@ export function FractionalsPage() {
       ) : (
         <>
           <span className="wb-strip-t">
-            <strong>You already know {plural(ctx.know.size, "of these fractionals", "of these fractionals")}.</strong> Next, open a company and pass the ones that are not your fit.
+            <strong>You already know {plural(ctx.know.size, "of these fractionals", "of these fractionals")}.</strong> Next, open a company and refer the ones that are not your fit to a peer.
           </span>
           <button type="button" className="btn btn-pine" onClick={() => c.openPage("table")}>
             Open a company
@@ -464,7 +464,7 @@ export function FractionalsPage() {
       >
         Mute
       </button>
-      <span className="fy-selnote">A lead goes to one fractional at a time. Open a card to pass one.</span>
+      <span className="fy-selnote">A referral goes to one fractional at a time. Open a card to refer a company.</span>
       <button type="button" className="wb-sel-clear" onClick={() => setSel(new Set())}>
         Clear
       </button>
@@ -687,7 +687,7 @@ export function FractionalsPage() {
               ? "Free on every plan"
               : first
                 ? "Fellow fractionals are free to see on every plan. A message never costs a credit."
-                : `Showing ${Math.min(n, rows.length).toLocaleString("en-US")} of ${rows.length.toLocaleString("en-US")}. Free on every plan${peers ? ` · ${peers.passesLeft} of 10 passes left today` : ""}`}
+                : `Showing ${Math.min(n, rows.length).toLocaleString("en-US")} of ${rows.length.toLocaleString("en-US")}. Free on every plan${peers ? ` · ${peers.passesLeft} of 10 referrals left today` : ""}`}
           </span>
         </div>
       </div>
@@ -745,13 +745,13 @@ function headlineOf(view: FxView, records: FractionalRec[], rows: FractionalRec[
     return `${same.length.toLocaleString("en-US")} ${same.length === 1 ? "fractional serves" : "fractionals serve"} companies like yours. ${on(same).toLocaleString("en-US")} are on Merlin.`;
   }
   if (view === "know") return `${plural(counts.know, "fractional", "fractionals")} you already know. Only you see this view.`;
-  return `${plural(counts.passed, "fractional has", "fractionals have")} passed you a lead.`;
+  return `${plural(counts.passed, "fractional has", "fractionals have")} referred you a company.`;
 }
 
 function emptyWords(view: FxView, filtered: boolean, anySource: boolean): string {
   if (filtered) return "Nobody matches these filters.";
   if (view === "know") return anySource ? "Nobody you know is a fractional on Merlin yet. Invite them from All." : "Bring in who you know above, and the fractionals you have already met show here.";
-  if (view === "passed") return "Nobody has passed you a lead yet. While you are open to leads, a company a fractional passes you opens free for you.";
+  if (view === "passed") return "Nobody has referred you a company yet. While you are open to leads, a company a fractional refers to you opens free for you.";
   if (view === "same") return "Say who your clients are, and Merlin finds the fractionals who serve the same kind.";
   return "Nobody on file yet.";
 }
@@ -819,7 +819,7 @@ function PassButtonFor({ r, className = "btn fy-btn-line" }: { r: FractionalRec;
   return (
     <>
       <button type="button" className={className} disabled={off} title={off ? `${firstOfRec(r)} is not taking leads right now.` : undefined} onClick={() => setOpen(true)}>
-        Pass a lead
+        Refer it to a peer
       </button>
       {open && <PassSheet from="record" to={{ id: r.memberId, first: firstOfRec(r) }} infos={c.infos} onClose={() => setOpen(false)} />}
     </>
@@ -929,25 +929,25 @@ function LeadsStrip({ peers, first, all, onAll, focus, openTeam }: { peers: Retu
     </div>
   );
   return (
-    <section id="leads" aria-label="Leads" className="fy-leads">
+    <section id="leads" aria-label="Referrals" className="fy-leads">
       {col(
-        "Leads passed to you",
+        "Referrals for you",
         toItems,
         first ? (peers ? "" : "") : "Each one opened free for you",
         first ? (
           <>
-            <span className="fy-pill">Example</span> A fractional passes you a company with an open role in your function. It opens free for you: take it, or say it is not for you.
+            <span className="fy-pill">Example</span> A fractional refers you a company with an open role in your function. It opens free for you: take it, or say it is not for you.
           </>
         ) : (
-          "Nothing passed to you yet. While you are open to leads, a company a fractional passes you opens free for you."
+          "No referrals for you yet. While you are open to leads, a company a fractional refers to you opens free for you."
         ),
         fresh,
       )}
       {col(
-        "Leads you passed",
+        "Referrals sent",
         byItems,
-        peers.sent.length ? `${peers.sent.length} passed · ${taken} taken · ${won} won${earned ? ` · ${earned} credits earned` : ""}` : `${peers.passesLeft} of 10 passes left today`,
-        "Nothing passed yet. Open a card and choose Pass a lead. The company opens free for them, and you earn 5 credits when it is taken.",
+        peers.sent.length ? `${peers.sent.length} referred · ${taken} taken · ${won} won${earned ? ` · ${earned} credits earned` : ""}` : `${peers.passesLeft} of 10 referrals left today`,
+        "No referrals sent yet. Open a card and choose Refer it to a peer. The company opens free for them, and you earn 5 credits when it is taken.",
       )}
     </section>
   );
@@ -1032,7 +1032,7 @@ function CardPanel({
   if (leadsWith.length) {
     const to = leadsWith.filter((l) => l.side === "from-you");
     const from = leadsWith.filter((l) => l.side === "to-you");
-    conn.push({ k: "Leads between you", v: [from.length ? `${fnm} passed you ${from.length === 1 ? from[0].name ?? "a company" : `${from.length} leads`}.` : "", to.length ? `You passed ${fnm} ${to.length === 1 ? to[0].name ?? "a company" : `${to.length} leads`}${to.some((l) => l.won) ? ", and one was won" : ""}.` : ""].filter(Boolean).join(" ") });
+    conn.push({ k: "Referrals between you", v: [from.length ? `${fnm} referred ${from.length === 1 ? from[0].name ?? "a company" : `${from.length} companies`} to you.` : "", to.length ? `You referred ${to.length === 1 ? to[0].name ?? "a company" : `${to.length} companies`} to ${fnm}${to.some((l) => l.won) ? ", and one was won" : ""}.` : ""].filter(Boolean).join(" ") });
   }
   const ball = ballChip(r);
   if (ball && !cw) conn.push({ k: "Your Crystal Ball", v: `${ball}.` });
@@ -1318,7 +1318,7 @@ function YourCard({ me, mine, first, peers, onClose, onKnow, phone }: { me: Me; 
             () => void run("dir", me.nameHidden ? { type: "settings", nameHidden: false } : { type: "settings", fractionals: !listed }),
           )}
           {sw("hide", "Hide my name on my seats", !!me.nameHidden, me.nameHidden ? 'On. Seats read "A fractional (name hidden)".' : "Off. Your name shows on your seats.", () => void run("hide", { type: "settings", nameHidden: !me.nameHidden }))}
-          {sw("leads", "Open to leads", me.leads !== false, me.leads !== false ? "On. A passed company opens free for you." : "Off. Nobody can pass you a lead.", () => void run("leads", { type: "settings", leads: me.leads === false }))}
+          {sw("leads", "Open to leads", me.leads !== false, me.leads !== false ? "On. A company referred to you opens free for you." : "Off. Nobody can refer you a company.", () => void run("leads", { type: "settings", leads: me.leads === false }))}
           {close ? (
             sw(
               "ev",

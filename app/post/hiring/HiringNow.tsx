@@ -15,7 +15,7 @@
  *             you, Your way in, Status (New, Seen, Pitched); and Closest evidence (Evidence Bank,
  *             Close only, the member's case most like each company), Size and HQ, Past fractional hires.
  *   Drawer    a row opens the role on the right (RoleDrawer.tsx): the posting, who is hiring, the
- *             way in, and open the company, draft a note, add to pipeline, pass it on.
+ *             way in, and open the company, draft a note, add to pipeline, refer it to a peer.
  *   Alert     "Save view with an alert" saves the view as a list of open roles with its alert on
  *             (AlertPanel.tsx, F5): the weekly email, and Slack when roles open. Free.
  *   First     pre-filtered to the member's function, one strip, the alert offer as the one
@@ -66,7 +66,7 @@ import "./hiring.css";
 const PAGE = 50;
 const n = (x: number) => x.toLocaleString("en-US");
 const STRIP =
-  "Every open fractional role Merlin finds on job boards, newest first. Pick a role to read its posting and see who is hiring, check your way in, then pitch it or pass it to a fractional who fits better.";
+  "Every open fractional role Merlin finds on job boards, newest first. Pick a role to read its posting and see who is hiring, check your way in, then pitch it or refer it to a peer who fits better.";
 
 /* ----- the member's own conveniences, in their browser: roles opened here, extra columns ----- */
 const seenKey = (id: string) => `hn_seen_${id}`;
@@ -311,7 +311,7 @@ export function HiringNow() {
         return (
           <span className="hn-two">
             <span className={`hn-fit hn-fit-${f.tier}`}>{FIT_LABEL[f.tier]}</span>
-            <span className="hn-sub hn-clip" title={f.why}>{f.tier ? f.why : "Pass it on"}</span>
+            <span className="hn-sub hn-clip" title={f.why}>{f.tier ? f.why : "Refer it to a peer"}</span>
           </span>
         );
       }

@@ -523,7 +523,7 @@ console.log("\nThe ledger by kind");
     L(1, "fill", "Private rate", "", 9),
     L(-1, "Removed", "Private rate", "", 10),
     L(REFERRAL_BONUS, "referral", "Invite bonus", "Devon", 11),
-    L(PASS_CREDIT, "A peer took the lead you passed", "", "", 12),
+    L(PASS_CREDIT, "A peer took the company you referred", "", "", 12),
     L(100, "Close credits for the month", "", "", 13),
     L(50, "Bought 50 credits", "", "", 14),
     L(1, "refund", "Person email", "Harrow and Vale", 15),

@@ -10,6 +10,7 @@
  * pastes. Either way the URL is sent a test message before it's saved, and the page only ever
  * gets it back masked. Reads and writes /api/integrations.
  */
+import { ServiceIcon } from "../ui/ServiceIcon";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevron, useToast, errorText } from "../ui/shared";
 import { useCopy } from "./Credits";
@@ -425,14 +426,14 @@ export function Integrations({
 
       <div className="in-picks">
         <PickCard
-          mark={<SlackMark />}
+          mark={<ServiceIcon service="slack" size={24} fallback={<SlackMark />} />}
           name="Slack"
           desc="Alerts for new open roles in your function, new messages, and fractionals who engage your seats."
           st={slackPick(view)}
           onClick={() => jump(slackRef.current)}
         />
-        <PickCard mark={<ClaudeMark />} name="Claude" desc="Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit." st={claudePick(apps)} onClick={() => (onAgent ? onAgent() : jump(claudeRef.current))} />
-        {googleSt && <PickCard mark={<GoogleG size={22} />} name="Google" desc="Who you already know at companies on Merlin, from your calendar and contacts." st={googleSt} onClick={() => jumpTo("google")} />}
+        <PickCard mark={<ServiceIcon service="claude" size={24} fallback={<ClaudeMark />} />} name="Claude" desc="Ask the table from Claude, ChatGPT, Claude Code or Cursor. It asks before it spends a credit." st={claudePick(apps)} onClick={() => (onAgent ? onAgent() : jump(claudeRef.current))} />
+        {googleSt && <PickCard mark={<ServiceIcon service="google" size={22} />} name="Google" desc="Who you already know at companies on Merlin, from your calendar and contacts." st={googleSt} onClick={() => jumpTo("google")} />}
         {granolaSt && <PickCard mark={<GranolaMark />} name="Granola" desc="Start a proposal from a call Granola recorded." st={granolaSt} onClick={() => jumpTo("granola")} />}
       </div>
 
