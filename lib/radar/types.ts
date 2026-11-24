@@ -293,6 +293,8 @@ export interface RadarView {
   range?: RadarRange | null;
   /** With &range= only: each range with how many companies it lists (the switcher), Today first. */
   ranges?: { range: RadarRange; companies: number }[];
+  /** With &range= only: the oldest kept day with a company in it. A wider range can't hold more than the days since then. */
+  since?: string | null;
   /** The day's companies, or the range's, most likely first. */
   rows: RadarRow[];
   /** Email or Slack would carry it: what the page says about delivery. */

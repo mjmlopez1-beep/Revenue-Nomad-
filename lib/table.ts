@@ -10856,11 +10856,15 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
           }
         }
         const teamAt = o.team ? now : prev?.teamAt;
+        // The same leaders as the last read (and a team page read before): the reading keeps the day it was first seen.
+        const hash = leadersHash(functions);
+        const sameReading = !!prev && prev.hash === hash && (!!prev.teamAt || !o.team);
+        const hashAt = sameReading ? prev!.hashAt ?? prev!.teamAt ?? prev!.readAt ?? prev!.checkedAt : now;
         // Names stay only where they may (a United States company, nobody who asked to be removed, a member's own choice).
         const named: Pick<LeadersRecord, "functions" | "top"> = { functions, top: mergeTop(prev?.top, o.top) };
         o.named = keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
         all[o.companyId] = {
-          status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash: leadersHash(functions), functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
+          status: found ? "found" : "none", checkedAt: now, ok: true, v: LEADERS_READER_VERSION, hash, hashAt, functions, ...(found ? {} : { why: o.why ?? "no leaders found" }), ...counts, readAt: now, ...(teamAt ? { teamAt } : {}),
           ...(named.top ? { top: named.top } : {}),
         };
         payLeaderBack(s, o.companyId, functions, now);
@@ -10877,7 +10881,7 @@ export function saveLeaders(outcomes: LeadersOutcome[], run: LeadersRunSummary |
         keepNamesWhereAllowed(s, seed, g.companies.get(o.companyId), o.companyId, named, priv);
         o.named = 0;
         all[o.companyId] = {
-          status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
+          status: kept ? "found" : o.status, checkedAt: now, ok: false, v: LEADERS_READER_VERSION, ...(kept && prev?.hash ? { hash: prev.hash, ...(prev.hashAt ? { hashAt: prev.hashAt } : {}) } : {}), functions, ...(o.why ? { why: o.why } : {}), ...counts,
           ...(readAt ? { readAt } : {}), ...(teamAt ? { teamAt } : {}), ...(named.top ? { top: named.top } : {}),
         };
       }
@@ -10909,7 +10913,9 @@ function leadsOf(s: State, companyId: string, hidden: boolean, viewer?: string, 
   });
   const teamAt = teamReadAt(r, nowMs);
   if (!fns.length && !teamAt) return undefined;
-  return { checkedAt: r?.checkedAt ?? "", fns, ...(teamAt ? { teamAt } : {}) };
+  // "Checked <day>" says when the leaders shown were read: a later try that could not reach the site does not move it.
+  const readAt = r ? r.readAt ?? (leadersReadOk(r) ? r.checkedAt : undefined) : undefined;
+  return { checkedAt: r?.checkedAt ?? "", ...(readAt ? { readAt } : {}), fns, ...(teamAt ? { teamAt } : {}) };
 }
 
 /** A members' leader report's ledger ref: "<companyId>.ftLeader:Sales" (the credit history reads "Full-time Sales leader"). */

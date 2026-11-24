@@ -9,7 +9,7 @@
  * Runs on a made-up seed and state in a temporary data dir (member Jordan Avery; companies
  * Northwind Clinics, Cedar and Pine, Halcyon Freight, Larkspur Learning, Quillon Labs).
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -264,6 +264,110 @@ async function main() {
     return Math.abs((tl.dots[0] ?? 0) - 0.5) < 0.01 && !!tl.win && tl.win[0] >= 0.5 && tl.win[1] > tl.win[0];
   })());
   check("groups count the companies behind them", CM.groupCounts([{ kinds: ["role", "seat"] }, { kinds: ["tenure"] }]).seat === 2 && CM.groupCounts([{ kinds: ["role"] }]).role === 1);
+
+  /* ---------- a leader gone while a full-time leader is in place: the ranking agrees with the panel ---------- */
+  console.log("\nA leader gone, a full-time leader in place now");
+  const gone = (lead: import("../lib/radar/signals").RawSignal["lead"]) => raw({ key: `gone:${String(!!lead?.ft.Sales)}`, kind: "departure", fn: "Sales", companyId: "c_d", gone: { kind: "full-time", level: "C-level" }, lead });
+  const dOpen = M.scoreFor(gone({ teamAt: new Date().toISOString(), ft: {} }), base);
+  const dHeld = M.scoreFor(gone({ teamAt: new Date().toISOString(), ft: { Sales: { how: "team page", level: "C-level", confirmed: true } } }), base);
+  check("a CRO gone with nobody in the seat on their team page is a strong call", !!dOpen && dOpen.band === "High" && !dOpen.held, dOpen && { b: dOpen.band, s: dOpen.score });
+  check("the same, with a full-time Sales leader on their team page now: held under Medium, and the why-now says so", !!dHeld && dHeld.band === "Low" && dHeld.held === true && /full-time CRO is in place now \(their team page\)/.test(dHeld.whyNow) && /looks filled/.test(dHeld.whyNow), dHeld && { b: dHeld.band, w: dHeld.whyNow });
+  const dSaid = M.scoreFor(gone({ teamAt: null, ft: { Sales: { how: "members", level: "C-level", role: "CRO", confirmed: false } } }), base);
+  check("members saying a full-time CRO is in place holds it too", !!dSaid && dSaid.band !== "High" && dSaid.band !== "Medium" && /\(members say\)/.test(dSaid.whyNow), dSaid && dSaid.whyNow);
+  const sHeld = M.scoreFor(raw({ key: "s_ft", kind: "seat", fn: "Sales", companyId: "c_s2", lead: { teamAt: null, ft: { Sales: { how: "team page", level: "VP", confirmed: true } } } }), base);
+  check("an ended Sales seat with a full-time Sales leader in place now is held under Medium too", !!sHeld && sHeld.band === "Low" && sHeld.held === true, sHeld && sHeld.band);
+  const rFt = M.scoreFor(raw({ key: "r_ft", kind: "role", fn: "Sales", companyId: "c_r2", lead: { teamAt: null, ft: { Sales: { how: "team page", level: "VP", confirmed: true } } } }), base);
+  check("an open Sales role stays a direct call even with a full-time leader (the panel says that does not hold it down)", !!rFt && rFt.band === "High" && !rFt.held);
+  const cbSrc = readFileSync(new URL("../app/post/crystal/CrystalBall.tsx", import.meta.url), "utf8");
+  check("the panel says Held under Medium only when the band is not High or Medium", /row\.band === "High" \|\| row\.band === "Medium" \? "An open role or a raise still counts/.test(cbSrc) && !/since \$\{lead\.since\}` : ""\}\. Held under Medium\./.test(cbSrc));
+
+  // End to end: a kept row sent High for "CRO gone" reads Low once their team page shows a full-time Sales leader.
+  const day2 = ago(2);
+  const goneAt = `${day2}T09:00:00.000Z`;
+  const gKey = `gone:${P.q}:Sales:${day2}`;
+  await T.mutate((d) => {
+    d.leaderDepartures = [{ companyId: "c_q", fn: "Sales", kind: "full-time", level: "C-level", at: goneAt }];
+    const mem = d.radar!.members.mem_jor;
+    mem.days = { ...(mem.days ?? {}), [day2]: [{ k: gKey, c: "c_q", kind: "departure", l: "Their CRO is no longer on their website", b: "High", w: "CRO gone from its website · interim or fractional cover usually follows within 2 months", s: 0.5, a: day2, h: [0, 2] }] };
+    mem.sent = { ...(mem.sent ?? {}), [gKey]: goneAt };
+  });
+  const before = (await view(JOR))!.rows.find((r) => r.id === P.q);
+  check("the kept row as sent: High, CRO gone", before?.band === "High", before);
+  const nowIso2 = new Date().toISOString();
+  await T.mutate((d) => {
+    (d.leaders ??= {}).c_q = { status: "found", checkedAt: nowIso2, ok: true, v: 99, team: true, teamAt: nowIso2, readAt: nowIso2, functions: { Sales: { level: "C-level", kind: "full-time", how: "team page", url: "https://qco.example/team", seenAt: nowIso2 } } } as never;
+  });
+  const after = (await view(JOR))!.rows.find((r) => r.id === P.q);
+  check("once their team page shows a full-time Sales leader, the same row reads Low, with why", after?.band === "Low" && /in place now/.test(after?.sigs?.[0]?.line ?? "") === false && JSON.stringify(after).includes("in place now"), after);
+
+  /* ---------- the ranges filter by day: Today, the last 7 days and the last 30 days ---------- */
+  console.log("\nThe ranges filter by day");
+  await T.mutate((d) => {
+    const mem = d.radar!.members.mem_jor;
+    // A company only seen 12 days ago belongs to the last 30 days, never the last 7.
+    mem.days = { ...(mem.days ?? {}), [ago(12)]: [row("c_q", "Medium", "adjacent", 0.12)] };
+  });
+  const vr = await view(JOR, "30d");
+  const rn = Object.fromEntries((vr!.ranges ?? []).map((r) => [r.range, r.companies]));
+  const in7 = new Set(ids(await view(JOR, "7d")));
+  const in30 = new Set(ids(await view(JOR, "30d")));
+  const inToday = new Set(ids(await view(JOR, "today")));
+  check("each range counts what it lists, and a wider range holds the narrower one", rn.today === inToday.size && rn["7d"] === in7.size && rn["30d"] === in30.size && [...inToday].every((x) => in7.has(x)) && [...in7].every((x) => in30.has(x)), { rn, t: inToday.size, s: in7.size, m: in30.size });
+  check("Today is today's companies only; yesterday's are in the last 7 days", inToday.has(P.n) && !inToday.has(P.c) && in7.has(P.c));
+  const q30 = (vr!.rows ?? []).find((r) => r.id === P.q);
+  check("a company is listed at its most recent day in the range (Quillon: 2 days ago, not 12)", q30?.day === ago(2), q30?.day);
+  await T.mutate((d) => {
+    const mem = d.radar!.members.mem_jor;
+    const { [ago(2)]: _drop, ...rest } = mem.days ?? {};
+    mem.days = rest;
+    d.leaderDepartures = [];
+  });
+  const in7b = new Set(ids(await view(JOR, "7d")));
+  const in30b = new Set(ids(await view(JOR, "30d")));
+  check("a company only seen 12 days ago is in the last 30 days, not the last 7", !in7b.has(P.q) && in30b.has(P.q), { s: [...in7b], m: [...in30b] });
+
+  /* ---------- a gap is dated by when its reading was first seen, not by the latest re-read ---------- */
+  console.log("\nTeam page re-reads keep a gap's date");
+  const SG = await import("../lib/radar/signals");
+  const mkt = { Marketing: { level: "VP" as const, kind: "full-time" as const, how: "team page" as const, url: "https://qco.example/team", seenAt: iso(-20 * DAY) } };
+  const outcome = { companyId: "c_q", status: "found" as const, functions: mkt, pages: 2, team: true, press: false, robots: 0 };
+  await T.mutate((d) => {
+    delete (d.leaders ??= {}).c_q;
+  });
+  await t.saveLeaders([outcome], null, iso(-20 * DAY));
+  const rec1 = (await t.loadState()).leaders!.c_q;
+  check("a first read with a team page: the reading is seen that day", rec1.hashAt === iso(-20 * DAY) && rec1.teamAt === iso(-20 * DAY), rec1);
+  await t.saveLeaders([outcome], null, iso(-HOUR));
+  const rec2 = (await t.loadState()).leaders!.c_q;
+  check("re-read with the same leaders: read today, the reading still dated 20 days ago", rec2.teamAt === iso(-HOUR) && rec2.readAt === iso(-HOUR) && rec2.hashAt === iso(-20 * DAY) && rec2.hash === rec1.hash, rec2);
+  const gapsIn = async (days: number) => {
+    const [sd, st] = [await t.loadSeed(), await t.loadState()];
+    return SG.detectSignals(sd, st, Date.now() - days * DAY, Date.now()).filter((x) => x.kind === "gap" && x.companyId === "c_q");
+  };
+  const g7 = await gapsIn(7);
+  const g30 = await gapsIn(30);
+  check("the gap that reading shows is in the last 30 days, not the last 7 (a re-read is not news)", g7.length === 0 && g30.length > 0 && g30.every((x) => x.at === iso(-20 * DAY)), { g7: g7.length, g30: g30.map((x) => x.at) });
+  await t.saveLeaders([{ ...outcome, functions: { ...mkt, Sales: { ...mkt.Marketing, url: "https://qco.example/team#s" } } }], null, iso(-HOUR / 2));
+  const rec3 = (await t.loadState()).leaders!.c_q;
+  check("a read that finds different leaders is a new reading, seen today", rec3.hash !== rec2.hash && rec3.hashAt === iso(-HOUR / 2), rec3);
+  await t.saveLeaders([{ ...outcome, status: "failed", functions: {}, why: "timeout" }], null, iso(-HOUR / 4));
+  const rec4 = (await t.loadState()).leaders!.c_q;
+  check("a try that could not reach the site keeps the reading's day and the last read", rec4.hashAt === rec3.hashAt && rec4.readAt === iso(-HOUR / 2) && rec4.ok === false, rec4);
+  const L = await import("../lib/leaders/types");
+  check("'checked' on the record says the last read, not a failed try", L.leadsReadAt({ checkedAt: rec4.checkedAt, readAt: rec4.readAt }) === iso(-HOUR / 2) && L.leadsReadAt({ checkedAt: "2026-01-02T00:00:00.000Z" }) === "2026-01-02T00:00:00.000Z");
+  await T.mutate((d) => {
+    delete d.leaders!.c_q;
+  });
+
+  /* ---------- why two ranges count the same ---------- */
+  console.log("\nThe ranges say why they agree");
+  const td = ago(0);
+  check("picks only from 3 days ago: the note says the last 30 days hold the same companies as the last 7", CM.rangesNote([{ range: "today", companies: 0 }, { range: "7d", companies: 124 }, { range: "30d", companies: 124 }], ago(3), td)?.includes("so the last 30 days hold the same companies as the last 7") === true);
+  check("no note when the counts differ, or when the picks go back further", CM.rangesNote([{ range: "7d", companies: 4 }, { range: "30d", companies: 9 }], ago(3), td) === null && CM.rangesNote([{ range: "7d", companies: 4 }, { range: "30d", companies: 4 }], ago(20), td) === null);
+  const vs = await view(JOR, "30d");
+  check("the view says how far back its picks go", typeof vs?.since === "string" && vs!.since! <= td && (vs!.ranges ?? []).length === 3, vs?.since);
+  const cbSrc2 = readFileSync(new URL("../app/post/crystal/CrystalBall.tsx", import.meta.url), "utf8");
+  check("the page shows the note beside the ranges", /rangesNote\(view\.ranges, view\.since, view\.today\)/.test(cbSrc2));
 }
 
 main()

@@ -78,6 +78,21 @@ export function dateWords(day: string | null | undefined, today: string): string
   return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric", timeZone: "UTC" } : { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
+/**
+ * Why two ranges count the same, when they do: Crystal Ball's picks only go back to `since`, so a
+ * wider range can hold no more ("Picks go back to Nov 18, so the last 30 days hold the same
+ * companies as the last 7"). Null when the counts differ or there is nothing to explain.
+ */
+export function rangesNote(ranges: { range: string; companies: number }[] | undefined, since: string | null | undefined, today: string): string | null {
+  const n = (r: string) => ranges?.find((x) => x.range === r)?.companies;
+  const w = n("7d");
+  const m = n("30d");
+  if (!since || w === undefined || m === undefined || w !== m || m === 0) return null;
+  const days = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${since}T12:00:00Z`)) / 86_400_000);
+  if (!(days >= 0 && days < 7)) return null;
+  return `Picks go back to ${dateWords(since, today)}, so the last 30 days hold the same companies as the last 7.`;
+}
+
 /** What the page knows about a way in at one company, from the member's own sources and the seats on file. */
 export interface WayFacts {
   /** Ways in through people the member knows (their own files, Google, messages): a count, never names here. */

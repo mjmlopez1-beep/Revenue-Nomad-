@@ -54,7 +54,7 @@ import { useNetwork } from "../network/useNetwork"; // [google network]
 import { usePaths } from "../network/usePaths"; // [smart ways in]
 import { firstOf, ownOf } from "../firstVisit";
 import { plural } from "../hooks";
-import { dateWords, fitWords, groupCounts, kindLabel, moveOf, movedCount, newSince, sinceWords, sourcesLine, timeline, whenLong, whenWords, withStep, type WayFacts } from "./crystalModel";
+import { dateWords, fitWords, groupCounts, kindLabel, moveOf, movedCount, newSince, rangesNote, sinceWords, sourcesLine, timeline, whenLong, whenWords, withStep, type WayFacts } from "./crystalModel";
 import "../workbench/workbench.css";
 import "./crystal.css";
 
@@ -387,6 +387,7 @@ export function CrystalBallPage() {
               ))}
             </div>
           )}
+          {rangesWorthShowing(view.ranges) && rangesNote(view.ranges, view.since, view.today) && <span className="cb-range-note">{rangesNote(view.ranges, view.since, view.today)}</span>}
           {(net || paths) && (knowOn || knownN > 0 || (!!range && !!net?.companies.some((x) => !x.set))) && (
             <button type="button" className={`cb-btn${knowOn ? " on" : ""}`} aria-pressed={knowOn} onClick={() => s.setRadarKnow(!knowOn)}>
               Where you know someone
@@ -815,7 +816,7 @@ function WhyPanel({
   const leadWords = !fn
     ? null
     : lead && lead.kind === "full-time"
-      ? `${lead.how === "members" ? "Members say" : "Their team page shows"} a full-time ${lead.role ?? `${fn} leader`}${lead.since ? ` since ${lead.since}` : ""}. Held under Medium.`
+      ? `${lead.how === "members" ? "Members say" : "Their team page shows"} a full-time ${lead.role ?? `${fn} leader`}${lead.since ? ` since ${lead.since}` : ""}. ${row.band === "High" || row.band === "Medium" ? "An open role or a raise still counts, so that does not hold it down." : "So the seat looks filled, and Merlin holds it under Medium."}`
       : teamAt
         ? `No full-time ${fn} leader on their team page, read ${dateWords(teamAt.slice(0, 10), view.today)}.`
         : `Team page not read yet, so a gap alone cannot make this High.`;
