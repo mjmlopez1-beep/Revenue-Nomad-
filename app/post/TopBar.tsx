@@ -42,6 +42,7 @@ export function BellFocus({ children }: { children: ReactNode }) {
   );
 }
 import { UNLOCKS_LEFT_TIP, unlocksLeft, unlocksLeftWords } from "./display";
+import { TRIAL_RULE } from "@/lib/tableFields";
 import { Questions } from "../landing/Questions";
 import { mailto } from "../landing/contact";
 import { Glyph } from "../ui/fractions/lazy";
@@ -88,7 +89,9 @@ export function CreditsPill({
   const low = me.credits <= 3 && !quiet;
   const owed = me.owed ?? 0;
   const left = unlocksLeft(me);
-  const leftWords = unlocksLeftWords(me);
+  // The trial's companies left today ("39 of 40 companies left today"), where the day's unlock limit doesn't bind first. Pro and Close: none (everything opens).
+  const trialLeft = left === null && me.proOpens && !me.openAll ? me.proOpens : null;
+  const leftWords = unlocksLeftWords(me) ?? (trialLeft ? `${trialLeft.left} of ${trialLeft.of} companies left today` : null);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
   const [said, setSaid] = useState("");
   const prev = useRef(me.credits);
@@ -120,7 +123,9 @@ export function CreditsPill({
               : me.credits <= 3
                 ? "You're running low. Add a fact you know and you earn a credit, or top up."
                 : leftWords
-                  ? (unlockTip ?? UNLOCKS_LEFT_TIP)
+                  ? trialLeft
+                    ? TRIAL_RULE
+                    : (unlockTip ?? UNLOCKS_LEFT_TIP)
                   : me.meter
                     ? meterTip(me.meter, me.plan)
                     : undefined
@@ -135,6 +140,11 @@ export function CreditsPill({
           <span className="num tp-credits-n">{me.credits}</span>
           <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
         </span>
+        {trialLeft && (
+          <span className="tp-credits-cap" aria-hidden>
+            <span className="num">{trialLeft.left}</span> of {trialLeft.of} companies<span className="tp-credits-cap-left"> left</span> today
+          </span>
+        )}
         {left !== null && (
           <span className="tp-credits-cap" aria-hidden>
             {left === 0 ? "No unlocks" : <><span className="num">{left}</span> {left === 1 ? "unlock" : "unlocks"}</>}

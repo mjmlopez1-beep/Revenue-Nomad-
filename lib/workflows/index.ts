@@ -32,8 +32,11 @@ const PERSON_PRICE = 1;
 
 /** What a paid step costs this member now, from the app's own rules. */
 export function pricesFor(s: State, memberId: string, nowMs = Date.now()): StepPrices {
+  // Pro and Close open everything: nothing a workflow opens costs a credit (an email or phone it unlocks still does). The trial: companies free, up to its daily count.
+  if (T.openPlan(s, memberId, nowMs)) return { company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0 };
   const opensLeft = T.freeCompaniesLeft(s, memberId, nowMs);
-  return { company: opensLeft > 0 ? 0 : COMPANY_PRICE, companyFull: COMPANY_PRICE, ballFree: T.crystalOf(s, memberId, nowMs) === "all", opensLeft, person: PERSON_PRICE };
+  const trial = T.accessFor(s, memberId, nowMs) === "trial";
+  return { company: opensLeft > 0 ? 0 : COMPANY_PRICE, companyFull: trial ? 0 : COMPANY_PRICE, ballFree: T.crystalOf(s, memberId, nowMs) === "all", opensLeft, person: trial ? 0 : PERSON_PRICE };
 }
 
 const listsOf = (s: State, memberId: string) => (s.connector?.alerts?.[memberId] ?? []).map((v) => ({ id: v.id, name: v.name }));

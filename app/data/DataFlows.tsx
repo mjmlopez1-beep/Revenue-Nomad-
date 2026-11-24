@@ -14,7 +14,7 @@ const SERVICES: Service[] = [
   {
     who: "Company websites",
     gets: "A request from Merlin's server for public pages: a company's homepage, its team or leadership pages, its careers page, its icon, and a website a member pastes into the Add form. No member data goes with it.",
-    why: "About texts, who leads each function and the company (their name and title as the company prints them, kept only for companies with a US headquarters, and never for a person in California), open roles, a company's icon, and finding a company's website. Merlin also reads the email addresses that fractionals publish on their own business websites, US only and never for a person in California, to invite them to join Merlin or claim their seats and to show members. Anyone can remove their name and email at /remove. Page reads check robots.txt first.",
+    why: "About texts, who leads each function and the company (their name and title as the company prints them, kept only for companies with a US headquarters, and never for a person in California), open roles, a company's icon, and finding a company's website. Merlin also reads the email addresses that fractionals publish on their own business websites, US only and never for a person in California, to invite them to join Merlin or claim their seats, and through the email finder to show only the member who looks one up (never shared with other members and never sold). Anyone can remove their name and email at /remove. Page reads check robots.txt first.",
   },
   {
     who: "Job boards and applicant tracking systems",

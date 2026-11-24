@@ -5,7 +5,7 @@
  * Moved out of Drawer.tsx: the record drawer (phones, RN_UI2 off) and the company page (company/CompanyPage.tsx) both draw these.
  */
 import { useRef, useState } from "react";
-import { COMPANY_PRICE, PRO_OPENS_USED, fieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, TRIAL_OPENS_USED, fieldDef } from "@/lib/tableFields";
 import { COMPANY_FILL, OPEN_ROLE_BUNDLE, cellKey, seatBundled, type CoInfo, type FactRef } from "../../model";
 import { Sheet, ZeroCredits, GET_COMPANY_CREDITS, needsSpendConfirm, useUi, usePine } from "../../ui";
 import { sendSignal } from "../../ProOffer";
@@ -248,13 +248,15 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
   const busy = ui.busy.has(cellKey(id, "identity"));
   // The free company of the day (any plan): no credits needed while it is left and the day's limit has room.
   const free = freeCompanyNow(ui.me);
-  const broke = !free && ui.me.credits < COMPANY_PRICE;
+  // The trial's companies for today are used: it opens tomorrow (the trial never pays credits for a company).
+  const trialUsed = proOpensUsed(ui.me);
+  const broke = !free && !trialUsed && ui.me.credits < COMPANY_PRICE;
   // Today's unlocks are used up (a company counts as COMPANY_PRICE of them, the free one too): the button says when, and spends nothing.
-  const later = companyLater(ui.me);
+  const later = companyLater(ui.me) || trialUsed;
   const label = free ? unlockFreeWords(ui.me) : UNLOCK_COMPANY;
   const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
   // Short of the price: "Get 2 credits" opens the ways to get them (earn one, the top-up, Pro).
-  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? GET_COMPANY_CREDITS : label;
+  const text = busy ? "Unlocking" : trialUsed ? "Opens tomorrow" : later ? "Unlocks again tomorrow" : broke ? GET_COMPANY_CREDITS : label;
   return (
     <>
       <button
@@ -280,8 +282,8 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
           text
         )}
       </button>
-      {/* Pro's fair use: today's free opens are used, so this one costs the usual price. */}
-      {!busy && !later && proOpensUsed(ui.me) && <span className="tp-uc-fair tp-small muted">{PRO_OPENS_USED}</span>}
+      {/* The trial's companies for today are used: it says so, and nothing is spent. */}
+      {!busy && trialUsed && <span className="tp-uc-fair tp-small muted">{TRIAL_OPENS_USED}</span>}
       {zero && ui.me.credits < COMPANY_PRICE && ref.current && <ZeroCredits anchor={ref.current} id={id} need={COMPANY_PRICE} onClose={() => setZero(false)} />}
     </>
   );

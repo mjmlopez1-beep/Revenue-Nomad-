@@ -87,7 +87,7 @@ export const COMPANY_COLUMNS: ColumnDef[] = [
     counts: "value",
     fill: (r) => (r.i.c.hidden ? "locked" : "value"),
     sort: "name",
-    tip: "Its name, website and job postings open with the company. Free on Trial, Pro and Close, up to 15 a day.",
+    tip: "Its name, website and job postings open with the company. Pro and Close: everything is open. Free in your trial, up to 40 a day.",
     width: "minmax(230px, 1.6fr)",
   },
   {

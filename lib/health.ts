@@ -69,6 +69,22 @@ export interface HealthStats {
   /** Claude on Merlin's server this UTC month (lib/proposals/aiUsage.ts aiUsageTotals): calls, tokens, estimated cost, packs, members past 50/90/100%. Admin only. */
   ai: AiUsageTotals;
   insights: { working: Insight[]; notWorking: Insight[]; waiting: string[] };
+  /**
+   * Heavy usage (lib/usageGuard.ts usageStats), today's UTC counts on this server: members who read,
+   * members past the heavy line, members a limit stopped and trips by part, with the trial's company
+   * opens today and paid plans' email and phone unlocks. Counts only, never who. Left out by healthStats (lib/table.ts adds it).
+   */
+  usage?: {
+    day: string;
+    readers: number;
+    heavy: number;
+    trippedMembers: number;
+    trips: Record<"table" | "company" | "people" | "mcp", number>;
+    tripsSinceStart: number;
+    limits: { perMinute: number; perHour: number; heavyDay: number };
+    trialOpens: number;
+    trialCapped: number;
+  };
 }
 
 export interface OutcomeRow {

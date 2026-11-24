@@ -394,7 +394,9 @@ async function main() {
     const after = await t.buildView(tok(who));
     const l = (await ledgerOf(who)).filter((x) => x.ref.startsWith("e_lee_one"));
     check(`${who === "mem_fay" ? "Free" : who === "mem_tia" ? "Trial" : "Pro"}: free, no ledger row`, after.me!.credits === before.me!.credits && l.length === 0, l);
-    if (who !== "mem_fay") check(`${who === "mem_tia" ? "Trial" : "Pro"}: the free company of the day is still left`, after.me!.freeCompany === true && before.me!.freeCompany === true);
+    // The trial's companies a day stay as they were; Pro opens everything (open data on paid plans), so it has no free company to keep.
+    if (who === "mem_tia") check("Trial: today's companies are still all left", after.me!.freeCompany === true && before.me!.freeCompany === true && after.me!.proOpens?.left === before.me!.proOpens?.left);
+    if (who === "mem_pru") check("Pro: everything opens, nothing counted", after.me!.openAll === true && !after.me!.proOpens);
   }
 
   /* ---------- 4. visibility and the switch ---------- */

@@ -644,7 +644,8 @@ async function main() {
   try {
     const pia1 = await find("tok-pcap-lock", CO.acme.name);
     const pia2 = await find("tok-pcap-lock", CO.blue.name);
-    check("on Pro, the 100th is found and the 101st refused", pia1.ok && pia1.r.found === "new" && !pia2.ok && /looked up 100 companies by name today/.test(pia2.error), [pia1, pia2]);
+    // Open data on paid plans: on Pro every company is open, so a lookup by name reveals nothing and no daily lookup limit binds.
+    check("on Pro every company is already open: lookups find it with no limit", pia1.ok && pia1.r.found === "again" && pia2.ok && pia2.r.found === "again", [pia1, pia2]);
     const fay5 = await find("tok-fcap-lock", CO.iris.name);
     check("with billing live, Free is still 25", !fay5.ok && /looked up 25 companies/.test(fay5.error), fay5);
   } finally {

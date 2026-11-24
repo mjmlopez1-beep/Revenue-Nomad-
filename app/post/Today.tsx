@@ -26,7 +26,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY, OPENS_RULE } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, OPENS_RULE } from "@/lib/tableFields";
 import { PRO_STORY, TRIAL_NAME } from "@/lib/billing/rules";
 import { CompanyLogo, IconLock, LockedName, val } from "../ui/shared";
 import { countryOf, hireLine, isOpenRole, shown, type CoInfo } from "./model";
@@ -289,7 +289,7 @@ export function TrialEnded({ onSeePro, onSeen, art }: { onSeePro: () => void; on
         Your {TRIAL_NAME} ended.
       </p>
       <p>
-        <strong>You kept:</strong> your credits, fellow fractionals free, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open.
+        <strong>You kept:</strong> your credits, fellow fractionals free, 1 saved view with the weekly email, {FEATURE_NAME} each morning with one company a day fully open, and every company you paid credits for, added to or held a seat at. The others your trial opened are locked again.
       </p>
       <p>
         <strong>Pro wins clients:</strong> {PRO_STORY} {OPENS_RULE} Open roles reach you the moment they post.

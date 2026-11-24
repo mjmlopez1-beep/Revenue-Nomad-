@@ -48,7 +48,9 @@ console.log("The order");
 const ending = plan({ ending: true, trialDaysLeft: 3 });
 const all = pickNudge({ ...base, credits: 1, plan: ending, profileEmpty: true, nextStep: step });
 check("the trial's last days come first, on Today", all?.kind === "trial" && all.text === "Your Close trial ends in 3 days. Then you're on Free, unless you choose Pro." && all.cta === "Choose Pro" && all.action === "plans", all);
-check("only on Today: on the table the credits come first", pickNudge({ ...base, page: "table", credits: 1, plan: ending, profileEmpty: true, nextStep: step })?.kind === "credits");
+// Open data on paid plans: the out-of-credits wall is Free's only (the trial and Pro open everything without credits but email and phone).
+check("only on Today: on the table, in the trial, the profile comes first (no credits wall)", pickNudge({ ...base, page: "table", credits: 1, plan: ending, profileEmpty: true, nextStep: step })?.kind === "profile");
+check("on Free the credits come first on the table", pickNudge({ ...base, page: "table", credits: 1, plan: { ...ending, name: "free" } as never, profileEmpty: true, nextStep: step })?.kind === "credits");
 check("a trial with more than 3 days left is no nudge", pickNudge({ ...base, plan: plan({ trialDaysLeft: 12 }) }) === null);
 check("the last day says tomorrow", pickNudge({ ...base, plan: plan({ ending: true, trialDaysLeft: 1 }) })?.text.startsWith("Your Close trial ends tomorrow.") === true);
 check("not looking: the soft form", pickNudge({ ...base, plan: plan({ ending: true, trialDaysLeft: 2, notLooking: true }) })?.cta === "See plans");

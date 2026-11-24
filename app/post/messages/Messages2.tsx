@@ -1006,7 +1006,7 @@ function ComposePane({
                   <FactCell t={{ entity: "company", id: to.seat.companyId, field: "identity" }} cell={{ s: "locked", ver: 0 }} />
                 </span>
                 <span className="ms2-small ms2-muted ms2-full">
-                  The name fills in when the company opens{opensLeft != null ? `. ${opensLeft} free opens left today` : ""}. Or send as it is: the button opens it first, and asks before any credit.
+                  The name fills in when the company opens{opensLeft != null ? `. Your trial opens ${opensLeft} more companies today` : ""}. Or send as it is: the button opens it first, and asks before any credit.
                 </span>
               </>
             )}
@@ -1359,7 +1359,7 @@ function CompanyCard({ id, label, fallbackName, seat, entries, onPass }: { id: s
             <span className="ms2-co-cell">
               <FactCell t={{ entity: "company", id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />
             </span>
-            <span className="ms2-small ms2-muted ms2-full">Then you can add it to your pipeline or refer it to a peer{app.me.proOpens ? `. ${app.me.proOpens.left} of ${app.me.proOpens.of} free opens left today` : ""}.</span>
+            <span className="ms2-small ms2-muted ms2-full">Then you can add it to your pipeline or refer it to a peer{app.me.proOpens ? `. ${app.me.proOpens.left} of ${app.me.proOpens.of} companies left today in your trial` : ""}.</span>
           </>
         ) : (
           <button type="button" className="ms2-link" onClick={() => app.openCompany(id)}>

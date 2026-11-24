@@ -15,7 +15,7 @@
  * someone" (moving to a wider range with nobody known in this one), Free's "today's free company
  * is used" line, an expired day's note, the start questions with no function yet, the empty states,
  * the cards on phones, opening a locked company by plan (CrystalOpen: free on Trial and Pro and not
- * counted toward the 15 a day, one a day on Free, 2 credits with billing off), "They have a full-time
+ * counted toward the trial's 40 a day, one a day on Free, 2 credits with billing off), "They have a full-time
  * leader" (a fact, 1 credit), Refer it to a peer, the delivery card with Slack as it happens on Pro,
  * and the signals radar_opened and radar_clicked.
  *
@@ -323,7 +323,7 @@ export function CrystalBallPage() {
           <strong>What this page is for.</strong> Merlin&apos;s forecast of who hires a fractional {fnWord ? `${fnWord} leader` : "like you"} next. Each company reads High, Medium or Low, with
           the two or three signals behind it: a seat that just ended, a new leader, a repeat hirer, a role just posted.{" "}
           {crystal === "all"
-            ? "Every company here opens free, and it does not count toward your 15 a day."
+            ? "Every company here opens free in your trial, with everything on it."
             : crystal === "one" || crystal === "used"
               ? "One company here opens free each day, with everything on it."
               : `Each one opens for ${COMPANY_PRICE_SAY}.`}
@@ -699,7 +699,7 @@ export function CrystalBallPage() {
           {anyCo
             ? "Any company for now."
             : crystal === "all"
-              ? `Companies here open free and don't count toward your 15 a day. ${view.on ? "Comes by email on mornings when something moved." : ""}`
+              ? `Companies here open free in your trial, with everything on them. ${view.on ? "Comes by email on mornings when something moved." : ""}`
               : view.on
                 ? "Comes by email on mornings when something moved."
                 : `${YOUR_FEATURE} is off by email and in Slack. This page still lists what moved.`}

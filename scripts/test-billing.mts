@@ -44,7 +44,11 @@ const seed = {
     { id: "mem_ed", name: "Ed Quietly", email: "ed.quietly@example.com", title: "Fractional COO", token: "tok-ed-0001" },
     { id: "mem_ad", name: "Ada Admin", email: "ada.admin@example.com", title: "Fractional CTO", token: "tok-ad-0001" },
   ],
-  companies: [{ id: "c_bill", fields: { name: "Ledgerline Labs", website: "ledgerline.example", industry: "SaaS", employees: "51–200" } }],
+  companies: [
+    { id: "c_bill", fields: { name: "Ledgerline Labs", website: "ledgerline.example", industry: "SaaS", employees: "51–200" } },
+    // A second company nobody has opened: the trial opens it in full (open data on paid plans).
+    { id: "c_bill2", fields: { name: "Quillfeather Supply", website: "quillfeather.example", industry: "SaaS", employees: "51–200" } },
+  ],
   engagements: [
     { id: "e_bill_cfo", companyId: "c_bill", fields: { source: "Published engagement", function: "Finance", role: "Fractional CFO", operator: "Pat Example", start: "2026-01", status: "Active", type: "Fractional" } },
     { id: "e_bill_cmo", companyId: "c_bill", fields: { source: "Published engagement", function: "Marketing", role: "Fractional CMO", operator: "Sam Sample", start: "2025-06", status: "Active", type: "Fractional" } },
@@ -426,13 +430,15 @@ async function main() {
   check("planFor (for the radar): Free is gated, the trial is not", forRadar.gated && !forRadar.pro && (await t.planFor("mem_bo")).pro && !(await t.planFor("mem_bo")).gated);
 
   console.log("\nThe extension");
-  // A warm path that costs is a person's name now: who held a seat is free (PEERS_FREE).
-  const alCo = (await t.buildView(AL)).companies[0];
-  const [pubCeo, pubVp] = alCo.people.map((p) => p.id);
+  // Open data on paid plans: in the trial a company opens in full (its people and seat holders with it), so opening one is the value moment.
+  const alView = await t.buildView(AL);
+  const alCo = alView.companies.find((c) => c.people.length)!;
+  const fresh = alView.companies.find((c) => c.hidden)!;
+  const [, pubVp] = alCo.people.map((p) => p.id);
   const beforeEnd = (await state()).billing!.members.mem_al.trialEndsAt!;
-  const un = await act(AL, { type: "unlock", entity: "contact", id: pubCeo, field: "name" });
+  const un = await act(AL, { type: "unlock", entity: "company", id: fresh.id, field: "identity" });
   const afterEnd = (await state()).billing!.members.mem_al.trialEndsAt!;
-  check("unlocking a warm path in the last days adds 7 days", un.ok && Date.parse(afterEnd) - Date.parse(beforeEnd) === 7 * DAY && (await meOf(AL)).plan?.trialExtended === true, { un, beforeEnd, afterEnd });
+  check("opening a company in full in the last days adds 7 days", un.ok && Date.parse(afterEnd) - Date.parse(beforeEnd) === 7 * DAY && (await meOf(AL)).plan?.trialExtended === true, { un, beforeEnd, afterEnd });
   await act(AL, { type: "unlock", entity: "contact", id: pubVp, field: "name" });
   check("and only once", (await state()).billing!.members.mem_al.trialEndsAt === afterEnd);
 

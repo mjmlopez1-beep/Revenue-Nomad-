@@ -488,8 +488,8 @@ const ar = averyRecs.find(({ c }) => c.name.startsWith("Clientco"))!;
 // Fellow fractionals are free (PEERS_FREE): Sal knows these companies, so who held the seat (the record's name) shows free.
 // The email they publish is a contact detail and keeps its price.
 check(
-  "the record: the seat holder, the name free with the seat, the email locked, From their website",
-  ar.p.cells.relationship.s === "value" && ar.p.cells.relationship.v === types.OWNSITE_RELATIONSHIP && ar.p.cells.name.s === "value" && ar.p.cells.name.v === "Avery Quinlan" && ar.e.cells.operator.s === "value" && ar.p.cells.email.s === "locked" && ar.p.cells.email.from === "ownsite",
+  "the record: the seat holder, the name free with the seat, the email for the email finder only (private, never for sale)",
+  ar.p.cells.relationship.s === "value" && ar.p.cells.relationship.v === types.OWNSITE_RELATIONSHIP && ar.p.cells.name.s === "value" && ar.p.cells.name.v === "Avery Quinlan" && ar.e.cells.operator.s === "value" && ar.p.cells.email.s === "empty" && (ar.p.cells.email as { find?: true }).find === true,
   ar.p.cells,
 );
 check("nothing of the address goes out while locked", !JSON.stringify(sal.companies).includes("avery@"));
@@ -505,21 +505,22 @@ const refused = async (fn: () => Promise<unknown>) => {
 const BASE = "https://post.example.com";
 const c0 = await credits("tok-sal-own");
 check("the record's name has nothing to buy", /Nothing here is locked/.test((await refused(() => table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "name" }, BASE))) ?? "") && (await credits("tok-sal-own")) === c0);
-await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "email" }, BASE);
+check("the email is not for sale (the email finder's results are private)", /Nothing here is locked/.test((await refused(() => table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: ar.p.id, field: "email" }, BASE))) ?? "") && (await credits("tok-sal-own")) === c0);
+await table.perform("tok-sal-own", { type: "findEmail", id: ar.p.id }, BASE);
 sal = await view("tok-sal-own");
 let a2 = ownPeople(sal).find(({ p }) => p.id === ar.p.id)!;
-check("1 credit opens the email, From their website", a2.p.cells.email.s === "value" && a2.p.cells.email.v === "avery@quinlanadvisory.test" && a2.p.cells.email.from === "ownsite" && (await credits("tok-sal-own")) === c0 - 1, a2.p.cells.email);
+check("the email finder opens it for this member only, free, From their website", a2.p.cells.email.s === "value" && a2.p.cells.email.v === "avery@quinlanadvisory.test" && a2.p.cells.email.from === "ownsite" && (a2.p.cells.email as { found?: true }).found === true && (await credits("tok-sal-own")) === c0, a2.p.cells.email);
 eq("nothing can be added to the record: it comes from the seat", await refused(() => table.perform("tok-sal-own", { type: "fill", entity: "contact", id: ar.p.id, field: "phone", value: "+1 555 010 0000" }, BASE)), table.OWN_RECORD_NO_ADD);
 // Their other seat: the name shows free there too, and the email they paid for shows at no charge.
 const o3 = ownPeople(sal).find(({ c }) => c.name.startsWith("Secondco A"))!;
-check("their other seat: the name shows, and the email they paid for shows too, at no charge", o3.e.cells.operator.s === "value" && o3.p.cells.email.s === "value" && (await credits("tok-sal-own")) === c0 - 1, { op: o3.e.cells.operator, email: o3.p.cells.email });
+check("their other seat: the name shows, and the email found for them shows too, at no charge", o3.e.cells.operator.s === "value" && o3.p.cells.email.s === "value" && (await credits("tok-sal-own")) === c0, { op: o3.e.cells.operator, email: o3.p.cells.email });
 // Invite to connect: the app's Drawer writes to the seat's person with the holder's name and a visible email (emailOnFile).
 const emailOnFile = (e: (typeof a2)["e"], name: string) => e.people.find((p) => p.cells.name?.s === "value" && p.cells.name.v === name && p.cells.email?.s === "value");
 check("Invite to connect picks it: the seat has its claim link, and the seat holder's email on file for Email it", !!a2.e.invite?.path && (emailOnFile(a2.e, "Avery Quinlan")?.cells.email as { v?: string } | undefined)?.v === "avery@quinlanadvisory.test", a2.e.invite);
 const { personOut } = await import("../lib/mcp/tools");
 const outLocked = personOut(ownPeople(sal).find(({ c }) => /Clientco J/.test(c.name))!.p);
 const outOpen = personOut(a2.p);
-check("the connector: the same locks, and says it is from their website", String(outLocked.email ?? "").toLowerCase().includes("lock") && /From their website/.test(String(outLocked.email_is)) && outOpen.email === "avery@quinlanadvisory.test", { outLocked, outOpen });
+check("the connector: an email nobody found for this member never goes out; the member's own find does", !JSON.stringify(outLocked).includes("@") && outOpen.email === "avery@quinlanadvisory.test", { outLocked, outOpen });
 const admin = await view("tok-admin-own");
 check("an admin's table follows the same rules (the record, From their website; never the invites-only inbox)", ownPeople(admin).length === 3 && !JSON.stringify(admin).includes("hello@wrenpartners"));
 const exported = JSON.stringify(await table.exportState());
@@ -587,7 +588,8 @@ const n = await table.nameOffByName("Avery Quinlan", "Clientco A Systems");
 const st3 = stateOnDisk();
 sal = await view("tok-sal-own");
 check("Remove my name takes the name off and the email with it, on every seat of theirs", n >= 1 && !st3.ownEmails[personKeyOf("SNAV-AVERY-001")] && !ownPeople(sal).some(({ c }) => /Clientco A|Secondco A/.test(c.name)) && !JSON.stringify(sal).includes("avery@"), { n, recs: ownPeople(sal).map(({ c }) => c.name) });
-check("whoever paid to see the email gets the credit back", (await credits("tok-sal-own")) > before3, { before3, after: await credits("tok-sal-own") });
+// The email finder's results are free and private now, so nobody paid for this one: no credit moves (a purchase from before the rule is refunded by refundOwnEmails).
+check("no credit moves: the finder's email was never sold", (await credits("tok-sal-own")) === before3, { before3, after: await credits("tok-sal-own") });
 eq("and the job never reads their site again", st3.ownSitesJob.people[personKeyOf("SNAV-AVERY-001")].s, "removed");
 const targets = await store.ownTargets({ dry: true });
 check("  not even a dry run", !targets.some((t) => t.key === personKeyOf("SNAV-AVERY-001")));
@@ -621,12 +623,12 @@ const casey = stateOnDisk().ownEmails[personKeyOf("SNAV-CASEY-003")];
 const before4 = await credits("tok-sal-own");
 check("(Casey's invites-only inbox has no record to unlock)", !!casey && !ownPeople(await view("tok-sal-own")).some(({ c }) => /Clientco C/.test(c.name)));
 const julesRec = ownPeople(await view("tok-sal-own")).find(({ c }) => /Clientco J/.test(c.name))!;
-// Who held Jules's seat is free (PEERS_FREE); the email is 1 credit.
-await table.perform("tok-sal-own", { type: "unlock", entity: "contact", id: julesRec.p.id, field: "email" }, BASE);
-check("(Jules's email, unlocked for 1 credit, the name free)", (await credits("tok-sal-own")) === before4 - 1);
+// Who held Jules's seat is free (PEERS_FREE); the email opens with the email finder, free and for this member only.
+await table.perform("tok-sal-own", { type: "findEmail", id: julesRec.p.id }, BASE);
+check("(Jules's email, found free, the name free)", (await credits("tok-sal-own")) === before4);
 const undone = await store.undoOwnEmails("m_admin");
 sal = await view("tok-sal-own");
-check("Undo takes every found email back, with the credit back", undone === 2 && ownPeople(sal).length === 0 && Object.keys(stateOnDisk().ownEmails).length === 0 && (await credits("tok-sal-own")) === before4, { undone, credits: await credits("tok-sal-own") });
+check("Undo takes every found email back (no credit was spent on them)", undone === 2 && ownPeople(sal).length === 0 && Object.keys(stateOnDisk().ownEmails).length === 0 && (await credits("tok-sal-own")) === before4, { undone, credits: await credits("tok-sal-own") });
 check("  and those people are not read again on their own", !(await store.ownTargets()).some((t) => t.key === personKeyOf("SNAV-CASEY-003")));
 
 server.close();

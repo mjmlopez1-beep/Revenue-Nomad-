@@ -28,8 +28,9 @@ import {
   EARN_CAP,
   FREE_EARN_RULE,
   OPENS_RULE,
+  OPEN_LINE,
   COMPANY_PRICE,
-  PRO_OPENS_DAILY,
+  TRIAL_OPENS_DAILY,
   REFERRAL_BONUS,
 } from "@/lib/tableFields";
 import { CRYSTAL_FREE_TODAY, FEATURE_NAME } from "@/lib/radar/types";
@@ -355,30 +356,35 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
         </span>
       </div>
       <div className="cnu-tile">
-        {me.proOpens ? (
+        {me.openAll ? (
           <>
-            <span className="cnu-k">Free company opens today</span>
+            <span className="cnu-k">Everything opens</span>
+            <span className="cnu-of">
+              <strong>0</strong>
+              <span>credits to see a company</span>
+            </span>
+            <span className="cnu-s">{OPEN_LINE}</span>
+          </>
+        ) : me.proOpens ? (
+          <>
+            <span className="cnu-k">Companies to open today</span>
             <span className="cnu-of">
               <strong>
                 <Num>{used}</Num>
               </strong>
-              <span>of {me.proOpens.of} used</span>
+              <span>of {me.proOpens.of} opened</span>
             </span>
             <span
               className="cnu-pips"
               role="img"
-              aria-label={`${used} of ${me.proOpens.of} free company opens used today`}
+              aria-label={`${used} of ${me.proOpens.of} companies opened today`}
             >
               {Array.from({ length: me.proOpens.of }, (_, k) => (
                 <span key={k} className={k < used ? "on" : undefined} />
               ))}
             </span>
             <span className="cnu-s">
-              {plan?.name === "trial"
-                ? "Free on your trial."
-                : "Free on your plan."}{" "}
-              {FEATURE_NAME} companies do not count. Past {PRO_OPENS_DAILY}, a
-              company is {COMPANY_PRICE} credits until tomorrow.
+              {me.proOpens.left} of {me.proOpens.of} companies left today. Each opens free, with everything on it. More open tomorrow.
             </span>
           </>
         ) : me.crystal ? (
@@ -565,9 +571,11 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
             <span className="cnu-kind-t">
               <strong>Company opens</strong>
               <span className="cnu-kind-c">
-                {me.proOpens
-                  ? `Free, up to ${PRO_OPENS_DAILY} a day`
-                  : `${COMPANY_PRICE} credits`}
+                {me.openAll
+                  ? "Free, every company"
+                  : me.proOpens
+                    ? `Free in your trial, up to ${TRIAL_OPENS_DAILY} a day`
+                    : `${COMPANY_PRICE} credits`}
               </span>
             </span>
             <span className="cnu-kind-s">
@@ -894,8 +902,10 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
       `You unlock a company: its name and website, with the job posting of each open role there. ${
         me.crystal === "one" || me.crystal === "used"
           ? `On Free, one ${FEATURE_NAME} company a day opens free, with everything on it. ${OPENS_RULE}`
-          : me.proOpens
-            ? `${OPENS_RULE} Past ${PRO_OPENS_DAILY}, a company is ${COMPANY_PRICE} credits until tomorrow.`
+          : me.openAll
+            ? OPEN_LINE
+            : me.proOpens
+            ? `In your trial a company opens free with everything on it, up to ${TRIAL_OPENS_DAILY} a day. ${OPEN_LINE}`
             : `Your first company each day is free.${me.crystal === "all" ? ` Every company in your ${FEATURE_NAME} opens free.` : ""}`
       }`,
     ],
@@ -1030,7 +1040,7 @@ export function CreditsUsage({ page }: { page: "credits" | "billing" }) {
         {plan.name === "trial"
           ? `Your trial is the Close plan, proposals included. It ends on ${planDay(plan.trialEndsAt)}. Nothing to do: when it ends you are on Free, and no card is asked.`
           : plan.name === "pro"
-            ? `${plan.prices.proCredits} credits come with each paid month, and companies open free, up to ${PRO_OPENS_DAILY} a day.`
+            ? `${OPEN_LINE} ${plan.prices.proCredits} credits come with each paid month.`
             : "Free keeps earning, 1 list with the weekly email, median rates by function, and one Crystal Ball company a day."}
       </p>
       {plan.topup && plan.name !== "pro" && <TopupLine plan={plan} />}

@@ -35,7 +35,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./setup.css";
 import { IconCheck, post, type Act, type View } from "../ui/shared";
-import { FUNCTIONS, OPENS_RULE, PRO_OPENS_DAILY, REFERRAL_BONUS, RN_EMPLOYEES } from "@/lib/tableFields";
+import { FUNCTIONS, OPENS_RULE, TRIAL_OPENS_DAILY, REFERRAL_BONUS, RN_EMPLOYEES } from "@/lib/tableFields";
 import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { deriveAll, icpEmpty, mySeats, namedFn, type LikeTrait } from "@/app/post/model";
 import { EMPTY_ICP, countriesByCount, industriesByCount } from "@/app/post/Hunt";
@@ -122,7 +122,7 @@ const WHY: Record<ScreenKey, [string, string]> = {
   seats: ["Why we ask", "Merlin runs on what members add. Your seats earn the credits you spend elsewhere, and the people you worked with become your warmest ways in."],
   like: ["How lookalikes work", "Merlin reads the free facts of the companies where you held a seat and lists the companies that share the most of them. Plain rules, no guessing."],
   know: ["What happens to your contacts", "They stay yours. Other members never see them, Merlin does not message anyone, and one tap in Settings deletes everything that was read."],
-  first: ["Why a company is locked", `Names are what members trade. On the trial any company opens free, up to ${PRO_OPENS_DAILY} a day, and companies in your Crystal Ball open free on top.`],
+  first: ["Why a company is locked", `Names are what members trade. Your trial opens up to ${TRIAL_OPENS_DAILY} companies a day, each with everything on it. Pro opens everything.`],
   done: ["What happens next", "Home shows your best moves each morning. The Getting started card in the nav keeps the steps left in view until they are done."],
 };
 
@@ -695,8 +695,8 @@ function Welcome({ first, invited, credits, trial, seats }: { first: string; inv
               <span>To start. You earn more by adding what you know.</span>
             </div>
             <div className="su-tile">
-              <strong className="num">{PRO_OPENS_DAILY} a day</strong>
-              <span>Companies you can open free. Crystal Ball companies don&apos;t count.</span>
+              <strong className="num">{TRIAL_OPENS_DAILY} a day</strong>
+              <span>Companies you can open free, each with everything on it.</span>
             </div>
           </>
         ) : (

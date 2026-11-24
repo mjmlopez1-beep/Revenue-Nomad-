@@ -154,7 +154,7 @@ export function offWords(key: string, page: string): string {
 export const COST_WORDS: Record<AgentCost, string> = { free: "Free", earn: "Earns 1 credit", earn5: "Earns 5 credits", close: "Close plan", c1: "1 credit", c2: "2 credits" };
 /** The second line under the cost. */
 export function askWords(t: AgentTool): string {
-  if (t.cost === "c2") return "Asks first. Free on the trial and Pro, 15 a day";
+  if (t.cost === "c2") return "Asks first. Free in the trial, 40 a day; open already on Pro and Close";
   if (t.group === "spend") return "Asks first, every time";
   if (t.group === "send") return t.cost === "earn5" ? "Asks first. Up to 10 a day" : "Asks first, every time";
   if (t.cost === "earn") return "Up to 25 a day";

@@ -205,12 +205,12 @@ async function inProcess() {
   const { faqItems } = await import("../app/landing/faq");
   const faq = new Map(faqItems(25));
   check("the Questions say who sees a name and how to hide it", /once they can see that company/.test(faq.get("What will other members see about me?") ?? "") && /name hidden/.test(faq.get("What will other members see about me?") ?? ""), faq.get("What will other members see about me?"));
-  check("the free opens are one sentence", TF.OPENS_RULE === "On Pro, Close and the trial, any company opens free, up to 15 a day, and your Crystal Ball companies don't count toward that.");
+  check("what each plan opens is one sentence, with the one line first", TF.OPENS_RULE === `${TF.OPEN_LINE} The trial opens up to 40 companies a day, with everything on them.`);
   check("the Questions use it", (faq.get("What does it cost?") ?? "").includes(TF.OPENS_RULE));
-  for (const f of ["app/post/Credits.tsx", "app/post/todayModel.ts", "app/onboard/Classic.tsx", "app/onboard/Setup.tsx", "app/landing/Pricing.tsx", "app/landing/faq.ts", "app/post/Today.tsx"]) check(`${f} uses OPENS_RULE`, /OPENS_RULE/.test(readFileSync(f, "utf8")));
-  check("the day's first free open says it in its toast, the rest count down", t.proOpenLine(14).includes(TF.OPENS_RULE) && /13 of today's 15 free opens left/.test(t.proOpenLine(13)) && /last of today's 15/.test(t.proOpenLine(0)));
+  for (const f of ["app/post/Credits.tsx", "app/post/todayModel.ts", "app/onboard/Classic.tsx", "app/onboard/Setup.tsx", "app/landing/Pricing.tsx", "app/landing/faq.ts", "app/post/Today.tsx"]) check(`${f} uses OPENS_RULE or OPEN_LINE`, /OPENS_RULE|OPEN_LINE/.test(readFileSync(f, "utf8")));
+  check("the trial's toast counts down today's companies", /13 of today's 40 companies left/.test(t.proOpenLine(13)) && /last of today's 40/.test(t.proOpenLine(0)));
   const TM = await import("../app/post/todayModel");
-  check("Home's trial card says it", TM.trialCardLine(21, { left: 14, of: 15 }).includes(TF.OPENS_RULE) && /14 of 15 free opens left today/.test(TM.trialCardLine(21, { left: 14, of: 15 })), TM.trialCardLine(21, { left: 14, of: 15 }));
+  check("Home's trial card says it", TM.trialCardLine(21, { left: 39, of: 40 }).includes(TF.OPENS_RULE) && /39 of 40 companies left to open today/.test(TM.trialCardLine(21, { left: 39, of: 40 })), TM.trialCardLine(21, { left: 39, of: 40 }));
   check("PRO_STORY never promises Pro sends proposals", !/send the proposal/.test(rules.PRO_STORY) && /Close adds the proposal they sign/.test(rules.PRO_STORY), rules.PRO_STORY);
   check("no \"Pro + Close\" anywhere in what changed", !["app/post/Credits.tsx", "app/landing/faq.ts", "lib/billing/rules.ts", "lib/tableFields.ts", "app/onboard/Classic.tsx", "app/onboard/Setup.tsx"].some((f) => readFileSync(f, "utf8").includes("Pro + Close")));
   check("a 500 or above reads in plain words, a refusal keeps its own", S.errorText(500, "TypeError: x is undefined at line 4", "f") === S.SERVER_PROBLEM && S.errorText(503, "Merlin is busy", "f") === S.SERVER_PROBLEM && S.errorText(400, "Pick the company.", "f") === "Pick the company." && S.errorText(404, "", "Fallback.") === "Fallback.");

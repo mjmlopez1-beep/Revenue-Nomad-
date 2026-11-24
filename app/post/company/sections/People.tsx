@@ -47,9 +47,40 @@ export function PersonCard({ p, inSeat, anchor = true }: { p: PersonRec; inSeat?
         noAdd={p.source === OWNSITE_SOURCE ? personFields(p) : unseen ? PERSON_NO_ADD : []}
         labels={likelyCell(p.cells.email) ? { email: "Likely email" } : undefined}
       />
+      <FindEmail p={p} unseen={unseen} />
       {p.source === LEADERS_SOURCE && <SiteSource p={p} />}
       {p.source === OWNSITE_SOURCE && <p className="tp-dsec-note tp-person-src">Email: {OWNSITE_SAY}, the address they publish on their own firm&apos;s website.</p>}
     </div>
+  );
+}
+
+/**
+ * The email finder, a member's private tool: where Merlin found a person's email (Cell.find), the
+ * member who looks it up sees it, free, and nobody else ever does. Shown once their name shows.
+ */
+export function FindEmail({ p, unseen }: { p: PersonRec; unseen: boolean }) {
+  const ui = useUi();
+  const [busy, setBusy] = useState(false);
+  const c = p.cells.email;
+  if (c?.s === "value" && c.found) return <p className="tp-dsec-note tp-person-src">Email found for you. Only you see it: it is never shared or sold.</p>;
+  if (unseen || !c || c.s !== "empty" || !c.find) return null;
+  return (
+    <p className="tp-dsec-note tp-person-src">
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={busy}
+        aria-busy={busy}
+        onClick={async () => {
+          setBusy(true);
+          await ui.act({ type: "findEmail", id: p.id });
+          setBusy(false);
+        }}
+      >
+        {busy ? "Finding" : "Find email"}
+      </button>{" "}
+      Free. Only you see what it finds.
+    </p>
   );
 }
 

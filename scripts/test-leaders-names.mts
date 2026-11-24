@@ -285,18 +285,21 @@ console.log("\nThe likely email");
 
 const cara = ppl(sal, "Mail Test").find((p) => p.source === types.LEADERS_SOURCE)!;
 const em = cara.cells.email;
-check("Mail Test: two emails at its domain on one pattern give Cara a likely email, locked, from the pattern of 2", em.s === "locked" && em.from === "pattern" && em.likely === 2, em);
-check("  it opens only after her name, like any email", /name and title first/i.test((await refused(() => unlock("tok-sal", cara.id, "email"))) ?? ""));
+// The email finder is a member's private tool: a likely email is never for sale, and shows only to the member who looks it up.
+check("Mail Test: two emails at its domain on one pattern give Cara a likely email, for the email finder only (never sold)", em.s === "empty" && (em as { find?: true }).find === true && !JSON.stringify(sal).includes("cara.leadwell@"), em);
+check("  the finder looks only once her name shows", /name and title first/i.test((await refused(() => table.perform("tok-sal", { type: "findEmail", id: cara.id }, BASE))) ?? ""));
+check("  and it can't be bought", /Nothing here is locked/.test((await refused(() => unlock("tok-sal", cara.id, "email"))) ?? ""));
 const c2 = await credits("tok-sal");
 await unlock("tok-sal", cara.id, "name");
-await unlock("tok-sal", cara.id, "email");
+await table.perform("tok-sal", { type: "findEmail", id: cara.id }, BASE);
 sal = await view("tok-sal");
 const ce = byPid(sal, "Mail Test", cara.id).cells.email;
-eq("  priced like an email: 1 for her name and title, 1 for the email", c2 - (await credits("tok-sal")), 2);
-check("  the likely email, labelled likely, never verified", ce.s === "value" && ce.v === "cara.leadwell@mailco.test" && ce.from === "pattern" && ce.likely === 2, ce);
+eq("  1 credit for her name and title, the finder free", c2 - (await credits("tok-sal")), 1);
+check("  the likely email, labelled likely, never verified, found for this member", ce.s === "value" && ce.v === "cara.leadwell@mailco.test" && ce.from === "pattern" && ce.likely === 2 && (ce as { found?: true }).found === true, ce);
 const { marksConfirmed } = await import("../app/post/display");
 await unlock("tok-mo", cara.id, "name");
-await unlock("tok-mo", cara.id, "email");
+check("  another member doesn't see Sal's find", byPid(await view("tok-mo"), "Mail Test", cara.id).cells.email.s === "empty");
+await table.perform("tok-mo", { type: "findEmail", id: cara.id }, BASE);
 await table.perform("tok-sal", { type: "verify", entity: "contact", id: cara.id, field: "email" }, BASE);
 await table.perform("tok-mo", { type: "verify", entity: "contact", id: cara.id, field: "email" }, BASE);
 sal = await view("tok-sal");

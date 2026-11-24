@@ -660,7 +660,7 @@ async function main() {
   check("Reminders until they sign: Close", row("Reminders until they sign")?.[2] === "In your trial only" && /day 2/i.test(row("Reminders until they sign")?.[3] ?? ""));
   check("Renewal reminders: Close", row("Renewal reminders")?.[2] === "In your trial only" && /30 days/.test(row("Renewal reminders")?.[3] ?? ""));
   check("all three in what Close adds (the Terms list them)", ["Know when they open it and what they read", "Reminders until they sign", "Renewal reminders"].every((w) => CP.CLOSE_ADDS.some(([x]) => x === w)));
-  check("the landing page's rows are unchanged", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Opening companies|Fellow fractionals|Proposals and e-signature|Merlin drafting and your own contracts|Pipeline after a signature|Open roles");
+  check("the landing page's rows: what opens first (open data on paid plans), then the rest as before", CP.LANDING_ROWS.map((r) => r[0]).join("|") === "Companies, seats, rates and people|Email and phone numbers|Fellow fractionals|Proposals and e-signature|Merlin drafting and your own contracts|Pipeline after a signature|Open roles");
   check("nothing left the machine but the fake email and Slack", others === 0, others);
 
   console.log(`\n${passes} passed, ${failures} failed`);

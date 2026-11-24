@@ -669,7 +669,7 @@ console.log("\nWays to earn and the rules");
     CAP_LINE.includes(`${EARN_CAP} credits in any 24 hours, bonuses included`),
   );
   const three = threeLines(
-    { earnCap: EARN_CAP, proOpens: { left: 11, of: 15 } } as Me,
+    { earnCap: EARN_CAP, proOpens: { left: 11, of: 40 } } as Me,
     25,
   );
   check(
@@ -677,7 +677,7 @@ console.log("\nWays to earn and the rules");
     three.length === 3 &&
       three[0].n === "25" &&
       three[1].s.includes("2 credits") &&
-      three[1].s.includes("15 a day") &&
+      three[1].s.includes("40 a day") &&
       three[2].s.includes(`${EARN_CAP} a day`),
   );
 }

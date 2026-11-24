@@ -14,7 +14,7 @@ import {
   COMPANY_PRICE,
   EARN_CAP,
   HIDDEN_COMPANY,
-  PRO_OPENS_DAILY,
+  TRIAL_OPENS_DAILY,
   REFERRAL_BONUS,
   REFERRAL_LIMIT,
 } from "@/lib/tableFields";
@@ -311,11 +311,13 @@ export function filterLedger<T extends LedgerRow>(
 
 /** The three lines: start, spend to see, earn by adding. From Me and the plan. */
 export function threeLines(
-  me: Pick<Me, "earnCap" | "proOpens" | "crystal">,
+  me: Pick<Me, "earnCap" | "proOpens" | "crystal"> & Partial<Pick<Me, "openAll">>,
   starter: number,
 ): { n: string; t: string; s: string }[] {
-  const opens = me.proOpens
-    ? ` Companies open free, up to ${PRO_OPENS_DAILY} a day, on your plan.`
+  const opens = me.openAll
+    ? " On your plan everything opens; only email and phone numbers cost credits."
+    : me.proOpens
+    ? ` In your trial companies open free, up to ${TRIAL_OPENS_DAILY} a day, with everything on them.`
     : me.crystal === "one" || me.crystal === "used"
       ? ` On Free, one ${FEATURE_NAME} company a day opens free.`
       : "";

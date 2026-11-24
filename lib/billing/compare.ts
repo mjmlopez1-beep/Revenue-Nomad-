@@ -8,20 +8,25 @@
  * of Service (app/terms/Terms.tsx) draw Pro and Close from these too.
  */
 import { FEATURE_NAME } from "../radar/types";
-import { COMPANY_PRICE, PRO_OPENS_DAILY } from "../tableFields";
+import { COMPANY_PRICE, OPEN_LINE, TRIAL_OPENS_DAILY } from "../tableFields";
 import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, PRO_CREDITS, TIER_NAME, WORKFLOW_PLAN } from "./rules";
+
+/** The one line on what the paid plans open (tableFields OPEN_LINE), and the trial's daily companies, for the plan pages. */
+export const OPEN_SAY = OPEN_LINE;
+export const TRIAL_SAY = `Your trial is like Pro for up to ${TRIAL_OPENS_DAILY} companies a day, each opened with everything on it.`;
 
 /** The three plans in order, with what each costs and one line on what you get. */
 export const PLANS = [
   { key: "free", name: "Free", month: 0, year: 0, line: `Credits to start, 1 for each fact you add, one ${FEATURE_NAME} company a day.` },
-  { key: "pro", name: TIER_NAME.pro, month: PRICES.month, year: PRICES.year, line: `Any company opens free, up to ${PRO_OPENS_DAILY} a day, every alert, ${PRO_CREDITS} credits a month.` },
+  { key: "pro", name: TIER_NAME.pro, month: PRICES.month, year: PRICES.year, line: `Everything opens: every company, seat, rate and person. Every alert, ${PRO_CREDITS} credits a month for email and phone numbers.` },
   { key: "close", name: TIER_NAME.close, month: PRICES.closeMonth, year: PRICES.closeYear, line: "Everything in Pro, plus proposals drafted from your call, sent and signed, and your Evidence Bank." },
 ] as const;
 
 /** [what, Free, Pro, Close]. */
 export const PLAN_ROWS: [string, string, string, string][] = [
-  // The same rule as OPENS_RULE, cell-sized.
-  ["Opening companies", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`, `Free, up to ${PRO_OPENS_DAILY} a day, ${FEATURE_NAME} not counted`],
+  // The same rule as OPEN_LINE, cell-sized.
+  ["Companies, seats, rates and people", `1 a day from ${FEATURE_NAME}, others ${COMPANY_PRICE} credits, 1 a fact`, "Everything opens, no credits, no daily cap", "Everything opens, no credits, no daily cap"],
+  ["Email and phone numbers", "1 credit each, from fellow fractionals", "1 credit each, from fellow fractionals", "1 credit each, from fellow fractionals"],
   ["Fellow fractionals", "Free", "Free", "Free"],
   ["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"],
   ["Merlin drafting and your own contracts", "In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"],
@@ -37,7 +42,7 @@ export const PLAN_ROWS: [string, string, string, string][] = [
   ["Give them options to pick from", "In your trial only", "In your trial only", "Up to 3 options and add-ons: they pick one, see the total and sign it"],
   ["Sealed PDF anyone can check", "In your trial only", "In your trial only", "Every signed proposal and document, sealed and emailed to both sides"],
   ["Saved views", "1, with the weekly email", "As many as you want, with alerts", "As many as you want, with alerts"],
-  [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open free, signals in Slack as they happen", "Every company in it open free, signals in Slack as they happen"],
+  [FEATURE_NAME, "Every signal each morning, one company a day fully open", "Every company in it open, signals in Slack as they happen", "Every company in it open, signals in Slack as they happen"],
   ["Rate benchmarks", "Medians by function", "Ranges by function and client size", "Ranges by function and client size"],
   ["Slack", "The weekly roles post", "Every alert", "Every alert"],
   ["Claude", `${FREE_MCP_PER_DAY} requests a day`, "No daily cap", "No daily cap"],
@@ -47,8 +52,8 @@ export const PLAN_ROWS: [string, string, string, string][] = [
 
 /** Close's ways of getting a contract out, in the plans sheet and the Terms; the landing page keeps its six. */
 const CLOSE_DETAIL = new Set(["Drop in a contract, fields placed for you", "Change it by talking", "Start from the call"]);
-/** The rows the landing page leads with: the ones that win a client, first. */
-export const LANDING_ROWS = PLAN_ROWS.filter((r) => !CLOSE_DETAIL.has(r[0])).slice(0, 6);
+/** The rows the landing page leads with: what opens (everything on Pro, email and phone for credits), then the ones that win a client. */
+export const LANDING_ROWS = PLAN_ROWS.filter((r) => !CLOSE_DETAIL.has(r[0])).slice(0, 7);
 
 /** The rows where Close does more than Pro: [what, Pro, Close]. The Terms of Service list them under Close. */
 export const CLOSE_ADDS: [string, string, string][] = PLAN_ROWS.filter((r) => r[2] !== r[3]).map(([what, , pro, close]) => [what, pro, close]);

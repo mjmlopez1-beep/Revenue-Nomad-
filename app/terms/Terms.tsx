@@ -10,7 +10,7 @@
  */
 import { EXTEND_DAYS, FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PAUSE_MONTHS, PRICES, TIER_NAME, TOPUP_CREDITS, TRIAL_LABEL } from "@/lib/billing/rules";
 import { CLOSE_ADDS, PLANS, PLAN_ROWS, PRO_LEAVES_OUT } from "@/lib/billing/compare";
-import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { EARN_CAP, OPEN_LINE, REFERRAL_BONUS, TRIAL_OPENS_DAILY } from "@/lib/tableFields";
 import { SENDER_DUTY } from "@/lib/proposals/types";
 import { ContactLine, LegalShell, TERMS_VERSION, type Part } from "../legal/LegalShell";
 
@@ -102,7 +102,7 @@ export function TermsView({ support, starter }: { support: string | null; starte
             <li>
               <h3 className="df-h3">Trial</h3>
               <p>
-                A {TRIAL_LABEL} when you finish onboarding, with no card: everything in {TIER_NAME.close} while it runs. It may run {EXTEND_DAYS} days longer, once. When it
+                A {TRIAL_LABEL} when you finish onboarding, with no card: everything in {TIER_NAME.close} while it runs, with up to {TRIAL_OPENS_DAILY} companies a day opened in full. It may run {EXTEND_DAYS} days longer, once. When it
                 ends you are on Free, and nothing is charged unless you chose {TIER_NAME.pro} or {TIER_NAME.close}.
               </p>
             </li>
@@ -116,7 +116,8 @@ export function TermsView({ support, starter }: { support: string | null; starte
             </li>
           </ul>
           <p className="cl-p">
-            Seeing a locked fact costs 1 credit. Unlocking a company costs 2. Merlin shows the cost before you spend. Credits are a way to use Merlin. They have no cash value,
+            {OPEN_LINE} On Free, seeing a locked fact costs 1 credit and unlocking a company costs 2. When a trial ends without a paid plan, or a paid plan
+            ends, the companies it opened lock again, except ones you paid credits for, added to or held a seat at. Merlin shows the cost before you spend. Credits are a way to use Merlin. They have no cash value,
             and can&apos;t be sold, transferred or exchanged for money. Credits you earned for a fact that turns out not to be true, or that you take back, can be taken back.
             Invite credits ({REFERRAL_BONUS} each) are paid as Merlin describes when you invite someone.
           </p>

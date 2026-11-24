@@ -528,8 +528,8 @@ async function main() {
   check("Pro and Free see the same day the same way", piaFree?.rows.length === 4 && piaFree.rows.slice(2).every((x) => x.band === "Low") && salPro?.rows.length === 2 && !("pro" in (piaFree as object)), { pia: piaFree?.rows, sal: salPro?.rows });
   const piaTable = await t.buildView("tok-pro-0001");
   check(
-    "on Pro each locked company on the day is named free, and stays locked and unbought in the table; Free sees no name",
-    !!piaFree?.rows.some((x) => x.name) && piaFree.rows.filter((x) => x.name).every((x) => piaTable.companies.find((c) => c.id === x.id)?.hidden === true) && !salPro?.rows.some((x) => x.name),
+    "on Pro every company on the day is open in the table, named there (open data on paid plans); Free sees no name",
+    !!piaFree?.rows.length && piaFree.rows.every((x) => piaTable.companies.find((c) => c.id === x.id)?.hidden !== true) && !salPro?.rows.some((x) => x.name),
     piaFree?.rows,
   );
 

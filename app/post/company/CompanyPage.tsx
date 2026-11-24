@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Benchmarks, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import type { KnownPersonView } from "@/lib/paths/types";
-import { FOUND_NOTE, COMPANY_PRICE_SAY, PRO_OPENS_DAILY } from "@/lib/tableFields";
+import { FOUND_NOTE, COMPANY_PRICE_SAY, TRIAL_OPENS_DAILY } from "@/lib/tableFields";
 import { CompanyLogo, IconChevron, IconExternal, IconX, hrefFor, post, val } from "../../ui/shared";
 import { COMPANY_GTM, fitReason, fnGap, namedFn, shown, type CoInfo, type SeatInfo } from "../model";
 import { Pro, useUi } from "../ui";
@@ -610,7 +610,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
           <span>{factsLine(i, plan.items.length)}</span>
           {opens && (
             <span>
-              {trial ? "Trial" : "Pro"}: {Math.max(0, opens.of - opens.left)} of {opens.of || PRO_OPENS_DAILY} free opens used today
+              Trial: {opens.left} of {opens.of || TRIAL_OPENS_DAILY} companies left today
             </span>
           )}
           <a

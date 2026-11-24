@@ -390,7 +390,7 @@ export function HiringNow() {
   const scanWords = scan?.lastOkAt ? `last scan ${fmtStamp(scan.lastOkAt)}` : scan?.lastRunAt ? "the last scan could not read the job boards" : "the first scan runs this week";
   const opens = live.proOpens;
   const status = first && opens
-    ? `${live.plan?.name === "trial" ? "Trial: " : ""}${opens.of - opens.left} of ${opens.of} free opens used today, then 2 credits each · ${scanWords}`
+    ? `Trial: ${opens.left} of ${opens.of} companies left today, each opened in full · ${scanWords}`
     : `${n(rows.length)} of ${n(view === "closed" ? closed.length : open.length)} roles · ${n(rows.filter((r) => r.e && newThisWeek(r.e)).length)} new this week · ${scanWords}`;
   const bottom = (
     <div className="wb-bottom">
@@ -440,7 +440,7 @@ export function HiringNow() {
       {anyAlert ? (
         <>
           <span className="hn-band-t">
-            <strong>Step 5 done. Merlin is watching for you.</strong> New roles come to your email each week, and to Slack once it is connected. Next, open a company to read its posting.{opens && opens.left > 0 ? ` It is free${live.plan?.name === "trial" ? " on your trial" : " today"}.` : ""}
+            <strong>Step 5 done. Merlin is watching for you.</strong> New roles come to your email each week, and to Slack once it is connected. Next, open a company to read its posting.{opens && opens.left > 0 ? " It is free on your trial." : ""}
           </span>
           {rows[0] && (
             <button type="button" className="btn btn-pine hn-band-btn" onClick={() => (c.phone ? c.openCompany(rows[0].i.c.id, rows[0].key) : openRow(rows[0]))}>

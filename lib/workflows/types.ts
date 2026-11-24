@@ -238,7 +238,7 @@ export const RECIPES: Recipe[] = [
 
 /** What a paid step costs this member now, from the app's own prices (lib/workflows/index.ts fills it from lib/table.ts). */
 export interface StepPrices {
-  /** A locked company: 0 when it opens free on the plan (Trial, Pro and Close: PRO_OPENS_DAILY a day, and Crystal Ball's always), else COMPANY_PRICE. */
+  /** A locked company: 0 when it opens free on the plan (Pro and Close: everything; the trial: TRIAL_OPENS_DAILY a day), else COMPANY_PRICE. */
   company: number;
   /** The company price once today's free opens are used. */
   companyFull: number;

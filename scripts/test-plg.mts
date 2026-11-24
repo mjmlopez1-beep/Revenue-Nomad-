@@ -7,11 +7,9 @@
  *   npx tsx scripts/test-plg.mts      exits 1 on any failure
  *
  * Covered:
- *   1. Pro opens companies free, up to PRO_OPENS_DAILY (15) a UTC day beyond Crystal Ball: each one
- *      says how many are left, the 16th costs 2 with "You've opened 15 companies today. More open
- *      tomorrow, or use 2 credits.", Crystal Ball's stay free and don't count, the free opens don't
- *      use the day's unlock limit, the connector quotes it, and the next UTC day has 15 again. Free
- *      is unchanged: other companies are 2 credits.
+ *   1. Pro opens everything (open data on paid plans, scripts/test-open-plans.mts has the rest):
+ *      Me.openAll, every company open for 0 credits, nothing to unlock, the one line in my_account.
+ *      Free is unchanged: other companies are 2 credits.
  *   2. Fellow fractionals are free: who held a seat and the role they held open free once the
  *      company is visible (before that: the company first), a member who keeps out of the
  *      directory keeps their price, Fractionals names a fellow fractional free, and contact details
@@ -216,34 +214,18 @@ async function main() {
     }
   };
 
-  /* ---------- 1. Pro: companies free, 15 a day ---------- */
-  console.log("\n1. Pro opens companies free, up to 15 a day beyond Crystal Ball");
+  /* ---------- 1. Pro opens everything (open data on paid plans; the rest is in scripts/test-open-plans.mts) ---------- */
+  console.log("\n1. Pro opens everything; Free is unchanged");
   let pro = await view(PRO);
-  check("Me.proOpens: 15 of 15 left today on Pro", pro.me!.proOpens?.left === 15 && pro.me!.proOpens.of === F.PRO_OPENS_DAILY && F.PRO_OPENS_DAILY === 15, pro.me!.proOpens);
+  check("Me.openAll on Pro, and no daily count", pro.me!.openAll === true && !pro.me!.proOpens, [pro.me!.openAll, pro.me!.proOpens]);
   const c0 = pro.me!.credits;
-  let lastMsg = "";
-  for (let k = 0; k < 15; k++) lastMsg = (await unlock(PRO, "company", P(k), "identity")).message;
-  pro = await view(PRO);
-  check("15 companies outside Crystal Ball opened for 0 credits", pro.me!.credits === c0 && Array.from({ length: 15 }, (_, k) => company(pro, P(k))).every((c) => !c.hidden), pro.me!.credits);
-  check("each says how many are left; the 15th says it was the last of today's", lastMsg.includes(t.proOpenLine(0)) && /last of today's 15/.test(lastMsg), lastMsg);
-  check("none left today, and the free opens don't use the day's unlock limit (100)", pro.me!.proOpens?.left === 0 && pro.me!.unlocksLeft === 100, [pro.me!.proOpens, pro.me!.unlocksLeft]);
-  check("the credit history reads each as opened free on Pro", pro.ledger.filter((l) => l.reason === t.PRO_OPEN_LINE).length === 15);
-  const q16 = (await tools.unlock({ member: (await t.memberForToken(PRO))!, origin: BASE }, { entity: "company", id: P(15), field: "identity" })) as { would_spend?: number; message: string };
-  check("the connector quotes the 16th at 2 credits and says why", q16.would_spend === 2 && q16.message.includes(F.PRO_OPENS_USED), q16);
+  check("every company is open on Pro, for 0 credits", Array.from({ length: N }, (_, k) => company(pro, P(k))).every((c) => !c.hidden) && pro.me!.credits === c0);
+  check("unlocking a company says nothing is locked", /Nothing here is locked on your plan/.test((await refused(unlock(PRO, "company", P(15), "identity"))) ?? ""));
   const acct = (await tools.myAccount({ member: (await t.memberForToken(PRO))!, origin: BASE })) as { free_company_today?: string; how_credits_work?: string };
-  check("my_account says none are left today, in the same words", /^none left today/.test(acct.free_company_today ?? "") && (acct.free_company_today ?? "").includes(F.PRO_OPENS_USED), acct.free_company_today);
-  const m16 = await unlock(PRO, "company", P(15), "identity");
-  check("the 16th costs 2 credits, with the fair-use line", (await credits(PRO)) === c0 - 2 && m16.message.includes(F.PRO_OPENS_USED), m16.message);
-  check("the fair-use line is the owner's words", F.PRO_OPENS_USED === "You've opened 15 companies today. More open tomorrow, or use 2 credits.");
-  await unlock(PRO, "company", BALL1, "identity", "crystal");
+  check("my_account says it in the one line", (acct.how_credits_work ?? "").startsWith(F.OPEN_LINE), acct.how_credits_work);
+  check("the trial's daily companies are 40", F.TRIAL_OPENS_DAILY === 40);
   pro = await view(PRO);
-  check("a Crystal Ball company still opens free past the 15, and doesn't count", pro.me!.credits === c0 - 2 && !company(pro, BALL1).hidden && pro.me!.proOpens?.left === 0);
-  skew += DAY;
-  pro = await view(PRO);
-  check("the next UTC day: 15 again", pro.me!.proOpens?.left === 15, pro.me!.proOpens);
-  const m17 = await unlock(PRO, "company", P(16), "identity");
-  check("and the next company is free again", (await credits(PRO)) === c0 - 2 && m17.message.includes(t.proOpenLine(14)), m17.message);
-  skew -= DAY;
+  check("a Crystal Ball company is open too", !company(pro, BALL1).hidden);
 
   // Free: unchanged.
   const fen0 = await view(FREE);
@@ -315,15 +297,16 @@ async function main() {
   check("three plans: Free $0, Pro $59 / $590, Close $79 / $790", JSON.stringify(compare.PLANS.map((p) => [p.name, p.month, p.year])) === JSON.stringify([["Free", 0, 0], ["Pro", 59, 590], ["Close", 79, 790]]), compare.PLANS);
   check("Proposals and e-signature: building is Close's after the trial", JSON.stringify(rowOf("Proposals and e-signature")) === JSON.stringify(["Proposals and e-signature", "In your trial only", "In your trial only", "Every template, send and get signed, unlimited"]));
   check("Merlin drafting and your own contracts are Close's", JSON.stringify(rowOf("Merlin drafting and your own contracts")?.slice(1)) === JSON.stringify(["In your trial only", "In your trial only", "Drafted from your call, your own templates and contracts with signature fields"]));
-  check("Opening companies", JSON.stringify(rowOf("Opening companies")) === JSON.stringify(["Opening companies", "1 a day from Crystal Ball, others 2 credits", "Free, up to 15 a day, Crystal Ball not counted", "Free, up to 15 a day, Crystal Ball not counted"]));
+  check("Companies, seats, rates and people", JSON.stringify(rowOf("Companies, seats, rates and people")) === JSON.stringify(["Companies, seats, rates and people", "1 a day from Crystal Ball, others 2 credits, 1 a fact", "Everything opens, no credits, no daily cap", "Everything opens, no credits, no daily cap"]));
+  check("Email and phone numbers", JSON.stringify(rowOf("Email and phone numbers")) === JSON.stringify(["Email and phone numbers", "1 credit each, from fellow fractionals", "1 credit each, from fellow fractionals", "1 credit each, from fellow fractionals"]));
   check("Fellow fractionals", JSON.stringify(rowOf("Fellow fractionals")) === JSON.stringify(["Fellow fractionals", "Free", "Free", "Free"]));
   check("Open roles are about alerts", JSON.stringify(rowOf("Open roles")) === JSON.stringify(["Open roles", "Alerts: weekly email", "Alerts as they open", "Alerts as they open"]));
-  check("each plan has a short what-you-get line", compare.PLANS.every((p) => p.line.length > 20 && p.line.length < 100));
+  check("each plan has a short what-you-get line", compare.PLANS.every((p) => p.line.length > 20 && p.line.length < 130));
   const table = text(renderToStaticMarkup(React.createElement(B.CompareTable, { current: "free" })));
-  check("the comparison table shows the three plans and the rows", ["Free Pro Close", "Proposals and e-signature", "Every template, send and get signed, unlimited", "Free, up to 15 a day, Crystal Ball not counted", "Fellow fractionals", "Alerts as they open"].every((x) => table.includes(x)), table.slice(0, 400));
+  check("the comparison table shows the three plans and the rows", ["Free Pro Close", "Proposals and e-signature", "Every template, send and get signed, unlimited", "Everything opens, no credits, no daily cap", "Fellow fractionals", "Alerts as they open"].every((x) => table.includes(x)), table.slice(0, 400));
   check("VALUE_LINE sells winning the client", B.VALUE_LINE === "Find the company before it posts and get in through the person who held the seat. Close adds the proposal they sign.");
   const welcome = text(renderToStaticMarkup(React.createElement(B.ProWelcome, { plan: (await view(PRO)).me!.plan!, onSeen: () => {} })));
-  check("the Pro welcome tells the same story, with the new rows", welcome.includes(rules.PRO_STORY) && /Opening companies\. Free, up to 15 a day/.test(welcome) && !/Proposals and e-signature/.test(welcome), welcome.slice(0, 300));
+  check("the Pro welcome tells the same story, with the new rows", welcome.includes(rules.PRO_STORY) && /Companies, seats, rates and people\. Everything opens/.test(welcome) && !/Proposals and e-signature/.test(welcome), welcome.slice(0, 300));
   const cardsFree = text(renderToStaticMarkup(React.createElement(B.PlanCards, { plan: (await view(FREE)).me!.plan!, from: "billing" })));
   check("the plans: all three, each upgrade button with what you get", /Choose Pro\b/.test(cardsFree) && /Choose Close/.test(cardsFree) && compare.PLANS.every((p) => cardsFree.includes(p.line)) && /\$590 a year/.test(cardsFree) && /\$790 a year/.test(cardsFree), cardsFree);
   check("under Close: what Claude does, then the AI pack, with no draft numbers or limit", cardsFree.includes("Merlin drafts your proposals from your calls Need more AI usage? Add a pack anytime for $10.") && !/\d+ Claude drafts|drafts a month|limit/i.test(cardsFree));
@@ -334,7 +317,7 @@ async function main() {
   check("paying for Close: a switch back to Pro", /Switch to Pro/.test(cardsClose) && /Your plan/.test(cardsClose), cardsClose);
   const { TrialEnded } = await import("../app/post/Today");
   const ended = text(renderToStaticMarkup(React.createElement(TrialEnded, { onSeePro: () => {}, onSeen: () => {} })));
-  check("the trial-ended card tells it too, with Close", ended.includes(rules.PRO_STORY) && /Close adds the proposal they sign/.test(ended) && /up to 15 a day/.test(ended), ended);
+  check("the trial-ended card tells it too, with Close", ended.includes(rules.PRO_STORY) && /Close adds the proposal they sign/.test(ended) && ended.includes(F.OPEN_LINE) && /locked again/.test(ended), ended);
 
   /* ---------- 6. the landing page's pricing ---------- */
   console.log("\n6. Pricing on the landing page");
@@ -349,14 +332,14 @@ async function main() {
   console.log("\n7. Out of credits: three choices in one line");
   const freePlan = (await view(FREE)).me!.plan!;
   const zero = nudges.pickNudge({ page: "table", credits: 0, plan: freePlan, profileEmpty: false });
-  check("the 0-credit line offers the three choices", JSON.stringify(zero?.choices?.map((c) => c.label)) === JSON.stringify(["Earn one: add a fact", "50 for $19", "Pro: companies free"]) && zero?.text === "You're out of credits.", zero);
+  check("the 0-credit line offers the three choices", JSON.stringify(zero?.choices?.map((c) => c.label)) === JSON.stringify(["Earn one: add a fact", "50 for $19", "Pro: everything opens"]) && zero?.text === "You're out of credits.", zero);
   check("their actions: earn, the top-up, the plans", zero?.choices?.map((c) => c.action).join() === "earn,topup,plansCredits");
   const slot = text(renderToStaticMarkup(React.createElement(nudges.NudgeSlot, { nudge: zero, onAction: () => {} })));
-  check("drawn in one line", slot === "You're out of credits. Earn one: add a fact 50 for $19 Pro: companies free", slot);
+  check("drawn in one line", slot === "You're out of credits. Earn one: add a fact 50 for $19 Pro: everything opens", slot);
   check("on Pro, no Pro choice; with billing off, only earning", nudges.creditChoices((await view(PRO)).me!.plan).map((c) => c.label).join() === "Earn one: add a fact,50 for $19" && nudges.creditChoices(undefined).map((c) => c.label).join() === "Earn one: add a fact");
   check("at 1 to 3 credits the line is as before", nudges.pickNudge({ page: "table", credits: 2, plan: freePlan, profileEmpty: false })?.cta === "Earn credits");
   const get = text(renderToStaticMarkup(React.createElement(B.GetCredits, { plan: freePlan, onEarn: () => {} })));
-  check("the record's Get 2 credits opens the same three", get === "Earn one: add a fact 50 for $19 Pro: companies free", get);
+  check("the record's Get 2 credits opens the same three", get === "Earn one: add a fact 50 for $19 Pro: everything opens", get);
   const ui = await import("../app/post/ui");
   check("its button reads Get 2 credits", ui.GET_COMPANY_CREDITS === "Get 2 credits" && ui.getCreditsWords(1) === "Get 1 credit");
 

@@ -193,7 +193,12 @@ async function main() {
   check("Close: a client signs, with an Evidence Bank draft, saves", (cv.workflows?.flows.length ?? 0) === 1);
 
   /* ---------- the watch pass sets off Jordan's workflows ---------- */
-  console.log("\nFrom the watch pass");
+  // Open data on paid plans: on Pro and Close nothing a workflow opens costs a credit (everything is open), so the spend,
+  // the cap and the yes are checked with billing off, where every member is on credits and every plan feature is on.
+  check("on Pro a workflow's steps cost nothing: everything opens", JSON.stringify(W.pricesFor(await t.loadState(), "mem_jordan")) === JSON.stringify({ company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0 }), W.pricesFor(await t.loadState(), "mem_jordan"));
+  const billingEnv = process.env.RN_BILLING;
+  delete process.env.RN_BILLING;
+  console.log("\nFrom the watch pass (billing off: credits)");
   const w1 = (await act(J, { type: "workflow.save", trigger: "funding", scope: { kind: "list", list: "al_jordan01" }, steps: [{ key: "dm" }, { key: "pipe" }, { key: "tell" }] })) as { workflows?: { flows: { id: string; name: string; ceiling: number }[]; prices: { person: number } } };
   const wf1 = w1.workflows!.flows[0];
   check("the builder's estimate before it is on: up to the company and who decides", wf1.ceiling === 3, wf1);
@@ -251,7 +256,8 @@ async function main() {
   await settle();
   let cs = await t.loadState();
   let cr = cs.workflows!.mem_casey.runs.filter((r) => r.wf === capWf.id);
-  check("under the cap it spends: who decides at Cedar and Pine, 1 credit (the company opens free on Close)", cr.length === 1 && cr[0].spent === 1 && cr[0].estimate === 1 && !cr[0].ask, cr);
+  // (Billing off: the first company of the day opens free; past it a company is 2 credits and who decides 1.)
+  check("under the cap it spends: who decides at Cedar and Pine, 1 credit (the company opens free, the day's first)", cr.length === 1 && cr[0].spent === 1 && cr[0].estimate === 1 && !cr[0].ask, cr);
   const warns = () => (cs.inbox?.mem_casey ?? []).filter((x) => x.id.startsWith("wf-warn:"));
   check("passing the warning tells the member, in the bell", warns().length === 1, cs.inbox?.mem_casey);
   await W.runEvents([evOf("seat:b", "c_halcyon"), evOf("seat:c", "c_lark")]);
@@ -263,24 +269,24 @@ async function main() {
   check("nothing more was spent", cbal0 - T.balance(cs, "mem_casey") === 1);
   check("the warning is told once", warns().length === 1);
   const asks = (cs.inbox?.mem_casey ?? []).filter((x) => x.ask && !x.ask.answer);
-  check("the bell asks: say yes, with the credits", asks.length === 2 && asks.every((x) => x.ask!.credits === 1 && /waits for your yes · 1 credit$/.test(x.line)), asks);
+  check("the bell asks: say yes, with the credits", asks.length === 2 && asks.every((x) => x.ask!.credits === 3 && /waits for your yes · 3 credits$/.test(x.line)), asks);
   check("the ask names no locked company", asks.every((x) => !/Halcyon Freight|Larkspur Learning/.test(`${x.line} ${x.sub}`)));
   const [yesRun, noRun] = waiting;
   const yes = (await act(C, { type: "workflow.approve", run: yesRun.id, yes: true })) as { message: string };
   await settle();
   cs = await t.loadState();
   const y = cs.workflows!.mem_casey.runs.find((r) => r.id === yesRun.id)!;
-  check("yes runs the waiting steps, and spends what it asked", y.ask?.answer === "yes" && y.spent === 1 && y.steps.find((x) => x.key === "dm")?.status === "done" && cbal0 - T.balance(cs, "mem_casey") === 2, [yes.message, y]);
+  check("yes runs the waiting steps, and spends what it asked", y.ask?.answer === "yes" && y.spent === 3 && y.steps.find((x) => x.key === "dm")?.status === "done" && cbal0 - T.balance(cs, "mem_casey") === 4, [yes.message, y]);
   check("the yes line in the bell is settled", (cs.inbox?.mem_casey ?? []).find((x) => x.ask?.run === yesRun.id)?.ask?.answer === "yes");
   await act(C, { type: "workflow.approve", run: noRun.id, yes: false });
   cs = await t.loadState();
   const no = cs.workflows!.mem_casey.runs.find((r) => r.id === noRun.id)!;
-  check("no doesn't run them, and spends nothing", no.ask?.answer === "no" && no.spent === 0 && no.steps.find((x) => x.key === "dm")?.status === "skipped" && cbal0 - T.balance(cs, "mem_casey") === 2, no);
-  check("a second answer changes nothing", /said no/.test(((await act(C, { type: "workflow.approve", run: noRun.id, yes: true })) as { message: string }).message) && cbal0 - T.balance(await t.loadState(), "mem_casey") === 2);
+  check("no doesn't run them, and spends nothing", no.ask?.answer === "no" && no.spent === 0 && no.steps.find((x) => x.key === "dm")?.status === "skipped" && cbal0 - T.balance(cs, "mem_casey") === 4, no);
+  check("a second answer changes nothing", /said no/.test(((await act(C, { type: "workflow.approve", run: noRun.id, yes: true })) as { message: string }).message) && cbal0 - T.balance(await t.loadState(), "mem_casey") === 4);
   const lines = cs.ledger.filter((l) => l.memberId === "mem_casey" && l.reason === "unlock");
   check("the yes's spend carries the workflow's name too", lines.length >= 2 && lines.every((l) => l.wf === capWf.name), lines);
   const v = (await W.workflowsFor(C)) as import("../lib/workflows/types").WorkflowsView;
-  check("credits spent by workflows in 30 days, from the credit history", v.on && v.spent30 === 2, v.spent30);
+  check("credits spent by workflows in 30 days, from the credit history", v.on && v.spent30 === 4, v.spent30);
 
   /* ---------- Merlin's daily caps ---------- */
   console.log("\nDaily caps");
@@ -297,6 +303,7 @@ async function main() {
   check("…and nothing is spent", T.balance(bs, "mem_busy") === bb0);
 
   /* ---------- reminders ---------- */
+  process.env.RN_BILLING = billingEnv;
   console.log("\nReminders");
   await W.runEvents([{ memberId: "mem_free", key: "seat:free1", trigger: "seat", at: iso(Date.now()), companyId: "c_halcyon", line: "A fractional seat ended at a locked Truck Transportation company with 201-500 employees", href: `/?c=${pub("c_halcyon")}`, lists: ["al_free0001"] }]);
   await settle();
