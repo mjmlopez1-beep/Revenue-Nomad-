@@ -35,6 +35,7 @@ import { pipelineAct } from "../pipelineStore";
 import { colsOf, withCols } from "../place";
 import { BottomTabs } from "./BottomTabs";
 import { columnOf, defaultCols, fillRate, visibleColumns } from "./columns";
+import { useWorkbenchSort } from "./useWorkbenchSort";
 import { SelectionBar } from "./SelectionBar";
 import { StatusLine } from "./StatusLine";
 import { Toolbar, type ViewOption } from "./Toolbar";
@@ -218,7 +219,7 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
         setFiltersOwn({ ...x.filters, icp: false });
       }
     }
-    if (x.sort !== undefined) setSort(x.sort);
+    if (x.sort !== undefined) (colSort.clear(), setSort(x.sort));
     if (x.cols?.length) {
       showCols(x.cols);
       setFresh(new Set(x.cols));
@@ -231,7 +232,11 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
   const all = useMemo(() => rowsFor(type, infos), [type, infos]);
   const { rows: filtered, facets } = useMemo(() => applyFilters(all, eff, tab, "", me), [all, eff, tab, me]);
   const sorted = useMemo(() => sortRows(filtered, sort, false, "", { me }), [filtered, sort, me]);
-  const inView = sorted.slice(0, limit);
+  const cols = visibleColumns(type, picked);
+  // A header click sorts the whole list by that column, both ways; the Sort menu's pick clears it.
+  const colSort = useWorkbenchSort(sorted, cols, `wb.${type}`);
+  const pickSort = (s: SortKey) => (colSort.clear(), setSort(s));
+  const inView = colSort.rows.slice(0, limit);
   useEffect(() => {
     setLimit(pageSize);
     setSelected(new Set());
@@ -249,7 +254,6 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
     return out;
   }, [all, filters, me, hasIcp, type]);
 
-  const cols = visibleColumns(type, picked);
   // Closest evidence (Evidence Bank, Close): asked for the companies on screen while its column shows; the counts always on Close.
   const evShown = type === "companies" && cols.some((c) => c.id === "evidence");
   const { summary: evSummary } = useClosest(evShown ? [...new Set(inView.map((r) => r.i.c.id))] : [], closeOk);
@@ -484,7 +488,8 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
         filterN={filterN}
         filterPanel={filterPanel}
         sort={sort}
-        onSort={setSort}
+        sortWords={colSort.words}
+        onSort={pickSort}
         alertText={savedHere?.email || alerted ? "Alert on · new roles" : "Save as alert"}
         onAlert={() => setSaveOpen(true)}
         toolsOpen={toolsShown}
@@ -545,7 +550,8 @@ export function CompaniesWorkbench({ view, infos, me, openCompany, openPage, ask
               onPickAll={pickAll}
               onOpen={openRow}
               sort={sort}
-              onSort={setSort}
+              onSort={pickSort}
+              sorter={colSort}
               onAddColumn={() => {
                 setToolsOpen(true);
                 setRun(null);

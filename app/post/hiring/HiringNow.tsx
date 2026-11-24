@@ -60,6 +60,8 @@ import {
   hiringColumns, hoursOf, inView, listedOf, pastHires, pitchedAt, rateOf, roleLists, sizeHq, sortRoles, statusOf, wayOf,
   type HireChip, type HireSort, type HireView, type PipeMap, type WayMap,
 } from "./hiringModel";
+import { useWorkbenchSort, type ExtraSorts } from "../workbench/useWorkbenchSort";
+import { rowSortSpec } from "../rowSort";
 import "../workbench/workbench.css";
 import "./hiring.css";
 
@@ -98,6 +100,8 @@ export function HiringNow() {
   const view: HireView = mode ?? (t.allFns || !myFn ? "all" : "mine");
   const [chips, setChips] = useState<Set<HireChip>>(new Set());
   const [sort, setSortRaw] = useState<HireSort>(() => hireSortOf(t.sortPicked));
+  /** Clears a header's sort when the Sort panel picks one (set once the rows are sorted, below). */
+  const colSortRef = useRef<(() => void) | null>(null);
   const [panel, setPanel] = useState<"cols" | "sort" | "filter" | null>(null);
   const [extras, setExtras] = useState<string[]>(() => readList(colsKey(me.id)));
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -120,6 +124,7 @@ export function HiringNow() {
     t.setAllFns?.(v === "all");
   };
   const setSort = (s: HireSort) => {
+    colSortRef.current?.();
     setSortRaw(s);
     // The table's own sorts go in the address too (a saved view keeps them).
     if (t.sorts.some((x) => x.key === s)) t.setSort(s);
@@ -154,7 +159,29 @@ export function HiringNow() {
   const base = view === "closed" ? closed : lift ?? inView(open, view, myFn, pitched);
   const chipCtx = { ways, me };
   const rows = useMemo(() => sortRoles(base.filter((r) => [...chips].every((k) => chipTest(k, r, chipCtx))), sort, me), [base, chips, sort, me, ways]); // eslint-disable-line react-hooks/exhaustive-deps
-  const shownRows = rows.slice(0, limit);
+  const colCtx = { me, ways, status: statusCtx, first };
+  const allCols = hiringColumns(colCtx);
+  const cols = allCols.filter((x) => HIRING_DEFAULT_COLS.includes(x.id) || extras.includes(x.id));
+  // A header click sorts every role by that column, both ways; the Sort panel's pick clears it.
+  const colSorts: ExtraSorts = useMemo(
+    () => ({
+      fit: { kind: "number", get: (r) => fitOf(r, me).tier },
+      way: {
+        kind: "number",
+        get: (r) => {
+          const w = wayOf(r, ways, first);
+          return w.has ? Number(/(\d+)%/.exec(w.sub)?.[1] ?? 0) : null;
+        },
+      },
+      status: { kind: "text", get: (r) => statusOf(r, statusCtx).label },
+      sizeHq: rowSortSpec("employees"),
+      past: { kind: "number", get: (r) => r.i.c.friendly.fractional || null },
+    }),
+    [me, ways, first, statusCtx],
+  );
+  const colSort = useWorkbenchSort(rows, cols, "hiring", colSorts);
+  colSortRef.current = colSort.clear;
+  const shownRows = colSort.rows.slice(0, limit);
   const pitchedN = useMemo(() => open.filter(pitched).length, [open, pipe]); // eslint-disable-line react-hooks/exhaustive-deps
   const freshMine = useMemo(() => open.filter((r) => r.e && (!myFn || fnOf(r.e) === myFn) && newThisWeek(r.e)).length, [open, myFn]);
   useEffect(() => setSelected(new Set()), [t.filters, view]);
@@ -238,9 +265,6 @@ export function HiringNow() {
   const openAlert = () => (setSel(null), setAside("alert"), setPanel(null));
 
   /* ----- columns ----- */
-  const colCtx = { me, ways, status: statusCtx, first };
-  const allCols = hiringColumns(colCtx);
-  const cols = allCols.filter((x) => HIRING_DEFAULT_COLS.includes(x.id) || extras.includes(x.id));
   // Closest evidence (Evidence Bank, Close): asked for the companies on screen while its column shows.
   const { summary: evSummary } = useClosest(close && extras.includes("evidence") ? [...new Set(shownRows.map((r) => r.i.c.id))] : [], close && extras.includes("evidence"));
   const toggleCol = (id: string) => {
@@ -590,7 +614,7 @@ export function HiringNow() {
           </button>
           <button type="button" className="wb-tb" aria-expanded={panel === "sort"} onClick={() => setPanel(panel === "sort" ? null : "sort")}>
             <span>
-              Sort<span className="wb-tb-sub">: {HIRE_SORTS.find((s) => s.key === sort)?.label.toLowerCase().replace("hq", "HQ").replace("a to z", "A to Z")}</span>
+              Sort<span className="wb-tb-sub">: {colSort.words ?? HIRE_SORTS.find((s) => s.key === sort)?.label.toLowerCase().replace("hq", "HQ").replace("a to z", "A to Z")}</span>
             </span>
           </button>
           <span className="wb-tb-sp" />
@@ -632,7 +656,7 @@ export function HiringNow() {
           <section className="hn-panel" aria-label="Sort" role="radiogroup">
             <strong>Sort by</strong>
             {HIRE_SORTS.map((s) => (
-              <button key={s.key} type="button" role="radio" aria-checked={sort === s.key} className={pill(sort === s.key)} onClick={() => setSort(s.key)}>
+              <button key={s.key} type="button" role="radio" aria-checked={!colSort.key && sort === s.key} className={pill(!colSort.key && sort === s.key)} onClick={() => setSort(s.key)}>
                 {s.label}
               </button>
             ))}
@@ -745,6 +769,7 @@ export function HiringNow() {
                 onOpen={openRow}
                 sort={sort === "best" ? "best" : sort === "fn" ? "fn" : sort === "employees" ? "employees" : "newest"}
                 onSort={(s) => setSort(hireSortOf(s))}
+                sorter={colSort}
                 onAddColumn={() => setPanel(panel === "cols" ? null : "cols")}
                 cell={cell}
                 rowClass={(r) => (r.key === sel && aside === "role" ? "hn-cur" : "")}

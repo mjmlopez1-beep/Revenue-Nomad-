@@ -33,7 +33,7 @@ import {
 } from "../model";
 import {
   HEADS, KIND_LABEL, KIND_TYPE, NOTES, deciderRefs, filterGroups, filtersFromAsk, findRun, fractionalRow, icpLine, insideStats, nounOf, previewRow, quickGroups, runCompanies, saveCost,
-  type FilterValue, type FindKind,
+  type FilterValue, type FindKind, type PreviewRow,
 } from "./findModel";
 import { alertWords, kindOfList, listAct, listsOf } from "./lists";
 import { listenFindStart, takeFindStart, type FindStart } from "./start";
@@ -41,6 +41,7 @@ import { appDeps, fetchQuote, quoteWords } from "../workbench/quote";
 import { runUnlock } from "../workbench/run";
 import { defaultSeeds, likeCriteria, profileOf, profileWords, rankLike, seedMatches, traitChips, withoutTrait, type LikeRow } from "./lookalikes";
 import type { LikeTrait } from "../model";
+import { SortHeader, useSort, type SortCol } from "../../ui/sortable";
 import "./find.css";
 
 /** The kinds in the switcher, Lookalikes last (the owner's "reverse engineer what works into a target account list"). */
@@ -860,18 +861,36 @@ const ini = (s: string) =>
     .slice(0, 2)
     .toUpperCase();
 
+const PREVIEW_KEYS = ["name", "c2", "c3", "sig"] as const;
+/** A price or a lock in a cell ("1 credit", "Opens with the company") is not a value: it sorts last. */
+const LOCK_WORDS = /credit|opens|locked|hidden|not on file|no posting|no rate/i;
+function previewSortCols(kind: FindKind, head: readonly string[]): SortCol<PreviewRow>[] {
+  const txt = (v: string | null | undefined) => (v && !LOCK_WORDS.test(v) ? v : null);
+  const money = kind === "seats" || kind === "roles";
+  return [
+    { key: "name", label: head[0], get: (r) => (r.open ? r.name : null) },
+    { key: "c2", label: head[1], kind: kind === "fractionals" ? "number" : "text", get: (r) => txt(r.c2) },
+    { key: "c3", label: head[2], get: (r) => (r.c3muted ? null : txt(r.c3)) },
+    { key: "sig", label: head[3], kind: money ? "money" : "text", get: (r) => txt(r.sig) },
+  ];
+}
+
 function Preview({ kind, run, me, ranked, openCompany, openFractionals }: { kind: FindKind; run: ReturnType<typeof findRun> | null; me: Me; ranked: Map<string, LikeRow> | null; openCompany: (id: string) => void; openFractionals: () => void }) {
   const head = HEADS[kind];
-  const rows = !run ? [] : kind === "fractionals" ? (run.fractionals ?? []).slice(0, PREVIEW).map(fractionalRow) : run.rows.slice(0, PREVIEW).map((r) => previewRow(kind, r, me, ranked?.get(r.key) ?? null));
+  const raw = useMemo(() => (!run ? [] : kind === "fractionals" ? (run.fractionals ?? []).slice(0, PREVIEW).map(fractionalRow) : run.rows.slice(0, PREVIEW).map((r) => previewRow(kind, r, me, ranked?.get(r.key) ?? null))), [run, kind, me, ranked]);
+  // Click a header to sort the preview by it, both ways; a locked name or a price word sorts last.
+  const sortCols = useMemo(() => previewSortCols(kind, head), [kind, head]);
+  const sorter = useSort(raw, sortCols, { storageKey: `find.${kind}` });
+  const rows = sorter.rows;
   return (
     <div className="fd-grid-wrap">
       <div className="fd-grid" role="table" aria-label="Preview">
         <div role="row" className="fd-grow-h">
           <span role="columnheader">#</span>
-          {head.map((h) => (
-            <span key={h} role="columnheader">
+          {head.map((h, k) => (
+            <SortHeader key={h} as="div" s={sorter} k={PREVIEW_KEYS[k]}>
               {h}
-            </span>
+            </SortHeader>
           ))}
         </div>
         {!run && kind !== "lookalikes" &&

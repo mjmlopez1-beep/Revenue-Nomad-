@@ -36,6 +36,8 @@ import { PageStrip } from "../shell/PageStrip";
 import { CardList } from "../Cards";
 import { Workbench } from "../workbench/Workbench";
 import { columnOf, type ColumnDef } from "../workbench/columns";
+import { useWorkbenchSort } from "../workbench/useWorkbenchSort";
+import { SortHeader, sorterOf, useSortState, type SortCol } from "../../ui/sortable";
 import {
   EMPTY_FILTERS,
   applyFilters,
@@ -183,6 +185,42 @@ function StatCells({
       </td>
     </>
   );
+}
+
+/* ---------- click a header to sort ---------- */
+
+/** The seats with a rate: their columns, which sort from their headers. */
+const SEAT_RATE_COLS: ColumnDef[] = ["company", "role", "function", "hours", "rate", "end"]
+  .map((id) => columnOf("engagements", id))
+  .filter((x): x is ColumnDef => !!x);
+
+type StatRow = { key: string; name: ReactNode; row: BenchmarkRow | null };
+/**
+ * The figures table's columns: what each cell shows, so a group below its floor, a Pro lock or a
+ * range not shown yet sorts last (never by a figure the page doesn't print).
+ */
+function statCols(b: Benchmarks, head: string, benchRates: Parameters<typeof ownRates>[1], seats: Parameters<typeof ownRates>[2], kind: RateKind): SortCol<StatRow>[] {
+  const fig = (x: StatRow, side: "m" | "h") => (x.row ? figureOf(side === "m" ? x.row.monthly : x.row.hourly, b) : null);
+  const mid = (side: "m" | "h") => (x: StatRow) => {
+    const f = fig(x, side);
+    return f && f.state !== "few" ? f.median : null;
+  };
+  const low = (side: "m" | "h") => (x: StatRow) => {
+    const f = fig(x, side);
+    return f && f.state === "range" ? f.p25 : null;
+  };
+  const people = (side: "m" | "h") => (x: StatRow) => fig(x, side)?.n ?? null;
+  return [
+    // A function by its name; a client size in its own order, smallest first.
+    head === "Function" ? { key: "name", label: head, get: (x) => (typeof x.name === "string" ? x.name : x.key) } : { key: "name", label: "Company size", kind: "number", get: (x) => (x.key === "All" ? -1 : RN_REVENUE.indexOf(x.key)) },
+    { key: "mMid", label: "Middle per month", kind: "number", get: mid("m") },
+    { key: "mLow", label: "Low per month", kind: "number", get: low("m") },
+    { key: "mN", label: "People per month", kind: "number", get: people("m") },
+    { key: "hMid", label: "Middle per hour", kind: "number", get: mid("h") },
+    { key: "hLow", label: "Low per hour", kind: "number", get: low("h") },
+    { key: "hN", label: "People per hour", kind: "number", get: people("h") },
+    { key: "yours", label: "Your rate", kind: "number", get: (x) => (x.row ? ownRates(x.row.function, benchRates, seats)[kind]?.amount ?? null : null) },
+  ];
 }
 
 /* ---------- the page ---------- */
@@ -338,6 +376,10 @@ export function RatesPage() {
         },
       });
   };
+
+  // Click a header to sort: the seats with a rate (every row, before the page is cut), and the figures.
+  const seatSort = useWorkbenchSort(seatRows, SEAT_RATE_COLS, "rates.seats");
+  const statStore = useSortState("rates.stats");
 
   if (!b)
     return (
@@ -1069,7 +1111,9 @@ export function RatesPage() {
       mine?: boolean;
     }[],
     head: string,
-  ) => (
+  ) => {
+    const ss = sorterOf(list, statCols(b, head, me.benchRates.filter((x) => !gone.has(x.id)), seatsIn, kind), statStore);
+    return (
     <div className="rt-scroll">
       <table
         className="rt-table"
@@ -1077,9 +1121,9 @@ export function RatesPage() {
       >
         <thead>
           <tr className="rt-groups">
-            <th scope="col" rowSpan={2} className="rt-th-name">
+            <SortHeader s={ss} k="name" rowSpan={2} className="rt-th-name">
               {head}
-            </th>
+            </SortHeader>
             <th scope="colgroup" colSpan={3} className="rt-m">
               Per month
             </th>
@@ -1087,37 +1131,39 @@ export function RatesPage() {
               Per hour
             </th>
             {yoursCol && (
-              <th scope="col" rowSpan={2} className="rt-th-yours">
-                Your rate <span className="rt-muted">Only you see it</span>
-              </th>
+              <SortHeader s={ss} k="yours" rowSpan={2} className="rt-th-yours" extra={<span className="rt-muted">Only you see it</span>}>
+                Your rate
+              </SortHeader>
             )}
           </tr>
           <tr className="rt-cols">
             {(["m", "h"] as const).map((sd) => [
-              <th key={`${sd}1`} scope="col" className={`num rt-${sd}`}>
+              <SortHeader key={`${sd}1`} s={ss} k={`${sd}Mid`} className={`num rt-${sd}`}>
                 Middle
-              </th>,
-              <th
+              </SortHeader>,
+              <SortHeader
                 key={`${sd}2`}
-                scope="col"
+                s={ss}
+                k={`${sd}Low`}
                 className={`num rt-${sd}`}
                 title="The middle half: 1 in 4 people are paid less than low, and 1 in 4 more than high"
               >
                 Low to high
-              </th>,
-              <th
+              </SortHeader>,
+              <SortHeader
                 key={`${sd}3`}
-                scope="col"
+                s={ss}
+                k={`${sd}N`}
                 className={`num rt-${sd}`}
                 title="Different people with a rate in this figure"
               >
                 People
-              </th>,
+              </SortHeader>,
             ])}
           </tr>
         </thead>
         <tbody>
-          {list.map((x) => (
+          {ss.rows.map((x) => (
             <tr key={x.key} className={x.on ? "on" : undefined}>
               <th scope="row" className="rt-name">
                 <button
@@ -1165,12 +1211,11 @@ export function RatesPage() {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
-  const seatCols = ["company", "role", "function", "hours", "rate", "end"]
-    .map((id) => columnOf("engagements", id))
-    .filter((x): x is ColumnDef => !!x);
-  const seatsShown = seatRows.slice(0, limit);
+  const seatCols = SEAT_RATE_COLS;
+  const seatsShown = seatSort.rows.slice(0, limit);
   const seatOpen = seatRows.filter((r) => !r.i.c.hidden).length;
   const seatRate = seatRows.filter(
     (r) => r.e?.cells.rate?.s === "value",
@@ -1252,6 +1297,7 @@ export function RatesPage() {
               canPick={() => false}
               onOpen={(r) => c.openCompany(r.i.c.id, r.key)}
               sort="newest"
+              sorter={seatSort}
               onAddColumn={() => {}}
             />
           </div>

@@ -37,6 +37,7 @@ import { useApp, stripGone } from "../shell/pages";
 import { CompanyName } from "../Tables";
 import { CardList } from "../Cards";
 import { Workbench } from "../workbench/Workbench";
+import { useWorkbenchSort, type ExtraSorts } from "../workbench/useWorkbenchSort";
 import { ColumnPicker } from "../workbench/ColumnPicker";
 import { COMPANY_COLUMNS, type ColumnDef } from "../workbench/columns";
 import { creditWords, quoteWords } from "../workbench/quote";
@@ -73,6 +74,8 @@ const factsOf = (i: CoInfo) => {
 /** The company as the member may read it: its name, the name the ball gives Trial and Pro, or "This company". */
 const nameOf = (i: CoInfo) => (!i.c.hidden ? i.c.name : i.c.shownName || "This company");
 const factOf = (i: CoInfo, k: string) => (i.c.cells[k]?.s === "value" ? String(i.c.cells[k]!.v) : null);
+
+const BAND_RANK: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
 
 /** The ball's own columns (the workbench's ColumnDef), before any Companies column the member adds. */
 const CB_COLUMNS = (): ColumnDef[] => [
@@ -162,6 +165,19 @@ export function CrystalBallPage() {
     } else widened.current = "done";
   }, [knowOn, view, knownN, s]);
 
+  // Every column sorts from its header, both ways; the Sort button's order clears it.
+  const cbCols = useMemo(() => [...CB_COLUMNS().map((col) => (col.id === "cb-move" ? { ...col, fill: (r: Row) => (moveOf(byRow.get(r.i.c.id) ?? { kinds: [] }, wayOf(r.i)).hasWay ? ("value" as const) : ("empty" as const)) } : col)), ...extra.map((id) => COMPANY_COLUMNS.find((x) => x.id === id)!).filter(Boolean)], [byRow, wayOf, extra]);
+  const cbSorts: ExtraSorts = useMemo(
+    () => ({
+      "cb-band": { kind: "number", get: (r) => BAND_RANK[byRow.get(r.i.c.id)?.band ?? ""] ?? null },
+      "cb-why": { kind: "text", get: (r) => byRow.get(r.i.c.id)?.lines[0] ?? null },
+      // Soonest first on the first click: months from now, the other way round.
+      "cb-when": { kind: "number", get: (r) => (byRow.get(r.i.c.id)?.h ? -byRow.get(r.i.c.id)!.h![0] : null) },
+      "cb-move": { kind: "number", get: (r) => (moveOf(byRow.get(r.i.c.id) ?? { kinds: [] }, wayOf(r.i)).hasWay ? 1 : 0) },
+    }),
+    [byRow, wayOf],
+  );
+  const colSort = useWorkbenchSort(rows, cbCols, "crystal", cbSorts);
   const curId = sel && rows.some((r) => r.i.c.id === sel) ? sel : rows[0]?.i.c.id ?? null;
   const cur = curId ? rows.find((r) => r.i.c.id === curId) ?? null : null;
 
@@ -362,8 +378,8 @@ export function CrystalBallPage() {
       {/* The toolbar: sort, ranges with their counts, where you know someone, rows, Tune. */}
       {view.ready && (
         <div className="cb-bar" role="toolbar" aria-label="Crystal Ball">
-          <button type="button" className="cb-btn" onClick={() => setWarmFirst((x) => !x)}>
-            Sort: {warmFirst ? "With a way in first" : "Most likely first"}
+          <button type="button" className="cb-btn" onClick={() => (colSort.key ? colSort.clear() : setWarmFirst((x) => !x))}>
+            Sort: {colSort.words ?? (warmFirst ? "With a way in first" : "Most likely first")}
           </button>
           {dayLink && (
             <span className="chip chip-on cb-pill">
@@ -584,8 +600,8 @@ export function CrystalBallPage() {
               )}
               <Workbench
                 type="companies"
-                rows={rows}
-                cols={[...CB_COLUMNS().map((col) => (col.id === "cb-move" ? { ...col, fill: (r: Row) => (moveOf(byRow.get(r.i.c.id) ?? { kinds: [] }, wayOf(r.i)).hasWay ? ("value" as const) : ("empty" as const)) } : col)), ...extra.map((id) => COMPANY_COLUMNS.find((x) => x.id === id)!).filter(Boolean)]}
+                rows={colSort.rows}
+                cols={cbCols}
                 mine={fn}
                 selected={picked}
                 onPick={(k, on) =>
@@ -599,6 +615,7 @@ export function CrystalBallPage() {
                 onPickAll={(on) => setPicked(on ? new Set(rows.map((r) => r.key)) : new Set())}
                 onOpen={(r) => (setSel(r.i.c.id), setTab("why"), setAsking(false))}
                 sort="best"
+                sorter={colSort}
                 onAddColumn={() => setPickCols(document.querySelector<HTMLElement>(".cb .wb-add"))}
                 rowClass={(r) => (r.i.c.id === curId ? "cb-cur" : "")}
                 cell={(id, r) => {
