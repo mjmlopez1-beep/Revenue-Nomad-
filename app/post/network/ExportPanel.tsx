@@ -23,7 +23,6 @@ import type { ActionResult } from "@/lib/tableTypes";
 import { NEVER_WORDS, READS, type ExportFile } from "@/lib/linkedin/files";
 import { readExport, type ExportRead } from "@/lib/linkedin/read";
 import { ASK_EARLY, EXPORT_HOW, USES_ON_BY_DEFAULT, USE_KEYS, USE_WORDS, type ExportInfo, type ExportView, type SeatOfferView, type UseKey } from "@/lib/linkedin/types";
-import { voiceSummary } from "@/lib/voice";
 import { exportAct, loadExport, useExport } from "./useExport";
 import "./linkedinExport.css";
 
@@ -61,7 +60,8 @@ function usesOf(r: ExportRead, v: ExportView | null): { k: UseKey; line: string 
   if (p.skills && v && (v.emptyProfile.function || v.emptyProfile.title)) out.push({ k: "skills", line: `${n(p.skills)} skills. Fills only what your profile leaves empty.` });
   if (p.posts >= 3) {
     const voice = r.voice(null);
-    out.push({ k: "voice", line: voice ? `${n(p.posts)} recent posts read here. Reads as: ${voiceSummary(voice)}.${v?.hasVoice ? " Replaces the voice you saved." : ""}` : `${n(p.posts)} posts` });
+    const reads = voice ? [voice.formality.charAt(0).toUpperCase() + voice.formality.slice(1), voice.length, voice.contractions ? "contractions" : "no contractions", voice.exclamations === "sometimes" ? "an exclamation mark now and then" : "no exclamation marks"].join(", ") : "";
+    out.push({ k: "voice", line: voice ? `${n(p.posts)} recent posts read here. Reads as: ${reads}.${v?.hasVoice ? " Replaces the voice you saved." : ""}` : `${n(p.posts)} posts` });
   }
   if (p.recsReceived) out.push({ k: "proof", line: v?.proofAllowed ? `${n(p.recsReceived)} recommendations, by first name and company` : "Part of Close" });
   return out.sort((a, b) => USE_KEYS.indexOf(a.k) - USE_KEYS.indexOf(b.k));

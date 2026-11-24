@@ -95,7 +95,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
           const st = status(k);
           const off = k === "google" && !googleReady;
           return (
-            <article key={k} className={`su-src${st ? " in" : ""}`} aria-label={t.name}>
+            <article key={k} className={`su-src${st ? " in" : ""}${open === k && k === "linkedin" ? " su-src-wide" : ""}`} aria-label={t.name}>
               <span className="su-src-top">
                 <span className="su-src-i" aria-hidden>
                   {k === "google" ? (
@@ -108,7 +108,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
                 </span>
                 <span className="su-src-t">
                   <strong>{t.name}</strong>
-                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? `Your own LinkedIn data export: the whole .zip, or just Connections.csv. It is read on this device, and Merlin also sees who you message and how often (never the words), your roles and who vouched for you. ${ASK_EARLY}` : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
+                  <span>{k === "google" ? "Your contacts and calendar, read only. Merlin sees who you met and in which months, then matches them to companies." : k === "linkedin" ? "Your own LinkedIn data export: the whole .zip, or just Connections.csv. Read on this device: who you message and how often (never the words), your roles and who vouched for you." : "Any list with a name and a company in it: a CRM export, a conference list, your own spreadsheet."}</span>
                 </span>
               </span>
               {st ? (
@@ -145,7 +145,7 @@ export function KnowScreen({ onLeave }: { onLeave: () => void }) {
                   <button type="button" className={st ? "su-ghost" : "su-pine"} onClick={() => setOpen(k)}>
                     {st ? "Manage it" : k === "linkedin" ? "Add your export" : "Add a CSV"}
                   </button>
-                  <span className="su-small">{k === "linkedin" ? "No export yet? Ask LinkedIn for it now, skip, and add it later in Settings." : "Columns are matched for you, and you see a preview first."}</span>
+                  <span className="su-small">{k === "linkedin" ? `No export yet? ${ASK_EARLY} Skip, and add it later in Settings.` : "Columns are matched for you, and you see a preview first."}</span>
                 </span>
               )}
               {k === "google" ? (

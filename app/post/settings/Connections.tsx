@@ -279,7 +279,6 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
         <div className="st-detail-main">
           <strong className="st-detail-h">{x ? "Your LinkedIn data export is in" : "Bring in your LinkedIn data export"}</strong>
           <span>The whole .zip LinkedIn gives you, read on this device. You see which files Merlin reads and which it never opens, and tick what it may use. Only you see it.</span>
-          <ExportPanel />
         </div>
         <Facts
           title={x ? "ON FILE NOW" : "WHAT MERLIN KEEPS"}
@@ -298,6 +297,10 @@ function Detail({ k, row, data, onNotif, flash }: { k: ConnKey; row: ConnRow; da
           }
         />
         <FeedsBox row={row} />
+        {/* The pick, the consent screen and the results take the row's whole width. */}
+        <div className="lx-full">
+          <ExportPanel />
+        </div>
       </div>
     );
   }

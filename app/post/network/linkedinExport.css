@@ -47,13 +47,14 @@
 }
 .lx-two {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 12px;
 }
-@media (max-width: 720px) {
-  .lx-two {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.lx-full {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line, #e2e6e3);
 }
 .lx-box {
   display: flex;
@@ -297,4 +298,9 @@
   .lx-proof-wrap {
     padding: 0 16px 16px;
   }
+}
+
+/* The set-up's Who you know: the LinkedIn card takes the row's width while its export is open. */
+.su-sources > .su-src-wide {
+  grid-column: 1 / -1;
 }
