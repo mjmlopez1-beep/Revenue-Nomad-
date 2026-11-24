@@ -3,6 +3,20 @@
  * No imports, so it can be tested on its own.
  */
 
+/**
+ * Rate benchmarks' floors: one set for the server's figures (lib/table.ts rateStat, BENCHMARK_*)
+ * and for every line a member reads about them (floorWords). Change them here only.
+ *   RATE_FLOOR        a group shows a figure (its median) once this many people have a rate in it
+ *   RATE_INDEX_FLOOR  a group that includes Rate Index data (our survey and contract data) needs this many
+ *   RATE_RANGE_FLOOR  the middle half (low and high) shows at this many
+ */
+export const RATE_FLOOR = 5;
+export const RATE_INDEX_FLOOR = 20;
+export const RATE_RANGE_FLOOR = 10;
+/** The rule in one sentence, the same wherever it is said. */
+export const floorWords = () =>
+  `A group shows a figure once ${RATE_FLOOR} people have a rate in it, or ${RATE_INDEX_FLOOR} when it includes Rate Index survey data. Low and high show at ${RATE_RANGE_FLOOR}.`;
+
 /** A number with an optional k/m suffix ("8k", "1.5m"); the suffix can't be the start of a word ("12000 monthly"). */
 const NUM = String.raw`(\d+(?:\.\d+)?)\s*(k|m)?(?![a-z])`;
 const RANGE = new RegExp(`${NUM}\\s*(?:-|–|—|to)\\s*\\$?\\s*${NUM}`);

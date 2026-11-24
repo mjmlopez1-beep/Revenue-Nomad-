@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionResult, BenchRate, BenchmarkRow, RateStat, View } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
-import { readRate } from "@/lib/rates";
+import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, floorWords, readRate } from "@/lib/rates";
 import { IconChevron, IconLock, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
 import { ProTag, UpgradeNote, openPlans } from "./Billing";
@@ -156,13 +156,13 @@ export function ShareRate({ refresh, inline, onDone, idp: idpGiven, revenue: rev
       }}
     >
       {inline ? (
-        <p className="tp-bm-share-lead">Never shown with your name or the seat. It counts once 5 people have shared one in this group.</p>
+        <p className="tp-bm-share-lead">Never shown with your name or the seat. It counts once {RATE_FLOOR} people have shared one in this group.</p>
       ) : (
         <>
       <h2 className="tp-card-h">Share a rate privately</h2>
       <p className="tp-bm-share-lead">
         Add a rate to the benchmarks without putting it on a seat. It counts in the medians and earns 1 credit. It is never shown with your name or the seat. Your rate joins a
-        group&apos;s number once 5 people have shared one privately in that group.
+        group&apos;s number once {RATE_FLOOR} people have shared one privately in that group.
       </p>
         </>
       )}
@@ -335,7 +335,7 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
   const [sharing, setSharing] = useState(false);
   const b = view.benchmarks;
   if (!b) return null;
-  const rangeN = b.rangeN ?? 10;
+  const rangeN = b.rangeN ?? RATE_RANGE_FLOOR;
   const mine = ui.me.function;
   // Every function the server sends, the member's own first.
   const all: BenchmarkRow[] = b.rows.filter((r) => r.revenue === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
@@ -446,7 +446,7 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
                   <span className="bm-fn-name">{r.function}</span>
                   {r.function === mine && <span className="chip bm-chip bm-chip-mine">Your function</span>}
                   {r.indexed && (
-                    <span className="chip bm-chip" title="Includes Revenue Nomad's Rate Index, our survey and contract data. Figures with it show at 20 people.">
+                    <span className="chip bm-chip" title={`Includes Revenue Nomad's Rate Index, our survey and contract data. Figures with it show at ${RATE_INDEX_FLOOR} people.`}>
                       Rate Index
                     </span>
                   )}
@@ -500,10 +500,10 @@ export function Benchmarks({ view, refresh }: { view: View; refresh: () => Promi
       <details className="tp-bm-note">
         <summary>How these figures work</summary>
         <p>
-          A group shows a median once {b.minN} different people have a rate in it, and the range at {rangeN}. The middle half is where the middle half of them fall. Amounts are rounded to the
+          {floorWords()} The middle half is where the middle half of them fall. Amounts are rounded to the
           nearest $250 a month or $5 an hour, and to the nearest $1,000 or $25 while fewer than {rangeN} people are in a figure.
         </p>
-        {indexShown && <p>Figures marked Rate Index include our survey and contract data. They show once 20 people are in them.</p>}
+        {indexShown && <p>Figures marked Rate Index include our survey and contract data. They show once {RATE_INDEX_FLOOR} people are in them.</p>}
         <p>Where we know the hours, an hourly rate also counts in the monthly figures (the rate times the hours a month), and a monthly retainer counts in the hourly ones.</p>
         {withoutYours && <p>Your rate is left out of what you see here, so nothing you share can move a number you read. Other members see it in the figure.</p>}
       </details>

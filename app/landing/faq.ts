@@ -7,6 +7,7 @@ import { COMPANY_PRICE_SAY, EARN_CAP, NAME_HIDDEN_SAY, PRO_OPENS_DAILY, REFERRAL
 import { FREE_MCP_PER_DAY, FREE_SAVED_VIEWS, PRICES, TOPUP_CREDITS, TRIAL_LABEL, WORKFLOW_PLAN } from "@/lib/billing/rules";
 import { SCAN_ROLE_FREE } from "./prices";
 import { FEATURE_NAME } from "@/lib/radar/types";
+import { RATE_FLOOR, RATE_INDEX_FLOOR } from "@/lib/rates";
 
 /** Unlocks an account gets in its first 24 hours, then in any 24 hours after (the server's limits). */
 const DAY_ONE_UNLOCKS = 25;
@@ -116,7 +117,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     ],
     [
       "What happens to a rate I share?",
-      "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate for the benchmarks only. Then it counts in the medians and is never shown with your name or the seat. A benchmark shows a number only once 5 people have a rate in it, or 20 where survey data is included. It never says who they are.",
+      `A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate for the benchmarks only. Then it counts in the medians and is never shown with your name or the seat. A benchmark shows a number only once ${RATE_FLOOR} people have a rate in it, or ${RATE_INDEX_FLOOR} where survey data is included. It never says who they are.`,
     ],
     [
       "What if something is wrong?",

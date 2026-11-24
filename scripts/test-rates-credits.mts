@@ -42,8 +42,10 @@ import {
   readChargeAsk,
   hoursOf,
   hoursMonth,
+  byHours,
   groupLabel,
 } from "../app/post/chargeModel";
+import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, floorWords } from "../lib/rates";
 import { askChips, myRates, rateTabOf } from "../app/post/rates/ratesModel";
 import {
   CAP_LINE,
@@ -234,41 +236,66 @@ console.log("\nWhat should I charge: the working");
   const w = chargeWorking(BENCH, { ...ask, fn: ask.fn! }, own);
   const titles = w.steps.map((s) => s.t);
   check(
-    "the steps: the group, what they were paid, the check by the hour, your own rate, what to ask",
+    "the steps: the group, what they were paid, by your hours, your own rate, what to ask",
     JSON.stringify(titles) ===
       JSON.stringify([
         "The group",
         "What they were paid",
-        "Checked by the hour",
+        "By your hours",
         "Your own rate",
         "What to ask",
       ]),
     titles,
   );
-  check(
-    "the answer is the median to the top of the middle half",
-    w.big === "Ask $12,000 to $15,500 a month" &&
-      w.answered &&
-      w.band?.from === 12000 &&
-      w.band.to === 15500,
-    w.big,
-  );
   const hourly = 200;
   const hm = hoursMonth(16);
   const check1 = Math.round((hm * hourly) / 250) * 250;
+  check(
+    "with hours given, the answer is the hours math shown (an hourly median only: start there)",
+    w.big === `Start at $${check1.toLocaleString("en-US")} a month` && w.answered && !w.band && byHours(hm, hourly) === check1,
+    w.big,
+  );
   const allowed = new Set([...amountsIn(BENCH), 12000, hourly, check1]);
   const said = dollars([...w.steps.map((s) => s.s), w.big, w.sub].join(" "));
   check(
-    "every dollar amount is a figure sent, your own rate, or the hour check on a shown figure",
+    "every dollar amount is a figure sent, your own rate, or the hour math on a shown figure",
     said.length > 0 && said.every((x) => allowed.has(x)),
     { said, check1 },
   );
   check(
-    "the hour check says its arithmetic",
+    "the hour math says its arithmetic",
     w.steps[2].s.includes(`${hm} hours a month`) &&
       w.steps[2].s.includes("$200") &&
       w.steps[2].s.includes(`$${check1.toLocaleString("en-US")}`),
     w.steps[2],
+  );
+  // The tester's case: 2 days a week, an hourly middle half on file. The range asked and the shown math are one sum.
+  const w2 = chargeWorking(BENCH, { fn: "Sales", band: "All", kind: "monthly", hours: 16, company: null, industry: false }, {});
+  const lo = byHours(hm, 190);
+  const hi = byHours(hm, 240);
+  const usd = (x: number) => `$${x.toLocaleString("en-US")}`;
+  check(
+    "hours and an hourly range: Ask is the hours times the hourly middle to the top of its middle half",
+    w2.big === `Ask ${usd(lo)} to ${usd(hi)} a month` && w2.band?.from === lo && w2.band?.to === hi,
+    { big: w2.big, lo, hi },
+  );
+  const hourStep = w2.steps.find((x) => x.t === "By your hours")?.s ?? "";
+  check(
+    "the shown math produces exactly the range asked",
+    hourStep.includes(`${hm} hours a month`) && hourStep.includes("$190 to $240 an hour") && hourStep.includes(`${usd(lo)} to ${usd(hi)} a month`),
+    hourStep,
+  );
+  const askStep = w2.steps.find((x) => x.t === "What to ask")?.s ?? "";
+  check(
+    "the monthly retainers are said as what they are, not as a second answer",
+    askStep.includes("Merlin goes by your hours") && askStep.includes("$8,500 to $15,000") && !w2.big.includes("11,500"),
+    askStep,
+  );
+  const w3 = chargeWorking(BENCH, { fn: "Sales", band: "All", kind: "monthly", hours: null, company: null, industry: false }, {});
+  check(
+    "without hours the answer stays the monthly median to the top of the middle half",
+    w3.big === "Ask $11,500 to $15,000 a month" && w3.band?.from === 11500 && w3.band.to === 15000,
+    w3.big,
   );
   const wf = chargeWorking(
     BENCH,
@@ -739,6 +766,36 @@ console.log("\nNo export, CSV or download anywhere");
     "Rate benchmarks: Seats with a rate lists only seats with a rate on file (rateKnown)",
     /rateKnown: true/.test(rates),
   );
+}
+
+/* ---------- the floors: one constant set, one sentence everywhere ---------- */
+{
+  console.log("\nRate benchmarks' floors");
+  const src = (f: string) => readFileSync(path.join(process.cwd(), f), "utf8");
+  const table = src("lib/table.ts");
+  check(
+    "the server's floors are lib/rates.ts's constants (5, 20 with Rate Index data, 10 for the range)",
+    /export const BENCHMARK_MIN_N = RATE_FLOOR;/.test(table) &&
+      /export const BENCHMARK_INDEX_MIN_N = RATE_INDEX_FLOOR;/.test(table) &&
+      /export const BENCHMARK_RANGE_N = RATE_RANGE_FLOOR;/.test(table) &&
+      RATE_FLOOR === 5 && RATE_INDEX_FLOOR === 20 && RATE_RANGE_FLOOR === 10,
+  );
+  check(
+    "the one sentence says both floors and the range",
+    floorWords().includes(`${RATE_FLOOR} people`) && floorWords().includes(`${RATE_INDEX_FLOOR} when it includes Rate Index`) && floorWords().includes(`${RATE_RANGE_FLOOR}`),
+    floorWords(),
+  );
+  const pages = ["app/post/rates/RatesPage.tsx", "app/post/Benchmarks.tsx", "app/post/Charge.tsx", "app/post/chargeModel.ts", "app/landing/faq.ts", "lib/mcp/server.ts"];
+  // A threshold typed as a number in words a member reads ("once 5 people", "show at 20 people") would drift from the rule.
+  const literal = /\b(?:once|at)\s+(?:5|10|20)\s+(?:different\s+)?people\b/;
+  const bad = pages.filter((f) => src(f).split("\n").some((l) => !/^\s*(\*|\/\/|\/\*)/.test(l) && literal.test(l)));
+  check("no page types a floor as a number: each reads the constants", bad.length === 0, bad);
+  check(
+    "Rate benchmarks says the whole rule where it lists functions with no figure yet (no 5 beside a list that reads 3 of 20)",
+    src("app/post/rates/RatesPage.tsx").includes(". {floorWords()}") && src("app/post/Charge.tsx").includes("{floorWords()}"),
+  );
+  const wf = chargeWorking(BENCH, { fn: "RevOps", band: "All", kind: "monthly", hours: null, company: null, industry: false }, {});
+  check("What should I charge with no figure says the same rule", wf.steps.some((x) => x.s.includes(floorWords())), wf.steps);
 }
 
 console.log(

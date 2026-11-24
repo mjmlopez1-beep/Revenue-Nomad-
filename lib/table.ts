@@ -64,7 +64,7 @@ import path from "path";
 import { gunzipSync } from "zlib";
 import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { iconDomains } from "./companyIcons";
-import { readRate } from "./rates";
+import { RATE_FLOOR, RATE_INDEX_FLOOR, RATE_RANGE_FLOOR, readRate } from "./rates";
 import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail, setMailBlock } from "./email";
 import { renderDigest } from "./digest";
@@ -4918,12 +4918,12 @@ function namesStats(seed: Seed, s: State, g: Graph, idx: MemberIndex): NonNullab
 
 /* ---------- rate benchmarks ---------- */
 
-/** A group shows numbers only with rates from at least this many contributors. */
-export const BENCHMARK_MIN_N = 5;
+/** A group shows numbers only with rates from at least this many contributors (lib/rates.ts RATE_FLOOR, the one constant every line says). */
+export const BENCHMARK_MIN_N = RATE_FLOOR;
 /** A figure that includes Rate Index data needs this many (the survey promised groups of 20). */
-export const BENCHMARK_INDEX_MIN_N = 20;
+export const BENCHMARK_INDEX_MIN_N = RATE_INDEX_FLOOR;
 /** The range (p25 to p75) is sent only at this many contributors. Below it, the median alone. */
-export const BENCHMARK_RANGE_N = 10;
+export const BENCHMARK_RANGE_N = RATE_RANGE_FLOOR;
 /** What leaves the server is rounded: dollars a month to the nearest 250, dollars an hour to the nearest 5 ... */
 const BENCH_ROUND = { monthly: 250, hourly: 5 } as const;
 /** ... and wider while a figure has fewer than BENCHMARK_RANGE_N contributors, where one person moves it most. */

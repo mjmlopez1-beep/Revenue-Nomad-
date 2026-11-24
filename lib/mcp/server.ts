@@ -28,6 +28,7 @@ import { granolaOn } from "../granola/types";
 import { networkOn } from "../google/types"; // [google network]
 import { pathsOn } from "../paths";
 import { VOICE_EXCLAMATIONS, VOICE_FORMALITY, VOICE_GREETINGS, VOICE_LENGTHS, VOICE_NAMES, VOICE_OPENERS, VOICE_PHRASES_MAX, VOICE_PHRASE_CHARS, VOICE_SIGNOFFS } from "../voice";
+import { floorWords } from "../rates";
 
 export const PER_MINUTE = 60;
 export const PER_DAY = 2000;
@@ -202,7 +203,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Rate benchmarks",
       description:
-        "What fractionals charge, by function and the client's revenue band at the time: the median and the middle half for monthly retainers (dollars a month) and hourly rates (dollars an hour), with how many people each figure counts. A group shows numbers only once enough people are in it. Free.",
+        `What fractionals charge, by function and the client's revenue band at the time: the median and the middle half for monthly retainers (dollars a month) and hourly rates (dollars an hour), with how many people each figure counts. ${floorWords()} Free.`,
       inputSchema: {
         function: fn.optional(),
         revenue: z.string().optional().describe(`Client revenue band: All, ${list(RN_REVENUE)}`),
