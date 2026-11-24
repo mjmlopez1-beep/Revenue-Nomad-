@@ -82,7 +82,13 @@ const SERVICES: Service[] = [
   },
 ];
 
-export function DataFlows() {
+/** Approve and send (lib/send, RN_SEND): what Google gets and why, added to Google's row while it is on. */
+const SEND_GETS =
+  " With Approve and send on, and only after the member taps Approve and send the first time and says yes at Google: permission to send email from their Gmail (gmail.send). Merlin then sends each note the member approved, as they read it, from their own Gmail, and asks only for the Message-ID of the note it sent and the From line and time of later messages in that thread, to hold a follow-up back when someone replied. Never a message's subject, snippet or text.";
+const SEND_WHY = " And to send the notes that member approves, from their own Gmail. Merlin sends only what the member approves.";
+const servicesFor = (send: boolean) => (send ? SERVICES.map((x) => (x.who === "Google" ? { ...x, gets: x.gets + SEND_GETS, why: x.why + SEND_WHY } : x)) : SERVICES);
+
+export function DataFlows({ send = false }: { /** Approve and send is on (lib/send sendOn). */ send?: boolean } = {}) {
   return (
     <div className="cl">
       <header className="cl-top">
@@ -145,7 +151,7 @@ export function DataFlows() {
               company&apos;s own website and sent from Merlin&apos;s own address.
             </p>
             <ul className="df-list">
-              {SERVICES.map((s) => (
+              {servicesFor(send).map((s) => (
                 <li key={s.who}>
                   <h3 className="df-h3">{s.who}</h3>
                   <p>

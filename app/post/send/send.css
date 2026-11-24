@@ -1,0 +1,165 @@
+/*
+ * Approve, then send (Send.tsx). Classes are prefixed sd-; the note's sheet, fields and footer are
+ * the drafted note's own (movenote.css).
+ */
+.sd-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sd-approve svg {
+  flex: none;
+}
+.sd-err {
+  flex-basis: 100%;
+}
+.sd-to-in {
+  font-weight: 600;
+}
+.sd-to-in::placeholder {
+  font-weight: 400;
+  color: var(--muted);
+}
+.sd-going,
+.sd-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sd-sent {
+  color: var(--pine);
+}
+.sd-agent {
+  padding: 10px 14px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+}
+.sd-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sd-when-b {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-input);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.sd-when-b.on {
+  border-color: var(--pine);
+  background: var(--pine-8);
+  color: var(--pine);
+}
+.sd-when-s,
+.sd-when-none {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* ---------- Messages: the outbox ---------- */
+.sd-outbox {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.sd-outbox-h {
+  display: grid;
+  gap: 2px;
+}
+.sd-outbox-h strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+.sd-sub {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.sd-h3 {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.sd-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sd-row-b {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.sd-row-b:hover {
+  background: var(--pine-8);
+}
+.sd-row-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sd-row-co {
+  font-weight: 400;
+  color: var(--muted);
+}
+.sd-row-s {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.sd-tag {
+  font-weight: 600;
+  color: var(--body-ink);
+}
+.sd-tag-sent {
+  color: var(--pine);
+}
+.sd-tag-draft,
+.sd-tag-held {
+  color: var(--ember-ink);
+}
+.sd-row-x {
+  flex: none;
+  font-size: 12.5px;
+}

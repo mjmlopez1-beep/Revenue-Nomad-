@@ -30,7 +30,7 @@ import { useUi } from "../ui";
 import { earnRoom } from "../NextMove";
 import { WarmthChip, besideChip } from "./parts";
 import { load, monthYear, netAct } from "./useNetwork";
-import { pipelineAct } from "../pipelineStore";
+import { loadPipeline, pipelineAct } from "../pipelineStore";
 import { usePlan } from "./usePaths";
 import { IntroLine } from "./IntroWhy";
 import type { IntroPlanView } from "@/lib/paths/intro";
@@ -141,6 +141,12 @@ function Note({ d, me, onClose, onClaude }: { d: Drafting; me: Me; onClose: () =
       intro={d.plan !== undefined ? { plan: d.plan ?? null, first, strength: d.strength ?? null } : null}
       sentLabel="Mark as sent"
       onClose={onClose}
+      sendAs={{
+        // Sent from Gmail: the server puts the company in the pipeline as Mark as sent does here.
+        effect: { type: "pipeline.sent", companyId: d.m.id, from: "network", intro: d.m.do === "intro" || d.facts?.kind === "ask", channel: d.m.do === "intro" || d.facts?.kind === "ask" ? "intro" : "email", ...(d.m.way.kind === "know" ? { to: { name: d.m.way.person.name, role: d.m.way.person.title, google: d.m.way.person.google } } : {}) },
+        kind: d.m.do === "intro" || d.facts?.kind === "ask" ? "intro" : "network",
+        onGmailSent: () => void loadPipeline(true),
+      }}
       onUsed={sent}
       onSent={() => (sent(), onClose())}
       onClaude={() => (onClose(), onClaude())}

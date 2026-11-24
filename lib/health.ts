@@ -280,7 +280,7 @@ export function healthStats(o: HealthInput): HealthStats {
     credits,
     invites,
     plans: { billing: o.billing, trialsEnded, trialsPaid, paidNow },
-    outcomes: outcomeRows(outcomeStats(s, nowMs)),
+    outcomes: [...outcomeRows(outcomeStats(s, nowMs)), ...sendRows(s, nowMs)],
     ai: aiUsageTotals(s, nowMs),
     insights: { working: [], notWorking: [], waiting: [] },
   };
@@ -301,6 +301,41 @@ const VIA_ROWS: [Via, string][] = [
   ["you", "the member"],
 ];
 const pctOf = (share: number | null) => (share === null ? null : Math.round(share * 100));
+
+/**
+ * Approve and send (lib/send, RN_SEND): notes members sent from their own Gmail, in counts only,
+ * never who, to whom or what. No rows until a member has an outbox.
+ */
+export function sendRows(s: State, nowMs: number): OutcomeRow[] {
+  const all = (s as State & { outbox?: Record<string, { grant?: unknown; items?: { status?: string; approvedAt?: string | null; sentAt?: string | null; createdAt?: string }[] }> }).outbox;
+  if (!all || !Object.keys(all).length) return [];
+  let members = 0, granted = 0, sent7 = 0, sent30 = 0, undone = 0, replied = 0, failed = 0;
+  for (const b of Object.values(all)) {
+    if (b.grant) granted++;
+    let used = false;
+    for (const x of b.items ?? []) {
+      const age = nowMs - Date.parse(x.sentAt ?? x.approvedAt ?? x.createdAt ?? "");
+      if (!(age < 30 * DAY)) continue;
+      if (x.status === "sent") {
+        used = true;
+        sent30++;
+        if (age < 7 * DAY) sent7++;
+      } else if (x.status === "cancelled" && x.approvedAt) undone++;
+      else if (x.status === "replied") replied++;
+      else if (x.status === "failed") failed++;
+    }
+    if (used) members++;
+  }
+  return [
+    { label: "Members who gave Merlin permission to send", n: granted },
+    { label: "Members who sent from their Gmail, 30 days", n: members },
+    { label: "Notes sent from members' Gmail, 7 days", n: sent7 },
+    { label: "Notes sent from members' Gmail, 30 days", n: sent30 },
+    { label: "Notes undone or cancelled, 30 days", n: undone },
+    { label: "Follow-ups held back on a reply, 30 days", n: replied },
+    { label: "Notes Gmail refused, 30 days", n: failed },
+  ];
+}
 
 /** The Outcomes card's rows from outcomeStats: counts and sums only. A share shows once it has something to divide by. */
 export function outcomeRows(o: OutcomeStats): OutcomeRow[] {

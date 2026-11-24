@@ -120,6 +120,9 @@ export function MovesSection({
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const now = wire;
+  // The moves as they stand now, for a note that went from Gmail after its sheet closed (Approve and send).
+  const nowRef = useRef(now);
+  nowRef.current = now;
   const moves = useMemo(() => {
     const out: { m: Move; w: MoveWire; i: CoInfo }[] = [];
     for (const w of now?.list ?? []) {
@@ -264,6 +267,16 @@ export function MovesSection({
             used.current = false;
           }}
           onUsed={() => (used.current = true)}
+          sendAs={{
+            // Sent from Gmail: the server marks the move sent (the pipeline at Sent, as Mark as sent does); here it leaves today's list.
+            effect: { type: "move", id: drafting.m.id, op: "sent", ...sentOf(drafting.m), channel: drafting.m.do === "intro" ? "intro" : "email" },
+            kind: "move",
+            onGmailSent: () => {
+              const w = nowRef.current;
+              if (w) onWire({ ...w, list: w.list.filter((x) => x.id !== drafting.m.id), month: (w.month ?? 0) + 1 });
+              void loadPipeline(true);
+            },
+          }}
           onSent={(channel) => {
             const m = drafting.m;
             used.current = false;

@@ -27,6 +27,7 @@ import {
 } from "./config";
 import { seal, unseal } from "./crypto";
 import * as G from "./api";
+import { forgetGrant, sendGrantToken } from "../send";
 import { CLAUDE_FIELDS, RELATIONSHIPS, calendarSource, cleanDate, contactsSource, gmailSource, looksLikeText, makeDirectory, matchDomain, matchOrg, type Directory } from "./compute";
 
 const DAY = 86_400_000;
@@ -409,6 +410,8 @@ function forgetIn(s: State, memberId: string, what: "everything" | "google" | "g
     return;
   }
   access.delete(`${memberId}:google`);
+  // Approve and send's permission (lib/send) is part of the same Google grant: it goes with it.
+  forgetGrant(s, memberId);
   if (what === "google" && n?.claude) netsOf(s)[memberId] = { claude: n.claude };
   else delete netsOf(s)[memberId];
 }
@@ -1060,6 +1063,9 @@ export async function disconnectAll(token: string | null): Promise<NetworkAnswer
   if (!w) throw new ActionError(SIGNED_OUT);
   const n = netOf(w.s, w.m.id);
   const tokens = [n?.google?.token, n?.gmail?.token].map((x) => unseal(x)).filter((x): x is string => !!x);
+  // Approve and send's permission (lib/send) is revoked with the rest.
+  const sendT = sendGrantToken(w.s, w.m.id);
+  if (sendT) tokens.push(sendT);
   await T.mutate((s) => forgetIn(s, w.m.id, "everything"));
   await Promise.all(tokens.map((t) => G.revoke(t)));
   return (await networkView(token))!;

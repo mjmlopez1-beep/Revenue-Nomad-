@@ -167,6 +167,7 @@ const LAND: Partial<Record<string, { page: ShellPage; label: string }>> = {
   rates: { page: "rates", label: "Open rate benchmarks" },
   today: { page: "today", label: "Open Home" },
   credits: { page: "credits", label: "Open your credits" },
+  messages: { page: "messages", label: "Open Messages" },
 };
 
 /* ---------- the page ---------- */

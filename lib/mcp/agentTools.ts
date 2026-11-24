@@ -13,7 +13,7 @@
 export type AgentGroup = "read" | "add" | "spend" | "send";
 export type AgentCost = "free" | "earn" | "earn5" | "close" | "c1" | "c2";
 /** Where a row of the log points, as a page key of the app (the page draws the address). */
-export type AgentLand = "proposals" | "contracts" | "seats" | "alerts" | "pipeline" | "warm" | "settings" | "evidence" | "fractionals" | "find" | "companies" | "hiring" | "rates" | "today" | "credits";
+export type AgentLand = "proposals" | "contracts" | "seats" | "alerts" | "pipeline" | "warm" | "settings" | "evidence" | "fractionals" | "find" | "companies" | "hiring" | "rates" | "today" | "credits" | "messages";
 
 export interface AgentTool {
   /** The switch key: the tool's name, or unlock's kind. */
@@ -33,8 +33,8 @@ export interface AgentTool {
   draft?: boolean;
   /** Where its result lands in the app. */
   land?: AgentLand;
-  /** Only where the server offers it: Google network (RN_GOOGLE), ways in (RN_PATHS), Granola (RN_GRANOLA), call triggers (RN_CALL_TRIGGERS). */
-  needs?: "network" | "paths" | "granola" | "calls";
+  /** Only where the server offers it: Google network (RN_GOOGLE), ways in (RN_PATHS), Granola (RN_GRANOLA), call triggers (RN_CALL_TRIGGERS), Approve and send (RN_SEND). */
+  needs?: "network" | "paths" | "granola" | "calls" | "send";
 }
 
 export const AGENT_GROUPS: { id: AgentGroup; name: string; d: string }[] = [
@@ -89,6 +89,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   T("add", "create_or_update_proposal", "Save a proposal draft", "Writes or updates a draft in Proposals", "Saved a proposal draft", { cost: "close", draft: true, land: "proposals" }),
   T("add", "draft_proposal_from_call", "Draft from a call", "A proposal draft from a Granola call or pasted notes", "Drafted a proposal from a call", { cost: "close", draft: true, land: "proposals" }),
   T("add", "change_proposal", "Change a proposal", "Edits pricing options, add-ons or wording in a draft", "Changed a proposal", { cost: "close", asked: "Showed you a change to a proposal", draft: true, land: "proposals" }),
+  T("add", "queue_note", "Queue a note to approve", "Puts a note in Merlin for you to approve and send. It never sends", "Queued a note for you to approve", { draft: true, land: "messages", needs: "send" }),
   T("add", "save_evidence_case", "Save a case study", "Writes a case study in your Evidence Bank, after you say yes", "Saved a case study", { cost: "close", asked: "Showed you a case study to save", draft: true, land: "evidence" }),
 
   T("spend", "unlock:company", "Open a company", "Its name, website and the posting of its open roles", "Opened a company", { cost: "c2", asked: "Asked the price of a company", land: "companies" }),

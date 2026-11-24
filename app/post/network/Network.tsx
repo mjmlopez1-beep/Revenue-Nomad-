@@ -22,6 +22,7 @@ import { NO_FILTER, setWords, topNumbers, type EveryoneFilter } from "./model";
 import { HiddenPaths, LinkedInImport } from "./SmartPaths"; // [smart ways in]
 import "./network.css";
 import { PageHead } from "../../ui/system";
+import { SendLaunch, SendPromise, draftKey, useSendOn } from "../send/Send";
 
 const START = "/api/integrations/google/start";
 const sources = (src: NetSource[]) => src.map((s) => SOURCE_WORDS[s]).join(", ");
@@ -568,6 +569,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
   const copy = useCopy();
   const [draft, setDraft] = useState<number | null>(null);
   const [undoing, setUndoing] = useState(false);
+  const sendOn = useSendOn();
   const people = c.people.filter((p) => !p.hidden).slice(0, 4);
   // Set aside (someone selling to them, a recruiter, an investor, or what they said): not a way in, said with why, and Undo.
   if (c.set)
@@ -629,8 +631,21 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
           <span className="nw-note-h">Suggested note to {firstName(p.name) ?? "them"}</span>
           <p>{note.trim()}</p>
           <div className="nw-row nw-wrap">
+            <SendLaunch
+              className="btn btn-sm btn-pine"
+              d={() => ({
+                key: draftKey(`net:${c.id}:${p.name ?? ""}`, p.email, note.trim()),
+                kind: "network",
+                to: p.email,
+                toName: p.name,
+                subject: "Catching up",
+                body: note.trim(),
+                company: c.id,
+                effect: { type: "pipeline.sent", companyId: c.id, from: "network", channel: "email", to: { name: p.name, role: p.title, google: true } },
+              })}
+            />
             {p.email && (
-              <a className="btn btn-sm btn-pine" href={`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Catching up")}&body=${encodeURIComponent(note)}`}>
+              <a className={`btn btn-sm${sendOn ? "" : " btn-pine"}`} href={`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Catching up")}&body=${encodeURIComponent(note)}`}>
                 Open in your email
               </a>
             )}
@@ -641,7 +656,7 @@ export function WayInPeople({ c, company }: { c: NetCompanyView; company: string
               Done
             </button>
           </div>
-          <span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>
+          <SendPromise small off={<span className="nw-small">Merlin never sends for you. You review and send it yourself.</span>} />
         </div>
       )}
       <p className="nw-small">{c.people.every((x) => x.seat) ? "From your own contacts. Only you see this." : "Named for you free: you already know someone here. Only you see this."}</p>

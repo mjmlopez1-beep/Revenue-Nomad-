@@ -302,6 +302,8 @@ export interface AgentOffer {
   granola: boolean;
   /** The call triggers (RN_CALL_TRIGGERS): get_call_pack. */
   calls?: boolean;
+  /** Approve, then send (RN_SEND): queue_note. */
+  send?: boolean;
 }
 
 export function agentViewIn(

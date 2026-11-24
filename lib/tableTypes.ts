@@ -790,7 +790,7 @@ export interface View {
    * names only those. Workflows (RN_WORKFLOWS, Beta), Google (RN_GOOGLE with a Google client) and
    * Granola (RN_GRANOLA=1). Older servers leave `granola` out.
    */
-  live?: { workflows: boolean; google: boolean; granola?: boolean };
+  live?: { workflows: boolean; google: boolean; granola?: boolean; /** Approve and send (lib/send, RN_SEND). */ send?: boolean };
   /** The view is drawn in the new look (Me.ui2, lib/ui2.ts). Left out with the flag off. */
   ui2?: boolean;
   me: Me | null;

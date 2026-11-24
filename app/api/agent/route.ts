@@ -9,6 +9,7 @@
  *
  * Disconnecting an agent stays on /api/oauth/apps.
  */
+import { sendOn } from "@/lib/send";
 import { NextRequest, NextResponse } from "next/server";
 import { guarded } from "@/lib/apiGuard";
 import { claudePerDay, loadState, memberForToken } from "@/lib/table";
@@ -26,7 +27,7 @@ const SIGNED_OUT = "You're signed out. Sign in again to see your agents.";
 
 async function viewFor(memberId: string) {
   const [s, apps, cap] = await Promise.all([loadState(), connectedApps(memberId), claudePerDay(memberId).catch(() => null)]);
-  return agentViewIn(s, memberId, apps, { network: networkOn(), paths: pathsOn(), granola: granolaOn(), calls: callTriggersOn() }, cap);
+  return agentViewIn(s, memberId, apps, { network: networkOn(), paths: pathsOn(), granola: granolaOn(), calls: callTriggersOn(), send: sendOn() }, cap);
 }
 
 export const GET = guarded(async (req: NextRequest) => {

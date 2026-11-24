@@ -49,6 +49,8 @@ export async function runDueJobs(origin?: string, nowMs = Date.now()): Promise<R
   await import("./workflows").then((m) => m.workflowTick(nowMs)).catch((e) => console.error("workflow reminders failed", e instanceof Error ? e.message : "error"));
   // Nor this: "A call ends" (lib/calls, RN_CALL_TRIGGERS): calls that ended in members' call recorders since the last look run their call workflows. Every tick (5 minutes), so a draft is ready about 10 minutes after the call. Nothing while off; cheap when nobody has a call workflow on.
   await import("./calls").then((m) => m.callTick(nowMs, origin)).catch((e) => console.error("call triggers failed", e instanceof Error ? e.message : "error"));
+  // Nor this: notes members approved that are due go from their own Gmail (lib/send, RN_SEND): a scheduled follow-up, or one whose own timer was lost to a restart. Cheap when none are; nothing while off.
+  if (process.env.RN_SEND === "1") await import("./send").then((m) => m.sendTick(nowMs)).catch((e) => console.error("send check failed", e instanceof Error ? e.message : "error"));
   // Not a job of its own either: RN_OWNSITES_DRYRUN=N runs the own-sites reader once, in the background, after the server starts.
   if (dryRunCount()) await import("./ownsites/run").then((m) => m.maybeOwnSitesDry()).catch((e) => console.error("ownsites dry run check failed", e instanceof Error ? e.message : "error"));
   await Promise.all(
