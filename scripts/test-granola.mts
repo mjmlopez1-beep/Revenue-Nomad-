@@ -186,7 +186,9 @@ const items = (n: FakeNote) =>
     start_time: iso(n.at + (i * 42 * 60_000) / Math.max(1, n.lines.length - 1) - (i === n.lines.length - 1 ? 1000 : 0)),
     end_time: iso(n.at + (i === n.lines.length - 1 ? 42 * 60_000 : (i * 42 * 60_000) / Math.max(1, n.lines.length - 1) + 1000)),
   }));
-const requests: { key: string; method: string; path: string; body: string }[] = [];
+const requests: { key: string; method: string; path: string; body: string; at: number; end?: number }[] = [];
+// A delay on every fake Granola answer (the round-trip checks set it), 0 otherwise.
+let apiDelayMs = 0;
 const slowSeen = new Map<string, number>();
 const send = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
   res.writeHead(status, { "content-type": "application/json", ...headers });
@@ -198,7 +200,10 @@ const granola = createServer(async (req: IncomingMessage, res: ServerResponse) =
   let raw = "";
   for await (const ch of req) raw += ch;
   const key = (req.headers.authorization ?? "").replace(/^Bearer /, "");
-  requests.push({ key, method: req.method ?? "GET", path: u.pathname + u.search, body: raw });
+  const logged: (typeof requests)[number] = { key, method: req.method ?? "GET", path: u.pathname + u.search, body: raw, at: Date.now() };
+  requests.push(logged);
+  if (apiDelayMs) await new Promise((r) => setTimeout(r, apiDelayMs));
+  res.on("finish", () => (logged.end = Date.now()));
   if (!key) return err(res, 401, "MISSING_API_KEY");
   if (![GOOD, BO_KEY, NOPLAN, NOTRANS, SLOW, ALWAYS429].includes(key) || dead.has(key)) return err(res, 401, "INVALID_API_KEY");
   if (key === NOPLAN) return err(res, 403, "SUBSCRIPTION_INACTIVE");
@@ -528,6 +533,50 @@ async function main() {
   check("an email that isn't one is refused", (await problem(G.granolaCalls(JORDAN, { email: "dana" })))?.code === "email");
   check("Bo has not connected: told to connect first", (await problem(G.granolaCalls(BO, { recent: "1" })))?.code === "not_connected");
 
+  /* ---------- 3b. the calls kept a moment, the round trips side by side ---------- */
+  console.log("\nThe calls kept a moment");
+  G._callsKept.clear();
+  let gates = 0;
+  const gate = () => void gates++;
+  const k0 = requests.length;
+  const first = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW, { gate });
+  const k1 = requests.length;
+  const keptAgain = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW + 90_000, { gate });
+  check("the same list again within 2 minutes: the same calls, nothing asked of Granola, the limit not counted", JSON.stringify(keptAgain.calls) === JSON.stringify(first.calls) && requests.length === k1 && k1 > k0 && gates === 1, { asked: requests.length - k1, gates });
+  keptAgain.calls.length = 0;
+  check("an answer changed by its caller doesn't change what is kept", (await G.granolaCalls(JORDAN, { companyId: cedar }, NOW)).calls.length === 3 && requests.length === k1);
+  await G.granolaCalls(JORDAN, { companyId: cedar, titles: "1" }, NOW, { gate });
+  const k2 = requests.length;
+  check("titles are another question: asked of Granola", k2 > k1 && gates === 2);
+  await G.granolaCalls(JORDAN, { companyId: cedar }, NOW + 121_000, { gate });
+  check("after 2 minutes: asked of Granola again", requests.length > k2 && gates === 3);
+  check("kept per member and query, in memory only", G._callsKept.size("mem_jordan") === 2 && G._callsKept.size("mem_bo") === 0 && !stateFile().includes("not_cedar000000001"));
+  check("a locked company is still refused while a list is kept (the check comes first)", (await problem(G.granolaCalls(JORDAN, { companyId: locked }, NOW, { gate })))?.code === "locked" && gates === 3);
+  G._callsKept.clear();
+  const k3 = requests.length;
+  const [p1, p2, p3] = await Promise.all([1, 2, 3].map(() => G.granolaCalls(JORDAN, { email: "dana@cedarpine.example" }, NOW, { gate })));
+  const oneRun = requests.length - k3;
+  G._callsKept.clear();
+  const k4 = requests.length;
+  await G.granolaCalls(JORDAN, { email: "dana@cedarpine.example" }, NOW);
+  check("three of the same question at once: Granola asked once, every one answered", oneRun === requests.length - k4 && JSON.stringify(p1) === JSON.stringify(p2) && JSON.stringify(p2) === JSON.stringify(p3) && gates === 4, { oneRun, single: requests.length - k4, gates });
+  // The round trips: the search and the newest notes go at once, then the notes are read together.
+  G._callsKept.clear();
+  A._pace.reset();
+  apiDelayMs = 150;
+  const k5 = requests.length;
+  const t5 = Date.now();
+  await G.granolaCalls(JORDAN, { companyId: cedar }, NOW);
+  const took = Date.now() - t5;
+  apiDelayMs = 0;
+  const trip = requests.slice(k5);
+  const srch = trip.find((r) => r.path === "/v1/notes/search");
+  const lst = trip.find((r) => r.path.startsWith("/v1/notes?"));
+  check("the search and the newest notes are asked side by side, not one after the other", !!srch && !!lst && !!srch.end && lst.at < srch.end && srch.at < (lst.end ?? 0), trip.map((r) => r.path));
+  check("a list by company is two Granola waits, not three (150 ms each here)", took < 2.7 * 150, took);
+  G._callsKept.clear("mem_jordan");
+  check("forgetting a member drops what is kept for them", G._callsKept.size("mem_jordan") === 0);
+
   /* ---------- 4. a picked call's transcript ---------- */
   console.log("\nA picked call");
   const t1 = await G.transcriptForPicker(JORDAN, "not_cedar000000001");
@@ -578,6 +627,7 @@ async function main() {
 
   /* ---------- 7. revoked, disconnect, closure, purge, export ---------- */
   console.log("\nA revoked key, Disconnect, closing an account");
+  G._callsKept.clear();
   dead.add(GOOD);
   const rv = await problem(G.granolaCalls(JORDAN, { companyId: cedar }, NOW));
   check("a key Granola stopped accepting: says connect a new one", rv?.message === W.revoked && rv.code === "bad_key", rv);
@@ -589,8 +639,10 @@ async function main() {
   check("working again: the mark goes", !(await G.granolaStatus(JORDAN))?.broken);
   const exp = JSON.stringify(await T.exportState());
   check("the admin export has no Granola key", !exp.includes('"granola"') && !exp.includes((JSON.parse(stateFile()) as { granola: Record<string, { key: string }> }).granola.mem_jordan.key));
+  check("a list is kept before Disconnect", G._callsKept.size("mem_jordan") > 0);
   const dc = await G.disconnectGranola(JORDAN);
   await flush();
+  check("Disconnect drops the kept lists at once", G._callsKept.size("mem_jordan") === 0);
   check("Disconnect deletes the key, and says to revoke it in Granola too", !dc.status.connected && !(JSON.parse(stateFile()) as { granola?: Record<string, unknown> }).granola?.mem_jordan && /revoke it under Settings, Connectors, API keys/.test(dc.message), dc);
   check("disconnected: calls ask to connect first", (await problem(G.granolaCalls(JORDAN, { recent: "1" })))?.code === "not_connected");
   // Bo is connected (SLOW). Closing the account deletes the key at once.
@@ -634,6 +686,13 @@ async function main() {
   check("GET status signed out: 401", (await call("status", "", { token: null })).status === 401);
   const rc = await call("calls", `?company=${encodeURIComponent(cedar)}`);
   check("GET calls?company=: the calls, no titles", rc.status === 200 && (rc.j.calls as unknown[]).length === 3 && leaks(JSON.stringify(rc.j)).length === 0, rc.status);
+  const rcSame = await Promise.all(Array.from({ length: 25 }, () => call("calls", `?company=${encodeURIComponent(cedar)}`)));
+  check("GET calls: the same list 25 times in a minute is never refused (a kept list isn't counted)", rcSame.every((r) => r.status === 200));
+  const rcMany: { status: number; j: Record<string, unknown> }[] = [];
+  for (let i = 0; i < 12; i++) rcMany.push(await call("calls", `?email=${encodeURIComponent(`person${i}@cedarpine.example`)}`));
+  const slowAt = rcMany.findIndex((r) => r.status === 429);
+  check("GET calls: 10 fresh asks of Granola a minute, then 429 saying to wait a minute", slowAt === 10 && rcMany[slowAt].j.code === "slow" && /Wait a minute/.test(String(rcMany[slowAt].j.error)), rcMany.map((r) => r.status));
+  check("and a list kept from before still answers then", (await call("calls", `?company=${encodeURIComponent(cedar)}`)).status === 200);
   const rcl = await call("calls", `?company=${encodeURIComponent(locked)}`);
   check("GET calls on a locked company: 403 with words", rcl.status === 403 && rcl.j.code === "locked");
   const rt = await call("transcript", "?note=not_cedar000000001");
@@ -801,7 +860,9 @@ async function main() {
   check("a meeting the search listed without emails is read with get_meetings (an event-stream answer) for who was on it", mc.some((x) => x.tool === "get_meetings" && JSON.stringify(x.args?.meeting_ids) === JSON.stringify(["not_cedar000000001"])) && oc.calls[0].with.map((p) => p.email).join() === "dana@cedarpine.example" && oc.calls[0].with[0].name === "Dana Whitfield", oc.calls[0]);
   check("each call: when, length from the meeting's end, who else (not the member, not the note's creator)", oc.calls[0].when === iso(today10) && oc.calls[0].minutes === 45 && oc.calls.every((c) => !c.with.some((p) => p.email === ownerJ.email)), oc.calls[0]);
   check("no transcript read to list calls, no titles unless asked, no summary or private notes anywhere", !mc.some((x) => x.tool === "get_meeting_transcript") && oc.calls.every((c) => !("title" in c)) && leaks(JSON.stringify(oc)).length === 0);
+  const mReuse = oa.mcp.length;
   check("titles=1: the member's own titles", (await G.granolaCalls(JORDAN, { companyId: cedar, titles: "1" }, NOW)).calls[0].title === SECRET_TITLE);
+  check("the next list reuses the MCP session: no initialize again", oa.mcp.length > mReuse && !oa.mcp.slice(mReuse).some((x) => x.method === "initialize" || x.method === "notifications/initialized") && oa.mcp.slice(mReuse).every((x) => x.session === "sess_fake_1"), oa.mcp.slice(mReuse).map((x) => x.tool ?? x.method));
   const om = await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
   check("by email: participant = that address, only that person's calls", om.calls.map((c) => c.noteId).join() === "not_cedar000000002" && oa.mcp.some((x) => x.tool === "search_meetings" && x.args?.participant === "lee@eu.cedarpine.example"), om.calls);
   const orc = await G.granolaCalls(JORDAN, { recent: "1" }, NOW);
@@ -809,6 +870,7 @@ async function main() {
   const m1 = oa.mcp.length;
   check("a locked company: refused, and nothing asked of Granola", (await problem(G.granolaCalls(JORDAN, { companyId: locked }, NOW)))?.code === "locked" && oa.mcp.length === m1);
   oa.json = true;
+  G._callsKept.clear();
   const ojs = await G.granolaCalls(JORDAN, { companyId: cedar }, NOW);
   oa.json = false;
   check("a JSON answer from search_meetings reads the same", JSON.stringify(ojs.calls.map((c) => c.noteId)) === JSON.stringify(oids) && ojs.calls[0].with[0]?.email === "dana@cedarpine.example", ojs.calls);
@@ -837,6 +899,7 @@ async function main() {
   const t0 = oa.token.filter((x) => x.grant_type === "refresh_token").length;
   const accessNow = unseal(sealedOf("mem_jordan")!.access)!;
   oa.expired.add(accessNow);
+  G._callsKept.clear();
   const afterRefresh = await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
   await flush();
   const refreshes = oa.token.filter((x) => x.grant_type === "refresh_token");
@@ -845,9 +908,11 @@ async function main() {
   check("the new access token and the rotated refresh token kept sealed", unseal(lr.access) !== accessNow && /^at_/.test(unseal(lr.access) ?? "") && /^rt_/.test(unseal(lr.refresh) ?? "") && oa.refresh.has(unseal(lr.refresh)!));
   await T.tableInternals.mutate((s) => void (((s as unknown as { granola: Record<string, { expiresAt: string }> }).granola.mem_jordan.expiresAt = iso(Date.now() + 10_000))));
   const n401 = oa.mcp.length;
+  G._callsKept.clear();
   await G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW);
   check("a token running out within a minute is refreshed before the call (no 401 needed)", oa.token.filter((x) => x.grant_type === "refresh_token").length === t0 + 2 && oa.mcp.length > n401);
-  await Promise.all([G.granolaCalls(JORDAN, { recent: "1" }, NOW), G.granolaCalls(JORDAN, { recent: "1" }, NOW)]);
+  G._callsKept.clear();
+  await Promise.all([G.granolaCalls(JORDAN, { recent: "1" }, NOW), G.granolaCalls(JORDAN, { email: "lee@eu.cedarpine.example" }, NOW)]);
   check("two calls at once with a good token: no refresh at all", oa.token.filter((x) => x.grant_type === "refresh_token").length === t0 + 2);
 
   console.log("\nConnect Granola: Disconnect revokes and deletes");
@@ -870,6 +935,7 @@ async function main() {
   check("connected again", (await connectOver(JORDAN)).outcome === "connected");
   oa.deadRefresh = true;
   oa.expired.add(unseal(sealedOf("mem_jordan")!.access)!);
+  G._callsKept.clear();
   const refusedR = await problem(G.granolaCalls(JORDAN, { recent: "1" }, NOW));
   await flush();
   check("Granola refuses the refresh: plain words to connect again, and the status says so", refusedR?.code === "bad_key" && refusedR.message === W.signInRevoked && (await G.granolaStatus(JORDAN))?.broken === true && M.granolaPick((await G.granolaStatus(JORDAN))!)?.chip === "Needs connecting again", refusedR);

@@ -12,6 +12,7 @@
  * POST connect { key }              the fallback: check a pasted API key with one call to Granola, then keep it sealed
  * POST disconnect                   delete the connection (a sign-in's tokens revoked at Granola first, when it can)
  * GET  calls?company=<id>           recent calls (last 30 days) with anyone at that company's domain, newest first
+ *                                   (kept 2 minutes per member and query; up to 10 fresh asks of Granola a minute)
  * GET  calls?email=<addr>           ... with that person
  * GET  calls?recent=1               ... any recent call
  *      &titles=1                    with each note's title (the member asked to see them)
@@ -32,6 +33,9 @@ const COOKIE = "rn_table";
 const noStore = { "cache-control": "no-store" };
 const SIGNED_OUT = "You're signed out. Sign in again.";
 const SLOW = "That's a lot of tries in a few minutes. Give it a moment, then try again.";
+/** The calls list: a list Merlin kept from the last 2 minutes doesn't count, only a fresh ask of Granola does. */
+const SLOW_CALLS = "Merlin asked Granola for your calls a lot just now. Wait a minute, then try again.";
+const CALLS_PER_MINUTE = 10;
 const fail = (error: string, status = 400, code = "") => NextResponse.json({ error, ...(code ? { code } : {}) }, { status, headers: noStore });
 type Ctx = { params: Promise<{ op: string }> };
 
@@ -74,8 +78,11 @@ export const GET = guarded(async (req: NextRequest, ctx: Ctx) => {
   if (!token) return fail(SIGNED_OUT, 401, "signed_out");
   const key = token.slice(-16);
   if (op === "calls") {
-    if (limited(`granola-calls:${key}`, 30, 10 * 60_000)) return fail(SLOW, 429, "slow");
-    return answer(() => granolaCalls(token, { companyId: q.get("company") ?? undefined, email: q.get("email") ?? undefined, recent: q.get("recent") ?? undefined, titles: q.get("titles") ?? undefined }));
+    // Counted per minute (so "wait a minute" is true), and only when the list really goes to Granola.
+    const gate = () => {
+      if (limited(`granola-calls:${key}`, CALLS_PER_MINUTE, 60_000)) throw new GranolaProblem(SLOW_CALLS, 429, "slow");
+    };
+    return answer(() => granolaCalls(token, { companyId: q.get("company") ?? undefined, email: q.get("email") ?? undefined, recent: q.get("recent") ?? undefined, titles: q.get("titles") ?? undefined }, undefined, { gate }));
   }
   if (op === "transcript") {
     if (limited(`granola-transcript:${key}`, 20, 10 * 60_000)) return fail(SLOW, 429, "slow");

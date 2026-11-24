@@ -34,6 +34,7 @@ import type { CoInfo } from "./model";
 import type { View } from "@/lib/tableTypes";
 import { fixesFor } from "./proposalFixes";
 import { useLeaveGuard } from "./leaveGuard";
+import { companyForCall } from "./callPick";
 
 const NETWORK = "We couldn't reach Merlin. Check your connection and try again.";
 /** What ticking the box agrees to, in plain words (the Privacy page names the provider). */
@@ -126,10 +127,10 @@ export interface CallPick {
 }
 /**
  * The slot "From Granola" renders into: the picker (GranolaCallPicker.tsx, wired in Proposals.tsx),
- * given the company, the signer's email and the call picked so far, hands back a transcript, or
- * sends the member to paste one instead.
+ * given the company and the call picked so far, hands back a transcript, or sends the member to
+ * paste one instead. Who signs is not passed: typing it must never search Granola.
  */
-export type GranolaSlot = (o: { companyId: string | null; companyName?: string; signerEmail?: string; pickedId?: string | null; onPick: (c: CallPick) => void; onPaste: () => void }) => React.ReactNode;
+export type GranolaSlot = (o: { companyId: string | null; companyName?: string; pickedId?: string | null; onPick: (c: CallPick) => void; onPaste: () => void }) => React.ReactNode;
 
 type Source = "granola" | "paste" | "agreed";
 type Ready = { proposal: ProposalRec; toFix: string[]; done: string[]; check: string[]; used: { from: string; what: string }[]; site?: string | null };
@@ -263,6 +264,11 @@ export function StartSheet({
     const them = c.attendees?.find((a) => a.name && a.name.trim().toLowerCase() !== data.me.name.trim().toLowerCase() && a.email?.toLowerCase() !== data.me.email.toLowerCase());
     if (them?.name && !withWho) setWith(them.name);
     if (them?.email && !typed && !found.email && them.name) setTyped({ name: them.name, title: "", email: them.email }), setFromCall(them.email);
+    // The company the call was with, when it is open to the member on Merlin (an attendee's work domain): Draft it needs no typing.
+    if (!pick) {
+      const co = companyForCall(c.attendees ?? [], infos, data.me);
+      if (co && (!q.trim() || co.c.name.toLowerCase().includes(q.trim().toLowerCase()))) (setPick(co.c.id), setQ(co.c.name), setAddCo(false));
+    }
   };
   const readFile = async (f: File | undefined) => {
     if (!f) return;
@@ -521,7 +527,7 @@ export function StartSheet({
                   </div>
                   {src === "granola" && granolaSlot && (
                     <div className="sc-granola" data-slot="granola">
-                      {granolaSlot({ companyId: pick, companyName: company || undefined, signerEmail: signer.email || undefined, pickedId: noteId, onPick: takeCall, onPaste: () => (setSrc("paste"), setSrcPicked(true)) })}
+                      {granolaSlot({ companyId: pick, companyName: company || undefined, pickedId: noteId, onPick: takeCall, onPaste: () => (setSrc("paste"), setSrcPicked(true)) })}
                       {text && noteId && <p className="pz-note">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words from Granola</p>}
                     </div>
                   )}
@@ -830,7 +836,7 @@ export function StartSheet({
         {src === "granola" && granolaSlot && (
           /* The Granola picker (GranolaCallPicker.tsx, lib/granola): it hands back the transcript, like a dropped file. */
           <div className="sc-granola" data-slot="granola">
-            {granolaSlot({ companyId: pick, companyName: company || undefined, signerEmail: signer.email || undefined, pickedId: noteId, onPick: takeCall, onPaste: () => (setSrc("paste"), setSrcPicked(true)) })}
+            {granolaSlot({ companyId: pick, companyName: company || undefined, pickedId: noteId, onPick: takeCall, onPaste: () => (setSrc("paste"), setSrcPicked(true)) })}
             {text && noteId && <p className="pp-muted">{text.trim().split(/\s+/).length.toLocaleString("en-US")} words from Granola</p>}
           </div>
         )}
