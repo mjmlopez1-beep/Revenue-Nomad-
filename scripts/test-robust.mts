@@ -711,7 +711,7 @@ console.log("\nThe API's routes");
     // api/billing/ai-pack: the AI usage pack's checkout, the member's cookie (Close and the trial).
     "api/billing", "api/billing/ai-pack", "api/billing/webhook",
     // Check a copy (/check, lib/seal.ts): public on purpose; the PDF is hashed in memory and kept nowhere, and the answer names only who signed and when.
-    "api/check",
+    "api/check", "api/contracts",
     // Documents to sign (lib/documents): the member's cookie for their own uploads; api/documents/file: the member's cookie, the signer's own signing link, or the finished copy's link.
     "api/documents", "api/documents/file",
     // Evidence Bank (lib/evidence): the member's cookie for their own cases; Close only.
