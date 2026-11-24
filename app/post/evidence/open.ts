@@ -1,5 +1,5 @@
 /**
- * Opening Evidence Bank from elsewhere (Your seats' "Finish its evidence case"): at a seat's case,
+ * Opening Evidence Bank from elsewhere (Your seats' "Finish its case study"): at a seat's case,
  * which the page finds or starts as a draft (api.ts draftFromSeat). Small on purpose: the pages that
  * link here don't load Evidence Bank to do it.
  */

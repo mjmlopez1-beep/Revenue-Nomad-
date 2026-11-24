@@ -1,24 +1,22 @@
 /**
- * Evidence Bank's page model (Evidence.dc.html), pure so scripts/test-evidence-page.mts checks it
- * with no browser: who sees the page (Close only), the rows (ready cases, drafts, the seats still
- * without a case, and on a first visit two rows marked Example), the client words (hidden by
- * default, a reveal shows the member their own client), filters, sorts, the fill line under each
- * column, how a case reads in a Proof part, match words, and what the library covers.
+ * Evidence Bank's page model, pure so scripts/test-evidence-page.mts checks it with no browser:
+ * who sees the page (Close only), the table (column A the client company with its real name and
+ * logo, column B its case studies as tiles), each tile's words, the blanks an agent left, the tag
+ * search and the quick picks, the wizard's steps and where it picks up, and the "Build this for
+ * me" prompt the member takes to their own Claude.
  *
  * Rules it keeps:
  *   - Close only (BUILD_PLAN part 8): on Free and Pro the page is the upgrade screen.
- *   - The client is hidden by default, row by row and in the case view. Showing it is for this
- *     screen only and never stored; naming the client to readers is the case's clientNamed switch.
- *   - Example rows are Example<T> (app/post/examples.ts): never counted, never selected, never
- *     matched, never sent.
- *   - Numbers are the member's own. An empty answer stays empty; nothing is invented.
+ *   - The page is the member's own: the client's name and logo show here. Whether the name goes
+ *     into proposals and onto their card is each case study's own switch (clientNamed, off).
+ *   - Numbers are the member's own. An empty answer stays empty; nothing is invented, and the
+ *     prompt tells their agent the same.
  *   - No export: nothing here downloads anything.
  */
-import { example, isExample, type Example } from "../examples";
-import { catOf, tagGroups, type EvidenceCase, type EvidenceMatch, type EvidenceOutcome } from "./types";
+import { datesOf, outcomeLine } from "@/lib/evidence/types";
+import type { Study, TagCatalogue, TagRef } from "./types";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const low = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 /* ---------- who sees it ---------- */
 
@@ -28,32 +26,32 @@ export const evidenceOpen = (plan: { canClose: boolean } | null | undefined) => 
 /** The upgrade screen's words: what Evidence Bank does, for a member on Free or Pro. */
 export const UPGRADE = {
   title: "Evidence Bank is part of Close",
-  lead: "Your private library of case studies. Write a case once, match it to any company, and Merlin puts the closest one in the Proof part of every proposal.",
+  lead: "Your case studies in one place: each client, what you did there and the result. Merlin puts the closest one into every proposal you send.",
   points: [
-    { h: "Built from your seats", p: "Each seat you held starts a draft with the industry, size and dates filled in. Three questions finish it: the problem, what you did, and the numbers before and after." },
-    { h: "Private by default", p: "Only you see your cases. The client name stays hidden. A reader sees a line like \"A health care company, $20M to $50M\" until you name the client." },
-    { h: "Matched to any company", p: "Merlin says which case is closest to a company and why, in words: what is the same and what is different. Matching never costs a credit." },
-    { h: "In the Proof part of your proposals", p: "The closest one or two cases go into the proposals you send. If you choose, a case also shows on your card in Fractionals." },
+    { h: "Built from your seats", p: "Each client you worked with starts a case study with the company, your role and the dates filled in. A few short questions finish it: the problem, what you did, the result." },
+    { h: "Private by default", p: "Only you see your case studies. In a proposal the client's name stays out, and it reads like \"A health care company, $20M to $50M\", until you choose to name the client." },
+    { h: "Matched to any company", p: "Merlin says which case study is closest to a company and why, in words. Matching never costs a credit." },
+    { h: "Build this for me", p: "With Claude connected, Claude looks through your email and its memory of your work, saves the case studies it finds, and leaves blanks for you to fill." },
   ],
   cta: "See the Close plan",
 } as const;
 
 /* ---------- a seat, as the page reads it ---------- */
 
-/** A seat of the member's, as much of it as a case needs (from SeatInfo: the company's free facts, the seat's own). */
+/** A seat of the member's, as much of it as a case study needs (from SeatInfo: the company's free facts, the seat's own). */
 export interface SeatLite {
   id: string;
+  /** The company's public id (its logo comes from /api/logo/<id>). */
   companyId: string;
-  /** The client's name, for the member's own eyes only. */
+  /** The client's name, for the member's own eyes. Empty while the company is locked for them. */
   company: string;
-  /** The company's name is locked for this member (not theirs yet): only its facts show. */
   hidden: boolean;
   industry: string;
   size: string;
   revenue: string;
   motion: string;
   role: string;
-  /** "Feb 2024 to Dec 2024", "Since Jun 2026". */
+  /** "Feb to Dec 2024", "Since Jun 2026". */
   dates: string;
   hours: string;
   /** Why they hired, from the seat. */
@@ -69,329 +67,293 @@ export function labelFrom(f: { industry?: string; size?: string; revenue?: strin
   const what = ind ? `${/^[aeiou]/i.test(ind) ? "An" : "A"} ${words} company` : "A company";
   return band ? `${what}, ${band.replace(/–/g, " to ")}` : what;
 }
-export const labelOf = (c: Pick<EvidenceCase, "clientLabel" | "industry" | "size" | "revenue">) => c.clientLabel?.trim() || labelFrom(c);
+/** "201 to 500 people · $20M to $50M revenue". */
+export const sizeWords = (f: { size?: string; revenue?: string }) => [f.size ? `${f.size.replace(/–/g, " to ")} people` : "", f.revenue ? `${f.revenue.replace(/–/g, " to ")} revenue` : ""].filter(Boolean).join(" · ");
 
-/* ---------- the rows ---------- */
+/* ---------- the table: column A the company, column B its case studies ---------- */
 
-/** An example case for a first visit: made up, shown with its Example label, never the member's. */
-export interface ExampleCase {
-  title: string;
-  role: string;
-  dates: string;
-  label: string;
-  industry: string;
-  size: string;
-  revenue: string;
-  motion: string;
-  soldTo: string;
-  problems: string[];
-  workType: string[];
-  outcomes: EvidenceOutcome[];
-  workedWith: string;
+export interface CompanyRow {
+  key: string;
+  /** The client's real name (this page is the member's own), or "" when there is none to show. */
+  name: string;
+  /** The company's public id, for its logo; null for a company typed in that isn't on Merlin. */
+  logoId: string | null;
+  /** "Health Care · 201 to 500 people". */
+  facts: string;
+  /** A seat the member held there, when there is one (Add a case study starts from it). */
+  seat: SeatLite | null;
+  cases: Study[];
 }
 
-export const EXAMPLE_CASES: readonly Example<ExampleCase>[] = [
-  example({
-    title: "Sales off the founder's desk",
-    role: "Fractional VP Sales",
-    dates: "Mar to Sep 2023",
-    label: "A 120-person EdTech company",
-    industry: "EdTech",
-    size: "51–200",
-    revenue: "$5M–$20M",
-    motion: "Inside sales",
-    soldTo: "School districts",
-    problems: ["The founder closed every deal", "Nothing written down for a new hire"],
-    workType: ["Founder-led sales exit", "Sales team hiring and ramp", "Sales playbook"],
-    outcomes: [
-      { k: "Win rate", before: "18%", after: "27%" },
-      { k: "Founder hours on sales", before: "30 a week", after: "10 a week" },
-    ],
-    workedWith: "The CEO and 2 new account executives",
-  }),
-  example({
-    title: "A sales team on top of self-serve sign-ups",
-    role: "Fractional VP Sales",
-    dates: "Apr to Dec 2021",
-    label: "A 60-person software company",
-    industry: "Software",
-    size: "51–200",
-    revenue: "$5M–$20M",
-    motion: "PLG to sales",
-    soldTo: "Tech teams",
-    problems: ["Sign-ups grew but nobody followed up"],
-    workType: ["Product-led to sales bridge", "AI lead scoring", "CRM sales configuration"],
-    outcomes: [
-      { k: "Sign-ups that pay", before: "2.1%", after: "3.4%" },
-      { k: "Average contract", before: "$4K", after: "$11K" },
-    ],
-    workedWith: "The CEO and the head of product",
-  }),
-];
-
-export type EvRow =
-  | { kind: "case"; key: string; c: EvidenceCase; seat: SeatLite | null }
-  | { kind: "seat"; key: string; seat: SeatLite }
-  | { kind: "example"; key: string; x: Example<ExampleCase> };
-
-/** A first visit (step 6): no case is ready yet. */
-export const isFirstVisit = (cases: readonly EvidenceCase[]) => !cases.some((c) => c.status === "ready");
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const nameOf = (c: Study) => (c.client.name ?? "").trim();
+const keyOfCase = (c: Study) => (nameOf(c) ? `n:${norm(nameOf(c))}` : c.companyId ? `c:${c.companyId}` : "x:unnamed");
 
 /**
- * The library: the member's cases (each with its seat when it came from one), then every seat of
- * theirs that has no case yet (a draft to start), then on a first visit the two Example rows.
+ * One row a company: its case studies (newest first), the company's name and logo, its facts. A
+ * seat the member held with no case study yet is a row too, so its "Add a case study" is one
+ * click. Companies with case studies come first, the one changed last on top.
  */
-export function rowsOf(cases: readonly EvidenceCase[], seats: readonly SeatLite[], first: boolean): EvRow[] {
-  const bySeat = new Map(seats.map((s) => [s.id, s]));
-  const caseRows: EvRow[] = cases.map((c) => ({ kind: "case", key: c.id, c, seat: c.seatId ? bySeat.get(c.seatId) ?? null : null }));
-  const taken = new Set(cases.map((c) => c.seatId).filter(Boolean));
-  const seatRows: EvRow[] = seats.filter((s) => !taken.has(s.id)).map((s) => ({ kind: "seat", key: `seat:${s.id}`, seat: s }));
-  const ex: EvRow[] = first ? EXAMPLE_CASES.map((x, n) => ({ kind: "example", key: `example:${n}`, x })) : [];
-  return [...caseRows, ...seatRows, ...ex];
-}
-
-/** The member's own rows (cases and seat drafts): what counts, selects, ranks and sends. Examples never. */
-export const ownRows = (rows: readonly EvRow[]) => rows.filter((r): r is Exclude<EvRow, { kind: "example" }> => r.kind !== "example" && !isExample(r));
-export const isReady = (r: EvRow) => r.kind === "case" && r.c.status === "ready";
-
-/** A row's title: the case's, or for a draft not written yet "<role> seat, <dates>". */
-export function titleOf(r: EvRow): string {
-  if (r.kind === "example") return r.x.value.title;
-  if (r.kind === "case" && r.c.status === "ready" && r.c.title.trim()) return r.c.title;
-  const s = r.seat;
-  const t = r.kind === "case" ? r.c.title.trim() : "";
-  if (t) return t;
-  return s ? `${s.role || "Fractional"} seat${s.dates ? `, ${s.dates}` : ""}` : "A case not written yet";
-}
-export const statusWord = (r: EvRow) => (r.kind === "example" ? "Example" : isReady(r) ? "Ready" : "Draft");
-export function subOf(r: EvRow): string {
-  if (r.kind === "example") return `${r.x.value.role} · ${r.x.value.dates}`;
-  if (!isReady(r)) return r.seat ? "From your seat · 3 questions, about 3 minutes" : "3 questions, about 3 minutes";
-  const s = r.seat;
-  return s ? [s.role, s.dates].filter(Boolean).join(" · ") : "Written by you";
-}
-
-/** The facts a row shows (from the case, else from its seat). */
-export function factsOf(r: EvRow): { industry: string; size: string; revenue: string; motion: string; soldTo: string } {
-  if (r.kind === "example") return r.x.value;
-  const s = r.seat;
-  const c = r.kind === "case" ? r.c : null;
-  return {
-    industry: c?.industry || s?.industry || "",
-    size: c?.size || s?.size || "",
-    revenue: c?.revenue || s?.revenue || "",
-    motion: c?.motion || s?.motion || "",
-    soldTo: c?.soldTo || "",
-  };
-}
-export const sizeWords = (f: { size: string; revenue: string }) => [f.size ? `${f.size.replace(/–/g, " to ")} people` : "", f.revenue ? `${f.revenue.replace(/–/g, " to ")} revenue` : ""].filter(Boolean).join(" · ");
-
-/* ---------- the client: hidden by default ---------- */
-
-/**
- * The client cell's two lines. Hidden by default ("Client hidden", and what a reader sees);
- * `shown` reveals the member's own client to them on this screen. A locked company never shows a name.
- */
-export function clientWords(r: EvRow, shown: boolean): [string, string] {
-  if (r.kind === "example") return ["Example client", r.x.value.label];
-  const c = r.kind === "case" ? r.c : null;
-  const named = !!c?.clientNamed;
-  const name = r.seat && !r.seat.hidden ? r.seat.company : c?.clientName ?? "";
-  const label = c ? labelOf(c) : labelFrom(r.seat ?? {});
-  if (shown && name) return [name, named ? "Named in proposals" : "Kept out of proposals"];
-  return ["Client hidden", named ? "Named in proposals" : `Reads as ${low(label)}`];
-}
-/** Whether a row has a name the member can reveal (their own client, a company they can see). */
-export const canReveal = (r: EvRow) => r.kind !== "example" && ((!!r.seat && !r.seat.hidden && !!r.seat.company) || (r.kind === "case" && !r.seat && !!r.c.clientName));
-
-/* ---------- filters and sorts ---------- */
-
-export interface EvFilters {
-  /** A type of work category, or "" for all. */
-  cat: string;
-  motion: string;
-  /** The bottom tabs: all, ready, drafts. */
-  tab: "all" | "ready" | "draft";
-  /** Typed words: a case whose title, problems, tags or facts carry them. */
-  q: string;
-}
-export const NO_FILTERS: EvFilters = { cat: "", motion: "", tab: "all", q: "" };
-
-export const tagsOf = (r: EvRow): string[] => (r.kind === "example" ? r.x.value.workType : r.kind === "case" ? r.c.workType : []);
-export const problemsOf = (r: EvRow): string[] => (r.kind === "example" ? r.x.value.problems : r.kind === "case" ? r.c.problems : []);
-export const outcomesOf = (r: EvRow): EvidenceOutcome[] => (r.kind === "example" ? r.x.value.outcomes : r.kind === "case" ? r.c.outcomes : []);
-export const hasCat = (r: EvRow, cat: string) => (r.kind === "example" || isReady(r)) && tagsOf(r).some((t) => catOf(t) === cat);
-
-export function filterRows(rows: readonly EvRow[], f: EvFilters): EvRow[] {
-  const q = f.q.trim().toLowerCase();
-  return rows.filter((r) => {
-    if (f.cat && !hasCat(r, f.cat)) return false;
-    if (f.motion && factsOf(r).motion !== f.motion) return false;
-    if (f.tab === "ready" && !isReady(r)) return false;
-    if (f.tab === "draft" && (r.kind === "example" || isReady(r))) return false;
-    if (q) {
-      const fx = factsOf(r);
-      const hay = [titleOf(r), ...problemsOf(r), ...tagsOf(r), fx.industry, fx.motion, fx.soldTo, ...outcomesOf(r).map((o) => o.k)].join(" ").toLowerCase();
-      if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+export function companyRows(cases: readonly Study[], seats: readonly SeatLite[]): CompanyRow[] {
+  const rows = new Map<string, CompanyRow>();
+  const seatKey = (s: SeatLite) => (s.company ? `n:${norm(s.company)}` : `c:${s.companyId}`);
+  const seatsByKey = new Map(seats.map((s) => [seatKey(s), s]));
+  const sorted = [...cases].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  for (const c of sorted) {
+    const k = keyOfCase(c);
+    let r = rows.get(k);
+    if (!r) {
+      const seat = seatsByKey.get(k) ?? (c.seatId ? seats.find((s) => s.id === c.seatId) ?? null : null);
+      r = { key: k, name: nameOf(c) || seat?.company || "", logoId: c.companyId ?? seat?.companyId ?? null, facts: "", seat: seat ?? null, cases: [] };
+      rows.set(k, r);
     }
-    return true;
-  });
+    if (!r.logoId && c.companyId) r.logoId = c.companyId;
+    r.cases.push(c);
+  }
+  for (const s of seats) {
+    const k = seatKey(s);
+    if (!rows.has(k)) rows.set(k, { key: k, name: s.company, logoId: s.companyId, facts: "", seat: s, cases: [] });
+  }
+  for (const r of rows.values()) {
+    const f = r.cases.find((c) => c.industry || c.size) ?? null;
+    const industry = f?.industry || r.seat?.industry || "";
+    const size = f?.size || r.seat?.size || "";
+    r.facts = [industry, size ? `${size.replace(/–/g, " to ")} people` : ""].filter(Boolean).join(" · ");
+  }
+  return [...rows.values()].sort((a, b) => Number(!a.cases.length) - Number(!b.cases.length));
 }
-/** The motions the rows carry, for the Motion chips. */
-export const motionsOf = (rows: readonly EvRow[]) => [...new Set(rows.map((r) => factsOf(r).motion).filter(Boolean))].sort();
-/** How many of the rows carry a category (the chip's count). */
-export const catCount = (rows: readonly EvRow[], cat: string) => rows.filter((r) => hasCat(r, cat)).length;
+/** The company's name as column A shows it. */
+export const companyName = (r: Pick<CompanyRow, "name" | "facts">) => r.name || "Client company";
 
-export type EvSort = "used" | "drafts" | "new" | "match";
-export const SORT_WORDS: Record<EvSort, string> = { used: "Sort: most used", drafts: "Sort: drafts first", new: "Sort: newest first", match: "Sort: closest match" };
-
-/** Rank of a match label: Same over Close over Different, then more the same and less different. */
-export const matchRank = (m: EvidenceMatch | undefined) => (m ? (m.label === "Same" ? 300 : m.label === "Close" ? 200 : 100) + m.same.length * 10 - m.diff.length : -1);
-
-export function sortRows(rows: readonly EvRow[], sort: EvSort, matches?: ReadonlyMap<string, EvidenceMatch>): EvRow[] {
-  const at = new Map(rows.map((r, n) => [r.key, n]));
-  const pos = (r: EvRow) => at.get(r.key) ?? 0;
-  const used = (r: EvRow) => (r.kind === "case" ? r.c.usedIn.length : -1);
-  const when = (r: EvRow) => (r.kind === "case" ? r.c.updatedAt || r.c.createdAt : r.kind === "seat" ? "" : "0");
-  const exLast = (r: EvRow) => (r.kind === "example" ? 1 : 0);
-  const draft = (r: EvRow) => (r.kind === "example" ? 2 : isReady(r) ? 1 : 0);
-  return [...rows].sort((a, b) => {
-    if (sort === "match") return matchRank(b.kind === "case" ? matches?.get(b.c.id) : undefined) - matchRank(a.kind === "case" ? matches?.get(a.c.id) : undefined) || exLast(a) - exLast(b) || pos(a) - pos(b);
-    if (sort === "drafts") return draft(a) - draft(b) || pos(a) - pos(b);
-    if (sort === "new") return exLast(a) - exLast(b) || when(b).localeCompare(when(a)) || pos(a) - pos(b);
-    return exLast(a) - exLast(b) || used(b) - used(a) || draft(b) - draft(a) || pos(a) - pos(b);
-  });
-}
-
-/* ---------- match words ---------- */
-
-/** A match label in words: the top one is the closest; Same reads Very close, Different Not close. */
-export function matchWord(m: EvidenceMatch | undefined, top: boolean): string {
-  if (!m) return "Not run";
-  if (top && m.label !== "Different") return "Closest match";
-  return m.label === "Same" ? "Very close" : m.label === "Close" ? "Close" : "Not close";
-}
-/** The row's match cell: why it is close, or why there is no ranking. */
-export function matchCell(r: EvRow, m: EvidenceMatch | undefined, top: boolean): { word: string; why: string; strong: boolean } {
-  if (r.kind === "example") return { word: "Example, not ranked", why: "", strong: false };
-  if (!isReady(r)) return { word: "Finish the case to rank it", why: "", strong: false };
-  if (!m) return { word: "Not run", why: "", strong: false };
-  const why = m.same.length ? m.same.join(", ") : m.diff.length ? `Different: ${m.diff.join(", ")}` : "";
-  return { word: matchWord(m, top), why, strong: m.label !== "Different" };
-}
-/** The key of the top-ranked case, or null. */
-export function topOf(matches: ReadonlyMap<string, EvidenceMatch>): string | null {
-  let best: string | null = null;
-  let n = -1;
-  for (const [k, m] of matches) if (matchRank(m) > n) (n = matchRank(m)), (best = k);
-  return best;
-}
-
-/* ---------- the columns' fill line ---------- */
-
-export function fillLine(rows: readonly EvRow[], matching: string | null, matchedN: number) {
-  const own = ownRows(rows);
-  const ready = own.filter(isReady);
-  const pct = (n: number) => (own.length ? `${Math.round((n / own.length) * 100)}%` : "0%");
-  const named = own.filter((r) => r.kind === "case" && r.c.clientNamed).length;
-  const fromSeats = own.filter((r) => !!r.seat).length;
-  const used = new Set(own.flatMap((r) => (r.kind === "case" ? r.c.usedIn : []))).size;
-  const out: { key: string; name: string; fill: string }[] = [
-    { key: "case", name: "Case", fill: `${ready.length} ready · ${plural(own.length - ready.length, "draft")}` },
-  ];
-  if (matching) out.push({ key: "match", name: `Match to ${matching}`, fill: `${matchedN} of ${own.length} ranked` });
-  out.push(
-    { key: "client", name: "Client", fill: `${named} named in proposals` },
-    { key: "ind", name: "Industry and size", fill: own.length && fromSeats === own.length ? "100% from your seats" : pct(own.filter((r) => factsOf(r).industry).length) },
-    { key: "motion", name: "Motion and sold to", fill: pct(own.filter((r) => factsOf(r).motion || factsOf(r).soldTo).length) },
-    { key: "probs", name: "Problems solved", fill: `${pct(own.filter((r) => problemsOf(r).length).length)} written` },
-    { key: "work", name: "Type of work", fill: `${pct(own.filter((r) => tagsOf(r).length).length)} tagged` },
-    { key: "outs", name: "Before and after", fill: `${pct(own.filter((r) => outcomesOf(r).length).length)} have numbers` },
-    { key: "with", name: "Worked with", fill: pct(own.filter((r) => r.kind === "case" && r.c.workedWith.length).length) },
-    { key: "used", name: "Used in", fill: plural(used, "proposal") },
-    { key: "card", name: "On my card", fill: `${own.filter((r) => r.kind === "case" && r.c.showOnCard).length} shown` },
-  );
+/** The rows a search keeps: the company's name, or any word of a case study (title, role, problem, what you did, result, tags). */
+export function searchRows(rows: readonly CompanyRow[], q: string): CompanyRow[] {
+  const words = norm(q).split(" ").filter(Boolean);
+  if (!words.length) return [...rows];
+  const hay = (c: Study) => norm([c.title, c.role, c.answers.problem, c.answers.did, c.answers.numbers, c.took, c.quote?.text ?? "", ...c.workType, c.industry].join(" "));
+  const out: CompanyRow[] = [];
+  for (const r of rows) {
+    const co = norm(`${r.name} ${r.facts}`);
+    if (words.every((w) => co.includes(w))) {
+      out.push(r);
+      continue;
+    }
+    const cases = r.cases.filter((c) => words.every((w) => hay(c).includes(w) || co.includes(w)));
+    if (cases.length) out.push({ ...r, cases });
+  }
   return out;
 }
 
-/* ---------- the three questions ---------- */
+/* ---------- one tile ---------- */
 
-export const QUESTIONS = [
-  { q: "What was the problem?", hint: "What was broken or stuck when you arrived. Pick what fits, or write it in your words, one problem a line.", ph: "Four reps sold four different ways, and the forecast missed by 30% a quarter." },
-  { q: "What did you do?", hint: "The work itself, in your words. Then tag the type of work: it is what Merlin matches companies on.", ph: "Set one sales process and a weekly forecast, and wrote the first playbook." },
-  { q: "What changed, in numbers?", hint: "Before and after, with the unit. Rough numbers are fine. Leave it empty if you have none: Merlin never fills a number in for you.", ph: "" },
-] as const;
-
-/** Problems typed one a line, cleaned: no blanks, no repeats, each at most 200 characters, at most 8. */
-export function problemLines(text: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of text.split(/\n+/)) {
-    const t = raw.replace(/^[\s\-•*]+/, "").trim().slice(0, 200);
-    if (!t || seen.has(t.toLowerCase())) continue;
-    seen.add(t.toLowerCase());
-    out.push(t);
+/** The tile's title: the member's, else the role and dates. */
+export const titleOf = (c: Pick<Study, "title" | "role" | "dates">) => c.title.trim() || `${c.role || "Fractional work"}${c.dates ? `, ${c.dates}` : ""}`;
+/** The result in one line: the first number as typed, else the result's first sentence, else "". */
+export function resultLine(c: Pick<Study, "outcomes" | "answers" | "took">): string {
+  const o = c.outcomes[0];
+  const took = c.took?.trim() ? ` in ${c.took.trim().replace(/^in\s+/i, "")}` : "";
+  if (o) return `${outcomeLine(o)}${took}`;
+  const first = c.answers.numbers.trim().split(/(?<=[.!?])\s+/)[0] ?? "";
+  if (!first) return "";
+  return `${first.length > 110 ? `${first.slice(0, 107).trimEnd()}...` : first.replace(/[.]$/, "")}${took}`;
+}
+export type Tone = "ready" | "draft" | "review";
+/** Where a case study stands, in a word or two: Ready, Draft (and how many blanks), From Claude · review. */
+export function statusOf(c: Pick<Study, "status" | "review" | "from" | "blanks">): { word: string; tone: Tone } {
+  if (c.review) return { word: `From ${c.from || "your agent"} · review`, tone: "review" };
+  if (c.blanks.length) return { word: `Draft · ${plural(c.blanks.length, "blank")} to fill`, tone: "draft" };
+  return c.status === "ready" ? { word: "Ready", tone: "ready" } : { word: "Draft", tone: "draft" };
+}
+/** Words with the blanks marked: [{ t, blank }]. */
+export function splitBlanks(text: string): { t: string; blank: boolean }[] {
+  const out: { t: string; blank: boolean }[] = [];
+  let at = 0;
+  for (const m of String(text ?? "").matchAll(/\[[^[\]\n]{2,80}\]/g)) {
+    if (m.index! > at) out.push({ t: text.slice(at, m.index), blank: false });
+    out.push({ t: m[0], blank: true });
+    at = m.index! + m[0].length;
   }
-  return out.slice(0, 8);
+  if (at < text.length) out.push({ t: text.slice(at), blank: false });
+  return out;
 }
-/** The numbers kept: a row needs what was measured and at least one side. */
-export const cleanOutcomes = (xs: readonly EvidenceOutcome[]): EvidenceOutcome[] =>
-  xs
-    .map((o) => ({ k: o.k.trim().slice(0, 80), before: o.before.trim().slice(0, 40), after: o.after.trim().slice(0, 40), ...(o.unit?.trim() ? { unit: o.unit.trim().slice(0, 20) } : {}) }))
-    .filter((o) => o.k && (o.before || o.after))
-    .slice(0, 6);
+/** A blank is still in these words. */
+export const hasBlank = (...t: (string | undefined)[]) => t.some((x) => /\[[^[\]\n]{2,80}\]/.test(x ?? ""));
 
-/** Q1's first words, from why they hired on the seat ("Build the first sales motion"), for the member to change. */
-export const seededProblem = (s: SeatLite | null) => (s?.why ? `They brought me in to ${low(s.why)}.` : "");
+/** A case study is ready once the problem and what you did are written, and no blank is left. */
+export const canBeReady = (x: { problem: string; did: string }, ...rest: (string | undefined)[]) => !!x.problem.trim() && !!x.did.trim() && !hasBlank(x.problem, x.did, ...rest);
 
-/** A case is ready once the problem and what they did are written (numbers are welcome, never required). */
-export const canBeReady = (x: { problems: readonly string[]; text: string }) => x.problems.length > 0 && x.text.trim().length > 0;
+/** Months for the form: "2024-02" stays, "Ongoing" is no end. */
+export const monthOk = (m: string) => !m || /^\d{4}(-(0[1-9]|1[0-2]))?$/.test(m);
+export const datesWords = (start: string, end: string) => datesOf(start, end);
 
-/** A title from the answers when the member gave none: the first problem turned around, else the seat. */
-export function titleFrom(problems: readonly string[], seat: SeatLite | null): string {
-  const p = problems[0]?.replace(/\.$/, "");
-  if (p) return p.length > 70 ? `${p.slice(0, 67)}...` : p;
-  return seat ? `${seat.role || "Fractional"} seat${seat.dates ? `, ${seat.dates}` : ""}` : "A case";
+/* ---------- tags: search, and the quick picks ---------- */
+
+/** The catalogue to search: every known tag, or the categories alone when the full list isn't loaded. */
+export function tagPool(cat: TagCatalogue): TagRef[] {
+  return cat.tags.length ? cat.tags : cat.categories.map((c) => ({ name: c, category: c }));
 }
 
-/* ---------- how it reads in a Proof part ---------- */
+/** Tags matching what was typed, best first: a tag that starts with it, then a word that does, then anywhere. Picked ones left out. */
+export function searchTags(q: string, cat: TagCatalogue, picked: readonly string[], max = 8): TagRef[] {
+  const t = q.trim().toLowerCase();
+  if (!t) return [];
+  const have = new Set(picked.map((x) => x.toLowerCase()));
+  const words = t.split(/\s+/);
+  const scored: { r: TagRef; s: number }[] = [];
+  for (const r of tagPool(cat)) {
+    const n = r.name.toLowerCase();
+    if (have.has(n)) continue;
+    const inCat = r.category.toLowerCase();
+    if (!words.every((w) => n.includes(w) || inCat.includes(w))) continue;
+    const s = n.startsWith(t) ? 0 : n.split(/[\s/-]+/).some((w) => w.startsWith(words[0])) ? 1 : words.every((w) => n.includes(w)) ? 2 : 3;
+    scored.push({ r, s });
+  }
+  return scored.sort((a, b) => a.s - b.s || a.r.name.length - b.r.name.length || a.r.name.localeCompare(b.r.name)).slice(0, max).map((x) => x.r);
+}
+
+const STOP = new Set("the and for with from that this into over our their them they then than was were are has have had its it's out off per via all any one two new how what when who why your you yours about after before more most less very just also each team teams work worked working".split(" "));
+const stem = (w: string) => w.replace(/(ing|ed|es|s)$/, "");
+const tokens = (s: string) => new Set(String(s ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP.has(w)).map(stem));
+/** The tag categories a seat's function or role points to. */
+export function categoriesFor(fn: string, role: string): string[] {
+  const t = `${fn} ${role}`.toLowerCase();
+  const out: string[] = [];
+  if (/revops|revenue op|sales op|gtm stack/.test(t)) out.push("Revenue Operations");
+  if (/enablement/.test(t)) out.push("Sales Enablement");
+  if (/sales|cro|revenue|business development|bdr|sdr/.test(t)) out.push("Sales Leadership", "Sellers");
+  if (/marketing|cmo|growth|brand|demand/.test(t)) out.push("Marketing");
+  if (/customer success|\bcs\b|account management|retention/.test(t)) out.push("Customer Success and Growth");
+  if (/partner|channel|alliance/.test(t)) out.push("Partnerships");
+  if (/\bai\b|ai gtm/.test(t)) out.push("AI go-to-market");
+  if (/finance|cfo|controller|fp&a|accounting/.test(t)) out.push("Finance");
+  if (/technology|cto|engineering|it\b|product/.test(t)) out.push("Technology");
+  return [...new Set(out)];
+}
+/**
+ * The 5 to 8 tags most likely to fit a case study, for quick picks: tags whose words are in its
+ * words (title, role, the problem, what you did, the result, the company's industry), the ones in
+ * its function's categories first; then, to make five, its categories' own tags. Picked ones left out.
+ */
+export function suggestTagsFor(c: { title?: string; role?: string; fn?: string; industry?: string; answers?: { problem?: string; did?: string; numbers?: string } }, cat: TagCatalogue, picked: readonly string[], max = 8): string[] {
+  const pool = tagPool(cat);
+  const have = new Set(picked.map((x) => x.toLowerCase()));
+  const words = tokens([c.title, c.role, c.fn, c.industry, c.answers?.problem, c.answers?.did, c.answers?.numbers].join(" "));
+  const cats = categoriesFor(c.fn ?? "", c.role ?? "");
+  const scored: { name: string; s: number }[] = [];
+  for (const r of pool) {
+    if (have.has(r.name.toLowerCase())) continue;
+    const tw = [...tokens(r.name)];
+    const hit = tw.filter((w) => words.has(w)).length;
+    if (!hit) continue;
+    scored.push({ name: r.name, s: hit * 10 + (hit === tw.length ? 5 : 0) + (cats.includes(r.category) ? 3 : 0) });
+  }
+  const out = scored.sort((a, b) => b.s - a.s || a.name.length - b.name.length).map((x) => x.name);
+  for (const k of cats) {
+    if (out.length >= 5) break;
+    for (const r of pool) {
+      if (out.length >= 5) break;
+      if (r.category === k && !have.has(r.name.toLowerCase()) && !out.includes(r.name)) out.push(r.name);
+    }
+  }
+  return [...new Set(out)].slice(0, max);
+}
 
 /**
- * The case as a reader sees it in a proposal's Proof part: a template that joins the member's own
- * answers (no AI writes it). The client is "a health care company, $20M to $50M" unless named.
+ * Which tag categories the member's saved case studies cover ("3 of 10 categories"), from the case
+ * studies themselves, the same list the table draws, so a save moves it at once: each case study
+ * counts for its tags' categories (a category's own name counts as that category), and a case
+ * study with no tag yet for the category its seat or role points to. Every saved case study counts,
+ * drafts and ones to review included: it is what is in the bank, not what is in proposals.
  */
-export function readsAs(c: Pick<EvidenceCase, "clientNamed" | "clientLabel" | "industry" | "size" | "revenue" | "problems" | "text" | "outcomes">, clientName: string | null): string {
-  const who = c.clientNamed && clientName ? `${clientName}, ${low(labelOf(c))},` : labelOf(c);
-  const probs = c.problems.map((p) => low(p.replace(/\.$/, "")));
-  const had = probs.length ? ` came in with ${probs.length > 1 ? `${probs.slice(0, -1).join(", ")} and ${probs[probs.length - 1]}` : probs[0]}.` : ".";
-  const did = c.text.trim() ? ` ${c.text.trim().replace(/([^.])$/, "$1.")}` : "";
-  const nums = c.outcomes.length ? ` ${c.outcomes.map((o, n) => `${n ? low(o.k) : o.k} went from ${o.before || "not measured"} to ${o.after || "not measured"}${o.unit ? ` ${o.unit}` : ""}`).join(", ")}.` : "";
-  return `${who}${had}${did}${nums}`;
+export function coverageOf(cases: readonly Pick<Study, "workType" | "fn" | "role">[], cat: TagCatalogue): { n: number; of: number; covered: string[] } {
+  const all = cat.categories.length ? cat.categories : [];
+  const byTag = new Map(cat.tags.map((t) => [t.name.toLowerCase(), t.category]));
+  const named = new Map(all.map((k) => [k.toLowerCase(), k]));
+  const covered = new Set<string>();
+  for (const c of cases) {
+    const fromTags = c.workType.map((t) => byTag.get(t.toLowerCase()) ?? named.get(t.toLowerCase())).filter((k): k is string => !!k);
+    const ks = fromTags.length ? fromTags : categoriesFor(c.fn, c.role).slice(0, 1);
+    for (const k of ks) if (!all.length || all.includes(k)) covered.add(k);
+  }
+  const order = all.length ? all : [...covered];
+  return { n: covered.size, of: all.length || covered.size, covered: order.filter((k) => covered.has(k)) };
 }
 
-/* ---------- what the library covers, and the status line ---------- */
+/* ---------- the wizard ---------- */
 
-export function coverage(rows: readonly EvRow[]) {
-  const own = ownRows(rows);
-  const groups = tagGroups();
-  const proven = groups.map((g) => own.some((r) => hasCat(r, g.cat)));
-  const n = proven.filter(Boolean).length;
-  const missing = groups.filter((_, i) => !proven[i]).map((g) => g.cat);
-  return {
-    n,
-    of: groups.length,
-    line: n === 0 ? "Build your first case and the work it proves shows here and, if you choose, on your card." : n === groups.length ? "Every category has a finished case." : `None yet for ${missing.join(", ")}.`,
-  };
+export const WIZ_STEPS = [
+  { key: "client", h: "Pick a client you did great work for", p: "One of your seats on Merlin, or type the company." },
+  { key: "work", h: "What was the problem, and what did you do?", p: "Two short answers, in your own words." },
+  { key: "result", h: "What changed?", p: "The result with a number, and how long it took." },
+  { key: "vouch", h: "Who can vouch for it?", p: "A quote from the client, if you have one. You can skip this." },
+] as const;
+export type WizStep = 0 | 1 | 2 | 3 | 4;
+
+/** The step a case study picks up at: the problem and what you did, then the result, then who can vouch. */
+export function stepOf(c: Pick<Study, "answers"> | null): WizStep {
+  if (!c) return 0;
+  if (!c.answers.problem.trim() || !c.answers.did.trim()) return 1;
+  if (!c.answers.numbers.trim()) return 2;
+  return 3;
+}
+/** Where the wizard was left, kept in this browser only (the case study itself is on Merlin). */
+export interface WizResume {
+  caseId: string;
+  step: WizStep;
+}
+export const wizKey = (memberId: string) => `rn-ev-wizard:${memberId}`;
+export function readResume(raw: string | null | undefined): WizResume | null {
+  try {
+    const j = JSON.parse(String(raw ?? "")) as Partial<WizResume>;
+    if (typeof j.caseId !== "string" || !j.caseId || typeof j.step !== "number" || j.step < 0 || j.step > 3) return null;
+    return { caseId: j.caseId, step: j.step as WizStep };
+  } catch {
+    return null;
+  }
+}
+/**
+ * Where to pick up: the case study the wizard was on, while it is still unfinished, at the later
+ * of the step kept and the step its answers say. On a first visit with nothing kept, the newest
+ * unfinished draft. Null when there is nothing to pick up.
+ */
+export function resumeAt(kept: WizResume | null, cases: readonly Study[], first: boolean): WizResume | null {
+  const open = (c: Study) => c.status !== "ready" && !c.review;
+  const c = kept ? cases.find((x) => x.id === kept.caseId) : null;
+  if (c && open(c)) return { caseId: c.id, step: Math.max(kept!.step, stepOf(c)) as WizStep };
+  if (!first) return null;
+  const d = [...cases].filter((x) => open(x) && !!(x.answers.problem || x.answers.did)).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
+  return d ? { caseId: d.id, step: stepOf(d) } : null;
+}
+/** A first visit: no case study is ready yet. */
+export const isFirstVisit = (cases: readonly Study[]) => !cases.some((c) => c.status === "ready");
+
+/* ---------- Build this for me ---------- */
+
+/** Which agent the member connected, by the name it registered (Agent access). Claude on claude.ai and the desktop app opens by a link. */
+export function agentState(apps: readonly { name: string }[]): { claude: boolean; any: boolean; names: string[] } {
+  const names = apps.map((a) => a.name);
+  return { claude: names.some((n) => /claude/i.test(n) && !/claude[\s_-]*code/i.test(n)), any: names.length > 0, names };
 }
 
-export function statusLine(rows: readonly EvRow[], first: boolean, matching: string | null, matchedN: number): string {
-  const own = ownRows(rows);
-  const ready = own.filter(isReady).length;
-  if (matching) return `Match to ${matching} · ${matchedN} of ${own.length} ranked · free`;
-  const used = new Set(own.flatMap((r) => (r.kind === "case" ? r.c.usedIn : []))).size;
-  if (first) return `Private to you. Building a case costs no credits. ${ready} of ${own.length} ready.`;
-  return `Private to you · ${ready} ready, ${plural(own.length - ready, "draft")} · used in ${plural(used, "proposal")}`;
+/**
+ * The prompt the member takes to their own Claude: use its memory and their connected email to
+ * find past client engagements, save each one with Merlin's save_evidence_case, leave marked
+ * blanks where unsure and never invent a number. It asks before it saves. Claude reads the email
+ * in the member's own Claude account: Merlin never sees it.
+ */
+export function buildPrompt(origin: string): string {
+  const page = `${origin.replace(/\/$/, "")}/?p=evidence`;
+  return [
+    "Please build my case studies in Merlin's Evidence Bank. Merlin is connected to you as a connector.",
+    "",
+    "1. Use what you remember about my work, and search my connected email (Gmail or Outlook) for my past client engagements: proposals, statements of work, kickoff and wrap-up notes, results updates, thank-you notes.",
+    "2. For each client, find: the company, my seat or role (like Fractional VP Sales), the start and end month, the problem when I got there, what I did, the result with numbers, how long it took, and a quote from someone there who can vouch for it, with their name and title.",
+    "3. Never invent, round or guess a number, a date, a name or a quote. Where you are not sure, leave a clearly marked blank like [add the result number], [add how long it took] or [add a quote]. Leave a date out rather than guess it.",
+    "4. Show me the list first and ask which ones to save. Then call Merlin's save_evidence_case once per case study, with confirm: true. Put the company in client_name and leave client_named off, so the client's name stays out of my proposals until I choose.",
+    `5. When you're done, tell me how many you saved and which blanks are left, and remind me to review them in Merlin's Evidence Bank (${page}), where each one shows "From Claude · review" until I check it.`,
+  ].join("\n");
 }
+/** Claude with the prompt ready to send (the member presses send there; nothing runs before that). */
+export const claudeLink = (prompt: string) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 
-/** Words for no export, kept here so the test can check the page never offers one. */
-export const NO_EXPORT = /\b(export|download|csv)\b/i;
+/** Words this page never uses: generic AI talk, not how fractionals speak. */
+export const NOT_OUR_WORDS = /\b(insights?|leverag\w*|unlock (your )?potential|artifacts?|entit(y|ies)|synerg\w*|empower\w*|supercharge\w*|seamless\w*)\b/i;
