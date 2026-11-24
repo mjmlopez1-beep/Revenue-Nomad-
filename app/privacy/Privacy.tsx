@@ -46,7 +46,7 @@ const PROCESSORS: { who: string; gets: string }[] = [
   },
 ];
 
-export function PrivacyView({ support }: { support: string | null }) {
+export function PrivacyView({ support, send = false }: { support: string | null; /** Approve and send is on (lib/send sendOn): the extra Google permission is listed. */ send?: boolean }) {
   const parts: Part[] = [
     {
       id: "who",
@@ -214,7 +214,14 @@ export function PrivacyView({ support }: { support: string | null }) {
             <a href={GOOGLE_POLICY_URL}>{LU_LINK}</a>
             {LU_AFTER}
           </p>
-          <p className="cl-p">Connecting Google is optional. Merlin asks for read-only access. It never changes, sends or deletes anything in your Google account.</p>
+          {send ? (
+            <p className="cl-p">
+              Connecting Google is optional. Merlin asks for read-only access, and one more permission only if you use Approve and send. It never changes or deletes anything in
+              your Google account, and it sends an email from your Gmail only when you tap Approve and send on that note in Merlin.
+            </p>
+          ) : (
+            <p className="cl-p">Connecting Google is optional. Merlin asks for read-only access. It never changes, sends or deletes anything in your Google account.</p>
+          )}
           <h3 className="df-h3">What Merlin reads</h3>
           <ul className="df-bullets">
             <li>Your Google account&apos;s email address, so we know which account you connected.</li>
@@ -230,6 +237,27 @@ export function PrivacyView({ support }: { support: string | null }) {
               text of an email or an attachment.
             </li>
           </ul>
+          {send && (
+            <>
+              <h3 className="df-h3" id="send">
+                Sending from your Gmail (Approve and send)
+              </h3>
+              <p className="cl-p">
+                Merlin sends only what you approve, from your own Gmail. The first time you tap Approve and send, Google asks you to let Merlin send email as you
+                (gmail.send). Merlin asks for nothing more at that moment, and you can say no. After that:
+              </p>
+              <ul className="df-bullets">
+                <li>Each note goes only after you tap Approve and send on it in Merlin, signed in, with 30 seconds to undo. An assistant connected to Merlin can put a note in front of you, never send it.</li>
+                <li>Merlin sends the note as you read it, from your Gmail, so it is in your Sent folder. It sends at most 50 a day for you, and only to an address you can see on Merlin, typed yourself, or have in your own contacts.</li>
+                <li>
+                  For a follow-up you schedule, Merlin checks the thread first: only the From line and the time of later messages, to hold it back if someone replied. Never a
+                  subject, a snippet or the text of any email.
+                </li>
+                <li>Merlin keeps who each note went to, when, the company it was about and Gmail&apos;s message id. The note&apos;s text is deleted once it is sent or undone.</li>
+                <li>Stop sending from my Gmail, in Messages, removes the permission here and at Google. Disconnecting Google removes it too.</li>
+              </ul>
+            </>
+          )}
           <p className="cl-p">Merlin reads the past 24 months and the next 30 days of your calendar, and reads again about once a day while you stay connected.</p>
           <h3 className="df-h3">How Merlin uses it</h3>
           <p className="cl-p">

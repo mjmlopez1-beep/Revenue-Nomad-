@@ -186,7 +186,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
 
   const supportHref = support ? mailto(support, "Merlin question") : null;
   // Which switchable features the server has on (signed out only). Until it says, neither is named.
-  const live = { workflows: !!view?.live?.workflows, google: !!view?.live?.google, granola: !!view?.live?.granola };
+  const live = { workflows: !!view?.live?.workflows, google: !!view?.live?.google, granola: !!view?.live?.granola, send: !!view?.live?.send };
 
   return (
     <div className="lp">

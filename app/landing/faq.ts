@@ -33,6 +33,8 @@ export const FAQ_LEAD = [
 export interface FaqLive {
   workflows?: boolean;
   google?: boolean;
+  /** Approve and send (lib/send, RN_SEND): Merlin sends what the member approves, from their own Gmail. */
+  send?: boolean;
 }
 
 /** The questions and answers, with the starter balance the server actually gives. `scanRoleFree`: lib/tableFields SEAT_SCAN_ROLE_FREE. */
@@ -77,7 +79,7 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     live.workflows
       ? [
           "What are workflows?",
-          `Workflows are in Beta. A workflow is an alert that also takes the next step: when this happens, then do this. It can add the company to your pipeline, find your way in, remind you, open the company or who decides there, or draft a note. Before you turn one on you see what each step costs and an estimate for each run, and you can set a monthly limit. Nothing is ever sent for you: a note waits as a draft in Messages. Free has ${wf.free.flows} workflow with the free steps, Pro up to ${wf.pro.flows} with the steps that cost credits, and Close up to ${wf.close.flows}, with proposal triggers and the Evidence Bank step.`,
+          `Workflows are in Beta. A workflow is an alert that also takes the next step: when this happens, then do this. It can add the company to your pipeline, find your way in, remind you, open the company or who decides there, or draft a note. Before you turn one on you see what each step costs and an estimate for each run, and you can set a monthly limit. ${live.send ? "Nothing goes out on its own: a note waits in Messages, and Merlin sends only what you approve, from your own Gmail." : "Nothing is ever sent for you: a note waits as a draft in Messages."} Free has ${wf.free.flows} workflow with the free steps, Pro up to ${wf.pro.flows} with the steps that cost credits, and Close up to ${wf.close.flows}, with proposal triggers and the Evidence Bank step.`,
         ]
       : null,
     [
@@ -87,7 +89,13 @@ export function faqItems(starter: number, intro = false, scanRoleFree = SCAN_ROL
     live.google
       ? [
           "What does Merlin do with my Google account?",
-          "Only what you connect, and only for you. Merlin reads your calendar events without their title, description, location or attachments, and your contacts' names, email addresses, companies and titles, to find who you know at a company. If you add Gmail, only who each email was between and when, never its subject or text. What comes from Google stays on your own screens: it is never shown to another member or an admin, and never added to Merlin. Disconnect and it is deleted. Your connections file and a contacts file work without Google.",
+          `Only what you connect, and only for you. Merlin reads your calendar events without their title, description, location or attachments, and your contacts' names, email addresses, companies and titles, to find who you know at a company. If you add Gmail, only who each email was between and when, never its subject or text. What comes from Google stays on your own screens: it is never shown to another member or an admin, and never added to Merlin. Disconnect and it is deleted. Your connections file and a contacts file work without Google.${live.send ? " If you let Merlin send, it sends only the notes you approve, from your own Gmail, and never reads your email." : ""}`,
+        ]
+      : null,
+    live.send
+      ? [
+          "Does Merlin send email for me?",
+          "Merlin sends only what you approve, from your own Gmail. It drafts each note in your voice. You read it, change any word, and tap Approve and send, and you have 30 seconds to undo it. A follow-up you schedule waits the same way, and Merlin cancels it and tells you if they replied. The first time, Google asks you once to let Merlin send. Merlin never reads your email, and an assistant connected to Merlin can only put a note in front of you, never send it.",
         ]
       : null,
     [
