@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Zone } from "@/lib/paths/rank";
 import { ZONES, betweenWords } from "@/lib/paths/rank";
-import { EXPORT_STEPS, lockedWaysWords, namesOnlyShort, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
+import { EXPORT_STEPS, lockedWaysWords, namesOnlyShort, warmCounts, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
 import { gmailLink } from "@/lib/moveNote";
 import { IconX, TileLogo, useToast } from "../../ui/shared";
 import { useCopy } from "../Credits";
@@ -159,7 +159,9 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
     setSel(id);
     setNote(!!o.note);
   };
-  const counts = ex ? zoneCounts(exRows) : v.countsAll;
+  // One unit everywhere on the page: companies in the list it holds, so the quadrants add up to All (lib/paths/types.ts warmCounts).
+  const wc = warmCounts(rows, ex ? rows.length : v.total);
+  const counts = wc.zones;
   const people = useMemo(() => peopleOf(rows), [rows]);
   const withPath = v.rows.filter((r) => r.best !== null).length;
   // Paths through someone (not a cold note to who decides), and those through fellow fractionals.
@@ -172,10 +174,11 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
     setTimeout(() => document.getElementById("wp-sources")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
   };
   const filters: { k: keyof Filt; label: string; n: number; val?: string }[] = [
-    ...(v.ball && !ex ? [{ k: "ball" as const, label: "Crystal Ball", n: v.ball }] : []),
-    ...(!ex ? v.lists.slice(0, 2).map((l) => ({ k: "list" as const, label: `List: ${l.name}`, n: l.n, val: l.name })) : []),
-    { k: "hiring", label: "Hiring now", n: rows.filter((r) => r.hiringNow).length },
-    { k: "fellow", label: "Through fellow fractionals", n: rows.filter((r) => r.src === "fellow").length },
+    ...(wc.ball && !ex ? [{ k: "ball" as const, label: "Crystal Ball", n: wc.ball }] : []),
+    ...(!ex ? v.lists.filter((l) => wc.lists.get(l.name)).slice(0, 2).map((l) => ({ k: "list" as const, label: `List: ${l.name}`, n: wc.lists.get(l.name)!, val: l.name })) : []),
+    // Companies here with an open role (Hiring now elsewhere counts the roles themselves).
+    { k: "hiring", label: "Companies hiring now", n: wc.hiring },
+    { k: "fellow", label: "Through fellow fractionals", n: wc.fellow },
   ];
 
   const sources = <Sources v={v} first={first} open={src} onOpen={setSrc} onRead={() => void reload()} />;
@@ -213,7 +216,7 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
           {(["all", ...ZONES] as const).map((z) => (
             <button key={z} type="button" className="wp-zbtn" aria-pressed={zone === z} onClick={() => setZone(z)}>
               {z === "all" ? "All" : QUADRANTS[z].title}
-              <strong>{z === "all" ? n(rows.length) : n(counts[z])}</strong>
+              <strong>{z === "all" ? n(wc.all) : n(counts[z])}</strong>
             </button>
           ))}
         </span>
@@ -252,6 +255,11 @@ export function WarmBody({ v, reload, phone, isHidden }: { v: WarmView; reload: 
           </span>
         )}
       </div>
+      {wc.capped && (
+        <p className="wp-note" role="note">
+          Your best {n(wc.all)} of the {n(wc.total)} companies that fit you. All, each quadrant and each filter count these {n(wc.all)}.
+        </p>
+      )}
       {!ex && lockedWaysWords(v.lockedWays) && (
         <p className="wp-note" role="note">
           {lockedWaysWords(v.lockedWays)} Each one names its company and the person once it is open.
@@ -450,7 +458,8 @@ function MapCard({
   modes: { ex: boolean; set: (on: boolean) => void } | null;
 }) {
   const per = zoneCounts(rows);
-  const all = ex ? per : v.countsAll;
+  // The quadrant's companies in the list (the same count as the bar above the map), and how many of them are on the map.
+  const all = ex ? per : warmCounts(v.rows, v.total).zones;
   // A few names on the map: the one picked, then the best few that keep clear of each other.
   const named = new Set<string>();
   if (cur) named.add(cur.id);
@@ -577,7 +586,7 @@ function MapCard({
           : warmest < 35
             ? `Your warmest way in today is ${warmest}%, so even Go now is a cold start. Bring in who you know to warm them up.`
             : `Your warmest way in today is ${warmest}%.`}
-        {rows.length < (ex ? rows.length : v.total) ? ` The map shows the best ${rows.length} across the four quadrants; the list has all ${n(v.total)}.` : ""}
+        {!ex && rows.length < v.rows.length ? ` The map shows the best ${rows.length} across the four quadrants. The list has ${v.rows.length < v.total ? `your best ${n(v.rows.length)} of ${n(v.total)}` : `all ${n(v.total)}`}.` : ""}
       </p>
     </section>
   );
