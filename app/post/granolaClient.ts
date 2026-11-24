@@ -76,13 +76,14 @@ export async function disconnectKey(): Promise<Answer<StatusAnswer>> {
   return r;
 }
 
-export function fetchCalls(by: { company?: string | null; email?: string | null; recent?: boolean }, titles: boolean): Promise<Answer<CallsAnswer>> {
+/** The calls list. `signal` cancels it (the picker's newer question replaces an older one). */
+export function fetchCalls(by: { company?: string | null; email?: string | null; recent?: boolean }, titles: boolean, signal?: AbortSignal): Promise<Answer<CallsAnswer>> {
   const q = new URLSearchParams();
   if (by.company) q.set("company", by.company);
   else if (by.email) q.set("email", by.email);
   else q.set("recent", "1");
   if (titles) q.set("titles", "1");
-  return ask<CallsAnswer>(`calls?${q}`);
+  return ask<CallsAnswer>(`calls?${q}`, signal ? { signal } : undefined);
 }
 
 export function fetchTranscript(noteId: string, titles: boolean): Promise<Answer<GranolaTranscript>> {

@@ -313,7 +313,6 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
             ? (o) => (
                 <GranolaCallPicker
                   companyId={o.companyId}
-                  email={o.signerEmail}
                   companyName={o.companyName}
                   pickedId={o.pickedId}
                   onPick={(c) => o.onPick({ transcript: c.text, attendees: c.attendees.map((a) => ({ name: a.name || undefined, email: a.email || undefined })), noteId: c.noteId, when: c.when })}

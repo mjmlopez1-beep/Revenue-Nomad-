@@ -1,10 +1,13 @@
 /**
  * A small MCP client for Granola's MCP server over Streamable HTTP (JSON-RPC 2.0 by POST; the
  * answer comes back as JSON or as a short event stream): initialize, notifications/initialized,
- * then tools/call. One session per piece of work (a list of calls, one transcript).
+ * then tools/call. A client keeps its session for the next calls (lib/granola/index.ts mcpFor keeps
+ * one per member for a few minutes), and starts a new one when the server says it has ended it.
+ * Calls at once share one initialize.
  *
  * The member's access token goes as a Bearer token. A 401 asks for one renewal (the refresh
- * token) and tries again; a second 401 is the end of the connection (bad_key). Requests share the
+ * token) and tries again, unless another call renewed it meanwhile (then it simply tries again);
+ * a second 401 for the same message is the end of the connection (bad_key). Requests share the
  * key path's pacing (lib/granola/api.ts turn: a burst of 10, 4 a second, per member) and its
  * backoff on 429. Nothing here logs a token, a meeting or an answer: only short codes.
  */
@@ -55,7 +58,7 @@ export class McpClient {
   private protocol = PROTOCOL;
   private ready = false;
   private n = 0;
-  private renewed = false;
+  private starting: Promise<void> | null = null;
 
   /**
    * url: the MCP server. access(): the current access token. renew(): a new one (refresh), or a
@@ -71,14 +74,16 @@ export class McpClient {
   private async send(msg: Rpc): Promise<Record<string, unknown> | null> {
     const wantsReply = msg.id !== undefined;
     let reinit = false;
+    let renewed = false;
     for (let attempt = 0; ; attempt++) {
       await turn(this.pace);
       let r: Response;
+      const token = this.access();
       try {
         r = await fetch(this.url, {
           method: "POST",
           headers: {
-            authorization: `Bearer ${this.access()}`,
+            authorization: `Bearer ${token}`,
             "content-type": "application/json",
             accept: "application/json, text/event-stream",
             ...(this.ready || msg.method === "notifications/initialized" ? { "mcp-protocol-version": this.protocol } : {}),
@@ -96,9 +101,10 @@ export class McpClient {
       }
       if (r.status === 401) {
         await r.body?.cancel().catch(() => {});
-        if (!this.renewed) {
-          this.renewed = true;
-          await this.renew();
+        if (!renewed) {
+          renewed = true;
+          // Another call on this client renewed it while this one was out: try again with that one.
+          if (this.access() === token) await this.renew();
           continue;
         }
         throw new GranolaError("bad_key", 401);
@@ -154,7 +160,7 @@ export class McpClient {
 
   /** tools/call: the answer's text and data. A tool that says it failed comes back with isError. */
   async tool(name: string, args: Record<string, unknown>): Promise<ToolAnswer> {
-    if (!this.ready) await this.init();
+    if (!this.ready) await (this.starting ??= this.init().finally(() => (this.starting = null)));
     const res = await this.send({ jsonrpc: "2.0", id: ++this.n, method: "tools/call", params: { name, arguments: args } });
     const parts = Array.isArray(res?.content) ? (res!.content as { type?: string; text?: unknown }[]) : [];
     const text = parts

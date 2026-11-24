@@ -8,9 +8,11 @@
  * Tokens and the key are sealed at rest and opened only here, right before a request to Granola.
  * They are never logged, never in an answer (only a key's last four characters) and never in the
  * admin export.
- * Nothing Granola returns is stored: calls are read when the member opens the picker and dropped
- * with the answer, a transcript when the member picks a call, for that request alone. A note's
- * title goes to the member only when they asked for titles, and never into a log, an alert or a count.
+ * Nothing Granola returns is stored: calls are read when the member opens the picker and kept in
+ * memory only, for 2 minutes per member and query (never on disk, gone at Disconnect), so opening,
+ * picking and typing don't ask Granola again; a transcript is read when the member picks a call, for
+ * that request alone. A note's title goes to the member only when they asked for titles, and never
+ * into a log, an alert or a count.
  */
 import { randomBytes } from "crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member, type Seed, type State } from "../table";
@@ -163,6 +165,16 @@ function renewFor(memberId: string, connectedAt: string): Promise<string> {
   });
 }
 
+/**
+ * One MCP client per member, kept while it is used (MCP_KEEP_MS since its last use), so a list and
+ * the transcript after it share one session: no initialize before every call. A new connection
+ * (another connectedAt), Disconnect, account closure or any failure starts a new one.
+ */
+const MCP_KEEP_MS = 4 * 60_000;
+type McpSession = { c: McpClient; connectedAt: string; url: string; access: string; used: number };
+const mcpSessions = new Map<string, McpSession>();
+const dropMcp = (memberId: string) => void mcpSessions.delete(memberId);
+
 async function mcpFor(memberId: string, l: GranolaLink): Promise<McpClient> {
   const p = await O.prepared().catch(() => {
     throw new G.GranolaError("unreachable");
@@ -171,16 +183,27 @@ async function mcpFor(memberId: string, l: GranolaLink): Promise<McpClient> {
   if (!access) throw new G.GranolaError("bad_key", 401);
   // Running out within a minute: renewed first.
   if (l.expiresAt && Date.parse(l.expiresAt) - Date.now() < 60_000 && l.refresh) access = await renewFor(memberId, l.connectedAt);
-  return new McpClient(
+  const was = mcpSessions.get(memberId);
+  if (was && was.connectedAt === l.connectedAt && was.url === p.d.mcpUrl && Date.now() - was.used < MCP_KEEP_MS) {
+    // The token on file now (renewed by another request, perhaps), with the session kept.
+    was.access = access;
+    was.used = Date.now();
+    return was.c;
+  }
+  const s = { connectedAt: l.connectedAt, url: p.d.mcpUrl, access, used: Date.now() } as McpSession;
+  s.c = new McpClient(
     p.d.mcpUrl,
-    () => access!,
+    () => s.access,
     async () => {
       if (!l.refresh) throw new G.GranolaError("bad_key", 401);
-      access = await renewFor(memberId, l.connectedAt);
-      return access;
+      s.access = await renewFor(memberId, l.connectedAt);
+      return s.access;
     },
     G.keyId(`oauth:${memberId}`),
   );
+  mcpSessions.set(memberId, s);
+  if (mcpSessions.size > 2000) for (const [k, v] of mcpSessions) if (Date.now() - v.used >= MCP_KEEP_MS) mcpSessions.delete(k);
+  return s.c;
 }
 
 /** A tool's answer, or its error as a GranolaError. */
@@ -200,6 +223,7 @@ async function withLink<T>(memberId: string, work: { key: (key: string) => Promi
     await noteOutcome(memberId, null, l.connectedAt).catch(() => {});
     return out;
   } catch (e) {
+    if (oauth) dropMcp(memberId);
     if (e instanceof GranolaProblem) throw e;
     await noteOutcome(memberId, e, l.connectedAt).catch(() => {});
     console.error(`Granola: a request failed (${e instanceof G.GranolaError ? e.code : "error"}${oauth ? ", sign-in" : ""})`);
@@ -346,6 +370,7 @@ export async function disconnectGranola(token: string | null | undefined, nowMs 
   if (!w) throw new GranolaProblem("You're signed out. Sign in again.", 401, "signed_out");
   const l = linkOf(w.s, w.m.id);
   const ended = l?.via === "oauth" ? await endAtGranola(l) : false;
+  forgetInMemory(w.m.id);
   const s = await T.mutate((d) => {
     delete (d as GState).granola?.[w.m.id];
     return d;
@@ -363,7 +388,15 @@ export async function disconnectGranola(token: string | null | undefined, nowMs 
 export function forgetGranolaIn(s: State, memberId: string): void {
   const l = (s as GState).granola?.[memberId];
   delete (s as GState).granola?.[memberId];
+  forgetInMemory(memberId);
   if (l?.via === "oauth") setTimeout(() => void endAtGranola(l), 0);
+}
+
+/** What Merlin holds in memory for a member's Granola (the kept calls, the MCP session): dropped. */
+function forgetInMemory(memberId: string): void {
+  dropMcp(memberId);
+  kept.delete(memberId);
+  for (const k of [...asking.keys()]) if (k.startsWith(`${memberId}|`)) asking.delete(k);
 }
 
 /* ---------- the calls ---------- */
@@ -420,7 +453,12 @@ async function companyDomain(m: Member, companyId: string): Promise<string> {
  * after its summary is written (today's call may not be there yet). Each candidate note is read
  * once, without its transcript, and checked here against its attendees.
  */
-export async function callsFor(m: Member, a: { companyId?: unknown; email?: unknown; recent?: unknown; titles?: unknown }, nowMs = Date.now()): Promise<CallsAnswer> {
+export async function callsFor(
+  m: Member,
+  a: { companyId?: unknown; email?: unknown; recent?: unknown; titles?: unknown },
+  nowMs = Date.now(),
+  o: { gate?: () => void } = {},
+): Promise<CallsAnswer> {
   if (!granolaOn()) throw new GranolaProblem(W.off, 404, "off");
   let f: Filter;
   const email = low(a.email);
@@ -432,8 +470,53 @@ export async function callsFor(m: Member, a: { companyId?: unknown; email?: unkn
   const titles = a.titles === true || a.titles === "1";
   const fromMs = nowMs - CALL_DAYS * DAY;
   const own = ownOf(m);
-  return withLink(m.id, { key: (key) => callsByKey(key, f, own, titles, fromMs, nowMs), mcp: (c) => callsByMcp(c, f, own, titles, fromMs, nowMs) });
+  const l = linkOf(await loadState(), m.id);
+  // The same question again within 2 minutes, or one already on its way: answered without Granola.
+  const qk = `${l?.connectedAt ?? ""}|${f.kind}:${f.kind === "company" ? f.domain : f.kind === "email" ? f.email : ""}|${titles ? "t" : ""}`;
+  if (l) {
+    const hit = kept.get(m.id)?.get(qk);
+    if (hit && nowMs - hit.at < CALLS_KEEP_MS && nowMs >= hit.at - 60_000) return copyOf(hit.a);
+    const going = asking.get(`${m.id}|${qk}`);
+    if (going) return going.then(copyOf);
+  }
+  // Only a question that goes to Granola counts against the member's limit (the route's gate).
+  o.gate?.();
+  const run = withLink(m.id, { key: (key) => callsByKey(key, f, own, titles, fromMs, nowMs), mcp: (c) => callsByMcp(c, f, own, titles, fromMs, nowMs) }).then((ans) => {
+    if (l && asking.has(`${m.id}|${qk}`)) keep(m.id, qk, nowMs, ans);
+    return ans;
+  });
+  if (!l) return run;
+  const k = `${m.id}|${qk}`;
+  asking.set(k, run);
+  void run.catch(() => {}).finally(() => asking.get(k) === run && asking.delete(k));
+  return run.then(copyOf);
 }
+
+/* ---------- the calls kept a moment: in memory only, per member and query ---------- */
+
+const CALLS_KEEP_MS = 2 * 60_000;
+const KEPT_PER_MEMBER = 20;
+const kept = new Map<string, Map<string, { at: number; a: CallsAnswer }>>();
+const asking = new Map<string, Promise<CallsAnswer>>();
+const copyOf = (a: CallsAnswer): CallsAnswer => ({ ...a, calls: a.calls.map((c) => ({ ...c, with: c.with.slice() })) });
+function keep(memberId: string, qk: string, at: number, a: CallsAnswer): void {
+  let mine = kept.get(memberId);
+  if (!mine) {
+    if (kept.size >= 2000) kept.delete(kept.keys().next().value!);
+    kept.set(memberId, (mine = new Map()));
+  }
+  mine.delete(qk);
+  mine.set(qk, { at, a: copyOf(a) });
+  while (mine.size > KEPT_PER_MEMBER) mine.delete(mine.keys().next().value!);
+}
+/** For the checks (scripts/test-granola.mts, test-call-picker.mts): forget every kept list, or one member's. */
+export const _callsKept = {
+  clear(memberId?: string) {
+    if (memberId) forgetInMemory(memberId);
+    else (kept.clear(), asking.clear(), mcpSessions.clear());
+  },
+  size: (memberId: string) => kept.get(memberId)?.size ?? 0,
+};
 
 /** By key (Granola's REST API): the search by domain or email, the newest notes, each read once without its transcript. */
 async function callsByKey(key: string, f: Filter, own: Set<string>, titles: boolean, fromMs: number, nowMs: number): Promise<CallsAnswer> {
@@ -442,18 +525,22 @@ async function callsByKey(key: string, f: Filter, own: Set<string>, titles: bool
   if (f.kind === "recent") add((await G.listNotes(key, { createdAfterMs: fromMs })).notes);
   else {
     const participant = f.kind === "email" ? f.email : f.domain;
-    try {
-      let page = await G.searchNotes(key, { participant, fromMs });
-      add(page.notes);
-      if (page.cursor) {
-        page = await G.searchNotes(key, { participant, fromMs, cursor: page.cursor });
-        add(page.notes);
+    const search = async (): Promise<G.NoteRef[]> => {
+      try {
+        const page = await G.searchNotes(key, { participant, fromMs });
+        // A full first page is enough to fill the list: no second round trip.
+        if (!page.cursor || page.notes.length >= CALLS_MAX) return page.notes;
+        return [...page.notes, ...(await G.searchNotes(key, { participant, fromMs, cursor: page.cursor })).notes];
+      } catch (e) {
+        // A search Granola won't run (an odd domain): the newest notes alone still answer.
+        if (!(e instanceof G.GranolaError) || e.code !== "invalid") throw e;
+        return [];
       }
-    } catch (e) {
-      // A search Granola won't run (an odd domain): the newest notes alone still answer.
-      if (!(e instanceof G.GranolaError) || e.code !== "invalid") throw e;
-    }
-    add((await G.listNotes(key, { createdAfterMs: nowMs - 2 * DAY })).notes);
+    };
+    // The search and the newest notes at once (two round trips side by side, not one after the other).
+    const [found, latest] = await Promise.all([search(), G.listNotes(key, { createdAfterMs: nowMs - 2 * DAY })]);
+    add(found);
+    add(latest.notes);
   }
   const newest = [...refs.values()]
     .map((r) => ({ r, at: Date.parse(r.meeting_at ?? r.created_at ?? "") || 0 }))
@@ -525,9 +612,9 @@ async function callsByMcp(c: McpClient, f: Filter, own: Set<string>, titles: boo
 }
 
 /** GET calls (the picker): the signed-in member's calls. */
-export async function granolaCalls(token: string | null | undefined, a: Parameters<typeof callsFor>[1], nowMs = Date.now()): Promise<CallsAnswer> {
+export async function granolaCalls(token: string | null | undefined, a: Parameters<typeof callsFor>[1], nowMs = Date.now(), o: Parameters<typeof callsFor>[3] = {}): Promise<CallsAnswer> {
   const w = await signedIn(token);
-  return callsFor(w.m, a, nowMs);
+  return callsFor(w.m, a, nowMs, o);
 }
 
 /* ---------- calls that ended, for the "A call ends" trigger (lib/calls) ---------- */
