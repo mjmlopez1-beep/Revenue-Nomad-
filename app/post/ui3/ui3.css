@@ -439,3 +439,19 @@
 /* the new design's headings take its ink and its fonts, whatever the current look sets for h1 to h4 */
 :where(.ui3) .u3 :where(h1, h2, h3, h4) { color: inherit; font-family: inherit; font-weight: 600; letter-spacing: inherit; }
 .ui3 .u3-acts .tp-credits * { color: inherit; }
+
+/* ---------- phones: a compact title band on every page, so the data starts on the first screen ---------- */
+@media (max-width: 760px) {
+  .ui3 .m-band, .ui3 .w3 .m-band { min-height: 0 !important; padding: 10px 0 12px; gap: 6px; }
+  .ui3 .m-band .m-band-art, .ui3 .w3 .m-band .m-band-art, .ui3 .w3 .pl-band .m-band-art, .ui3 .w3 .ex-band .m-band-art { position: absolute !important; right: -6px; top: 4px; bottom: auto; width: 88px !important; height: 44px !important; margin: 0; order: 0; opacity: .9; }
+  .ui3 .m-band > .m-display, .ui3 .m-band > h1, .ui3 .m-band > .m-eyebrow { padding-right: 80px; }
+  .ui3 .m-band .m-lede { font-size: 15.5px; }
+  .ui3 .m-band .m-sub { font-size: 15px; }
+  .ui3 .m-h1 { font-size: 32px; }
+  /* Target Companies' three questions: short cards, no art. */
+  .ui3 .m-qcard { width: 74%; min-height: 0; padding: 14px 16px; gap: 4px; }
+  .ui3 .m-qcard > .m-qart, .ui3 .m-qcard > svg.m-qi { display: none; }
+  .ui3 .m-qcard > :not(.m-qart):not(.m-go) { max-width: calc(100% - 44px); }
+  .ui3 .m-qcard .m-go { right: 10px; bottom: 10px; }
+  .ui3 .u3p .m-qcard h3 { font-size: 18px; }
+}

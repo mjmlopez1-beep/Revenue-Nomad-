@@ -694,6 +694,17 @@ function App() {
    * its own button (onDone). A reload from there opens the app.
    */
   const [obHold, setObHold] = useState(false);
+  /**
+   * A reload on set-up's "Your first company" (setupModel.ts PROFILE_SCREEN, 6, kept in this tab's
+   * history): the profile is in, so the member reads as onboarded, but set-up isn't finished. It
+   * stays on screen until its own Finish (acceptance F37: the app used to open without it).
+   */
+  const obResumed = useRef(false);
+  useEffect(() => {
+    if (obResumed.current || !view?.me) return;
+    obResumed.current = true;
+    if (view.me.onboarded && (view.me.ui2 ?? view.ui2) && Number(window.history.state?.ob) === 6) setObHold(true);
+  }, [view]);
   const holdOnboarding = useCallback(() => setObHold(true), []);
   const onSkip = useCallback(() => {
     skipped.current = true;

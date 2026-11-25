@@ -369,11 +369,16 @@ export function renderAlertEmail(d: AlertMailData): { subject: string; text: str
     .filter((g) => g.name && g.lines.length);
   const n = groups.reduce((a, g) => a + g.lines.length, 0);
   const when = d.every === "daily" ? "this morning" : d.every === "weekly" ? "this week" : "just now";
-  const subject = n === 1 || (d.oneRun && groups.length === 1) ? groups[0].lines[0].text : `${n} alerts ${when}: ${groups.map((g) => g.name).slice(0, 2).join(", ")}${groups.length > 2 ? " and more" : ""}`;
+  // One workflow run: a short subject, the first clause of what happened and the workflow's name ("A note waits for your tap · Be first in the door").
+  const runSubject = d.oneRun && groups.length === 1 ? `${groups[0].lines[0].text.split(/[:.](?:\s|$)/)[0].trim()} · ${groups[0].name}` : null;
+  const subject = runSubject ?? (n === 1 ? groups[0].lines[0].text : `${n} alerts ${when}: ${groups.map((g) => g.name).slice(0, 2).join(", ")}${groups.length > 2 ? " and more" : ""}`);
   const alertsUrl = link(d.alertsUrl);
   const unsubscribeUrl = link(d.unsubscribeUrl);
   const footerNote = footerLine();
-  const why = "You get this because an alert of yours is on. Each alert has its own link to turn it off, and every alert is in Alerts and workflows.";
+  // A workflow's email speaks of the workflow, in the new names (Workflows, in-app notifications).
+  const why = d.oneRun ? "You get this because one of your workflows is on. Pause it, or choose in-app notifications only, in Workflows." : "You get this because an alert of yours is on. Each alert has its own link to turn it off, and every alert is in Alerts and workflows.";
+  const pageName = d.oneRun ? "Workflows" : "Alerts and workflows";
+  const offWords = d.oneRun ? "Pause this workflow" : "Turn this alert off";
   const text = [
     `Hi ${first},`,
     "",
@@ -381,12 +386,12 @@ export function renderAlertEmail(d: AlertMailData): { subject: string; text: str
       g.name,
       ...g.lines.slice(0, ALERT_MAIL_LINES).flatMap((l) => [`  ${l.text}`, ...(l.url ? [`  ${l.url}`] : [])]),
       ...(g.lines.length > ALERT_MAIL_LINES ? [`  And ${g.lines.length - ALERT_MAIL_LINES} more in Merlin.`] : []),
-      ...(g.offUrl ? [`  Turn this alert off: ${g.offUrl}`] : []),
+      ...(g.offUrl ? [`  ${offWords}: ${g.offUrl}`] : []),
       "",
     ]),
     "--",
     why,
-    ...(alertsUrl ? ["Alerts and workflows", alertsUrl] : []),
+    ...(alertsUrl ? [pageName, alertsUrl] : []),
     ...(footerNote ? [footerNote] : []),
   ].join("\n");
   const blocks = groups
@@ -401,7 +406,7 @@ export function renderAlertEmail(d: AlertMailData): { subject: string; text: str
         )
         .join("\n");
       const more = g.lines.length > ALERT_MAIL_LINES ? mailP(esc(`And ${g.lines.length - ALERT_MAIL_LINES} more in Merlin.`)) : "";
-      const off = g.offUrl ? `<p style="margin:0 0 24px;font-family:${MAIL.font};font-size:13px;line-height:20px;color:${MAIL.muted}"><a href="${esc(g.offUrl)}" style="color:${MAIL.muted};text-decoration:underline">Turn this alert off</a></p>` : "";
+      const off = g.offUrl ? `<p style="margin:0 0 24px;font-family:${MAIL.font};font-size:13px;line-height:20px;color:${MAIL.muted}"><a href="${esc(g.offUrl)}" style="color:${MAIL.muted};text-decoration:underline">${offWords}</a></p>` : "";
       return `<p class="cb-muted" style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${esc(g.name)}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;border-bottom:1px solid ${MAIL.line}">
 ${rows}
@@ -409,14 +414,14 @@ ${rows}
 ${more}${off}`;
     })
     .join("\n");
-  const body = [mailP(`Hi ${esc(first)},`), blocks, alertsUrl ? mailButton(alertsUrl, "Open your alerts", "margin:8px 0 0", "outline") : ""].filter(Boolean).join("\n");
+  const body = [mailP(`Hi ${esc(first)},`), blocks, alertsUrl ? mailButton(alertsUrl, d.oneRun ? "Open Workflows" : "Open your alerts", "margin:8px 0 0", "outline") : ""].filter(Boolean).join("\n");
   const html = mailShell({
     title: subject,
     art: "week",
     link: d.appUrl || alertsUrl,
     preheader: oneLine(groups.map((g) => `${g.name}: ${g.lines[0]?.text ?? ""}`).join(" · ")).slice(0, 180),
     body,
-    footer: [esc(why), [alertsUrl ? mailFootLink(alertsUrl, "Alerts and workflows") : "", unsubscribeUrl ? mailFootLink(unsubscribeUrl, "Unsubscribe") : ""].filter(Boolean).join(" · "), footerNote ? esc(footerNote) : ""],
+    footer: [esc(why), [alertsUrl ? mailFootLink(alertsUrl, pageName) : "", unsubscribeUrl ? mailFootLink(unsubscribeUrl, "Unsubscribe") : ""].filter(Boolean).join(" · "), footerNote ? esc(footerNote) : ""],
   });
   return { subject: oneLine(subject).slice(0, 160), text, html };
 }

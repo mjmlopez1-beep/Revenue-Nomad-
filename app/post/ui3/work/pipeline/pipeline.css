@@ -27,3 +27,4 @@
 .ui3 .w3 .pl-card .pl-cohead { align-items: flex-start; }
 .ui3 .w3 .pl-card .pl-cohead .m-logo { margin-top: 1px; }
 .ui3 .w3 .pl-card .pl-coname { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
+.ui3 .w3 .pl-metric .pl3-terms { display: block; margin-top: 4px; font-size: 13px; }

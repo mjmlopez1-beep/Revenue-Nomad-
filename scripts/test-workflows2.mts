@@ -476,6 +476,23 @@ async function main() {
   const ta = await route("POST", { op: "answer", run: trun.id, yes: true });
   check("approving a test sends nothing", ta.status === 200 && /Nothing was sent/.test(String(ta.j.message)) && ob().length === before.ob && outbox.length === before.mail, ta.j);
 
+  /* ---------- steps run in drawn order (acceptance F3) ---------- */
+  console.log("\nDrawn order");
+  // Webhook > Match to a company > Open the company: the match runs first, so there is a company to open.
+  const oId = await mk(
+    "Match, then open",
+    [N("t", "trig.webhook"), N("mt", "find.match", { from: "Website" }), N("op", "find.open"), N("me", "notify.me", { text: "Opened {Company line}" })],
+    [E("t", "mt"), E("mt", "op"), E("op", "me")],
+  );
+  const oKey = decodeURIComponent(String(((await route("GET", undefined, `?id=${oId}`)).j as { hook?: string }).hook ?? "").split("hook=")[1] ?? "");
+  await route("POST", { Website: "https://larkspur.example" }, `?hook=${encodeURIComponent(oKey)}`, { token: null, origin: null });
+  await settle();
+  const orun = (await lastRun("mem_c", oId))!;
+  const oAt = (id: string) => orun.nodes.findIndex((x) => x.node === id);
+  check("a paid step after Match to a company runs after it: the match first, then the open", oAt("mt") >= 0 && oAt("mt") < oAt("op") && orun.nodes[oAt("mt")].status === "done", orun.nodes.map((x) => [x.node, x.status, x.note]));
+  check("…so the open finds the company and opens it (never \"Nothing to open\")", orun.nodes[oAt("op")]?.status === "done" && !/Nothing to open/.test(orun.nodes[oAt("op")]?.note ?? "") && orun.item.Company === "Larkspur Learning" && orun.spent > 0, orun.nodes.map((x) => [x.node, x.status, x.note]));
+  check("…and the step after it sees the opened company", orun.nodes[oAt("me")]?.status === "done" && ((await st()).inbox?.mem_c ?? []).some((x) => x.line === "Opened Larkspur Learning"), ((await st()).inbox?.mem_c ?? []).map((x) => x.line).slice(0, 3));
+
   /* ---------- Retry from the failed node; three failures turn it off ---------- */
   console.log("\nRetry");
   const fId = await mk("Hook then bell", [N("t", "trig.manual"), N("b1", "notify.bell", { text: "Before the hook" }), N("wh", "notify.webhook", { text: "Hello hook" }), N("b2", "notify.bell", { text: "After the hook" })], [E("t", "b1"), E("b1", "wh"), E("wh", "b2")]);

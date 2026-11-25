@@ -18,7 +18,7 @@ import { timingSafeEqual, randomBytes } from "node:crypto";
 import { loadSeed, loadState, memberByToken, tableInternals as T, type Member } from "../table";
 import * as G from "./graph";
 import { RunAnswer, answerRun, fireOne, graphsOf, monthSpentV2, retryRun, testRun, v2On } from "./graphRun";
-import { planFor, wfIn } from "./run";
+import { planFor, wfIn, workflowsOn } from "./run";
 import { newWfId } from "./steps";
 import { describe } from "./describe";
 import { emailsFrom, v2Of } from "./v2mode";
@@ -71,6 +71,8 @@ export async function list(token: string | null, nowMs = Date.now()) {
   const month = new Date(nowMs - 30 * 86_400_000).toISOString();
   return {
     on: true as const,
+    // Merlin's runner (RN_WORKFLOWS): off, nothing runs or spends, so the page never says Live.
+    running: workflowsOn(),
     plan: gates,
     // What each paid step costs this member now (the new design's Simple mode says it on each step).
     prices,

@@ -34,16 +34,22 @@ const seed = {
     { id: "mem_d", name: "Drew Doe", email: "drew@twins.example", title: "Fractional COO", token: "tok-d-000000001" },
     { id: "mem_e", name: "Drew Doe", email: "drew.e@twins.example", title: "Fractional COO", token: "tok-e-000000001" },
     { id: "mem_t", name: "Tess Trial", email: "tess@trial.example", title: "Fractional COO", token: "tok-t-000000001" },
+    // Pro: every company and who decides open free, so Find their email (1 credit) is the step that spends (acceptance F21).
+    { id: "mem_p", name: "Pat Pro", email: "pat@pro.example", title: "Fractional COO", token: "tok-p-000000001" },
   ],
   companies: [
     { id: "c_north", fields: { name: "Northwind Clinics", website: "northwind.example", industry: "Hospitals and Health Care", employees: "51-200", hq: "Denver, CO" } },
     { id: "c_cedar", fields: { name: "Cedar and Pine", website: "cedarpine.example", industry: "Software Development", employees: "11-50", hq: "Austin, TX" } },
     { id: "c_halcyon", fields: { name: "Halcyon Freight", website: "halcyon.example", industry: "Truck Transportation", employees: "201-500", hq: "Dallas, TX" } },
+    { id: "c_ember", fields: { name: "Ember Analytics", website: "ember.example", industry: "Software Development", employees: "51-200", hq: "Chicago, IL" } },
+    { id: "c_fjord", fields: { name: "Fjord Health", website: "fjord.example", industry: "Hospitals and Health Care", employees: "201-500", hq: "Seattle, WA" } },
   ],
   engagements: [{ id: "e_north_ops", companyId: "c_north", fields: { source: "Published engagement", role: "Fractional COO", function: "Operations", type: "Fractional", start: "2025-01", status: "Active" } }],
   contacts: [
     { id: "p_cedar_ceo", companyId: "c_cedar", fields: { name: "Morgan Hale", title: "CEO", relationship: "Decision maker" } },
     { id: "p_halcyon_coo", companyId: "c_halcyon", fields: { name: "Quinn Rivers", title: "COO", relationship: "Decision maker" } },
+    { id: "p_ember_ceo", companyId: "c_ember", fields: { name: "Rowan Vale", title: "CEO", relationship: "Decision maker", email: "rowan@ember.example" } },
+    { id: "p_fjord_coo", companyId: "c_fjord", fields: { name: "Sage Lind", title: "COO", relationship: "Decision maker", email: "sage@fjord.example" } },
   ],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
@@ -54,10 +60,10 @@ writeFileSync(
     ledger: [],
     values: {},
     unlocks: { "c_north.identity": ["mem_c"] },
-    seen: { mem_c: seen, mem_d: seen, mem_e: seen, mem_t: seen },
-    profiles: { mem_c: { function: "Operations", onboarded: true, ui3: true }, mem_d: { function: "Operations", onboarded: true }, mem_e: { function: "Operations", onboarded: true }, mem_t: { function: "Operations", onboarded: true } },
+    seen: { mem_c: seen, mem_d: seen, mem_e: seen, mem_t: seen, mem_p: seen },
+    profiles: { mem_c: { function: "Operations", onboarded: true, ui3: true }, mem_d: { function: "Operations", onboarded: true }, mem_e: { function: "Operations", onboarded: true }, mem_t: { function: "Operations", onboarded: true }, mem_p: { function: "Operations", onboarded: true, ui3: true } },
     follows: {},
-    connector: { clients: [], grants: [], alerts: Object.fromEntries(["mem_c", "mem_d", "mem_e", "mem_t"].map((m) => [m, [{ id: m === "mem_c" ? "al_casey001" : `al_${m}0001`, name: "Every company", createdAt: seen, place: "v=all&t=companies", alert: { on: false, triggers: ["role"], every: "instant", email: false, slack: false, bell: false } }]])) },
+    connector: { clients: [], grants: [], alerts: Object.fromEntries(["mem_c", "mem_d", "mem_e", "mem_t", "mem_p"].map((m) => [m, [{ id: m === "mem_c" ? "al_casey001" : `al_${m}0001`, name: "Every company", createdAt: seen, place: "v=all&t=companies", alert: { on: false, triggers: ["role"], every: "instant", email: false, slack: false, bell: false } }]])) },
   }),
 );
 Object.assign(process.env, {
@@ -104,6 +110,7 @@ function wordsOf(src: string): string[] {
   return out;
 }
 
+const UI3ID = (id: string) => /^[a-z]_[A-Za-z0-9_-]{4,40}$/.test(id);
 async function main() {
   const t = await import("../lib/table");
   const ui3 = await import("../lib/ui3");
@@ -146,7 +153,7 @@ async function main() {
   const prHome = readFileSync(path.join(ROOT, "app/post/ui3/work/proposals/ProposalsHome.tsx"), "utf8");
   check("Proposals: writing one is Close, said with the plan, never hidden", /data\.canBuild \?/.test(prHome) && /Writing proposals is on Close/.test(prHome) && /data\.canSend &&/.test(prHome));
   const ctPage = readFileSync(path.join(ROOT, "app/post/ui3/work/contracts/ContractsPage.tsx"), "utf8");
-  check("Contracts: sending is Pro and Close, said above the list", /!v\.canSend &&/.test(ctPage));
+  check("Contracts: sending is Close, said above the list", /!v\.canSend &&/.test(ctPage));
 
   /* ---------- Workflows: Simple mode on the real engine ---------- */
   console.log("\nWorkflows, Simple mode");
@@ -270,6 +277,10 @@ async function main() {
   check("new design off: the v2 workflows are all still there, unchanged (not deleted)", JSON.stringify(s2.workflows!.mem_c.graphs!.map((g) => ({ id: g.id, on: g.on, live: !!g.live }))) === JSON.stringify(graphsBefore) && graphsBefore.length > 0);
   check("…and paused: an event runs none of them, on either runner", (await runs()).length === gr1 && !s2.workflows!.mem_c.runs.some((r) => r.at > iso(Date.now() - 5000) && r.wf === id));
   check("…the v2 API is a 404 while it is off", (await routeAs(C, "GET")) === 404);
+  const oldTab = await W.workflowsFor(C);
+  check("…and the current design's Workflows tab says which are paused, and that they carry on when switched back (acceptance F11)", !!oldTab && oldTab.on === true && (oldTab.paused ?? []).length === graphsBefore.length, oldTab && "paused" in oldTab ? oldTab.paused : oldTab);
+  check("…a member with nothing saved in the new design sees no paused line", !("paused" in ((await W.workflowsFor("tok-d-000000001")) ?? {})));
+  check("switching back to the current design warns first when workflows would pause", /backToCurrent = async/.test(tp) && /window\.confirm\(`\$\{n === 1 \? "Your workflow"/.test(readFileSync(path.join(ROOT, "app/post/TradingPost.tsx"), "utf8")));
   const answered = await RUN.approveRun("mem_c", r2.id, true).then((x) => x, (e) => (e as Error).message);
   check("…a run waiting on one holds: answering it is refused, nothing spent", /paused while the new design is off/.test(String(answered)) && (await runs()).reduce((n2, r) => n2 + r.spent, 0) === spentSoFar, answered);
   await T.mutate((d) => {
@@ -315,7 +326,74 @@ async function main() {
   // In this code the trial doesn't charge past its daily opens: it stops opening until tomorrow. A run then spends nothing, says why, and doesn't fail.
   check("past the trial's daily opens nothing is spent: the company steps say the limit, and the run doesn't fail", !!t2 && t2.id !== t1?.id && t2.spent === 0 && /opened 40 companies today/.test(t2.nodes.find((x) => x.node === "s_open")?.note ?? "") && t2.status !== "failed" && t2.nodes.find((x) => x.node === "s_send")?.status === "skipped", t2?.nodes.map((x) => [x.node, x.status, x.note]));
   check("…and nothing counts toward the limit", (await tRuns()).reduce((n2, r) => n2 + r.spent, 0) === 0);
+  /* ---------- Pro: the step that spends, and the monthly limit end to end (acceptance F21) ---------- */
+  console.log("\nPro: Find their email and the monthly limit");
+  await T.mutate((d) => {
+    (d as { billing?: { members: Record<string, unknown> } }).billing!.members.mem_p = { proUntil: iso(Date.now() + 20 * DAY), interval: "month", tier: "pro" };
+  });
+  const PTOK = "tok-p-000000001";
+  const routeP = async (method: "GET" | "POST", body?: unknown, q = "") => {
+    const req = new NextRequest(`${ORIGIN}/api/workflows2${q}`, { method, headers: { cookie: `rn_table=${PTOK}`, ...(method === "POST" ? { "content-type": "application/json", origin: ORIGIN } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+    const res = await (method === "POST" ? R.POST : R.GET)(req as never, undefined as never);
+    return (await res.json().catch(() => ({}))) as Record<string, unknown> & { id?: string; error?: string; run?: import("../lib/workflows/graph").GraphRun };
+  };
+  const proCfg = { ...SM.SIMPLE_DEFAULT, scope: { kind: "list" as const, list: "al_mem_p0001" }, email: true, follow: { ...SM.SIMPLE_DEFAULT.follow, reply: false, followup: false } };
+  check("Simple mode has Find their email: off by default, and a saved workflow without it reads back the same", SM.SIMPLE_DEFAULT.email === false && !SM.compileSimple(SM.SIMPLE_DEFAULT).nodes.some((x) => x.id === "s_email") && SM.parseSimple(SM.compileSimple(SM.SIMPLE_DEFAULT))?.email === false);
+  check("…on, it is a real step after who decides, and reads back on", SM.compileSimple(proCfg).nodes.some((x) => x.id === "s_email" && x.type === "find.email") && SM.parseSimple(SM.compileSimple(proCfg))?.email === true);
+  const pw = await routeP("POST", { op: "save", name: "Email who decides", mode: "simple", cap: 1, version: SM.compileSimple(proCfg) });
+  check("Pro saves a Simple workflow with Find their email and a limit of 1", !!pw.id, pw);
+  const plist = await routeP("GET");
+  const pItem = (plist.workflows as { id: string; ceiling: number }[]).find((x) => x.id === pw.id);
+  const pPrices = plist.prices as { company: number; person: number; detail?: number };
+  check("on Pro only the email costs: the company and who decides are free, the email 1 credit", pPrices.companyFull === 0 && pPrices.person === 0 && pPrices.detail === 1, pPrices);
+  const pOne = (await routeP("GET", undefined, `?id=${pw.id}`)) as { draftCheck?: { ceiling: number } };
+  check("…so the workflow's ceiling is 1 credit a run (the spending panel shows the limit)", pOne.draftCheck?.ceiling === 1 && (pItem?.ceiling ?? 0) === 0, { pOne: pOne.draftCheck, pItem });
+  check("the runner is on: the page may say Live", plist.running === true);
+  await routeP("POST", { op: "live", id: pw.id });
+  await routeP("POST", { op: "on", id: pw.id, on: true });
+  const pEv = (k: string, co: string) => ({ memberId: "mem_p", key: k, trigger: "seat" as const, at: iso(Date.now()), companyId: co, line: "A fractional seat ended", href: "/", lists: ["al_mem_p0001"] });
+  const pRuns = async () => ((await t.loadState()).workflows?.mem_p?.graphRuns ?? []).filter((r) => r.wf === pw.id && !r.test).sort((a, b) => b.at.localeCompare(a.at));
+  const pBal0 = T.balance(await t.loadState(), "mem_p");
+  await W.runEvents([pEv("seat:p1", "c_ember")]);
+  await settle();
+  const p1 = (await pRuns())[0];
+  check("a run under the limit spends the email's 1 credit, and the email is open", !!p1 && p1.spent === 1 && p1.nodes.find((x) => x.node === "s_email")?.status === "done" && pBal0 - T.balance(await t.loadState(), "mem_p") === 1, p1?.nodes.map((x) => [x.node, x.status, x.note, x.credits]));
+  check("…the ledger line carries the workflow's name", (await t.loadState()).ledger.some((l) => l.memberId === "mem_p" && l.wf === "Email who decides" && l.delta === -1));
+  await W.runEvents([pEv("seat:p2", "c_fjord")]);
+  await settle();
+  const p2 = (await pRuns())[0];
+  check("at the limit the next run spends nothing and waits for the member's yes", !!p2 && p2.id !== p1?.id && p2.status === "waiting" && p2.wait?.kind === "cap" && p2.spent === 0 && p2.nodes.find((x) => x.node === "s_email")?.status === "waiting" && pBal0 - T.balance(await t.loadState(), "mem_p") === 1, p2?.nodes.map((x) => [x.node, x.status, x.note]));
+  check("…asked in-app, with the credit a yes would spend", ((await t.loadState()).inbox?.mem_p ?? []).some((b) => b.ask?.run === p2?.id && b.ask.credits === 1));
+  const pYes = await routeP("POST", { op: "answer", run: p2!.id, yes: true });
+  await settle();
+  const p2b = (await pRuns()).find((r) => r.id === p2!.id);
+  check("…yes spends exactly what it asked, and the run carries on", !pYes.error && p2b?.spent === 1 && p2b.nodes.find((x) => x.node === "s_email")?.status === "done" && pBal0 - T.balance(await t.loadState(), "mem_p") === 2, { pYes, nodes: p2b?.nodes.map((x) => [x.node, x.status]) });
+  // RN_WORKFLOWS off (acceptance F2): the page is told nothing runs, so it never says Live.
+  delete process.env.RN_WORKFLOWS;
+  const offList = await routeP("GET");
+  process.env.RN_WORKFLOWS = "1";
+  check("with Merlin's runner off the list says so (running false): the page shows an honest state, not Live", offList.running === false);
+  const wfPage = readFileSync(path.join(ROOT, "app/post/ui3/work/workflows/WorkflowsPage.tsx"), "utf8");
+  check("…and the page's status reads running before it says Live", /: running \? \{ words: "Live"/.test(wfPage) && /list\.running === false &&/.test(wfPage));
+  check("the spending panel shows the monthly limit only when a step can spend", /\{ceiling \? \(\s*<>\s*<div className="wf3-cap">/.test(wfPage));
+  check("workflow copy: in-app notifications, never the bell; never 'up to 0 credits'; the trigger keeps its capital I", !/in the bell|the bell says/.test(wfPage) && /x\.ceiling \? `up to/.test(wfPage) && /TRIG_LABEL\[t\]\.charAt\(0\)\.toLowerCase\(\)/.test(wfPage));
+
   for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) delete process.env[k];
+
+  /* ---------- Saved and Hidden take only real companies (acceptance F36) ---------- */
+  console.log("\nSaved and Hidden");
+  process.env.RN_UI3 = "on";
+  const saveBogus = await t.perform(C, ui3.ui3Action({ ui3Save: { id: "c_nosuchco0001", on: true } })).then(() => "ok", (e) => (e as Error).message);
+  check("Saved refuses a well-formed id that is no company on Merlin", /isn't on Merlin/.test(saveBogus), saveBogus);
+  const hideBogus = await t.perform(C, ui3.ui3Action({ ui3Hide: { id: "c_nosuchco0001", on: true } })).then(() => "ok", (e) => (e as Error).message);
+  check("Hidden refuses it too", /isn't on Merlin/.test(hideBogus), hideBogus);
+  const seatId = T.pubId("e_north_ops");
+  const saveSeat = await t.perform(C, ui3.ui3Action({ ui3Save: { id: seatId, on: true } })).then(() => "ok", (e) => (e as Error).message);
+  check("…and a seat's or a person's id (only a company's own id is kept)", UI3ID(seatId) ? /isn't on Merlin/.test(saveSeat) : true, { seatId, saveSeat });
+  const saveReal = await t.perform(C, ui3.ui3Action({ ui3Save: { id: T.pubId("c_cedar"), on: true } }));
+  check("a real company saves", /Saved/.test(saveReal.message) && ((await t.loadState()).profiles.mem_c as { ui3Saved?: string[] }).ui3Saved?.includes(T.pubId("c_cedar")) === true, saveReal);
+  const takeOut = await t.perform(C, ui3.ui3Action({ ui3Hide: { id: "c_nosuchco0001", on: false } }));
+  check("taking an id out always works (a stale one can go)", /back in your lists/.test(takeOut.message));
 
   /* ---------- the pipeline's money ---------- */
   console.log("\nPipeline money");
@@ -323,10 +401,33 @@ async function main() {
   const m = money.moneyOf([D("reach", 12000), D("sent", 9500), D("replied", 0), D("proposal", 16000), D("proposal", 10500), D("won", 12000, true), D("won", 9000), D("lost", 20000), D("notnow", 5000)]);
   check("open pipeline: every open stage's typed value, a month", m.open === 48000 && m.openN === 5, m);
   check("proposals out: the Proposal stage only, and a part of the open pipeline", m.props === 26500 && m.propsN === 2 && m.props <= m.open, m);
-  check("won: the Won deals' terms; a Won deal without terms counts nothing", m.won === 12000 && m.wonN === 2, m);
-  check("lost and not now count nowhere", m.open + m.won === 60000);
+  check("won: the Won deals' terms, and a Won deal without terms counts the value typed (acceptance F12)", m.won === 21000 && m.wonN === 2, m);
+  check("…and the page asks for the missing terms", m.wonNoTerms === 1 && /Add the terms of your win/.test(readFileSync(path.join(ROOT, "app/post/ui3/work/pipeline/PipelinePage.tsx"), "utf8")), m);
+  check("…a Won deal with no terms and no value counts nothing, never guessed", money.moneyOf([D("won", 0)]).won === 0);
+  check("lost and not now count nowhere", m.open + m.won === 69000);
   check("a deal with no value is counted as such, never guessed", m.openNoValue === 1);
   check("the money words: $96.5k, $26.5k, $12k, $900", money.kMoney(96500) === "$96.5k" && money.kMoney(26500) === "$26.5k" && money.kMoney(12000) === "$12k" && money.kMoney(900) === "$900" && money.kMoney(120000) === "$120k");
+
+  /* ---------- the shell and the record (acceptance F10, F14, F15, F20, F26, F29, F30, F35) ---------- */
+  console.log("\nShell and record");
+  const cur = await import("../app/post/ui3/current");
+  check("a record opened from Crystal Ball sits under Crystal Ball in the nav, from a list under Target Companies (F15)", cur.ui3Current("table", "companies", "all", true, null, "radar") === "radar" && cur.ui3Current("table", "companies", "all", true, null, null) === "companies" && cur.ui3Current("table", "companies", "all", true, null, "getin") === "warm");
+  check("…and the nav reads where it was opened from, over a page included", /drawer \? \(drawer\.over \?\? drawer\.returnTo \?\? null\) : null/.test(tp));
+  const cpage = readFileSync(path.join(ROOT, "app/post/company/CompanyPage.tsx"), "utf8");
+  check("the full record inside the new design draws no header of its own: one breadcrumb, one credits pill, one Add (F15)", /const ui3Head = useUi3Header\(\);/.test(cpage) && /\{ui3Head \? null : \(\s*\n\s*<header className="ws-head co-topbar">/.test(cpage));
+  const H = await import("../app/post/ui3/head");
+  check("the new design says Open: \"Open company · 2 credits\", \"Open all 6\", today's look keeps Unlock (F26)", H.openSay("Unlock company · 2 credits", true) === "Open company · 2 credits" && H.openSay("Unlock all", true) === "Open all" && H.openSay("Unlocking", true) === "Opening" && H.openSay("Unlock company · 2 credits", false) === "Unlock company · 2 credits");
+  const tgt = readFileSync(path.join(ROOT, "app/post/ui3/Targets.tsx"), "utf8");
+  check("a locked row on Target Companies offers Open company through the record's own unlock (it quotes first), never a refused Add to pipeline (F10)", /\) : i\.c\.hidden \? \(/.test(tgt) && /ui\.unlock\(\{ entity: "company", id: i\.c\.id, field: "identity" \}\)/.test(tgt) && /"Open company"/.test(tgt));
+  check("…and no second Locked chip squeezing the name (F29)", !/>\s*Locked\s*<\/Chip>/.test(tgt));
+  const cmp = readFileSync(path.join(ROOT, "app/post/ui3/Company.tsx"), "utf8");
+  check("the record's header says each fact once (F30)", /size && !line\.includes\(size\)/.test(cmp) && /stage && !line\.includes\(stage\)/.test(cmp));
+  const shellCss = readFileSync(path.join(ROOT, "app/post/ui3/shell.css"), "utf8");
+  check("laptops (800 and 768 high): the nav items fit above the account and the art shrinks behind it (F14)", /@media \(max-height: 900px\)[^\n]*\.m-nav-item \{ height: 38px; \}[^\n]*\.m-nav-art \{ height: 150px; \}/.test(shellCss) && /@media \(max-height: 780px\)[^\n]*\.m-nav-item \{ height: 35px; \}/.test(shellCss));
+  const u3css = readFileSync(path.join(ROOT, "app/post/ui3/ui3.css"), "utf8");
+  check("phones: a compact title band on every page, the art a small corner beside the title (F20)", /compact title band on every page/.test(u3css) && /width: 88px !important; height: 44px !important;/.test(u3css));
+  const shared = readFileSync(path.join(ROOT, "app/ui/shared.tsx"), "utf8");
+  check("the design switch says one thing: its toast alone on screen (F35)", /if \(opts\?\.only\) \{/.test(shared) && /toast\(r\.message, false, \{ only: true \}\)/.test(tp));
 
   /* ---------- copy ---------- */
   console.log("\nCopy");

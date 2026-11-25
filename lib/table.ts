@@ -7988,6 +7988,13 @@ export async function perform(
           // The new design (lib/ui3.ts): "Try the new design", and its Saved and Hidden companies.
           {
             const prof3 = s.profiles[me.id] ?? {};
+            // Saved and Hidden take a company's own public id, one that is on Merlin (taking one out takes any id, so a stale one can go).
+            for (const key of ["ui3Save", "ui3Hide"] as const) {
+              const f = (a as { ui3Save?: { id?: unknown; on?: unknown }; ui3Hide?: { id?: unknown; on?: unknown } })[key];
+              if (f?.on !== true || typeof f.id !== "string") continue;
+              const c = companyIndex(g).get(f.id);
+              if (!c || !g.companies.has(c) || pubId(c) !== f.id) throw new ActionError("That company isn't on Merlin. Refresh the page and try again.");
+            }
             const u = ui3Setting(a, prof3, { admin: isAdmin(me), ui2: !!ui2Me(prof3).ui2 });
             if (u && "refused" in u) throw new ActionError(u.refused);
             if (u) {

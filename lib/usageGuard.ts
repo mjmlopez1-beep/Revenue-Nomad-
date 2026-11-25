@@ -11,10 +11,17 @@ import { limited } from "./rateLimit";
 
 export type ReadKind = "table" | "company" | "people" | "mcp";
 
-/** Reads a member makes in any minute before the next waits (the IP limit beside it is 120). */
-export const READS_PER_MINUTE = 90;
-/** Reads in any hour: about one every 4 seconds for the whole hour. A person never gets near it. */
-export const READS_PER_HOUR = 900;
+/**
+ * Reads a member makes in any minute before the next waits (the IP limit beside it is 120). A full
+ * page load in the new design reads 7 or 8 times (the table, Home's moves, the nav's counts, ways in),
+ * so a person opening a page every 4 seconds stays inside it (acceptance F22: 90 tripped at 12 loads).
+ * The member's own state (their bell, their pipeline, their workflows) isn't counted: it opens nothing.
+ */
+export const READS_PER_MINUTE = 120;
+/** Reads in any hour: about one every 2 seconds for the whole hour. A person never gets near it. */
+export const READS_PER_HOUR = 1800;
+/** GET /api/table reads of the member's own state only (nothing a plan opens): not counted toward the limits. */
+export const OWN_READS = ["inbox", "pipeline", "workflows"] as const;
 /** A member past this many reads in a UTC day counts as heavy usage on Health. */
 export const HEAVY_DAY = 1500;
 /** What the member reads when a limit trips. */

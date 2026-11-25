@@ -194,6 +194,14 @@ export function WorkflowsTab({
   );
   return (
     <>
+      {!!v.paused?.length && (
+        <section className="al-soon wf-paused" aria-label="Paused workflows">
+          <h2>{v.paused.length === 1 ? "1 workflow from the new design is paused" : `${v.paused.length} workflows from the new design are paused`}</h2>
+          <p>
+            {v.paused.join(", ")}. {v.paused.length === 1 ? "It is" : "They are"} kept as you left {v.paused.length === 1 ? "it" : "them"}, but nothing runs or spends while you use the current design. Switch back to the new design from your menu and {v.paused.length === 1 ? "it carries" : "they carry"} on where {v.paused.length === 1 ? "it" : "they"} stopped.
+          </p>
+        </section>
+      )}
       {first && gallery}
       <section aria-label="Workflows" className="wf-wrap">
         <div role="table" aria-label="Workflows" className="wf-table">

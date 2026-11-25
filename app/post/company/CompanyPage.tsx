@@ -41,6 +41,7 @@ import { WriteProposal } from "../WriteProposal";
 import { usePipeline } from "../pipelineStore";
 import { ownClick } from "../shell/Rail";
 import type { Crumb } from "../shell/Header";
+import { useUi3Header } from "../ui3/head";
 import { useAppMaybe } from "../shell/pages";
 import { LeadsLine } from "./sections/Leads";
 import { UnlockAll, UnlockCompany } from "./sections/Unlock";
@@ -115,6 +116,8 @@ export function CompanyRecord(props: CompanyRecordProps) {
   const { i, focus, pos, onClose, onStep, crystal, crumbs, first = false, benchmarks, mySeats, contact, actions, bubble, knownOf, startTab, stripOff, onStripOff } = props;
   const ui = useUi();
   const app = useAppMaybe();
+  // The new design's shell (RN_UI3): it draws the one header; this record leaves its own out.
+  const ui3Head = useUi3Header();
   const c = i.c;
   const coarse = useMedia("(hover: none) and (pointer: coarse)");
   const env = recordEnv(i, { touch: coarse, phone: false, contact: contact ?? ui.contact ?? null });
@@ -505,6 +508,8 @@ export function CompanyRecord(props: CompanyRecordProps) {
   return (
     <RecordEnvProvider env={env}>
       <main ref={rootRef} className="tp-main tp-main-page co-page" id="tp-page" aria-label={c.hidden ? "Locked company" : c.name}>
+        {/* Inside the new design (RN_UI3) the shell's top bar and the record's own row already say where it is, with the credits and Add: one header, not two. */}
+        {ui3Head ? null : (
         <header className="ws-head co-topbar">
           {crumbsEl}
           <span className="co-pos">
@@ -521,6 +526,7 @@ export function CompanyRecord(props: CompanyRecordProps) {
           </span>
           {actions}
         </header>
+        )}
         {stripShown && (c.hidden || opened) && (
           <section className={`ws-strip co-strip${opened ? " co-strip-done" : ""}`} aria-label="About this page">
             <span className="ws-strip-t">

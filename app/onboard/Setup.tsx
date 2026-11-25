@@ -148,7 +148,8 @@ export default function Setup({ view, act, onDone, onSkip, viewReady = true, onH
     const before = raw && raw.length && kept && !kept.length ? null : kept;
     const saved = new Set((me.savedViews ?? []).map((v) => v.id));
     const views = Array.isArray(a.views) ? a.views.filter((id) => saved.has(id)) : [];
-    const screen = resumeScreen(entryStep() || a.step || 1, { fn });
+    // A reload on "Your first company" (the profile is in, so the member reads as onboarded): it stays on that screen until Finish (acceptance F37).
+    const screen = me.onboarded && entryStep() === PROFILE_SCREEN ? PROFILE_SCREEN : resumeScreen(entryStep() || a.step || 1, { fn });
     return {
       fn, title, icp, here, before, views, screen,
       clients: Array.isArray(a.clients) ? a.clients.slice(0, 20) : [],

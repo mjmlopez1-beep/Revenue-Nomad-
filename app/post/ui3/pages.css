@@ -422,6 +422,8 @@
 .u3p .tg .m-thead > span:nth-child(2) { overflow: visible; }
 .u3p .tg .m-chips .m-chip { font-size: 12px; padding: 2px 8px; }
 .u3p .tg .m-co small { font-size: 13px; }
+/* A company's facts wrap to a second line instead of cutting mid-figure ("$5M–$20..."). */
+.u3p .tg .m-co small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 .u3p .tg .m-thead > span:nth-child(2) { justify-self: start; }
 
 /* round 6: no clipping at 1280 */

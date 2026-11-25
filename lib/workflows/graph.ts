@@ -79,6 +79,7 @@ export const NODES = {
   // Find and enrich.
   "find.open": { group: "find", name: "Open the company", sub: "Its name, website and open roles, at the price in the app", step: "open", paid: true, plan: "pro", company: true },
   "find.dm": { group: "find", name: "Open who decides", sub: "Their name and title. The company opens first if it is locked", step: "dm", paid: true, plan: "pro", company: true },
+  "find.email": { group: "find", name: "Find their email", sub: "The email of who decides, where a fellow fractional added it. 1 credit on every plan", step: "email", paid: true, plan: "pro", company: true },
   "find.way": { group: "find", name: "Find my way in", sub: "Your ways in there, strongest first", step: "way", company: true },
   "find.profile": { group: "find", name: "Company profile", sub: "Industry, size, revenue, region and its About text, from Merlin's own records", company: true },
   "find.rates": { group: "find", name: "Check my rates", sub: "Rate benchmarks: what fractionals charge in your function", plan: "pro" },
@@ -587,8 +588,9 @@ export function unapprovedSend(g: GraphVersion): GNode | null {
 /** Credits one path spends at most: the company once (Open the company, who decides, a note), who decides' person once. */
 function pathCredits(types: Set<NodeType>, scope: WfScope | null, p: StepPrices): number {
   const company = scope?.kind === "radar" && p.ballFree ? 0 : p.companyFull;
-  const needsCompany = types.has("find.open") || types.has("find.dm") || types.has("ai.draft");
-  return (needsCompany ? company : 0) + (types.has("find.dm") ? p.person : 0);
+  const needsCompany = types.has("find.open") || types.has("find.dm") || types.has("find.email") || types.has("ai.draft");
+  const person = types.has("find.dm") || types.has("find.email") ? p.person : 0;
+  return (needsCompany ? company : 0) + person + (types.has("find.email") ? (p.detail ?? 1) : 0);
 }
 
 /** The most one run can spend: the highest of its paths (at most 500 paths are walked, then every paid node counts). */

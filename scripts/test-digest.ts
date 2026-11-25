@@ -294,6 +294,10 @@ async function main() {
   check("it links to Alerts and workflows, and says why it came", /Alerts and workflows\nhttps:\/\/post\.example\.com\/\?p=alerts/.test(am.text) && /an alert of yours is on/.test(am.text));
   const one = renderAlertEmail({ name: "Jordan", every: "instant", groups: [{ name: "A list", lines: [{ text: "A fractional Sales seat ended at Northwind Clinics", url: "" }], offUrl: "" }], alertsUrl: "", appUrl: "", unsubscribeUrl: "" });
   check("one line: the subject is the line", one.subject === "A fractional Sales seat ended at Northwind Clinics");
+  // A workflow's approval email (acceptance F25): a short subject, and the footer in the new names.
+  const ask = renderAlertEmail({ name: "Jordan", every: "instant", oneRun: true, groups: [{ name: "Be first in the door", lines: [{ text: "A note waits for your tap: Approve and send. It is skipped if you don't answer in 7 days.", url: "https://post.example.com/?p=messages" }, { text: "A fractional seat ended at Northwind Clinics", url: "" }], offUrl: "https://post.example.com/api/table/unsubscribe?m=x&r=alert&a=wf%3Awf_1&s=y" }], alertsUrl: "https://post.example.com/?p=alerts", appUrl: "https://post.example.com", unsubscribeUrl: "https://post.example.com/u" });
+  check("a workflow's email: a short subject, what happened and the workflow", ask.subject === "A note waits for your tap · Be first in the door", ask.subject);
+  check("…its footer speaks of workflows: never 'an alert of yours', never 'Alerts and workflows'", /one of your workflows is on/.test(ask.text) && !/an alert of yours|Alerts and workflows|Turn this alert off/.test(ask.text + ask.html) && /Pause this workflow/.test(ask.html), ask.text);
 
   // "Email me my link" finds a member the way joining does: one Gmail inbox is one account.
   await t.joinMember("Gia Gmail", "gia.mail+post@gmail.com");

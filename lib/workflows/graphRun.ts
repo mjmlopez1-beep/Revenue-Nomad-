@@ -37,7 +37,7 @@ import { loadSeed, loadState, tableInternals as T, type Member, type Seed, type 
 import { emailEnabled, sendEmail } from "../email";
 import { pushInbox, settleAsk } from "../inbox";
 import { CALL_STEPS, WF_LIMITS, creditWords, doneWords, monthOf, oneLineWf, type MemberWorkflows, type RunStep, type WfRun, type WfStepKey, type WfTrigger, type Workflow } from "./types";
-import { companyOpen, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
+import { companyOpen, deciderName, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
 import { capWorkflows, matches, monthSpent, planFor, wfIn, type WfEvent } from "./run";
 import * as G from "./graph";
 import { emailsFrom, v2Any, v2Mode, v2Of } from "./v2mode";
@@ -305,6 +305,10 @@ function segmentFrom(cx: Cx, n: G.GNode): G.GNode[] {
     if (es.length !== 1) break;
     const next = cx.byId.get(es[0].to);
     if (!next || isBoundary(next) || seen.has(next.id) || cx.ver.edges.filter((e) => e.to === next.id).length !== 1 || (cx.run.visits[next.id] ?? 0) >= cx.maxVisits) break;
+    // Steps run in drawn order: a paid step after a new kind of step (Match to a company, Read into
+    // fields...) starts its own stretch, so what that step finds is there before anything is bought.
+    // A stretch of today's steps only (a converted line, Simple mode) runs exactly as before.
+    if (G.info(next.type).paid && out.some((x) => !stepOf(x))) break;
     out.push(next);
     seen.add(next.id);
     cur = next;
@@ -371,7 +375,7 @@ async function segment(cx: Cx, S: G.GNode[]): Promise<"ok" | "discard" | "failed
           for (const x of toBuy) {
             const n = nodeByStep(cx, paid, x.key);
             run.bought.push(n.id);
-            put(cx, n, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : "Opened the company for the note.", q.per[x.key] ?? 0);
+            put(cx, n, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : x.key === "email" ? "Opened their email: it is on the company's page, for you to write from." : "Opened the company for the note.", q.per[x.key] ?? 0);
           }
           await refreshCompany(cx);
         } catch (e) {
@@ -464,7 +468,7 @@ async function freeNodes(cx: Cx, S: G.GNode[], waiting: boolean, again?: Set<str
           locked(n);
           continue;
         }
-        const d = await stepDraft(now.s, m, ev.trigger as WfTrigger, now.name, ev.fn ?? null);
+        const d = await stepDraft(now.s, m, ev.trigger as WfTrigger, now.name, ev.fn ?? null, await deciderName(m, run.event.company));
         run.item["Draft subject"] = oneLineWf(d.subject, 160);
         run.item["Draft body"] = String(d.body).slice(0, WF_LIMITS.body);
         if (cx.test) {

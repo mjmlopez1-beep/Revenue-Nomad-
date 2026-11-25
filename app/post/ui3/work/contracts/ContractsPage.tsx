@@ -164,10 +164,16 @@ export function Ui3Contracts() {
   const title = screen.k === "flow" ? "Send for signature" : screen.k === "detail" ? "Contract" : screen.k === "sent" ? "Sent" : "Contracts";
 
   if (off) {
-    // RN_CONTRACTS2 off: today's Contracts lives in Proposals' send flow. Say where it is.
+    // RN_CONTRACTS2 off: today's Contracts lives in Proposals' send flow. Say where everything is, and what the plan allows.
+    const tier = c.me.plan?.tier ?? "free";
     return (
       <WorkMain group="Work" title="Contracts">
-        <Band density="none" title="Contracts." sub="Send a contract for signature from Proposals." />
+        <Band density="none" title="Contracts." sub="For now, everything you send for signature lives in Proposals: contracts and signed proposals are under Signed or closed there, with each signer, the audit trail and the signed PDF." />
+        {!c.me.plan?.canClose && tier !== "close" && (
+          <Gate title="Sending for signature is on Close" onPlans={() => openPlans("billing")}>
+            {tier === "pro" ? "Pro opens every company. Sending contracts and proposals for signature, with the signed copy and its audit trail, is on Close." : "You can prepare a contract now and send it after you upgrade to Close."}
+          </Gate>
+        )}
         <button type="button" className="m-btn m-btn-primary" onClick={() => c.openPage("proposals")}>
           Open Proposals
         </button>
@@ -241,8 +247,9 @@ export function Ui3Contracts() {
       <>
         <Band density="none" title="Contracts." sub={sub} extra={send} />
         {!v.canSend && (
-          <Gate title="Sending for signature is on Pro and Close" onPlans={() => openPlans("billing")}>
-            You can prepare a contract now and send it after you upgrade.
+          // Sending is Close (lib/proposals/store.ts PRO_SEND; onFree is "not Close"): Free and Pro are told so, by name (F34).
+          <Gate title="Sending for signature is on Close" onPlans={() => openPlans("billing")}>
+            {c.me.plan?.tier === "pro" ? "Pro opens every company. Sending contracts and proposals for signature, with the signed copy and its audit trail, is on Close. You can prepare a contract now." : "You can prepare a contract now and send it after you upgrade to Close."}
           </Gate>
         )}
         {!v.rows.length ? (

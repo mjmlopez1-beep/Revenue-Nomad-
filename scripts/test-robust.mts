@@ -1082,11 +1082,11 @@ else {
 
       // The cap on views.
       const burst = await Promise.all(Array.from({ length: 150 }, () => load("fixtok-2")));
-      // Per-member read limits (lib/usageGuard.ts READS_PER_MINUTE, 90; owner 2026-11-24 with "Pro opens everything": generous for a
+      // Per-member read limits (lib/usageGuard.ts READS_PER_MINUTE, 120 since acceptance F22; owner 2026-11-24 with "Pro opens everything": generous for a
       // person, stops scripted bulk): a burst of 150 from one member is served up to the minute's limit and the rest are asked to wait.
       const served = burst.filter((r) => r.status === 200 && r.me === "fm2").length;
       const waited = burst.filter((r) => r.status === 429 && /That's a lot of requests in a short time/.test(r.error)).length;
-      check(`150 loads from one member at once: up to 90 answer, the rest are told to wait (${served} served, ${waited} told)`, served >= 1 && served <= 90 && served + waited === 150, burst.filter((r) => r.status !== 200 && r.status !== 429).slice(0, 3));
+      check(`150 loads from one member at once: up to 120 answer, the rest are told to wait (${served} served, ${waited} told)`, served >= 1 && served <= 120 && served + waited === 150, burst.filter((r) => r.status !== 200 && r.status !== 429).slice(0, 3));
       const many = await Promise.all(Array.from({ length: BIG - 10 }, (_, i) => load(`fixtok-${i + 10}`)));
       const ok = many.filter((r, i) => r.status === 200 && r.me === `fm${i + 10}`).length;
       const busy = many.filter((r) => r.status === 503);
