@@ -56,6 +56,7 @@ export function usePaths(): { view: PathsView | null; failed: boolean; version: 
   const [s, setS] = useState<Snap>(snap);
   useEffect(() => {
     subs.add(setS);
+    setS(snap);
     if (!snap.answer && !loading) void loadPaths();
     return () => {
       subs.delete(setS);
@@ -150,6 +151,8 @@ export function useKnown(): KnownSnap {
   const [s, setS] = useState<KnownSnap>(ksnap);
   useEffect(() => {
     ksubs.add(setS);
+    // What arrived between the first render and this subscription.
+    setS(ksnap);
     if (!ksnap.known && !kloading && !ksnap.off) void loadKnown();
     return () => {
       ksubs.delete(setS);

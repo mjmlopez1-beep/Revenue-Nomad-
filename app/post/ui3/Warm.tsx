@@ -69,7 +69,12 @@ export function Ui3Warm() {
       </>
     );
 
-  if (!warm.data && !warm.off && !warm.failed) return <Wait line="Finding your warm paths" />;
+  if (!warm.data && !warm.off && !warm.failed)
+    return (
+      <main className="tp-main tp-main-page u3 u3p">
+        <Wait line="Finding your warm paths" />
+      </main>
+    );
 
   const target = route?.nodes[route.nodes.length - 1] ?? null;
   const first = route?.nodes.find((n) => n.role === "person") ?? null;

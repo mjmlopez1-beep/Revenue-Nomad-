@@ -196,7 +196,12 @@ export function Ui3Network() {
   const next = (warm?.rows ?? []).filter((r) => isWarm(r) && !r.locked && r.name).sort((a, b) => Number(b.hiringNow) - Number(a.hiringNow) || (b.best ?? 0) - (a.best ?? 0))[0] ?? null;
   const popP = pop ? people.find((x) => x.p.key === pop.key) ?? null : null;
 
-  if (!k.known && !k.off && !k.failed) return <Wait line="Reading who you know" />;
+  if (!k.known && !k.off && !k.failed)
+    return (
+      <main className="tp-main tp-main-page u3 u3p">
+        <Wait line="Reading who you know" />
+      </main>
+    );
 
   return (
     <main className="tp-main tp-main-page u3 u3p u3-nw" id="tp-page" onClick={() => pop && setPop(null)}>

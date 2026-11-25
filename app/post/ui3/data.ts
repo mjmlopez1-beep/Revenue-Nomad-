@@ -43,6 +43,7 @@ export function useWarmShared(): WarmSnap {
   const [s, setS] = useState(wsnap);
   useEffect(() => {
     wsubs.add(setS);
+    setS(wsnap);
     if (!wsnap.data && !wsnap.off && !wloading) void loadWarm();
     return () => {
       wsubs.delete(setS);
