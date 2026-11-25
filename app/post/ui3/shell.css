@@ -130,3 +130,6 @@ html[data-theme="dark"]:has(.tp-app.ui3) body { background: #0f1412; }
 .ui3 .u3-macts .tp-credits-cap, .ui3 .u3-macts .tp-credits-l { display: none; }
 .ui3 .u3-macts .tp-credits { max-width: 92px; overflow: hidden; }
 @media (max-width: 380px) { .ui3 .m-mtop .m-brand { font-size: 0; gap: 0; } }
+/* a lettered logo tile keeps its light tint in dark mode, so its letters stay readable */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .m-logo > span.logo { background: #e9e2d4 !important; color: #1d2a23 !important; } }
+:root[data-theme="dark"] .ui3 .m-logo > span.logo { background: #e9e2d4 !important; color: #1d2a23 !important; }

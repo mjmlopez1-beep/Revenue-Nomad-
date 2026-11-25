@@ -668,3 +668,13 @@
   .u3p .wp-bar { grid-template-columns: auto minmax(0, 1fr); }
   .u3p .wp-bar .m-toolbar { grid-column: 1 / -1; }
 }
+
+/* class names the current look also uses (network.css .nw-list, .nw-row, .nw-co; warm.css .wp-bar): undo what they set */
+.u3p .nw-list { border: 0; border-radius: 0; background: transparent; overflow: visible; margin: 0; }
+.u3p .nw-list li + li { border-top: 0; }
+.u3p .nw-row { margin-top: 0; }
+.u3p .nw-co { width: auto; padding: 0; }
+.u3p .nw-co:hover { background: none; }
+.u3p .nw-co:focus-visible { outline-offset: 2px; }
+.u3p .wp-bar { flex-wrap: nowrap; padding: 0; border-bottom: 0; }
+@media (max-width: 760px) { .u3p .nw-main .tg-bar { flex-direction: column; align-items: stretch; } .u3p .nw-main .m-tabs { overflow-x: auto; } }

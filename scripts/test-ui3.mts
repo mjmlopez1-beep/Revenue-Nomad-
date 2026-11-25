@@ -194,6 +194,9 @@ async function main() {
   };
   const leaks = sels.flatMap((s) => splitTop(s).map((x) => x.trim())).filter((x) => x && !/(^|\s|:where\()\.ui3\b|^\.ui3|\.u3p\b|\.u3\b|tp-app\.ui3|:has\(\.tp-app\.ui3\)|^:root/.test(x));
   check("every style of the new design is scoped under .ui3 (nothing reaches the current look)", leaks.length === 0, leaks.slice(0, 8));
+  // Class names the current look's CSS also uses: each needs its undo in pages.css (found by building My Network in dark mode).
+  for (const [cls, prop] of [["nw-list", "background: transparent"], ["nw-row", "margin-top: 0"], ["nw-co", "padding: 0"], ["wp-bar", "border-bottom: 0"]] as const)
+    check(`.${cls} (also the current look's) is reset in the new design`, new RegExp(`\\.u3p \\.${cls} \\{[^}]*${prop}`).test(css));
   const pkg = read("package.json");
   check("the fonts are bundled, no Google Fonts link", /@fontsource-variable\/fraunces/.test(pkg) && /@fontsource-variable\/geist"/.test(pkg) && !/fonts\.googleapis/.test(css + shell + read("app/post/ui3/fonts.ts")));
 
