@@ -92,6 +92,8 @@ serve() {
     check_env=(SEED_FILE="$SERVE_SEED")
   fi
   mkdir -p "$TMP/data-$name"
+  # SERVE_STATE=<file>: the server starts on that state (its intel.json) instead of an empty one.
+  if [ -n "${SERVE_STATE:-}" ]; then cp "$SERVE_STATE" "$TMP/data-$name/intel.json"; fi
   env ${seed_env[@]+"${seed_env[@]}"} RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off RN_FREE_COMPANY="${FREE_COMPANY:-off}" \
     RN_SUPPORT_EMAIL="$SUPPORT_EMAIL" RN_INTRO_EMAIL="$INTRO_EMAIL" \
     node node_modules/next/dist/bin/next start -p "$PORT" > "$TMP/$name.server.log" 2>&1 &
@@ -309,6 +311,24 @@ run qafixb env QAFIXB_PORT="$PORT" npx tsx scripts/test-qafixb.mts
 # The QA fixes, batch 6U (scripts/test-qa6u.mts): the plan by name everywhere (Free, Pro, Close, Close trial: billing page, thanks, sidebar, renewal and trial emails, the credit history, the month's credits on a yearly plan), Home's trial card, one balance on the table, Unlock and send asks once, where a claimed seat was found, You've messaged, locked sites as dots; then in Chromium: the record modal at 768 with focus back, onboarding's chips by arrow keys, Fractionals at 768, 44px on touch.
 run qa6u env QA6U_PORT="$PORT" npx tsx scripts/test-qa6u.mts
 # 20 members acting at once on their own server: every answer carries the member's numbers and the table version, no server errors, at most one table a minute each.
+# Journeys end to end in Chromium (scripts/test-journey.mjs), on a made-up seed and a starting state made for them (Free, Pro,
+# Close, Close trial, and Sales, Finance and Marketing personas), with the new design and its work pages on, billing live
+# against a fake Stripe, and email, Gmail and Google against the fakes the script serves on PORT+50: a saved view's alert,
+# a company unlock, an intro approved and sent once, pipeline to proposal to signature to Won, a workflow from a template,
+# the reviewer's routes and personas, every primary page at 337, 779 and 1363 px, the keyboard, and axe-core. Screenshots
+# and accessibility snapshots go to JOURNEY_OUT (default: a temporary folder the suite prints).
+JSEED="${SERVE_SEED:-$TMP/journey-seed.json}"
+[ -n "${SERVE_SEED:-}" ] || node scripts/make-test-seed.mjs "$JSEED" > /dev/null
+node scripts/test-journey.mjs --state "$JSEED" "$TMP/journey-state.json" > /dev/null
+JMOCK=$((PORT + 50))
+SERVE_SEED="$JSEED" SERVE_STATE="$TMP/journey-state.json" JOURNEY_MOCK="$JMOCK" RN_PUBLIC_URL="http://localhost:$PORT" RN_ID_SECRET=journey-id-secret RN_SCHEDULER=0 \
+  RN_UI3=on RN_WORKFLOWS=1 RN_WORKFLOWS_V2=optin RN_PROPOSALS2=1 RN_CONTRACTS2=1 \
+  RN_BILLING=1 STRIPE_SECRET_KEY=sk_test_journey_made_up STRIPE_WEBHOOK_SECRET=whsec_journey_made_up STRIPE_API_URL="http://127.0.0.1:$JMOCK/stripe" \
+  STRIPE_PRICE_MONTH=price_j_m STRIPE_PRICE_YEAR=price_j_y STRIPE_PRICE_CLOSE_MONTH=price_j_cm STRIPE_PRICE_CLOSE_YEAR=price_j_cy STRIPE_PRICE_TOPUP=price_j_top STRIPE_PRICE_AIPACK=price_j_ai \
+  RESEND_API_KEY=re_journey_made_up RN_EMAIL_FROM="Merlin <post@example.com>" RN_EMAIL_API_URL="http://127.0.0.1:$JMOCK/fake-email" \
+  RN_GOOGLE=1 RN_SEND=1 GOOGLE_CLIENT_ID=journey-client.apps.example GOOGLE_CLIENT_SECRET=journey-secret-made-up RN_GOOGLE_API_TEST="http://127.0.0.1:$JMOCK/google" \
+  serve journey node scripts/test-journey.mjs
+
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 
 echo
