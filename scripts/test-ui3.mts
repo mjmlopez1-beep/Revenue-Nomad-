@@ -136,10 +136,22 @@ async function main() {
     await t.perform("tok-adm-ui3", { type: "settings", ui3: true } as never);
     const a2 = await t.buildView("tok-adm-ui3");
     check("optin: Try the new design turns it on, kept on the profile", a2.me!.ui3 === true && Array.isArray(a2.me!.ui3Saved));
-    await t.perform("tok-adm-ui3", { type: "settings", ui3Save: { id: "c_uithree2", on: true } } as never);
-    await t.perform("tok-adm-ui3", { type: "settings", ui3Hide: { id: "c_uithree3", on: true } } as never);
+    // Saved and Hidden take a company's public id as the view gives it (F36: an id that is not on Merlin is refused).
+    const ids = a2.companies.map((c) => c.id);
+    const [saveId, hideId] = [ids[2], ids[3]];
+    check("the view gives the fixture companies' public ids", ids.length === companies.length && !!saveId && !!hideId && !ids.includes("c_uithree2"), ids);
+    await t.perform("tok-adm-ui3", { type: "settings", ui3Save: { id: saveId, on: true } } as never);
+    await t.perform("tok-adm-ui3", { type: "settings", ui3Hide: { id: hideId, on: true } } as never);
     const a3 = await t.buildView("tok-adm-ui3");
-    check("Saved and Hidden come back on Me", a3.me!.ui3Saved!.join() === "c_uithree2" && a3.me!.ui3Hidden!.join() === "c_uithree3");
+    check("Saved and Hidden come back on Me", a3.me!.ui3Saved!.join() === saveId && a3.me!.ui3Hidden!.join() === hideId, [a3.me!.ui3Saved, a3.me!.ui3Hidden]);
+    for (const bad of ["c_nosuchco999", "c_uithree2", "../etc"]) {
+      const why = await t.perform("tok-adm-ui3", { type: "settings", ui3Save: { id: bad, on: true } } as never).then(() => null, (e: Error) => e.message);
+      check(`Save of a company that isn't on Merlin (${bad}) is refused in plain words`, why === "That company isn't on Merlin. Refresh the page and try again.", why);
+    }
+    const a3b = await t.buildView("tok-adm-ui3");
+    check("...and nothing was kept", a3b.me!.ui3Saved!.join() === saveId);
+    const out = await t.perform("tok-adm-ui3", { type: "settings", ui3Save: { id: "c_nosuchco999", on: false } } as never).then(() => null, (e: Error) => e.message);
+    check("taking out an id that is not on Merlin is allowed (a stale one can go)", out === null, out);
     process.env.RN_UI3 = "on";
     const m2 = await t.buildView("tok-mem-ui3");
     check("on: everyone, and no switch", m2.me!.ui3 === true && m2.me!.ui3Optin === undefined);

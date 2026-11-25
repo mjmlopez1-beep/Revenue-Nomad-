@@ -266,7 +266,8 @@ async function main() {
   console.log("\nWhere it draws");
   const pages = src("app/post/shell/pages.tsx");
   check("the registry has the company page (company2), drawing its own header and strip", /company2: \{ title: "Company", component: CompanyP, ownHeader: true, ownStrip: true \}/.test(pages) && /record\?: RecordCtx \| null;/.test(pages));
-  check("the app draws it in the new look on wider screens only, in place of the list, and the drawer otherwise", /const recordPage = ui2 && !phone && !!drawer && !!drawerInfo && page === "table"/.test(tp) && /\{RecordPage \? \(\s*<RecordPage \/>/.test(tp) && /page === "table" && !RecordPage && \(\s*<Drawer/.test(tp));
+  // The new look draws it as a page on wider screens; the new design (ui3) on phones too (its company view). Elsewhere the drawer.
+  check("the app draws it in the new look on wider screens (and in the new design on phones too), in place of the list, and the drawer otherwise", /const recordPage = ui2 && \(!phone \|\| ui3\) && !!drawer && !!drawerInfo && page === "table"/.test(tp) && /\? \(\s*<Ui3Frame part="page" page=\{ui3Page\} \/>\s*\) : RecordPage \? \(\s*<RecordPage \/>/.test(tp) && /page === "table" && !RecordPage && \(\s*<Drawer/.test(tp));
   check("old /?c= addresses open it: the record is the same state (drawer, ?c=) either way", /c: recordOpen \? drawer!\.id : null/.test(tp) && /place0\.c && !place0\.p/.test(tp));
   const drawer = src("app/post/Drawer.tsx");
   check("the drawer draws the same sections, from company/sections/", /from "\.\/company\/sections\/Record"/.test(drawer) && /<SeatsSection i=\{i\} focus=\{focus\} \/>/.test(drawer) && /<PeopleSection key=\{c\.id\} i=\{i\} \/>/.test(drawer) && drawer.split("\n").length < 700);
