@@ -15,6 +15,9 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { useApp } from "../shell/pages";
+import { useUi } from "../ui";
+import { freeCompanyNow } from "../display";
+import { COMPANY_PRICE } from "@/lib/tableFields";
 import { useToast } from "../../ui/shared";
 import { ui3Action } from "@/lib/ui3";
 import { useUi3Head } from "./head";
@@ -279,6 +282,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
 
 function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols: string; radar: import("@/lib/radar/types").RadarRow | null; fn: string | null; onPipe: () => void; onHide: () => void; busy: boolean }) {
   const c = useApp();
+  const ui = useUi();
   const acts = useCoActs();
   const i = r.i;
   const name = coName(i);
@@ -307,12 +311,8 @@ function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols:
         <CoLogo i={i} s={42} />
         <div>
           <span className="m-name">
-            <span>{name}</span>
-            {i.c.hidden && (
-              <Chip kind="soft" sm icon="lock" title="Locked. The record says what opens it and what it costs.">
-                Locked
-              </Chip>
-            )}
+            {/* A locked company says so in its name and its lock: no second "Locked" chip to squeeze the name (F29). */}
+            <span title={i.c.hidden ? "Locked. Open it to see its name, website and job postings." : undefined}>{name}</span>
           </span>
           <small>{coLine(i)}</small>
         </div>
@@ -376,6 +376,11 @@ function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols:
             <Ic n="check" />
             In pipeline
           </span>
+        ) : i.c.hidden ? (
+          // A locked company opens first (F10): the record's own unlock, which quotes and asks before it spends.
+          <button type="button" className="m-btn m-btn-secondary" title={freeCompanyNow(c.me) ? "Opens free today: its name, website and job postings." : `${COMPANY_PRICE} credits: its name, website and job postings. Merlin asks before it spends.`} aria-label={freeCompanyNow(c.me) ? `Open ${name} free` : `Open company, ${COMPANY_PRICE} credits`} onClick={() => void ui.unlock({ entity: "company", id: i.c.id, field: "identity" })}>
+            {freeCompanyNow(c.me) ? "Open free" : "Open company"}
+          </button>
         ) : (
           <button type="button" className="m-btn m-btn-primary" disabled={busy} aria-busy={busy} onClick={onPipe}>
             Add to pipeline

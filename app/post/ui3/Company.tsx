@@ -152,7 +152,9 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
   const ask = () => (setWarmFocus(id, true), c.openPage("warm"));
   const size = shown(i.c.cells.employees);
   const stage = shown(i.c.cells.revenue);
-  const sub = [coLine(i), size ? `${size} people` : null, stage].filter(Boolean).join(" · ");
+  // Each fact once (F30): a locked company's line already carries its size and revenue.
+  const line = coLine(i);
+  const sub = [line, size && !line.includes(size) ? `${size} people` : null, stage && !line.includes(stage) ? stage : null].filter(Boolean).join(" · ");
 
   if (!fit) return <Wait />;
   return (
