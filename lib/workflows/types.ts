@@ -139,6 +139,8 @@ export interface WfDraft {
   body: string;
   /** What it is: a note (the default), a call's follow-up email, a call's deck outline. */
   kind?: "note" | "followup" | "deck";
+  /** A workflow v2 step's draft: its run, step and visit, so a second pass of the same step keeps one draft. */
+  key?: string;
 }
 /**
  * What a call run prepared for the member's own Claude (get_call_pack): the call's derived summary
@@ -181,11 +183,13 @@ export interface MemberWorkflows {
   /** Workflows v2 (RN_WORKFLOWS_V2, lib/workflows/graph.ts): the graphs the member saved, and their runs (the last V2_LIMITS.runsKept a workflow). */
   graphs?: import("./graph").GraphWorkflow[];
   graphRuns?: import("./graph").GraphRun[];
+  /** Workflows v2: the notifications already given ("<what>:<run>:<node>:<visit>"), newest last, so a second pass of a step never tells the member twice. */
+  notified?: string[];
 }
 export type WorkflowsState = Record<string, MemberWorkflows>;
 
 /** What the state keeps per member (capped on every write). */
-export const WF_LIMITS = { flows: 25, runs: 200, reminders: 100, drafts: 50, keys: 2000, name: 140, line: 240, note: 200, body: 2000, runDays: 90, runsPerDay: 25, packs: 50, packDays: 30, seen: 500, pack: 600 } as const;
+export const WF_LIMITS = { flows: 25, runs: 200, reminders: 100, drafts: 50, keys: 2000, name: 140, line: 240, note: 200, body: 2000, runDays: 90, runsPerDay: 25, packs: 50, packDays: 30, seen: 500, pack: 600, notified: 1000 } as const;
 /** The most a cap or a warning can be: a month's Pro credits and then some. */
 export const WF_CAP_MAX = 500;
 export const REMIND_DAYS = { min: 1, max: 30, default: 2 } as const;

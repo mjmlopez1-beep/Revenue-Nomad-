@@ -141,6 +141,7 @@ export const WORDS = {
   hidden: "Merlin can't send to that person. Send from your own mail if you know them.",
   replied: (first: string) => `${first} replied, so Merlin didn't send your follow-up.`,
   agentOnly: "Merlin sends only after you approve it here. An agent can queue a note for you, never send one.",
+  expired: "This note waited too long for your tap, so it expired. Nothing was sent.",
 } as const;
 
 export const firstOf = (name: string | null | undefined, email?: string | null) => {

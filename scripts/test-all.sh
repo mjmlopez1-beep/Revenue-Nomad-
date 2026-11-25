@@ -241,6 +241,8 @@ run workflows npx tsx scripts/test-workflows.mts
 run call-triggers npx tsx scripts/test-call-triggers.mts
 # Workflows v2 (RN_WORKFLOWS_V2, lib/workflows/graph.ts, graphRun.ts, v2.ts): off is a 404 and today's engine as before; every recipe converts losslessly and runs with the same results; save refuses a send without a tap and a second trigger; the credit quote, the cap and the daily limit; branches; Ask me and Approve, then send; Retry; test mode; describe-to-build; a wait carried on by a second process. In process, on a made-up seed.
 run workflows2 npx tsx scripts/test-workflows2.mts
+# Workflow approval and outbox safety (lib/workflows/graphRun.ts, lib/send): the waiting state written before the member is told, and told once per run and step (a second pass sends no second email or bell line); one outbox note per key whatever its status; an expired approval refused at the tap itself; waiting runs never trimmed by the run history's limits; with sending off, told of a draft only when there is one; with Merlin's AI off, an AI write step never queues its instruction; nothing sent without the tap under retries and concurrent passes. In process.
+run wfsafe npx tsx scripts/test-wfsafe.mts
 # The new design's Work and Community pages (RN_UI3, app/post/ui3/work): the flag off changes nothing, each page registered, plan gates, Simple workflows on the real engine (the approval, the enforced monthly limit, a test spends and sends nothing), the pipeline money, the copy.
 run ui3work npx tsx scripts/test-ui3-work.mts
 # The invite loop: the inviter told once when a friend joins (app, email, Slack), never the friend's email, and the invitee's onboarding line, on a made-up seed with fetch replaced.
