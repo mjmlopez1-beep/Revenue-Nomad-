@@ -124,6 +124,17 @@ const counts = M.filterCounts(list, ctx);
 check("filter counts: all, unread, intros, leads, questions, teams, peers (with invites), drafts, closed (with blocked)", counts.all === 9 && counts.unread === 1 && counts.intro === 1 && counts.lead === 1 && counts.q === 4 && counts.team === 1 && counts.peer === 2 && counts.draft === 1 && counts.closed === 2, counts);
 check("the search reads names and companies, never a locked company's name", M.matches("halcyon", list[0]) && M.matches("rita", list[0]) && !M.matches("cedar", list[8]) && M.companyWords(list[8]) === "A locked company");
 check("a locked lead reads as its free facts", M.companyWords(list[2], leads.get("cv_lead")) === "A locked Robotics company of 51–200 people");
+// Owner review M1: one read conversation, picked; All, then Unread (0), then Show all.
+{
+  const one = [conv({ id: "cv_only", unread: 0 })];
+  const ids = (f: "all" | "unread") => one.filter((c) => M.inFilter(f, c, ctx) && M.matches("", c)).map((c) => c.id);
+  check("M1: All shows the read conversation, and it is the one drawn", ids("all").join() === "cv_only" && M.pickState("cv_only", ids("all")) === "shown");
+  check("M1: Unread (0) leaves it out: the panel is cleared ('outside'), so no reply can be written to it", ids("unread").length === 0 && M.pickState("cv_only", ids("unread")) === "outside");
+  check("M1: Show all brings the same conversation back (the pick is kept)", M.pickState("cv_only", ids("all")) === "shown");
+  check("M1: nothing picked is 'none', never a guess", M.pickState(null, ids("all")) === "none");
+  check("M1/L1: the empty heading names the filter, never 'no messages'", M.noneHead("Unread", "unread", "") === "No conversations in Unread" && M.noneHead("All", "all", "rita") === "No conversation matches your search" && M.noneHead("Intros", "intro", "x") === "Nothing in Intros matches your search");
+  check("L1: the count read out on a filter change says how many of how many match", M.matchCountLine(0, 1, "Unread", "unread", "") === "0 of 1 conversation in Unread" && M.matchCountLine(1, 1, "All", "all", "") === "1 conversation" && M.matchCountLine(2, 9, "All", "all", "ri") === "2 of 9 conversations in your search");
+}
 check("the list head counts conversations and unread", M.listHead(list) === "9 conversations · 1 unread" && M.listHead([]) === "No conversations yet");
 const lines = list.flatMap((c) => [M.aboutLine(c, M.kindOf(c, ctx), leads.get(c.id)), M.contextLine(c, M.kindOf(c, ctx), leads.get(c.id)), M.rowAbout(c, M.kindOf(c, ctx), leads.get(c.id))]);
 check("every line is plain words, never the hidden placeholder", lines.every(plain) && !lines.some((l) => l.includes(HIDDEN_COMPANY)), lines.filter((l) => !plain(l) || l.includes(HIDDEN_COMPANY)));
@@ -214,6 +225,9 @@ check("the old look keeps its page and its empty state; the new look is drawn on
 check("unlock and send asks once before any credit (askSpend, then unlock asked: true)", /askSpend\(\{ cost, what: spendWhat\(needNow\)/.test(page) && /ui\.unlock\(needNow, \{ asked: true \}\)/.test(page));
 check("drafts live in this browser only, every storage call wrapped", /localStorage\.getItem/.test(src("app/post/messages/drafts.ts")) && (src("app/post/messages/drafts.ts").match(/try \{/g) ?? []).length >= 2 && !/fetch\(/.test(src("app/post/messages/drafts.ts")));
 check("reading a conversation tells the rail and the bell (tellUnread)", /message\.read/.test(page) && /tellUnread\(r\.unread\)/.test(page));
+check("M1: a conversation the filter leaves out is not drawn: no thread and no reply box, a neutral panel with Show all", /const outside = m === "thread" && !!cur && pickState\(cur\.id, shown\.map\(\(c\) => c\.id\)\) === "outside";/.test(page) && /const open = m === "thread" && !outside \? cur : null;/.test(page) && /outside && cur \? \(\s*<section className="ms2-center ms2-outside"/.test(page) && /<h2 id="ms2-outside-h">No conversation open<\/h2>/.test(page));
+check("M1: Show all puts focus back on the picked conversation", /const showAll = \(\) => \{[\s\S]{0,300}\.ms2-row\[aria-current='true'\]/.test(page));
+check("L1: the filtered empty list names the filter, says the conversations are still there, and the count is read out (aria-live)", /data-empty="filtered"[\s\S]{0,200}noneHead\(filterLabel, filter, q\)/.test(page) && /aria-live="polite" aria-atomic="true">\s*\{first \? "" : matchCountLine\(/.test(page));
 check("no export or download anywhere on the page", !/download|export CSV|\.csv/i.test(page));
 
 rmSync(dir, { recursive: true, force: true });

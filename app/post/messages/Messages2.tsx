@@ -47,7 +47,7 @@ import { IntroLine } from "../IntroLine";
 import { SEAT_LOCKED_FIRST, readM, rememberOne, send, tellUnread, unlockSendCost, unlockSendPrice, useConversations, when, type Act, type ActAnswer } from "./data";
 import { setDraft, useDrafts } from "./drafts";
 import {
-  EXAMPLE_ROWS, FILTERS, KINDS, aboutLine, closedNote, companyWords, contextLine, filterCounts, inFilter, introsByConversation, isClosed, kindOf, lastLine, leadStatus, leadsByConversation, listHead, matches, rowAbout,
+  EXAMPLE_ROWS, FILTERS, KINDS, aboutLine, matchCountLine, noneHead, pickState, scopeWords, closedNote, companyWords, contextLine, filterCounts, inFilter, introsByConversation, isClosed, kindOf, lastLine, leadStatus, leadsByConversation, listHead, matches, rowAbout,
   type FilterKey, type Kind, type ThreadCtx,
 } from "./model";
 import "../messages.css";
@@ -173,7 +173,20 @@ export function Messages2() {
   useEffect(() => {
     if (!phone && list?.length && !sel && m === "thread") setSel(list[0].id);
   }, [phone, list, sel, m]);
-  const open = m === "thread" ? cur : null;
+  /*
+   * The conversation picked earlier but left out by the filter or the search (Unread with none
+   * unread, say): it is not drawn, and no reply can be written, until the member picks a
+   * conversation or shows all. The pick is kept, so Show all brings it back.
+   */
+  const outside = m === "thread" && !!cur && pickState(cur.id, shown.map((c) => c.id)) === "outside";
+  const open = m === "thread" && !outside ? cur : null;
+  const filterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "All";
+  const showAll = () => {
+    setFilter("all");
+    setQ("");
+    // Focus goes back to the conversation that was picked (or the first one), not to the page.
+    setTimeout(() => (document.querySelector<HTMLElement>(".ms2-list .ms2-row[aria-current='true']") ?? document.querySelector<HTMLElement>(".ms2-list .ms2-row") ?? document.querySelector<HTMLElement>(".ms2-filter"))?.focus(), 30);
+  };
 
   // Opening a conversation with something unread marks it read, and the rail and the bell follow.
   const unread = open?.unread ?? 0;
@@ -423,19 +436,37 @@ export function Messages2() {
             })}
       </ul>
       {!first && !shown.length && (
-        <div className="ms2-none">
-          <span>No conversation matches that. Your conversations are all still here.</span>
-          <button type="button" className="ms2-btn" onClick={() => (setFilter("all"), setQ(""))}>
+        <div className="ms2-none" data-empty="filtered">
+          <strong className="ms2-none-h">{noneHead(filterLabel, filter, q)}</strong>
+          <span>
+            Nothing in {scopeWords(filterLabel, filter, q)} right now. Your {all.length === 1 ? "conversation is" : `${all.length} conversations are`} all still here.
+          </span>
+          <button type="button" className="ms2-btn" onClick={showAll}>
             Show all
           </button>
         </div>
       )}
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {first ? "" : matchCountLine(shown.length, all.length, filterLabel, filter, q)}
+      </p>
       <p className="ms2-list-foot">{first ? "Your own conversations replace the examples as soon as you send one." : "New replies show here without a reload, and by email with a link to the conversation."}</p>
     </section>
   );
 
   const center =
-    m === "thread" && open ? (
+    outside && cur ? (
+      <section className="ms2-center ms2-outside" aria-labelledby="ms2-outside-h" data-outside={cur.id}>
+        <div className="ms2-outside-in">
+          <h2 id="ms2-outside-h">No conversation open</h2>
+          <p>
+            Your conversation with {cur.with.first || cur.with.name} isn&apos;t in {scopeWords(filterLabel, filter, q)}, so it is closed here and nothing can be written from this panel. Pick a conversation from the list, or show all to go back to it.
+          </p>
+          <button type="button" className="ms2-btn" onClick={showAll}>
+            Show all
+          </button>
+        </div>
+      </section>
+    ) : m === "thread" && open ? (
       <ThreadPane
         key={open.id}
         c={open}

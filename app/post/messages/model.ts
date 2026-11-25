@@ -207,3 +207,36 @@ export const EXAMPLE_ROWS: readonly ExampleRow[] = [
   { example: true, reason: "lead", kind: "lead", about: "A fintech company · you referred it", last: "Taking it. Thank you. You earned 5 credits." },
   { example: true, reason: "q", kind: "q", about: "A SaaS company · Fractional CMO", last: "You: What did the CEO care about most in your first 90 days?" },
 ];
+
+/* ---------- a filter that leaves things out (owner review M1, L1) ---------- */
+
+/** What the filter and the search cover, in words: "Unread", "your search", "Unread and your search". */
+export function scopeWords(label: string, f: FilterKey, q: string): string {
+  const searched = !!q.trim();
+  if (!searched) return label;
+  return f === "all" ? "your search" : `${label} and your search`;
+}
+
+/** The heading of a filtered list with no match: it names the filter, so it never reads as an empty inbox. */
+export function noneHead(label: string, f: FilterKey, q: string): string {
+  if (q.trim() && f === "all") return "No conversation matches your search";
+  if (q.trim()) return `Nothing in ${label} matches your search`;
+  return `No conversations in ${label}`;
+}
+
+/** The line read out (aria-live) when the filter or the search changes the list. */
+export function matchCountLine(shown: number, total: number, label: string, f: FilterKey, q: string): string {
+  const noun = (n: number) => (n === 1 ? "conversation" : "conversations");
+  if (f === "all" && !q.trim()) return `${total} ${noun(total)}`;
+  return `${shown} of ${total} ${noun(total)} in ${scopeWords(label, f, q)}`;
+}
+
+/**
+ * The conversation picked earlier is drawn only while the list shows it. One the filter or the
+ * search leaves out is "outside": the panel beside the list is cleared, so no reply can be written
+ * to someone the member can't see in the list. The pick is kept, so Show all brings it back.
+ */
+export function pickState(sel: string | null, shownIds: readonly string[]): "none" | "shown" | "outside" {
+  if (!sel) return "none";
+  return shownIds.includes(sel) ? "shown" : "outside";
+}
