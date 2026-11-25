@@ -153,7 +153,7 @@ async function main() {
   const prHome = readFileSync(path.join(ROOT, "app/post/ui3/work/proposals/ProposalsHome.tsx"), "utf8");
   check("Proposals: writing one is Close, said with the plan, never hidden", /data\.canBuild \?/.test(prHome) && /Writing proposals is on Close/.test(prHome) && /data\.canSend &&/.test(prHome));
   const ctPage = readFileSync(path.join(ROOT, "app/post/ui3/work/contracts/ContractsPage.tsx"), "utf8");
-  check("Contracts: sending is Pro and Close, said above the list", /!v\.canSend &&/.test(ctPage));
+  check("Contracts: sending is Close, said above the list", /!v\.canSend &&/.test(ctPage));
 
   /* ---------- Workflows: Simple mode on the real engine ---------- */
   console.log("\nWorkflows, Simple mode");
@@ -407,6 +407,27 @@ async function main() {
   check("lost and not now count nowhere", m.open + m.won === 69000);
   check("a deal with no value is counted as such, never guessed", m.openNoValue === 1);
   check("the money words: $96.5k, $26.5k, $12k, $900", money.kMoney(96500) === "$96.5k" && money.kMoney(26500) === "$26.5k" && money.kMoney(12000) === "$12k" && money.kMoney(900) === "$900" && money.kMoney(120000) === "$120k");
+
+  /* ---------- the shell and the record (acceptance F10, F14, F15, F20, F26, F29, F30, F35) ---------- */
+  console.log("\nShell and record");
+  const cur = await import("../app/post/ui3/current");
+  check("a record opened from Crystal Ball sits under Crystal Ball in the nav, from a list under Target Companies (F15)", cur.ui3Current("table", "companies", "all", true, null, "radar") === "radar" && cur.ui3Current("table", "companies", "all", true, null, null) === "companies" && cur.ui3Current("table", "companies", "all", true, null, "getin") === "warm");
+  check("…and the nav reads where it was opened from, over a page included", /drawer \? \(drawer\.over \?\? drawer\.returnTo \?\? null\) : null/.test(tp));
+  const cpage = readFileSync(path.join(ROOT, "app/post/company/CompanyPage.tsx"), "utf8");
+  check("the full record inside the new design draws no header of its own: one breadcrumb, one credits pill, one Add (F15)", /const ui3Head = useUi3Header\(\);/.test(cpage) && /\{ui3Head \? null : \(\s*\n\s*<header className="ws-head co-topbar">/.test(cpage));
+  const H = await import("../app/post/ui3/head");
+  check("the new design says Open: \"Open company · 2 credits\", \"Open all 6\", today's look keeps Unlock (F26)", H.openSay("Unlock company · 2 credits", true) === "Open company · 2 credits" && H.openSay("Unlock all", true) === "Open all" && H.openSay("Unlocking", true) === "Opening" && H.openSay("Unlock company · 2 credits", false) === "Unlock company · 2 credits");
+  const tgt = readFileSync(path.join(ROOT, "app/post/ui3/Targets.tsx"), "utf8");
+  check("a locked row on Target Companies offers Open company through the record's own unlock (it quotes first), never a refused Add to pipeline (F10)", /\) : i\.c\.hidden \? \(/.test(tgt) && /ui\.unlock\(\{ entity: "company", id: i\.c\.id, field: "identity" \}\)/.test(tgt) && /"Open company"/.test(tgt));
+  check("…and no second Locked chip squeezing the name (F29)", !/>\s*Locked\s*<\/Chip>/.test(tgt));
+  const cmp = readFileSync(path.join(ROOT, "app/post/ui3/Company.tsx"), "utf8");
+  check("the record's header says each fact once (F30)", /size && !line\.includes\(size\)/.test(cmp) && /stage && !line\.includes\(stage\)/.test(cmp));
+  const shellCss = readFileSync(path.join(ROOT, "app/post/ui3/shell.css"), "utf8");
+  check("laptops (800 and 768 high): the nav items fit above the account and the art shrinks behind it (F14)", /@media \(max-height: 900px\)[^\n]*\.m-nav-item \{ height: 38px; \}[^\n]*\.m-nav-art \{ height: 150px; \}/.test(shellCss) && /@media \(max-height: 780px\)[^\n]*\.m-nav-item \{ height: 35px; \}/.test(shellCss));
+  const u3css = readFileSync(path.join(ROOT, "app/post/ui3/ui3.css"), "utf8");
+  check("phones: a compact title band on every page, the art a small corner beside the title (F20)", /compact title band on every page/.test(u3css) && /width: 88px !important; height: 44px !important;/.test(u3css));
+  const shared = readFileSync(path.join(ROOT, "app/ui/shared.tsx"), "utf8");
+  check("the design switch says one thing: its toast alone on screen (F35)", /if \(opts\?\.only\) \{/.test(shared) && /toast\(r\.message, false, \{ only: true \}\)/.test(tp));
 
   /* ---------- copy ---------- */
   console.log("\nCopy");

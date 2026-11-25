@@ -258,7 +258,7 @@ import { TOAST_MERGE_MS, mergeToastText } from "../post/nudges"; // [ux ws3]
  * A toast can carry one action ("Undo") and its own time on screen. The action closes the
  * toast when tapped. Without opts a toast is text only, as before.
  */
-export type ToastOpts = { action?: { label: string; onClick: () => void }; ms?: number; /** A small picture before the words (a first unlock): the caller draws it, so nothing is loaded for it here. */ art?: ReactNode };
+export type ToastOpts = { action?: { label: string; onClick: () => void }; ms?: number; /** A small picture before the words (a first unlock): the caller draws it, so nothing is loaded for it here. */ art?: ReactNode; /** This toast alone: the ones still up go (the design switch says one thing at a time). */ only?: boolean };
 type Toast = { id: number; text: string; err?: boolean; action?: ToastOpts["action"]; art?: ReactNode };
 export type ToastFn = (text: string, err?: boolean, opts?: ToastOpts) => void;
 const ToastCtx = createContext<ToastFn>(() => {});
@@ -281,6 +281,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = Date.now() + Math.random();
       const plain = !err && !opts?.action;
       const prev = lastPlain.current;
+      if (opts?.only) {
+        lastPlain.current = null;
+        setToasts([{ id, text, err }]);
+        setTimeout(() => drop(id), opts?.ms ?? toastMs(text, err));
+        return;
+      }
       if (plain && prev && Date.now() - prev.at < TOAST_MERGE_MS) {
         const merged = mergeToastText(prev.text, text);
         lastPlain.current = { id, text: merged, at: Date.now() };
