@@ -52,3 +52,6 @@
 .ui3 .w3 .ex-band.w3-band-moderate { min-height: 148px !important; }
 .ui3 .w3 .w3-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ui3 .w3 .w3-tags .m-chip { display: inline-flex; width: auto; height: 26px; font-size: 13px; padding: 0 10px; }
+/* headings keep the new ink in both themes (today's page CSS colors h1 and h2 with its own tokens) */
+.ui3 .w3 .m-band h1, .ui3 .w3 h1.m-display, .ui3 .w3 h2.m-h2, .ui3 .w3 h2.m-h3, .ui3 .w3 .m-h3 { color: var(--m-ink); }
+.ui3 .w3 .pr3-empty { padding: 22px; border-radius: var(--m-r-lg); background: var(--m-panel-2); border: 1px dashed var(--m-line-2); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }

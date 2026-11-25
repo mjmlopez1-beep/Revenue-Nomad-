@@ -1,0 +1,25 @@
+/* Pipeline in the new design (RN_UI3): extras on work.css's .pl-* classes (round 8). */
+.ui3 .w3 .pl-band.w3-band-minimal { min-height: 0 !important; }
+.ui3 .w3 .pl-card { user-select: none; }
+.ui3 .w3 .pl-card:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+.ui3 .w3 .pl-card .m-more { width: 28px; height: 28px; }
+.ui3 .w3 .pl-card .m-more svg { width: 17px; height: 17px; }
+.ui3 .w3 .pl3-way { font-size: 12.5px; color: var(--m-co-ink); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pl3-open { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.ui3 .w3 .pl3-pick { align-self: flex-start; }
+.ui3 .w3 .pl3-pick svg { width: 14px; height: 14px; }
+.ui3 .w3 .pl3-fold { margin-left: auto; }
+.ui3 .w3 .pl3-chips { margin: 0 0 16px; }
+.ui3 .w3 .pl3-first { margin: 0 0 16px; }
+.ui3 .w3 .pl3-sees { margin-top: 18px; }
+.ui3 .w3 .pl-ch .v:empty { display: none; }
+.ui3 .w3 .pl-tmove b, .ui3 .w3 .pl-tmove small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pl3-side { overflow-y: auto; }
+.ui3 .w3 .pl3-side > * { flex: 1 1 auto !important; position: static !important; width: 100% !important; max-width: none !important; height: auto; box-shadow: none; border: 0; }
+.ui3 .w3 .pl-intros li > .w-row:last-child { flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 760px) {
+  .ui3 .w3 .pl-col.ph-on { display: flex; }
+  .ui3 .w3 .pl-intros li { grid-template-columns: minmax(0, 1fr); }
+  .ui3 .w3 .pl-intros li > .w-row:last-child { justify-content: flex-start; }
+}
+.ui3 .w3 .pl-metric { text-align: left; align-items: flex-start; }

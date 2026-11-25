@@ -15,7 +15,6 @@
 .ui3 .w3 .pr3-list .m-tr:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
 .ui3 .w3 .pr3-list .m-co small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ui3 .w3 .pr3-stline { gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-.ui3 .w3 .pr3-empty { padding: 22px; border-radius: var(--m-r-lg); background: var(--m-panel-2); border: 1px dashed var(--m-line-2); display: flex; flex-direction: column; gap: 6px; }
 .ui3 .w3 .w3-err { padding: 10px 12px; border-radius: 10px; background: var(--w-hot-wash); color: var(--w-hot); font-size: 14px; margin: 4px 0 8px; }
 .ui3 .w3 .m-eyebrow.am { color: var(--m-am-ink); }
 @media (max-width: 760px) {
