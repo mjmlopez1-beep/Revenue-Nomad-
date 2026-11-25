@@ -14,6 +14,7 @@ const wait = () => (
   </main>
 );
 const PAGES: Partial<Record<Ui3WorkKey, React.ComponentType>> = {
+  "w:proposals": dynamic(() => import("./proposals/ProposalsPage").then((m) => m.Ui3Proposals), { ssr: false, loading: wait }),
   "w:contracts": dynamic(() => import("./contracts/ContractsPage").then((m) => m.Ui3Contracts), { ssr: false, loading: wait }),
 };
 

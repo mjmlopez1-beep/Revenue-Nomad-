@@ -348,6 +348,9 @@ export function Home2({
   );
 }
 
+/** Home2's props, for a home drawn in its place (the new design's, ui3/work/proposals). */
+export type Home2Props = Parameters<typeof Home2>[0];
+
 /** Paste notes or a transcript: read by Merlin's rules on the server, never kept. */
 function PasteSheet({ infos, busy, onClose, onStart }: { infos: CoInfo[]; busy: boolean; onClose: () => void; onStart: (b: Record<string, unknown>) => void }) {
   const [text, setText] = useState("");
