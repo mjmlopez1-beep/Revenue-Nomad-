@@ -34,6 +34,7 @@
 import { createHmac } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -264,7 +265,21 @@ async function until(fn, ms = 15_000, step = 250) {
 /* =====================================================================================
  * The browser
  * ===================================================================================== */
-const { chromium } = require("playwright");
+/** Playwright from node_modules, NODE_PATH or the global npm root (CI installs it with npm i -g). A missing Playwright fails the suite. */
+function findPlaywright() {
+  const tries = ["playwright", ...(process.env.NODE_PATH ?? "").split(path.delimiter).filter(Boolean).map((p) => path.join(p, "playwright"))];
+  try {
+    const g = spawnSync("npm", ["root", "-g"], { encoding: "utf8" }).stdout.trim();
+    if (g) tries.push(path.join(g, "playwright"));
+  } catch {}
+  for (const p of tries) {
+    try {
+      return require(p);
+    } catch {}
+  }
+  throw new Error("Playwright isn't installed here (npm i -g playwright, then playwright install chromium).");
+}
+const { chromium } = findPlaywright();
 const browser = await chromium.launch();
 async function contextFor(as, { width = 1363, height = 900, touch = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: false, extraHTTPHeaders: { "x-forwarded-for": as ? ipOf(as) : freshIp() } });
