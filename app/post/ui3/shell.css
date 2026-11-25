@@ -122,3 +122,5 @@ html[data-theme="dark"]:has(.tp-app.ui3) body { background: #0f1412; }
 .ui3 .u3-macts .ws-hbtn { width: 40px; border-radius: 99px; }
 .ui3 .u3-macts .tp-credits { border-radius: 99px; padding: 0 12px; }
 .ui3 .u3-macts .tp-credits * { color: var(--m-nav-hi); }
+.ui3 .u3-acts .ws-add { white-space: nowrap; }
+@media (max-width: 1500px) { .ui3 .m-search { width: 320px; } }

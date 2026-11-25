@@ -578,3 +578,27 @@
 .u3p .tg .m-name .m-chip { flex: none; }
 .u3p .tg .m-btn-done { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
 @media (max-width: 760px) { .u3p .tg-phtools { display: flex; gap: 8px; margin-top: 10px; } }
+
+/* Company intelligence */
+.ui3 .u3-cvtabs { display: flex; align-items: center; gap: 14px; padding: 4px 40px 0; flex-wrap: wrap; }
+.ui3 .u3-cvtabs .cv-back { margin: 0 0 0 -12px; color: var(--m-muted); }
+.ui3 .u3-cvtabs .cv-back svg { width: 16px; height: 16px; }
+.ui3 .u3-cvtabs .u3-pos { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
+.ui3 .u3-cvtabs .u3-pos svg { width: 15px; height: 15px; }
+.ui3 .u3-cvtabs .m-seg button { display: inline-flex; align-items: center; }
+.u3p .cv-h .m-logo { --s: 64px; }
+.u3p .cv-t h1 { outline: none; }
+.u3p .cv-people { padding: 0 10px 8px; }
+.u3p .cv-people .m-person b, .u3p .cv-people .m-person small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.u3p .cv-people .m-person > div { min-width: 0; }
+.u3p .tl svg { width: 100%; height: auto; overflow: visible; display: block; }
+.u3p .gr-wrap.compact { padding: 0 10px; }
+@media (max-width: 1100px) { .ui3 .u3-cvtabs { padding: 4px 28px 0; } }
+@media (max-width: 760px) { .ui3 .u3-cvtabs { padding: 8px 16px 0; } .ui3 .u3-cvtabs .u3-pos { display: none; } }
+.u3p .cv-sec { flex-wrap: nowrap; }
+.u3p .cv-sec .m-iconbtn { width: 36px; height: 36px; }
+.u3p .cv-sec .m-iconbtn[aria-pressed="true"] { background: var(--m-forest-wash); color: var(--m-forest-ink); border-color: transparent; }
+/* a few class names here are also the current look's (the client page's .cv-sec, .cv-acts): say every property that matters */
+.u3p .cv-sec { flex-direction: row; gap: 6px; scroll-margin-top: 0; min-width: 0; }
+.u3p .cv-acts { flex-wrap: nowrap; }
+.u3p .cv-acts > * { flex: none; }

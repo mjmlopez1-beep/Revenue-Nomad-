@@ -1,0 +1,498 @@
+"use client";
+
+/**
+ * The company intelligence view in the new design (find-design/v5, Company): the name and its free
+ * facts, one primary action, and four answers at a glance (fit, need, who you know, how you get in),
+ * then Why it fits (the seven traits, and the closest past client by shared traits), Need over time
+ * (the open role and every dated signal in the last six months), Who you know there (with the
+ * relationship band only where Merlin derives one) and How you get in (Merlin's best routes, drawn).
+ *
+ * Everything the record does today (unlocking with its quote, seats, people, ways in, open roles,
+ * notes and activity, the deal) is the "Full record" tab: today's record page, unchanged.
+ */
+import { useMemo, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
+import type { RadarRow } from "@/lib/radar/types";
+import type { RouteView } from "@/lib/paths/types";
+import { useApp } from "../shell/pages";
+import { useToast } from "../../ui/shared";
+import { useKnown } from "../network/usePaths";
+import { useWayIn } from "../network/useWays";
+import { likeParts, likeShared, shown, type CoInfo } from "../model";
+import { defaultSeeds, profileOf } from "../find/lookalikes";
+import { kindLabel } from "../crystal/crystalModel";
+import { Ui3HeaderCtx, useUi3Head, useUi3Header } from "./head";
+import { isWarm, setWarmFocus, useCoActs, useTargets } from "./data";
+import { Art } from "./illustrations";
+import { Ic } from "./icons";
+import { Av, Chip, CoLogo, FitRing, RelChip, Traits, Wait } from "./parts";
+import { agoWords, coLine, coName, initialsOf, numWord, plural, relOfWarmth } from "./model";
+import { Graph, GraphLegend } from "./Graph";
+import { oppTitle } from "./Home";
+
+const Record = dynamic(() => import("../company/CompanyPage").then((m) => m.CompanyPage), { ssr: false, loading: () => <Wait /> });
+const SRC_WORDS: Record<string, string> = { google: "your mail and calendar", messages: "your messages on Merlin", linkedin: "your LinkedIn file", csv: "your contacts file" };
+const DAY = 86_400_000;
+
+export function Ui3Company() {
+  const c = useApp();
+  const rec = c.record!;
+  const i = rec.info;
+  const [tab, setTab] = useState<"intel" | "record">("intel");
+  // Opened from a list of companies: it sits under Target Companies. From another page (Crystal Ball, Warm Paths, Pipeline...): under that page.
+  const from = rec.crumbs.filter((x) => x.label !== "Home");
+  const pageCrumb = from.length === 1 && !/compan|ideal client|lookalike/i.test(from[0].label);
+  const crumbs = pageCrumb ? from : [{ label: "Find" }, { label: "Target Companies", href: from[from.length - 1]?.href, go: rec.onClose }];
+  const api = useUi3Header();
+  useUi3Head(crumbs.length ? crumbs : [{ label: "Find" }, { label: "Target Companies" }], coName(i));
+  return (
+    <>
+      <div className="u3 u3-cvtabs">
+        <button type="button" className="m-btn m-btn-ghost m-btn-sm cv-back" onClick={rec.onClose}>
+          <Ic n="back" />
+          {crumbs[crumbs.length - 1]?.label ?? "Back"}
+        </button>
+        <div className="m-seg" role="tablist" aria-label="View">
+          <button type="button" role="tab" aria-pressed={tab === "intel"} aria-selected={tab === "intel"} onClick={() => setTab("intel")}>
+            Intelligence
+          </button>
+          <button type="button" role="tab" aria-pressed={tab === "record"} aria-selected={tab === "record"} onClick={() => setTab("record")}>
+            Full record
+          </button>
+        </div>
+        {rec.pos && (
+          <span className="m-small u3-pos">
+            {rec.pos.n} of {rec.pos.of}
+            <button type="button" className="m-iconbtn sm plain" aria-label="Previous company" onClick={() => rec.onStep(-1)}>
+              <Ic n="back" />
+            </button>
+            <button type="button" className="m-iconbtn sm plain" aria-label="Next company" onClick={() => rec.onStep(1)}>
+              <Ic n="arrow" />
+            </button>
+          </span>
+        )}
+      </div>
+      {tab === "record" ? (
+        // Today's record draws its own header: inside the new design the shell's top bar is already there.
+        <Ui3HeaderCtx.Provider value={api ? { ...api, top: (h) => <>{h.hosts}</> } : null}>
+          <Record />
+        </Ui3HeaderCtx.Provider>
+      ) : (
+        <Intel i={i} onRecord={() => setTab("record")} />
+      )}
+    </>
+  );
+}
+
+function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
+  const c = useApp();
+  const me = c.me;
+  const id = i.c.id;
+  const toast = useToast();
+  const acts = useCoActs();
+  const t = useTargets();
+  const row = t.rows.find((r) => r.i.c.id === id);
+  const fit = row?.fit;
+  const role = row?.role ?? null;
+  const warm = isWarm(row?.warm) ? row!.warm : null;
+  const way = useWayIn(i.c.hidden ? null : id);
+  const routes: RouteView[] = way.data?.routes ?? [];
+  const best = routes[0] ?? null;
+  const [alt, setAlt] = useState(0);
+  const [traitsOpen, setTraitsOpen] = useState(false);
+  const known = useKnown().known;
+  const people = useMemo(() => (known?.people ?? []).filter((p) => p.company === id && !p.away), [known, id]);
+  const fn = me.function && me.function !== "Other" ? me.function : null;
+  const radar: RadarRow | null = useMemo(() => [...(c.shell.radar.data?.rows ?? []), ...(c.legacy.homeProps.data?.rows ?? [])].find((r) => r.id === id) ?? null, [c.shell.radar.data, c.legacy.homeProps.data, id]);
+
+  // The closest past client: the member's own seats' companies, by traits shared.
+  const like = useMemo(() => {
+    let out: { name: string; same: number; of: number } | null = null;
+    for (const sid of defaultSeeds(c.infos, me)) {
+      if (sid === id) continue;
+      const s = c.byId.get(sid);
+      if (!s || s.c.hidden) continue;
+      const parts = likeParts(profileOf([s]));
+      if (!parts.traits.length) continue;
+      const same = likeShared(parts, { key: id, i }).length;
+      if (!out || same > out.same) out = { name: s.c.name, same, of: parts.traits.length };
+    }
+    return out;
+  }, [c.infos, c.byId, me, id, i]);
+
+  // Need over time: dated facts in the last six months.
+  const now = Date.now();
+  const events = useMemo(() => {
+    const ev: { at: string; t: string; s: string; hot: boolean }[] = [];
+    const add = (at: string | null | undefined, t: string, s: string) => {
+      if (!at) return;
+      const iso = at.length === 7 ? `${at}-01` : at.slice(0, 10);
+      const ms = Date.parse(`${iso}T12:00:00Z`);
+      if (!Number.isFinite(ms) || now - ms > 182 * DAY || ms > now + DAY) return;
+      ev.push({ at: iso, t, s, hot: now - ms < 14 * DAY });
+    };
+    for (const g of radar?.sigs ?? []) add(g.at, kindLabel(g.kind, fn), `${g.line.split(" · ")[0]} · from Crystal Ball`);
+    for (const e of i.engs) {
+      if (e.opened || e.posted) add(e.posted ?? e.opened, "Role posted", `${shown(e.cells.role) ?? "An open role"} · from the job posting`);
+      const start = shown(e.cells.start);
+      const f = shown(e.cells.function);
+      if (start && !e.opened) add(start, f ? `Fractional ${f} started` : "A fractional seat started", "From seats on file");
+    }
+    return ev.sort((a, b) => a.at.localeCompare(b.at)).slice(-6);
+  }, [radar, i, fn, now]);
+
+  const need = role?.mine ? "Hiring now" : role ? "Hiring" : radar ? "An early signal" : i.c.friendly.fractional ? "Hired fractionals before" : "Quiet for now";
+  const needLine = role ? role.title : radar ? oppTitle(radar, fn) : i.c.friendly.fractional ? plural(i.c.friendly.fractional, "fractional hire") : "No signal on file";
+  const via = best?.nodes.find((n) => n.role === "person");
+
+  const addPipe = async () => {
+    const res = await acts.addPipe(id);
+    toast(res.message || (res.ok ? "Added to your pipeline, under To reach out." : "That didn't go through. Try again."), !res.ok);
+  };
+  const ask = () => (setWarmFocus(id, true), c.openPage("warm"));
+  const size = shown(i.c.cells.employees);
+  const stage = shown(i.c.cells.revenue);
+  const sub = [coLine(i), size ? `${size} people` : null, stage].filter(Boolean).join(" · ");
+
+  if (!fit) return <Wait />;
+  return (
+    <main className="tp-main tp-main-page u3 u3p" id="tp-page">
+      <div className="u3-wrap">
+        <header className="cv-h">
+          <CoLogo i={i} s={64} />
+          <div className="cv-t">
+            <h1 className="m-display" tabIndex={-1}>
+              {coName(i)}
+            </h1>
+            <p className="m-sub">{sub}</p>
+            {i.c.hidden && <p className="m-small">This company is locked. Its name, website and people open with it. The full record says what it costs, and nothing is spent until you say yes.</p>}
+          </div>
+          <div className="cv-acts">
+            {i.c.hidden ? (
+              <button type="button" className="m-btn m-btn-primary" onClick={onRecord}>
+                <Ic n="lock" />
+                See what opens it
+              </button>
+            ) : (best && best.between > 0) || warm ? (
+              <button type="button" className="m-btn m-btn-primary" onClick={ask}>
+                <Ic n="send" />
+                Request an intro
+              </button>
+            ) : best ? (
+              <button type="button" className="m-btn m-btn-primary" onClick={ask}>
+                <Ic n="send" />
+                Write to {(best.nodes[best.nodes.length - 1]?.label ?? "them").split(" ")[0]}
+              </button>
+            ) : row?.inPipe ? (
+              <span className="m-btn m-btn-done">
+                <Ic n="check" />
+                In pipeline
+              </span>
+            ) : (
+              <button type="button" className="m-btn m-btn-primary" onClick={() => void addPipe()}>
+                <Ic n="plus" />
+                Add to pipeline
+              </button>
+            )}
+            <div className="cv-sec">
+              {(i.c.hidden || best || warm) &&
+                (row?.inPipe ? (
+                  <Chip kind="forest" icon="check">
+                    In pipeline
+                  </Chip>
+                ) : (
+                  <button type="button" className="m-btn m-btn-secondary m-btn-sm" onClick={() => void addPipe()}>
+                    <Ic n="plus" />
+                    Add to pipeline
+                  </button>
+                ))}
+              <button type="button" className="m-iconbtn" onClick={() => void acts.follow(id, !i.c.following)} aria-pressed={i.c.following} aria-label={i.c.following ? "Watching" : "Watch"} title={i.c.following ? "Watching. Merlin tells you when it moves." : "Watch: tell me when it moves"}>
+                <Ic n={i.c.following ? "check" : "eye"} />
+              </button>
+              <button type="button" className="m-iconbtn" onClick={() => void acts.save(id, !row?.saved)} aria-pressed={!!row?.saved} aria-label={row?.saved ? "Saved" : "Save"} title={row?.saved ? "Saved. Take it out of Saved." : "Save: keep it in Saved"}>
+                <Ic n="bookmark" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="cv-sum">
+          <div className="cv-cell">
+            <FitRing fit={fit} lg />
+            <div>
+              <p className="m-eyebrow forest">Fit</p>
+              <b>{fit.n} of 7 traits</b>
+              <span className="m-small">{fit.band}</span>
+            </div>
+          </div>
+          <div className="cv-cell">
+            <span className="cv-ic gold">
+              <Ic n="brief" />
+            </span>
+            <div>
+              <p className="m-eyebrow gold">Need</p>
+              <b>{need}</b>
+              <span className="m-small">{needLine}</span>
+            </div>
+          </div>
+          <div className="cv-cell">
+            <span className="m-stack">
+              {people.length ? people.slice(0, 3).map((p) => <Av key={p.key} name={p.name} s={38} />) : via ? <Av name={via.label} s={38} hid={via.locked} /> : <Av name="" s={38} hid />}
+            </span>
+            <div>
+              <p className="m-eyebrow">Who you know</p>
+              <b>{people.length ? `${people.length} there` : via ? `Through ${via.label.split(" ")[0]}` : "Nobody yet"}</b>
+              <span className="m-small">{people.length ? people[0].title ?? "Someone you know" : via ? "Your network reaches in" : "Bring in who you know"}</span>
+            </div>
+          </div>
+          <div className="cv-cell">
+            <span className="cv-ic co">
+              <Ic n="route" />
+            </span>
+            <div>
+              <p className="m-eyebrow cobalt">How you get in</p>
+              <b>{best ? (best.between === 0 ? "Write to them yourself" : best.between === 1 ? "1 introduction" : `${best.between} introductions`) : "Direct note"}</b>
+              <span className="m-small">{best ? best.short : "No warm path yet"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="cv-grid">
+          <section className="m-panel">
+            <div className="m-panel-h">
+              <div>
+                <p className="m-eyebrow forest">Why it fits</p>
+                <h2 className="m-h3" style={{ marginTop: 8 }}>
+                  {fit.n >= 6 ? "It fits your practice." : fit.n >= 4 ? "It mostly fits your practice." : "It sits outside your sweet spot."}
+                </h2>
+              </div>
+            </div>
+            <div className="m-panel-b">
+              <div className="fitrow">
+                <Traits n={fit.n} />
+                <span>
+                  <b>{fit.n} of 7</b> traits of your ideal client
+                </span>
+              </div>
+              {like && (
+                <div className="fitrow">
+                  <Traits n={like.same} of={like.of} am />
+                  <span>
+                    <b>
+                      {like.same} of {like.of}
+                    </b>{" "}
+                    like {like.name}, your past client
+                  </span>
+                </div>
+              )}
+              <button type="button" className="m-btn m-btn-ghost m-btn-sm evb" aria-expanded={traitsOpen} onClick={() => setTraitsOpen((x) => !x)}>
+                {traitsOpen ? "Hide the traits" : "See every trait"}
+                <Ic n="down" />
+              </button>
+              {traitsOpen && (
+                <table className="m-compare">
+                  <thead>
+                    <tr>
+                      <th>Trait</th>
+                      <th>{coName(i)}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fit.traits.map((tr) => (
+                      <tr key={tr.key}>
+                        <td>{tr.label}</td>
+                        <td>{tr.value}</td>
+                        <td>
+                          <span className={`m-check${tr.on ? "" : " no"}`}>
+                            <Ic n={tr.on ? "check" : "x"} />
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+
+          <section className="m-panel">
+            <div className="m-panel-h">
+              <div>
+                <p className="m-eyebrow gold">Need over time</p>
+                <h2 className="m-h3" style={{ marginTop: 8 }}>
+                  {role?.mine ? "It needs your expertise now." : role || events.length >= 3 ? "Demand is building." : events.length ? "An early signal." : "Quiet, for now."}
+                </h2>
+              </div>
+              {role && (
+                <Chip kind="gold" sm dot>
+                  Hiring now
+                </Chip>
+              )}
+            </div>
+            <div className="m-panel-b">
+              {role && (
+                <p className="cv-hire">
+                  <b>{role.title}</b>
+                  <span className="m-sub">
+                    {role.ago ? ` · posted ${role.ago.toLowerCase()}` : ""}
+                    {role.rate ? ` · ${role.rate}` : ""}
+                  </span>
+                </p>
+              )}
+              {events.length ? (
+                <>
+                  <Timeline events={events} />
+                  <p className="m-small">Hover a signal for where it came from.</p>
+                </>
+              ) : (
+                <p className="m-sub">No dated signals on file in the last six months.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="m-panel">
+            <div className="m-panel-h">
+              <div>
+                <p className="m-eyebrow forest">Who you know</p>
+                <h2 className="m-h3" style={{ marginTop: 8 }}>
+                  {people.length ? (people.length === 1 ? "You know someone there." : `You know ${numWord(people.length).toLowerCase()} people there.`) : best && best.between > 0 ? "Nobody yet, but you're connected." : "Nobody yet."}
+                </h2>
+              </div>
+            </div>
+            <ul className="m-list cv-people">
+              {people.map((p) => {
+                const band = relOfWarmth(p.warmth);
+                const from = p.src.map((s) => SRC_WORDS[s]).filter(Boolean).join(" and ");
+                return (
+                  <li key={p.key} style={{ "--cols": "minmax(0,1fr) auto" } as CSSProperties}>
+                    <div className="m-person">
+                      <Av name={p.name} s={42} />
+                      <div>
+                        <b>{p.name}</b>
+                        <small>{[p.title, p.why].filter(Boolean).join(" · ")}</small>
+                      </div>
+                    </div>
+                    {band && <RelChip band={band} from={`${p.last ? `Last ${(p.lastKind ?? "touch").toLowerCase()}: ${agoWords(p.last)?.toLowerCase()}. ` : ""}From ${from || "your own sources"}.`} />}
+                  </li>
+                );
+              })}
+              {best?.nodes
+                .filter((n) => n.role === "person" && !people.some((p) => p.name === n.label))
+                .map((n) => (
+                  <li key={n.label} style={{ "--cols": "minmax(0,1fr) auto" } as CSSProperties}>
+                    <div className="m-person">
+                      <Av name={n.label} s={42} hid={n.locked} />
+                      <div>
+                        <b>{n.label}</b>
+                        <small>{n.sub ?? ""}</small>
+                      </div>
+                    </div>
+                    <Chip kind="cobalt" sm>
+                      On your path
+                    </Chip>
+                  </li>
+                ))}
+              {!people.length && !best && (
+                <li style={{ "--cols": "1fr" } as CSSProperties}>
+                  <span className="m-sub">Bring in your contacts to see who you know here.</span>
+                </li>
+              )}
+            </ul>
+          </section>
+
+          <section className="m-panel">
+            <div className="m-panel-h">
+              <div>
+                <p className="m-eyebrow cobalt">How you get in</p>
+                <h2 className="m-h3" style={{ marginTop: 8 }}>
+                  {best ? (best.between === 0 ? "You can write to them yourself." : best.between === 1 ? "One introduction gets you in." : `${numWord(best.between)} introductions get you in.`) : "Start with a direct note."}
+                </h2>
+              </div>
+              {best && (
+                <button type="button" className="m-btn m-btn-ghost m-btn-sm" onClick={() => (setWarmFocus(id), c.openPage("warm"))}>
+                  Full path
+                  <Ic n="arrow" />
+                </button>
+              )}
+            </div>
+            {way.data === null && !way.off && !way.failed && !i.c.hidden ? (
+              <Wait line="Finding your way in" />
+            ) : best ? (
+              <>
+                <Graph routes={routes} act={alt} onPick={setAlt} compact youInitials={initialsOf(me.name)} youSub={me.title || "You"} />
+                <div className="m-panel-b">
+                  <p className="m-sub">{routes[Math.min(alt, routes.length - 1)].because || routes[Math.min(alt, routes.length - 1)].why}</p>
+                </div>
+              </>
+            ) : (
+              <div className="m-panel-b nopath">
+                <div className="np-art">
+                  <Art name="trailhead" />
+                </div>
+                <p className="m-sub">{i.c.hidden ? "Ways in show once the company is open." : "No warm path on file. Bring in who you know, or write to them directly from the full record."}</p>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Timeline({ events }: { events: { at: string; t: string; s: string; hot: boolean }[] }) {
+  const W = 520;
+  const H = 150;
+  const L = 14;
+  const R = W - 14;
+  const y = 68;
+  const now = Date.now();
+  const span = 182 * DAY;
+  const x = (at: string) => L + ((Date.parse(`${at}T12:00:00Z`) - (now - span)) / span) * (R - L);
+  const months: { m: string; x: number }[] = [];
+  for (const k of [5, 3, 1]) {
+    const d = new Date(now);
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - k);
+    months.push({ m: d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), x: x(d.toISOString().slice(0, 10)) });
+  }
+  return (
+    <div className="tl">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Signals at this company over six months">
+        <rect x={R - 26} y="8" width="32" height={H - 30} rx="12" className="rv-band" />
+        <line x1={L} x2={R} y1={y} y2={y} className="rv-base" />
+        {months.map((m) => (
+          <text key={m.m} className="rv-m" x={m.x.toFixed(1)} y={H - 4} textAnchor="middle">
+            {m.m}
+          </text>
+        ))}
+        <text className="rv-m now" x={R} y={H - 4} textAnchor="end">
+          Now
+        </text>
+        {events.map((e, k) => {
+          const cx = Math.min(R - 10, Math.max(L + 10, x(e.at)));
+          const up = k % 2 === 0;
+          const r = e.hot ? 10 : 7;
+          const anchor = cx > W - 90 ? "end" : cx < 90 ? "start" : "middle";
+          const tx = anchor === "end" ? cx + 10 : anchor === "start" ? cx - 10 : cx;
+          const when = agoWords(e.at) ?? "";
+          return (
+            <g key={k}>
+              <line x1={cx} x2={cx} y1={up ? y - 34 : y + r} y2={up ? y - r : y + 26} className="tl-stem" />
+              {e.hot && <circle cx={cx} cy={y} r="18" className="rv-glow" />}
+              <circle cx={cx} cy={y} r={r} className={`rv-dot ${e.hot ? "new" : "old"}`} tabIndex={0} aria-label={`${e.t}, ${when}`}>
+                <title>{`${e.t}. ${when}. ${e.s}`}</title>
+              </circle>
+              <text className="tl-w" x={tx} y={up ? y - 52 : y + 40} textAnchor={anchor}>
+                {when}
+              </text>
+              <text className="tl-l" x={tx} y={up ? y - 38 : y + 56} textAnchor={anchor}>
+                {e.t.length > 26 ? `${e.t.slice(0, 25)}…` : e.t}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}

@@ -3357,7 +3357,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * opened over. Phones and the old look keep the drawer. The record is the same state either way
    * (drawer, ?c=), so J and K, Esc, the address and Back work as they did.
    */
-  const recordPage = ui2 && !phone && !!drawer && !!drawerInfo && page === "table" && !!pageDef("company2")?.component;
+  const recordPage = ui2 && (!phone || ui3) && !!drawer && !!drawerInfo && page === "table" && !!pageDef("company2")?.component;
   ctx.record = recordPage
     ? {
         info: drawerInfo!,
