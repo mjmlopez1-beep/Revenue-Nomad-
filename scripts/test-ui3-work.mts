@@ -28,7 +28,13 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const ORIGIN = "https://post.example.com";
 const seed = {
   builtAt: iso(t0 - 60 * DAY),
-  members: [{ id: "mem_c", name: "Casey Close", email: "casey@close.example", title: "Fractional COO", token: "tok-c-000000001" }],
+  members: [
+    { id: "mem_c", name: "Casey Close", email: "casey@close.example", title: "Fractional COO", token: "tok-c-000000001" },
+    // Twins with the new design off: one runs under RN_WORKFLOWS_V2=optin, the other with it off. Their runs must match.
+    { id: "mem_d", name: "Drew Doe", email: "drew@twins.example", title: "Fractional COO", token: "tok-d-000000001" },
+    { id: "mem_e", name: "Drew Doe", email: "drew.e@twins.example", title: "Fractional COO", token: "tok-e-000000001" },
+    { id: "mem_t", name: "Tess Trial", email: "tess@trial.example", title: "Fractional COO", token: "tok-t-000000001" },
+  ],
   companies: [
     { id: "c_north", fields: { name: "Northwind Clinics", website: "northwind.example", industry: "Hospitals and Health Care", employees: "51-200", hq: "Denver, CO" } },
     { id: "c_cedar", fields: { name: "Cedar and Pine", website: "cedarpine.example", industry: "Software Development", employees: "11-50", hq: "Austin, TX" } },
@@ -48,10 +54,10 @@ writeFileSync(
     ledger: [],
     values: {},
     unlocks: { "c_north.identity": ["mem_c"] },
-    seen: { mem_c: seen },
-    profiles: { mem_c: { function: "Operations", onboarded: true } },
+    seen: { mem_c: seen, mem_d: seen, mem_e: seen, mem_t: seen },
+    profiles: { mem_c: { function: "Operations", onboarded: true, ui3: true }, mem_d: { function: "Operations", onboarded: true }, mem_e: { function: "Operations", onboarded: true }, mem_t: { function: "Operations", onboarded: true } },
     follows: {},
-    connector: { clients: [], grants: [], alerts: { mem_c: [{ id: "al_casey001", name: "Every company", createdAt: seen, place: "v=all&t=companies", alert: { on: false, triggers: ["role"], every: "instant", email: false, slack: false, bell: false } }] } },
+    connector: { clients: [], grants: [], alerts: Object.fromEntries(["mem_c", "mem_d", "mem_e", "mem_t"].map((m) => [m, [{ id: m === "mem_c" ? "al_casey001" : `al_${m}0001`, name: "Every company", createdAt: seen, place: "v=all&t=companies", alert: { on: false, triggers: ["role"], every: "instant", email: false, slack: false, bell: false } }]])) },
   }),
 );
 Object.assign(process.env, {
@@ -208,6 +214,108 @@ async function main() {
   check("…asked in the bell, with the credits a yes would spend", ((await t.loadState()).inbox?.mem_c ?? []).some((b) => b.ask?.run === r2.id && (b.ask.credits ?? 0) > 0));
   const no = await route("POST", { op: "answer", run: r2.id, yes: false });
   check("…no spends nothing", no.status === 200 && (await runs()).reduce((s, r) => s + r.spent, 0) === spentSoFar, no);
+
+
+  /* ---------- RN_WORKFLOWS_V2=optin: v2 only for members with the new design on ---------- */
+  console.log("\nOptin");
+  const VM = await import("../lib/workflows/v2mode");
+  const RUN = await import("../lib/workflows/run");
+  process.env.RN_WORKFLOWS_V2 = "optin";
+  process.env.RN_UI3 = "optin";
+  process.env.RN_ADMIN_EMAILS = "casey@close.example";
+  const s0 = await t.loadState();
+  const isV2 = VM.v2Of(s0, VM.emailsFrom(seed, s0));
+  check("optin: v2 for a member with the new design on, nobody else", VM.v2Mode() === "optin" && isV2("mem_c") && !isV2("mem_d") && !isV2("mem_e") && !isV2("mem_t"));
+  const routeAs = async (tok: string, method: "GET" | "POST", body?: unknown, q = "") => {
+    const req = new NextRequest(`${ORIGIN}/api/workflows2${q}`, { method, headers: { cookie: `rn_table=${tok}`, ...(method === "POST" ? { "content-type": "application/json", origin: ORIGIN } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+    const res = await (method === "POST" ? R.POST : R.GET)(req as never, undefined as never);
+    return res.status;
+  };
+  check("optin with the new design on: the v2 API answers", (await routeAs(C, "GET")) === 200);
+  check("optin with the new design off: the v2 API is a 404, as if it were off", (await routeAs("tok-d-000000001", "GET")) === 404);
+  const gr0 = (await runs()).length;
+  await W.runEvents([evOf("seat:o1", "c_north")]);
+  await settle();
+  check("optin with the new design on: an event runs on the graph runner", (await runs()).length === gr0 + 1);
+
+  // Today's runner, byte for byte: the twins' identical workflow, one under optin, one with v2 off.
+  const flow = (m: string) => ({ id: `wf_twin_${m}`, name: "Seat ended: pipeline and tell me", on: true, trigger: "seat" as const, scope: { kind: "list" as const, list: `al_${m}0001` }, steps: [{ key: "dm" as const }, { key: "pipe" as const }, { key: "tell" as const }], cap: null, warn: null, createdAt: seen, updatedAt: seen });
+  await T.mutate((d) => {
+    d.workflows ??= {};
+    for (const m of ["mem_d", "mem_e"]) d.workflows[m] = { flows: [flow(m)], runs: [], reminders: [], drafts: [], keys: [] };
+  });
+  const twinEv = (m: string) => ({ memberId: m, key: `seat:twin`, trigger: "seat" as const, at: iso(Date.now()), companyId: "c_cedar", line: "A fractional seat ended at a locked company", href: `/?c=${T.pubId("c_cedar")}`, lists: [`al_${m}0001`] });
+  await W.runEvents([twinEv("mem_d")]);
+  await settle();
+  delete process.env.RN_WORKFLOWS_V2;
+  await W.runEvents([twinEv("mem_e")]);
+  await settle();
+  process.env.RN_WORKFLOWS_V2 = "optin";
+  const sT = await t.loadState();
+  const norm = (m: string) => {
+    const w = sT.workflows![m];
+    return { runs: w.runs.map(({ id: _i, wf: _w, at: _a, ...r }) => r), graphRuns: (w.graphRuns ?? []).length, drafts: w.drafts.length, keys: w.keys.map((k) => k.split("|")[1]), spent: sT.ledger.filter((l) => l.memberId === m).map((l) => [l.reason, l.delta]) };
+  };
+  check("optin with the new design off: today's runner, the same run as with v2 off", norm("mem_d").runs.length === 1 && JSON.stringify(norm("mem_d")) === JSON.stringify(norm("mem_e")), { d: norm("mem_d"), e: norm("mem_e") });
+
+  // The new design switched off: the member's v2 workflows are kept, paused.
+  const graphsBefore = (await t.loadState()).workflows!.mem_c.graphs!.map((g) => ({ id: g.id, on: g.on, live: !!g.live }));
+  await T.mutate((d) => {
+    (d.profiles.mem_c as { ui3?: boolean }).ui3 = false;
+  });
+  const gr1 = (await runs()).length;
+  await W.runEvents([evOf("seat:o2", "c_north")]);
+  await settle();
+  const s2 = await t.loadState();
+  check("new design off: the v2 workflows are all still there, unchanged (not deleted)", JSON.stringify(s2.workflows!.mem_c.graphs!.map((g) => ({ id: g.id, on: g.on, live: !!g.live }))) === JSON.stringify(graphsBefore) && graphsBefore.length > 0);
+  check("…and paused: an event runs none of them, on either runner", (await runs()).length === gr1 && !s2.workflows!.mem_c.runs.some((r) => r.at > iso(Date.now() - 5000) && r.wf === id));
+  check("…the v2 API is a 404 while it is off", (await routeAs(C, "GET")) === 404);
+  const answered = await RUN.approveRun("mem_c", r2.id, true).then((x) => x, (e) => (e as Error).message);
+  check("…a run waiting on one holds: answering it is refused, nothing spent", /paused while the new design is off/.test(String(answered)) && (await runs()).reduce((n2, r) => n2 + r.spent, 0) === spentSoFar, answered);
+  await T.mutate((d) => {
+    (d.profiles.mem_c as { ui3?: boolean }).ui3 = true;
+  });
+  await W.runEvents([evOf("seat:o3", "c_north")]);
+  await settle();
+  check("new design back on: they carry on where they were", (await routeAs(C, "GET")) === 200 && (await runs()).length === gr1 + 1);
+
+  /* ---------- the trial: its company opens a day; past them nothing is spent ---------- */
+  console.log("\nThe trial's opens and the limit");
+  process.env.RN_WORKFLOWS_V2 = "1";
+  Object.assign(process.env, { RN_BILLING: "1", STRIPE_SECRET_KEY: "sk_test_made_up", STRIPE_WEBHOOK_SECRET: "whsec_made_up", STRIPE_PRICE_MONTH: "price_m", STRIPE_PRICE_YEAR: "price_y" });
+  const today = iso(Date.now());
+  await T.mutate((d) => {
+    ((d as { billing?: { members: Record<string, unknown> } }).billing ??= { members: {} } as never).members.mem_t = { trialStartedAt: iso(Date.now() - DAY), trialEndsAt: iso(Date.now() + 10 * DAY) };
+  });
+  const TOK = "tok-t-000000001";
+  const routeT = async (body: unknown) => {
+    const req = new NextRequest(`${ORIGIN}/api/workflows2`, { method: "POST", headers: { cookie: `rn_table=${TOK}`, "content-type": "application/json", origin: ORIGIN }, body: JSON.stringify(body) });
+    const res = await R.POST(req as never, undefined as never);
+    return (await res.json()) as { id?: string; error?: string };
+  };
+  const tw = await routeT({ op: "save", name: "Trial seat", mode: "simple", cap: 1, version: SM.compileSimple({ ...SM.SIMPLE_DEFAULT, scope: { kind: "list", list: "al_mem_t0001" }, dm: false, follow: { ...SM.SIMPLE_DEFAULT.follow, reply: false, followup: false } }) });
+  check("the trial saves a Simple workflow with a limit of 1", !!tw.id, tw);
+  await routeT({ op: "live", id: tw.id });
+  await routeT({ op: "on", id: tw.id, on: true });
+  const tEv = (k: string, co: string) => ({ memberId: "mem_t", key: k, trigger: "seat" as const, at: iso(Date.now()), companyId: co, line: "A fractional seat ended at a locked company", href: "/", lists: ["al_mem_t0001"] });
+  const tRuns = async () => ((await t.loadState()).workflows?.mem_t?.graphRuns ?? []).filter((r) => r.wf === tw.id && !r.test).sort((a, b) => b.at.localeCompare(a.at));
+  await W.runEvents([tEv("seat:t1", "c_cedar")]);
+  await settle();
+  const t1 = (await tRuns())[0];
+  check("within the day's free opens a company costs nothing and the run goes on", !!t1 && t1.spent === 0 && t1.nodes.find((x) => x.node === "s_open")?.status === "done", t1?.nodes);
+  // The day's opens used up: the usual price applies, and it counts toward the limit.
+  await T.mutate((d) => {
+    const opens: Record<string, string> = {};
+    for (let i = 0; i < 60; i++) opens[`c_used${i}`] = today;
+    ((d as { planOpens?: Record<string, Record<string, string>> }).planOpens ??= {}).mem_t = { ...((d as { planOpens?: Record<string, Record<string, string>> }).planOpens?.mem_t ?? {}), ...opens };
+  });
+  await W.runEvents([tEv("seat:t2", "c_halcyon")]);
+  await settle();
+  const t2 = (await tRuns())[0];
+  // In this code the trial doesn't charge past its daily opens: it stops opening until tomorrow. A run then spends nothing, says why, and doesn't fail.
+  check("past the trial's daily opens nothing is spent: the company steps say the limit, and the run doesn't fail", !!t2 && t2.id !== t1?.id && t2.spent === 0 && /opened 40 companies today/.test(t2.nodes.find((x) => x.node === "s_open")?.note ?? "") && t2.status !== "failed" && t2.nodes.find((x) => x.node === "s_send")?.status === "skipped", t2?.nodes.map((x) => [x.node, x.status, x.note]));
+  check("…and nothing counts toward the limit", (await tRuns()).reduce((n2, r) => n2 + r.spent, 0) === 0);
+  for (const k of ["RN_BILLING", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTH", "STRIPE_PRICE_YEAR"]) delete process.env[k];
 
   /* ---------- the pipeline's money ---------- */
   console.log("\nPipeline money");

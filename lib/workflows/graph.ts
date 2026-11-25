@@ -719,9 +719,14 @@ export interface Watching {
  * The member's workflows that are on, as the watch passes see them. Switch off: today's workflows,
  * exactly as before. On: the live graphs, and today's workflows not saved as a graph yet.
  */
-export function watchingOf(w: { flows: Workflow[]; graphs?: GraphWorkflow[] } | undefined): Watching[] {
+export function watchingOf(w: { flows: Workflow[]; graphs?: GraphWorkflow[] } | undefined, runner: "v2" | "paused" | "today" = v2Switch() ? "v2" : "today"): Watching[] {
   if (!w) return [];
-  if (!v2Switch()) return w.flows.filter((f) => f.on);
+  if (runner === "today") return w.flows.filter((f) => f.on);
+  // RN_WORKFLOWS_V2=optin, the new design switched off: today's workflows run, the ones saved as v2 graphs are paused.
+  if (runner === "paused") {
+    const held = new Set((w.graphs ?? []).map((g) => g.id));
+    return w.flows.filter((f) => f.on && !held.has(f.id));
+  }
   const ids = new Set((w.graphs ?? []).map((g) => g.id));
   const out: Watching[] = w.flows.filter((f) => f.on && !ids.has(f.id));
   for (const g of w.graphs ?? []) {

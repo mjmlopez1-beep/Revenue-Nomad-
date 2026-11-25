@@ -30,6 +30,7 @@ import {
 import { companyOpen, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
 import { workflowPlan } from "../billing/rules";
 import { v2Switch } from "./graph";
+import { emailsFrom, runnerOf, v2Mode, v2Of } from "./v2mode";
 
 const DAY = 86_400_000;
 
@@ -116,12 +117,26 @@ async function runAll(evs: WfEvent[], origin: string | undefined, nowMs: number)
   // Workflows v2 (RN_WORKFLOWS_V2): the graph runner takes every event (today's workflows run there as straight lines). Off: below, as before.
   if (v2Switch()) return (await import("./graphRun")).runAllV2(evs as unknown as import("./graphRun").V2Event[], origin, nowMs);
   let n = 0;
+  // RN_WORKFLOWS_V2=optin: members with the new design on go to the graph runner; everyone else runs below, exactly as before.
+  const paused = new Map<string, Set<string>>();
+  if (v2Mode() === "optin") {
+    const [seed0, st0] = await Promise.all([loadSeed(), loadState()]);
+    const isV2 = v2Of(st0, emailsFrom(seed0, st0));
+    const mine = evs.filter((ev) => isV2(ev.memberId));
+    if (mine.length) n += await (await import("./graphRun")).runAllV2(mine as unknown as import("./graphRun").V2Event[], origin, nowMs);
+    evs = evs.filter((ev) => !isV2(ev.memberId));
+    // The new design off with v2 workflows saved: those are paused (not deleted), and today's flow of the same id doesn't stand in.
+    for (const ev of evs) {
+      const w = st0.workflows?.[ev.memberId];
+      if (runnerOf(false, w) === "paused") paused.set(ev.memberId, new Set((w?.graphs ?? []).map((g) => g.id)));
+    }
+  }
   for (const ev of evs) {
     const s0 = await loadState();
     const mine = s0.workflows?.[ev.memberId];
     if (!mine || s0.closures?.[ev.memberId]) continue;
     for (const f of mine.flows) {
-      if (!f.on || !matches(f, ev)) continue;
+      if (!f.on || !matches(f, ev) || paused.get(ev.memberId)?.has(f.id)) continue;
       const key = `${f.id}|${ev.key}`;
       const today = new Date(nowMs).toISOString().slice(0, 10);
       const claimed = await T.mutate((d) => {
@@ -322,12 +337,15 @@ async function tell(cx: Ctx, run: WfRun, bells: Parameters<typeof pushInbox>[2])
  */
 export async function approveRun(memberId: string, runId: string, yes: boolean, origin?: string, nowMs = Date.now()): Promise<string> {
   // A run of Workflows v2 (RN_WORKFLOWS_V2): its own answer, the same words.
-  if (v2Switch()) {
+  if (v2Mode() !== "off") {
     const g = await import("./graphRun");
-    if (await g.isGraphRun(memberId, runId))
+    if (await g.isGraphRun(memberId, runId)) {
+      // Optin, the new design off: the member's v2 workflows are paused, and so is a run waiting on one.
+      if (!(await g.v2ForMember(memberId))) throw new WfAnswer("That workflow is paused while the new design is off. Switch it back on to answer.");
       return g.answerRun(memberId, runId, yes, origin, nowMs).catch((e) => {
         throw e instanceof g.RunAnswer ? new WfAnswer(e.message) : e;
       });
+    }
   }
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = T.memberIndex(seed, s).byId.get(memberId);

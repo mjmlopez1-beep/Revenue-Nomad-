@@ -34,6 +34,7 @@ import { emailEnabled, sendEmail } from "../email";
 import { styleOf, voiceSummary } from "../voice";
 import { workflowsOn } from "../workflows/run";
 import { watchingOf } from "../workflows/graph";
+import { emailsFrom, runnerOf, v2Of } from "../workflows/v2mode";
 import {
   CALL_DEFAULT, CALL_STEPS, DELIVERABLE_WORDS, WF_LIMITS, emptyWorkflows, oneLineWf,
   type CallOptions, type Deliverable, type MemberWorkflows, type RunStep, type WfPack, type WfRun, type WfStepKey, type Workflow, type CallsInfo,
@@ -179,10 +180,11 @@ function makeReading(m: Member, s: State, ctx: Omit<CallCtx, "reading">, want: {
 /* ---------- the scheduler's tick ---------- */
 
 /** Members with a call workflow on (none while the switches are off). */
-function callWatchers(s: State): string[] {
+function callWatchers(s: State, seed?: Seed): string[] {
   if (!callTriggersOn() || !workflowsOn()) return [];
+  const isV2 = v2Of(s, emailsFrom(seed, s));
   return Object.entries(s.workflows ?? {})
-    .filter(([id, w]) => !s.closures?.[id] && watchingOf(w).some((f) => f.trigger === "call"))
+    .filter(([id, w]) => !s.closures?.[id] && watchingOf(w, runnerOf(isV2(id), w)).some((f) => f.trigger === "call"))
     .map(([id]) => id);
 }
 
@@ -196,7 +198,8 @@ export async function callTick(nowMs = Date.now(), origin?: string): Promise<num
   inTick.running = true;
   try {
     const [seed, s] = await Promise.all([loadSeed(), loadState()]);
-    const who = callWatchers(s);
+    const who = callWatchers(s, seed);
+    const isV2 = v2Of(s, emailsFrom(seed, s));
     if (!who.length) return 0;
     const idx = T.memberIndex(seed, s);
     const { runEvents } = await import("../workflows/run");
@@ -204,7 +207,7 @@ export async function callTick(nowMs = Date.now(), origin?: string): Promise<num
     for (const memberId of who) {
       const m = idx.byId.get(memberId);
       if (!m) continue;
-      const flows = watchingOf(s.workflows![memberId]).filter((f) => f.trigger === "call");
+      const flows = watchingOf(s.workflows![memberId], runnerOf(isV2(memberId), s.workflows![memberId])).filter((f) => f.trigger === "call");
       const want = { followup: flows.some((f) => f.steps.some((x) => x.key === "followup")), deck: flows.some((f) => f.steps.some((x) => x.key === "deck")) };
       for (const r of connectedRecorders(s, memberId)) {
         const cur = s.workflows![memberId].calls?.[r.key];

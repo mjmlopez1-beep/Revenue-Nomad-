@@ -21,6 +21,8 @@ import { RunAnswer, answerRun, fireOne, graphsOf, monthSpentV2, retryRun, testRu
 import { planFor, wfIn } from "./run";
 import { newWfId } from "./steps";
 import { describe } from "./describe";
+import { emailsFrom, v2Of } from "./v2mode";
+import { TRIAL_OPENS_DAILY } from "../tableFields";
 
 export { v2On };
 export class V2Problem extends Error {
@@ -38,6 +40,8 @@ async function who(token: string | null): Promise<Member> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
   if (!m) throw new V2Problem(SIGNED_OUT, 401);
+  // RN_WORKFLOWS_V2=optin: v2 is only for members with the new design on. Everyone else: as if it were off.
+  if (!v2Of(s, emailsFrom(seed, s))(m.id)) throw new V2Problem("Not found.", 404);
   return m;
 }
 const gatesOf = (s: Awaited<ReturnType<typeof loadState>>, memberId: string, nowMs: number) => {
@@ -70,6 +74,8 @@ export async function list(token: string | null, nowMs = Date.now()) {
     plan: gates,
     // What each paid step costs this member now (the new design's Simple mode says it on each step).
     prices,
+    // How companies open for this member: Pro and Close open every one; the trial, up to its daily count, then the usual price (which counts toward a workflow's limit).
+    opens: { access: T.accessFor(s, m.id, nowMs), trialDaily: TRIAL_OPENS_DAILY, left: T.trialOpensLeft(s, m.id, nowMs) },
     catalog: catalogFor(gates),
     workflows: graphsOf(w).map(({ g, stored }) => {
       const mine = runs.filter((r) => r.wf === g.id && !r.test);
@@ -330,6 +336,7 @@ export async function hookCall(key: string, body: unknown): Promise<{ ok: boolea
     if (!g) continue;
     if (!g.hook || !same(g.hook, secret) || s.closures?.[memberId]) break;
     if (!g.on || !g.live || G.triggerOf(g.live)?.type !== "trig.webhook") return { ok: false, message: "That workflow is off." };
+    if (!v2Of(s, emailsFrom(await loadSeed(), s))(memberId)) return { ok: false, message: "That workflow is paused." };
     const fields: G.Fields = {};
     if (body && typeof body === "object" && !Array.isArray(body))
       for (const [k, v] of Object.entries(body as Record<string, unknown>).slice(0, 20)) {

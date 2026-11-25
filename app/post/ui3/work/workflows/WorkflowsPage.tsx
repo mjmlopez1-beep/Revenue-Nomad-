@@ -73,6 +73,7 @@ interface ListView {
   on: true;
   plan: { tier: string; paid: boolean; proposals: boolean; evidence: boolean };
   prices?: StepPrices;
+  opens?: { access: "open" | "trial" | "credits"; trialDaily: number; left: number };
   catalog: CatItem[];
   workflows: ListItem[];
 }
@@ -456,10 +457,12 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
         ) : (
           <>
             No credits
-            <small> per run on your plan</small>
+            <small> per run {list.opens?.access === "trial" ? "in your trial" : list.plan.tier === "close" ? "on Close" : list.plan.paid ? "on Pro" : "on your plan"}</small>
           </>
         )}
       </div>
+      {!ceiling && list.opens?.access === "trial" && <p className="w-help">Within your trial&apos;s {list.opens.trialDaily} company opens a day. Past them, Merlin skips the company steps until tomorrow and spends nothing.</p>}
+      {!ceiling && list.opens?.access === "open" && <p className="w-help">Your plan opens every company. An email or phone still costs a credit.</p>}
       <div className="wf3-cap">
         <div className="w-row">
           <span className="m-small">Monthly credit limit</span>
