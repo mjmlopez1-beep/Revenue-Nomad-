@@ -35,7 +35,7 @@ import { COL_NONE, FILTERS, SORTS, colOf, dropStage, nextOf, passes, sortDeals, 
 import { DealDrawer } from "../../../pipeline/DealDrawer";
 import { AddDeal, AddFromList } from "../../../pipeline/AddDeal";
 import { Band, Chips, CoMark, Failed, MatchCount, More, NoMatch, Skel, St, Tabs, WorkMain, money, type MenuItem, type Tone } from "../parts";
-import { kMoney, moneyOf } from "./money";
+import { kMoney, moneyHead, moneyOf } from "./money";
 import { WIc } from "../icons";
 import "../../../workbench/workbench.css";
 import "../../../pipeline/board.css";
@@ -167,6 +167,8 @@ export function Ui3Pipeline() {
     );
 
   const m = moneyOf(deals);
+  const openHead = moneyHead(m.open, m.openN, m.openNoValue);
+  const propsHead = moneyHead(m.props, m.propsN, m.propsNoValue);
   const hot = deals.filter((r) => (OPEN as readonly string[]).includes(r.stage) && nextOf(r, today).hot);
   const nFilter = (k: FilterKey) => deals.filter((r) => passes(k, r, today, routes.get(r.company))).length;
   const openCount = deals.filter((r) => (OPEN as readonly string[]).includes(r.stage)).length;
@@ -468,17 +470,17 @@ export function Ui3Pipeline() {
       <div className="pl-metrics" aria-label="Money in your pipeline">
         <div className="pl-metric">
           <span className="w-kicker">Open pipeline</span>
-          <b>{kMoney(m.open)}</b>
+          <b data-unknown={openHead.unknown || undefined}>{openHead.big}</b>
           <small>
-            Potential monthly revenue · {m.openN} active {m.openN === 1 ? "opportunity" : "opportunities"}
+            {openHead.unknown ? openHead.left : `Potential monthly revenue · ${m.openN} active ${m.openN === 1 ? "opportunity" : "opportunities"}`}
           </small>
-          {m.openNoValue > 0 && <em>{m.openNoValue === 1 ? "1 deal has no value yet" : `${m.openNoValue} deals have no value yet`}</em>}
+          {!openHead.unknown && openHead.left && <em>{openHead.left}</em>}
         </div>
         <div className="pl-metric sub">
           <span className="w-kicker">Proposals out</span>
-          <b>{kMoney(m.props)}</b>
+          <b data-unknown={propsHead.unknown || undefined}>{propsHead.big}</b>
           <small>
-            Monthly revenue proposed · {m.propsN} {m.propsN === 1 ? "opportunity" : "opportunities"}
+            {propsHead.unknown ? propsHead.left : `Monthly revenue proposed · ${m.propsN} ${m.propsN === 1 ? "opportunity" : "opportunities"}`}
           </small>
           <em>Part of the open pipeline</em>
         </div>

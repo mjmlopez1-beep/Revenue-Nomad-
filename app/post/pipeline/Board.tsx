@@ -653,7 +653,7 @@ function DealTable({
   const cols: ColumnDef[] = [
     { ...COMPANY_COLUMNS[0], words: (rs) => `${rs.length} ${rs.length === 1 ? "deal" : "deals"}` },
     col("plStage", "Stage", "minmax(112px, 0.6fr)", (ds) => `${ds.filter((d) => LINE.includes(d.stage) && d.stage !== "won").length} open`, () => true),
-    col("plValue", "Value a month", "minmax(112px, 0.6fr)", (ds) => `${money(ds.filter((d) => d.stage !== "won" && colOf(d.stage) !== "closed").reduce((n, d) => n + d.monthly, 0))} open`, (d) => shownMonthly(d) > 0),
+    col("plValue", "Value a month", "minmax(112px, 0.6fr)", (ds) => openValueLine(ds.filter((d) => d.stage !== "won" && colOf(d.stage) !== "closed")), (d) => shownMonthly(d) > 0),
     col("plWay", "Your way in", "minmax(180px, 1.2fr)", (ds) => `${pct(ds.filter((d) => !!wayOf(d, routes.get(d.company))).length, ds.length)} have one`, (d) => !!wayOf(d, routes.get(d.company))),
     col("plNext", "Next move", "minmax(190px, 1.2fr)", (ds) => `${ds.filter((d) => passes("due", d, today)).length} due`, () => true),
     col("plPaper", "Proposal or contract", "minmax(170px, 1.1fr)", (ds) => `${ds.filter((d) => !!d.paper).length} of ${ds.length}`, (d) => !!d.paper),
@@ -768,4 +768,12 @@ function DealTable({
       {rows.length < deals.length && <p className="pl2-wait">{deals.length - rows.length} more show once all your companies load.</p>}
     </div>
   );
+}
+
+/** The open deals' value a month for the column's head: unpriced deals are left out and said, never read as $0 (owner review, simulated operators 3). */
+function openValueLine(open: readonly { value: number | null; monthly: number; won?: unknown }[]): string {
+  const unpriced = open.filter((d) => !d.won && d.value === null).length;
+  if (open.length && unpriced === open.length) return `Value unknown · ${unpriced} unpriced`;
+  const sum = open.filter((d) => d.won || d.value !== null).reduce((n, d) => n + d.monthly, 0);
+  return `${money(sum)} open${unpriced ? ` · ${unpriced} unpriced` : ""}`;
 }

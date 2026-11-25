@@ -421,6 +421,23 @@ async function main() {
   check("…a Won deal with no terms and no value counts nothing, never guessed", money.moneyOf([D("won", 0)]).won === 0);
   check("lost and not now count nowhere", m.open + m.won === 69000);
   check("a deal with no value is counted as such, never guessed", m.openNoValue === 1);
+  // Owner review, simulated operators 3: unknown values are unknown, never $0.
+  {
+    const V = (stage: string, value: number | null) => ({ stage, value, monthly: value ?? 0, won: undefined }) as never;
+    const allMissing = money.moneyOf([V("reach", null), V("sent", null)]);
+    const hAll = money.moneyHead(allMissing.open, allMissing.openN, allMissing.openNoValue);
+    check("sim 3, all missing: 'Value unknown · 2 unpriced deals', never $0", hAll.big === "Value unknown" && hAll.unknown && hAll.left === "2 unpriced deals, not counted" && allMissing.open === 0 && allMissing.openNoValue === 2, [allMissing, hAll]);
+    const zero = money.moneyOf([V("reach", 0), V("sent", 0)]);
+    const hZero = money.moneyHead(zero.open, zero.openN, zero.openNoValue);
+    check("sim 3, explicit zero: a value of $0 is a value: $0, nothing unpriced", hZero.big === "$0" && !hZero.unknown && hZero.left === null && zero.openNoValue === 0, [zero, hZero]);
+    const mixed = money.moneyOf([V("reach", 6000), V("sent", null), V("proposal", null), V("proposal", 4000)]);
+    const hMix = money.moneyHead(mixed.open, mixed.openN, mixed.openNoValue);
+    const pMix = money.moneyHead(mixed.props, mixed.propsN, mixed.propsNoValue);
+    check("sim 3, mixed: the total counts only the priced deals and says how many are left out", mixed.open === 10000 && hMix.big === "$10k" && hMix.left === "Not counted: 2 unpriced deals" && pMix.big === "$4k" && pMix.left === "Not counted: 1 unpriced deal", [mixed, hMix, pMix]);
+    const plSrc = readFileSync(path.join(ROOT, "app/post/ui3/work/pipeline/PipelinePage.tsx"), "utf8");
+    check("sim 3: the money cards lead with moneyHead (Value unknown when nothing is priced)", /const openHead = moneyHead\(m\.open, m\.openN, m\.openNoValue\);/.test(plSrc) && /\{openHead\.big\}/.test(plSrc) && /\{propsHead\.big\}/.test(plSrc) && !/kMoney\(m\.open\)/.test(plSrc));
+    check("sim 3: the current look's table head says Value unknown too, never $0 for unpriced deals", /Value unknown · \$\{unpriced\} unpriced/.test(readFileSync(path.join(ROOT, "app/post/pipeline/Board.tsx"), "utf8")));
+  }
   check("the money words: $96.5k, $26.5k, $12k, $900", money.kMoney(96500) === "$96.5k" && money.kMoney(26500) === "$26.5k" && money.kMoney(12000) === "$12k" && money.kMoney(900) === "$900" && money.kMoney(120000) === "$120k");
 
   /* ---------- the shell and the record (acceptance F10, F14, F15, F20, F26, F29, F30, F35) ---------- */
