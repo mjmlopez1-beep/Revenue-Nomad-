@@ -94,8 +94,10 @@
   line-height: 18px;
   color: var(--muted);
 }
+/* The outbox's section headings (h2 under the page's h1; axe heading-order). */
 .sd-h3 {
   margin: 6px 0 0;
+  font-family: inherit;
   font-size: 12px;
   line-height: 16px;
   font-weight: 700;

@@ -503,19 +503,19 @@ export function Outbox() {
       </div>
       {waiting.length > 0 && (
         <>
-          <h3 className="sd-h3">Waiting for your approval</h3>
+          <h2 className="sd-h3">Waiting for your approval</h2>
           <ul className="sd-list">{waiting.map(row)}</ul>
         </>
       )}
       {going.length > 0 && (
         <>
-          <h3 className="sd-h3">Going out</h3>
+          <h2 className="sd-h3">Going out</h2>
           <ul className="sd-list">{going.map(row)}</ul>
         </>
       )}
       {done.length > 0 && (
         <>
-          <h3 className="sd-h3">{WORDS.sentFrom}</h3>
+          <h2 className="sd-h3">{WORDS.sentFrom}</h2>
           <ul className="sd-list">{done.map(row)}</ul>
         </>
       )}
