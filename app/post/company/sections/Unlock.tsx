@@ -11,6 +11,7 @@ import { Sheet, ZeroCredits, GET_COMPANY_CREDITS, needsSpendConfirm, useUi, useP
 import { sendSignal } from "../../ProOffer";
 import { plural } from "../../hooks";
 import { companyLater, freeCompanyNow, proOpensUsed, unlockFreeWords } from "../../display";
+import { useOpenSay } from "../../ui3/head";
 import { EnvCtx, UNLOCK_COMPANY, UNLOCK_ROLE_SAY, UNLOCK_ROLE_SHORT, earnLine, listOf, openRole, pickExempt, useEnv, useEscape } from "./env";
 import { AddFact } from "./Facts";
 
@@ -94,6 +95,8 @@ export function planOf(i: CoInfo): Plan {
 export function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
   const ui = useUi();
   const env = useEnv();
+  // The new design (RN_UI3) says Open: "Open all 6".
+  const say = useOpenSay();
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -141,19 +144,19 @@ export function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
       disabled={busy}
       aria-busy={busy}
       aria-expanded={needsSpendConfirm(cost) ? ask : undefined}
-      aria-label={busy ? "Unlocking" : `Unlock all ${facts} locked facts here for ${price}`}
+      aria-label={say(busy ? "Unlocking" : `Unlock all ${facts} locked facts here for ${price}`)}
       onClick={() => (needsSpendConfirm(cost) ? setAsk(true) : go())}
     >
       {busy ? (
-        "Unlocking"
+        say("Unlocking")
       ) : bar ? (
         <span className="tp-ua-two">
-          <span>Unlock all {facts}</span>
+          <span>{say("Unlock all")} {facts}</span>
           <span className="tp-ua-cost num">{price}</span>
         </span>
       ) : (
         <span>
-          Unlock all {facts} · <span className="num">{price}</span>
+          {say("Unlock all")} {facts} · <span className="num">{price}</span>
         </span>
       )}
     </button>
@@ -163,7 +166,7 @@ export function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
       <span className="tp-unlockall">
         {button}
         <Sheet
-          title={`Unlock all ${facts} here?`}
+          title={say(`Unlock all ${facts} here?`)}
           onClose={cancel}
           footer={
             <div className="tp-sheet-actions">
@@ -256,7 +259,8 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
   const label = free ? unlockFreeWords(ui.me) : UNLOCK_COMPANY;
   const included = !roles ? "Name, website and logo" : rate ? "Job posting and rate included" : "Job posting included";
   // Short of the price: "Get 2 credits" opens the ways to get them (earn one, the top-up, Pro).
-  const text = busy ? "Unlocking" : trialUsed ? "Opens tomorrow" : later ? "Unlocks again tomorrow" : broke ? GET_COMPANY_CREDITS : label;
+  const say = useOpenSay();
+  const text = say(busy ? "Unlocking" : trialUsed ? "Opens tomorrow" : later ? "Unlocks again tomorrow" : broke ? GET_COMPANY_CREDITS : label);
   return (
     <>
       <button
@@ -265,7 +269,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         className={`btn ${pine}${bar ? " tp-uc-bar" : ""}`}
         disabled={busy || later}
         aria-busy={busy}
-        aria-label={busy || later || broke ? text : `${free ? `Unlock company free. ${unlockFreeWords(ui.me)}` : UNLOCK_ROLE_SAY}. ${included}.`}
+        aria-label={busy || later || broke ? text : say(`${free ? `Unlock company free. ${unlockFreeWords(ui.me)}` : UNLOCK_ROLE_SAY}. ${included}.`)}
         onClick={() => {
           if (free || ui.me.credits >= COMPANY_PRICE) return ui.unlock({ entity: "company", id, field: "identity" }, { onWall: () => setZero(true) });
           sendSignal("wall", "identity");
@@ -275,7 +279,7 @@ export function UnlockCompany({ id, rate, roles, bar }: { id: string; rate: bool
         {bar && !busy && !later && !broke ? (
           // A phone's sticky bar: the price on one line, what comes with it on a small second line.
           <span className="tp-ua-two">
-            <span>{free ? unlockFreeWords(ui.me) : UNLOCK_ROLE_SHORT}</span>
+            <span>{say(free ? unlockFreeWords(ui.me) : UNLOCK_ROLE_SHORT)}</span>
             <span className="tp-ua-cost">{included}</span>
           </span>
         ) : (

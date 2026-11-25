@@ -3437,7 +3437,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 ? "targets"
                 : ui3WorkKey(onScreen); // wave 2: the Work and Community pages (ui3/work/pages.ts)
   const ui3Page = ui3Key && (UI3_BUILT as readonly string[]).includes(ui3Key) ? ui3Key : null;
-  const ui3Nav = ui3 ? ui3Current(onScreen, recordType, tab, !!RecordPage, navOn2?.key ?? null) : null;
+  const ui3Nav = ui3 ? ui3Current(onScreen, recordType, tab, !!RecordPage, navOn2?.key ?? null, RecordPage && drawer ? (drawer.over ?? drawer.returnTo ?? null) : null) : null;
   const ui3Menu = ui3 ? (navSide ? menuRef : moreRef) : null;
 
   /* ----- layout ----- */

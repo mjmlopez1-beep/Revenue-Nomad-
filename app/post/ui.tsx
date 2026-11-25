@@ -27,6 +27,7 @@ import { CreditsWall, GetCredits, UpgradeNote } from "./Billing";
 import { InvitePanel } from "./Invite";
 import { SEAT_YIELD, tappedWhat, wallBack } from "./earnBack";
 import { companyLater, freeCompanyNow, marksConfirmed, unlockFreeWords } from "./display";
+import { useOpenSay } from "./ui3/head";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -1315,6 +1316,8 @@ export function askSpend(x: { cost: number; what: string; credits: number; then?
 
 /** The question before a spend. Mount it once (the top bar does). */
 export function SpendHost() {
+  // The new design says Open (lib: ui3/head.ts openSay).
+  const say = useOpenSay();
   const x = useSyncExternalStore(
     (f) => (askSubs.add(f), () => askSubs.delete(f)),
     () => askNow,
@@ -1351,7 +1354,7 @@ export function SpendHost() {
           Not now
         </button>
         <button type="button" className="btn btn-pine" autoFocus onClick={() => answer(true)}>
-          {x.go ?? "Unlock"} · <span className="num">{plural(x.cost, "credit")}</span>
+          {x.go ?? say("Unlock")} · <span className="num">{plural(x.cost, "credit")}</span>
         </button>
       </div>
     </Anchored>

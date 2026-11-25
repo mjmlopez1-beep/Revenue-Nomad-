@@ -27,6 +27,14 @@ export interface Ui3HeaderApi {
 export const Ui3HeaderCtx = createContext<Ui3HeaderApi | null>(null);
 export const useUi3Header = () => useContext(Ui3HeaderCtx);
 
+/** The new design says Open where today's pages say Unlock ("Open company · 2 credits", "Open all 6"); today's look keeps its words. */
+export const openSay = (text: string, ui3: boolean) => (ui3 ? text.replace(/\bUnlock(s|ing)?\b/g, (_m, x?: string) => (x === "s" ? "Opens" : x === "ing" ? "Opening" : "Open")) : text);
+/** openSay for the page on screen: Open inside the new design's shell. */
+export const useOpenSay = () => {
+  const on = !!useUi3Header();
+  return (text: string) => openSay(text, on);
+};
+
 /** A new-design page's breadcrumb, for the shell's top bar. */
 export function useUi3Head(crumbs: Crumb[], title: string) {
   const api = useUi3Header();

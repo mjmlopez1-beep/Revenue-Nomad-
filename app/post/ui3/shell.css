@@ -27,7 +27,11 @@ html[data-theme="dark"]:has(.tp-app.ui3) body { background: #0f1412; }
 .ui3 .m-nav-foot { margin-top: 10px; padding-top: 60px; flex: none; }
 .ui3 .m-user .u3-ellip { min-width: 0; }
 .ui3 .m-user .u3-ellip b, .ui3 .m-user .u3-ellip small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-height: 760px) { .ui3 .m-nav-sec { padding-top: 12px; } .ui3 .m-nav-item { height: 38px; } .ui3 .m-nav-foot { padding-top: 30px; } }
+/* Laptops (1280x800, 1366x768): every nav item fits above the account, and the art stays behind the account, never over a link. */
+@media (max-height: 900px) { .ui3 .m-brand { padding-bottom: 16px; } .ui3 .m-nav-sec { padding: 12px 12px 6px; } .ui3 .m-nav-item { height: 38px; } .ui3 .m-nav-foot { padding-top: 14px; } .ui3 .m-nav-art { height: 150px; } }
+@media (max-height: 780px) { .ui3 .m-nav { padding-top: 16px; } .ui3 .m-nav-sec { padding: 10px 12px 5px; } .ui3 .m-nav-item { height: 35px; } .ui3 .m-nav-foot { padding-top: 8px; } .ui3 .m-nav-art { height: 118px; } }
+/* Shorter still, the list scrolls: its last line fades, so more below reads as more. */
+@media (max-height: 700px) { .ui3 .u3-navlist { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); } }
 
 /* ---------- the top bar ---------- */
 .ui3 .m-top { position: relative; flex: none; height: 64px; padding: 0 40px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
