@@ -91,6 +91,17 @@ async function pure() {
   check("six steps: the card's words", gs.sixLine(s0) === "0 of 5 done" && s0.minutes === 12);
   check("step 1: an ideal client on file", six({ icp }).steps[0].done && !six({ icp: { industries: [], employees: [], revenue: [], countries: [] } }).steps[0].done);
   check("step 2: a seat held", six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.done && six({}, { seatsHeld: 1 }).steps.find((x) => x.key === "seat")!.pill === "Earns credits");
+  // Acceptance F37: a reload on set-up's "Your first company" (the profile is in, so the member reads as onboarded) stays there until Finish.
+  {
+    const SMod = await import("../app/onboard/setupModel");
+    const rootSrc = (await import("node:fs")).readFileSync("app/Root.tsx", "utf8");
+    const setupSrc = (await import("node:fs")).readFileSync("app/onboard/Setup.tsx", "utf8");
+    check("a reload on Your first company keeps set-up on screen (history says screen 6), and Setup opens on it", SMod.PROFILE_SCREEN === 6 && /Number\(window\.history\.state\?\.ob\) === 6\) setObHold\(true\)/.test(rootSrc) && /me\.onboarded && entryStep\(\) === PROFILE_SCREEN \? PROFILE_SCREEN :/.test(setupSrc));
+  }
+  // Acceptance F38: on a paid plan the steps lead with value, never with earning credits.
+  const paid = six({ icp }, { paid: true });
+  check("on Pro, Close or the trial: after the ideal client comes bringing in who you know, then the seats", paid.next?.key === "network" && paid.steps.map((x) => x.key).slice(0, 3).join() === "icp,network,seat" && paid.steps.map((x) => x.n).join() === "1,2,3,4,5", paid.steps.map((x) => x.key));
+  check("…and the seats step says what a seat does for them, with no earn pill", !/credit/i.test(paid.steps.find((x) => x.key === "seat")!.gives) && !paid.steps.find((x) => x.key === "seat")!.pill);
   check("step 3: Google or the LinkedIn connections file brought in", six({ started: { note: false, network: true } }).steps.find((x) => x.key === "network")!.done);
   const noNet = six({ started: { note: false, network: false, networkOff: true } });
   check("step 3 is left out while Your network is off (it could never be done)", !noNet.steps.some((x) => x.key === "network") && noNet.of === 4 && gs.sixLine(noNet) === "0 of 4 done");
