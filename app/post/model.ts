@@ -226,6 +226,15 @@ export const OPEN_ROLE_BUNDLE = ["posting", "rate", "hours"];
 /** The one lock that spends for an open role: the first of its role, posting and rate still locked. */
 export const bundleLead = (e: EngagementRec) => OPEN_ROLE_BUNDLE.find((f) => e.cells[f]?.s === "locked") ?? null;
 /** An open role nobody holds yet: it has no start, end, why hired or how sourced. */
+/**
+ * Asking for an open role's posting, posted rate or hours at a locked company buys the company with
+ * it (lib/table.ts bundle): COMPANY_PRICE, not 1 credit. The quote before the spend says so.
+ */
+export const buysCompany = (i: CoInfo | undefined, t: { entity: string; id: string; field: string }): boolean => {
+  if (!i?.c.hidden || t.entity !== "engagement" || !OPEN_ROLE_BUNDLE.includes(t.field)) return false;
+  const e = i.engs.find((x) => x.id === t.id);
+  return !!e && isOpenRole(e);
+};
 export const isUnheldOpenRole = (e: EngagementRec) => isOpenRole(e) && (!e.cells.operator || e.cells.operator.s === "empty");
 /** Facts an open role nobody holds can't have yet. Shown as a quiet dash, never "+ Add". */
 export const NOT_YET_ON_OPEN_ROLE = ["start", "end", "reason", "sourced"];

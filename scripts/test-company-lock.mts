@@ -105,6 +105,10 @@ const seed = {
     { id: "m_fcap", name: "Fay Freecap", email: "fay@example.com", title: "Fractional CMO", token: "tok-fcap-lock" },
     { id: "m_pcap", name: "Pia Procap", email: "pia@example.com", title: "Fractional CMO", token: "tok-pcap-lock" },
     { id: "m_miss", name: "Milo Misser", email: "milo@example.com", title: "Fractional CMO", token: "tok-miss-lock" },
+    // Owner review M2, the unlock prices against the ledger: one member a case, nothing else on their ledger.
+    { id: "m_m2free", name: "Mia Freeopen", email: "mia-m2@example.com", title: "Fractional CMO", token: "tok-m2free-lock" },
+    { id: "m_m2paid", name: "Pax Paidopen", email: "pax-m2@example.com", title: "Fractional CMO", token: "tok-m2paid-lock" },
+    { id: "m_m2vis", name: "Vic Visible", email: "vic-m2@example.com", title: "Fractional CRO", token: "tok-m2vis-lock" },
   ],
   companies: [
     { id: CO.acme.id, fields: coFields(CO.acme, { hq: "Austin, TX", industry: "SaaS", revenue: "$1M–$5M", employees: "11–50" }) },
@@ -157,6 +161,8 @@ writeFileSync(
       { memberId: "m_pete", delta: 0, reason: "unlock", ref: "c_gone_free.identity", at: ago(0), why: "free" },
       { memberId: "m_zed", delta: -25, reason: "reversal", ref: "x.y", at: ago(30) },
       { memberId: "m_cap", delta: 100, reason: "plan", ref: "plan", at: ago(0.1) },
+      // Pax used today's free company already (on a company gone since), so his next company is paid.
+      { memberId: "m_m2paid", delta: 0, reason: "unlock", ref: "c_gone_free2.identity", at: ago(0), why: "free" },
       ...capRows,
     ],
     unlocks: { [`${CO.elm.id}.identity`]: ["m_olga"], "e_fox_open.posting": ["m_olga"], "p_gran_ceo.name": ["m_olga"] },
@@ -173,6 +179,8 @@ writeFileSync(
     values: {
       // Ada added the industry at Dunmorely: she knows it.
       [`${CO.dun.id}.industry`]: v("Biotech", "m_ada"),
+      // Vic added a fact at Foxglovia: the company is already visible to him (its open role's posting is still locked).
+      [`${CO.fox.id}.employees`]: v("201–500", "m_m2vis"),
       [`${SPAM.id}.website`]: v(SPAM.site, "m_sam"),
       [`${SPAM.id}.industry`]: v("SaaS", "m_sam"),
     },
@@ -982,6 +990,58 @@ async function main() {
   const p = await preview({ fn: "Marketing" });
   const named = p.rows.filter((r) => r.company && "name" in r.company && r.company.name).map((r) => (r.company as { name: string }).name);
   check("the signed-out preview still names companies, as before", named.length > 0 && named.some((n) => Object.values(CO).some((c) => c.name === n)), named);
+  /* ---------- owner review M2: what an unlock costs, against the ledger ---------- */
+  console.log("\nUnlock prices against the ledger (owner review M2)");
+  {
+    const rowsOf = async (memberId: string) => (await T.loadState()).ledger.filter((l) => l.memberId === memberId && l.reason === "unlock");
+    // Free: an entitlement applies (the free company of the day). Asking for the posting of a locked hiring company buys the company bundle, for 0.
+    const f0 = (await view("tok-m2free-lock")).me!.credits;
+    const fr = await act("tok-m2free-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "posting" });
+    const fRows = await rowsOf("m_m2free");
+    const fBlue = coOf(await view("tok-m2free-lock"), CO.blue.id)!;
+    check("M2 free: the posting at a locked company opens with the company, free with the free company of the day", fr.ok && fr.r.me?.credits === f0 && fBlue.hidden !== true && fBlue.engagements[0].cells.posting?.s === "value" && fBlue.engagements[0].cells.rate?.s === "value", fr.ok ? fr.r.message : fr);
+    check("M2 free: one ledger row, 0 credits, on the company, marked free", fRows.length === 1 && fRows[0].delta === 0 && fRows[0].ref === `${CO.blue.id}.identity` && fRows[0].why === "free", fRows);
+    // Paid: the locked-company bundle, 2 credits, one row on the company (the posting and rate come with it, no row of their own).
+    const p0 = (await view("tok-m2paid-lock")).me!.credits;
+    const pr = await act("tok-m2paid-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "posting" });
+    const pRows = (await rowsOf("m_m2paid")).filter((l) => l.ref !== "c_gone_free2.identity");
+    const pBlue = coOf(await view("tok-m2paid-lock"), CO.blue.id)!;
+    check("M2 paid: the posting at a locked company is the company bundle, 2 credits", pr.ok && pr.r.me?.credits === p0 - 2 && / for 2 credits\.$/.test(pr.r.message) && pBlue.hidden !== true && pBlue.engagements[0].cells.posting?.s === "value" && pBlue.engagements[0].cells.rate?.s === "value", pr.ok ? pr.r.message : pr);
+    check("M2 paid: one ledger row of -2 on the company, none for the posting or the rate", pRows.length === 1 && pRows[0].delta === -2 && pRows[0].ref === `${CO.blue.id}.identity` && !pRows[0].why, pRows);
+    // Already visible: a new posting at a company the member can see is 1 credit, on the posting.
+    const vFox0 = coOf(await view("tok-m2vis-lock"), CO.fox.id)!;
+    const v0 = (await view("tok-m2vis-lock")).me!.credits;
+    const vr = await act("tok-m2vis-lock", { type: "unlock", entity: "engagement", id: pub("e_fox_open"), field: "posting" });
+    const vRows = await rowsOf("m_m2vis");
+    check("M2 already visible: the company is named and its open role's posting is locked before", vFox0.hidden !== true && vFox0.name === CO.fox.name && vFox0.engagements.find((e) => e.id === pub("e_fox_open"))?.cells.posting?.s === "locked", vFox0.engagements.map((e) => e.cells.posting));
+    check("M2 already visible: the posting is 1 credit", vr.ok && vr.r.me?.credits === v0 - 1 && / for 1 credit\.$/.test(vr.r.message), vr.ok ? vr.r.message : vr);
+    check("M2 already visible: one ledger row of -1 on the posting, none on the company", vRows.length === 1 && vRows[0].delta === -1 && vRows[0].ref === "e_fox_open.posting", vRows);
+    // Repeated: each again is free, and writes no ledger row.
+    const again = [
+      await act("tok-m2free-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "posting" }),
+      await act("tok-m2paid-lock", { type: "unlock", entity: "company", id: pub(CO.blue.id), field: "identity" }),
+      await act("tok-m2paid-lock", { type: "unlock", entity: "engagement", id: pub("e_blue_open"), field: "rate" }),
+      await act("tok-m2vis-lock", { type: "unlock", entity: "engagement", id: pub("e_fox_open"), field: "posting" }),
+    ];
+    const after = [(await rowsOf("m_m2free")).length, (await rowsOf("m_m2paid")).length, (await rowsOf("m_m2vis")).length];
+    const credits = [(await view("tok-m2free-lock")).me!.credits, (await view("tok-m2paid-lock")).me!.credits, (await view("tok-m2vis-lock")).me!.credits];
+    check("M2 repeated: asking again spends nothing, in plain words", again.every((x) => !x.ok && /Nothing here is locked, so no credit was spent\./.test(x.error)), again.map((x) => (x.ok ? x.r.message : x.error)));
+    check("M2 repeated: no new ledger rows and the same balances", after.join() === "1,2,1" && credits.join() === [f0, p0 - 2, v0 - 1].join(), [after, credits]);
+    // The words at the point of action say the same rules.
+    const pmodel = readFileSync(path.join(process.cwd(), "app/post/model.ts"), "utf8");
+    check("M2 words: in the app a locked company's posting says it comes with the company for 2 credits, a visible one's says 1 credit", pmodel.includes("Comes with the company. Unlock the company for ${COMPANY_PRICE_SAY} and you see its name, the job posting and the posted rate.") && pmodel.includes("One credit opens the job posting and the posted rate."));
+    const vis = readFileSync(path.join(process.cwd(), "app/landing/Visuals.tsx"), "utf8");
+    check("M2 words: the landing hero's posting is quoted as the locked-company bundle (2 credits) and says when it is 1", /PostingUnlock/.test(vis) && /COMPANY_PRICE/.test(vis) && /already see the company, a new job posting there is 1 credit/.test(vis));
+    const PM = await import("../app/post/model");
+    const hiddenBlue = { c: { hidden: true }, engs: [{ id: "eb", opened: "2026-01-01", cells: {} }] } as never;
+    const openBlue = { c: { hidden: false }, engs: [{ id: "eb", opened: "2026-01-01", cells: {} }] } as never;
+    check("M2 quote: in the app, a posting at a locked company is quoted as the company (buysCompany), at a visible one as 1 credit", PM.buysCompany(hiddenBlue, { entity: "engagement", id: "eb", field: "posting" }) && PM.buysCompany(hiddenBlue, { entity: "engagement", id: "eb", field: "rate" }) && !PM.buysCompany(openBlue, { entity: "engagement", id: "eb", field: "posting" }) && !PM.buysCompany(hiddenBlue, { entity: "engagement", id: "eb", field: "operator" }));
+    const tpSrc = readFileSync(path.join(process.cwd(), "app/post/TradingPost.tsx"), "utf8");
+    check("M2 quote: the question before an unlock uses that price and names the company", /const costOf = \(t: FactRef, from\?: "crystal"\) => \(t\.field === "identity" \|\| buysCompany\(ownerOf\.get\(t\.id\), t\) \? \(from === "crystal" \|\| freeCompanyNow\(me\) \? 0 : COMPANY_PRICE\) : 1\);/.test(tpSrc) && /confirmSpend\(costOf\(t, opts\?\.from\), whatOf\(t\)\)/.test(tpSrc));
+    const readme = readFileSync(path.join(process.cwd(), "README.md"), "utf8");
+    check("M2 README: the locked-company bundle is 2 credits, a posting at a visible company 1, a repeat free", /A hidden company is one purchase with the role and posting of each open role there: asking for the company, such a role or such a posting buys all of them for 2 credits/.test(readme) && /posting and posted rate of an open role at a company the member can already see are one purchase for 1 credit/.test(readme) && /Asking again for anything already open spends nothing/.test(readme) && !/buys all of them for 1 credit/.test(readme));
+  }
+
   const signedOut = await T.buildView(null);
   check("the signed-out table sends counts only", !signedOut.companies.length || leaks(signedOut, ALL).length === 0);
 

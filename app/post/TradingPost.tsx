@@ -42,7 +42,7 @@ import type { CompanyRec } from "@/lib/tableTypes";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cardSeat, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, hireCounts, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
-  icpApplies, icpMatch, newThisWeek, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
+  icpApplies, icpMatch, newThisWeek, buysCompany, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { COLS_PARAM, colsOf, PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
@@ -1072,8 +1072,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const firstUnlock = me.unlocked === 0;
   const flagOn = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which], ...keys]) }));
   const flagOff = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which]].filter((k) => !keys.includes(k))) }));
-  /** What an unlock will likely cost, before the server says: a company COMPANY_PRICE (free while a free open is left, or from Crystal Ball), any other fact 1. */
-  const costOf = (t: FactRef, from?: "crystal") => (t.field === "identity" ? (from === "crystal" || freeCompanyNow(me) ? 0 : COMPANY_PRICE) : 1);
+  /**
+   * What an unlock will likely cost, before the server says: a company COMPANY_PRICE (free while a free open is left, or from Crystal Ball), any other fact 1.
+   * An open role's posting at a locked company buys the company (buysCompany), so it is quoted as the company.
+   */
+  const costOf = (t: FactRef, from?: "crystal") => (t.field === "identity" || buysCompany(ownerOf.get(t.id), t) ? (from === "crystal" || freeCompanyNow(me) ? 0 : COMPANY_PRICE) : 1);
+  const whatOf = (t: FactRef) => spendWhat(buysCompany(ownerOf.get(t.id), t) ? { entity: "company", id: t.id, field: "identity" } : t);
   /** Ask first when the spend calls for it (the session's first, or 2 credits or more): false when the member says Not now. */
   const confirmSpend = async (cost: number, what: string) => !needsSpendConfirm(cost) || me.credits < cost || (await askSpend({ cost, what, credits: me.credits }));
   /** After a spend: its toast says what it opened, with Undo for 10 seconds (the server's undoUnlock). */
@@ -1083,7 +1087,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   };
   const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void; from?: "crystal"; asked?: boolean }): Promise<boolean> => {
     const k = cellKey(t.id, t.field);
-    if (!opts?.asked && !(await confirmSpend(costOf(t, opts?.from), spendWhat(t)))) return false;
+    if (!opts?.asked && !(await confirmSpend(costOf(t, opts?.from), whatOf(t)))) return false;
     flagOn("busy", [k]);
     const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field, ...(opts?.from ? { from: opts.from } : {}) }, { quiet: true, silentError: true });
     flagOff("busy", [k]);
@@ -1109,7 +1113,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const unlockMany = useStable(async (items: FactRef[], opts?: { confirmed?: boolean; cost?: number }) => {
     const keys = items.map((t) => cellKey(t.id, t.field));
     const cost = opts?.cost ?? items.reduce((n, t) => n + costOf(t), 0);
-    if (!opts?.confirmed && !(await confirmSpend(cost, items.length === 1 ? spendWhat(items[0]) : `these ${items.length} facts`))) return false;
+    if (!opts?.confirmed && !(await confirmSpend(cost, items.length === 1 ? whatOf(items[0]) : `these ${items.length} facts`))) return false;
     flagOn("busy", keys);
     const r = await act({ type: "unlockMany", items: items.map(({ entity, id, field }) => ({ entity, id, field })) }, { quiet: true });
     flagOff("busy", keys);

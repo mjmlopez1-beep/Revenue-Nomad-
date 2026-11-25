@@ -16,6 +16,7 @@
 import type { ReactNode } from "react";
 import { CompanyLogo, IconCheck, IconLock } from "../ui/shared";
 import type { PreviewExample } from "./Finder";
+import { COMPANY_PRICE } from "@/lib/tableFields";
 
 /** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
 export function Locked({ w = 72 }: { w?: number }) {
@@ -27,21 +28,32 @@ export function Locked({ w = 72 }: { w?: number }) {
   );
 }
 
-/** The same locked fact as it looks under the pointer: one tap, one credit. With `onJoin`, a button that takes the visitor to the join form. */
-function Unlock({ onJoin, what }: { onJoin?: () => void; what?: string }) {
+/** The same locked fact as it looks under the pointer: one tap, its price (1 credit unless said). With `onJoin`, a button that takes the visitor to the join form. */
+function Unlock({ onJoin, what, cost = 1, say }: { onJoin?: () => void; what?: string; cost?: number; say?: string }) {
+  const price = `${cost} credit${cost === 1 ? "" : "s"}`;
   const label = (
     <span className="lock-cta lock-cta-static">
       <IconLock size={12} />
       <span>Unlock</span>
-      <span className="lock-cost num">· 1 credit</span>
+      <span className="lock-cost num">· {price}</span>
     </span>
   );
   if (!onJoin) return label;
   return (
-    <button type="button" className="lp-rec-btn" onClick={onJoin} aria-label={`Join free to unlock ${what ?? "this"} for 1 credit`}>
+    <button type="button" className="lp-rec-btn" onClick={onJoin} aria-label={say ?? `Join free to unlock ${what ?? "this"} for ${price}`}>
       {label}
     </button>
   );
+}
+
+/**
+ * The hero's job posting, priced as a new member meets it (owner review M2): on Free every company
+ * is locked, and asking for an open role's posting there buys the company with it, COMPANY_PRICE
+ * credits. Only at a company the member can already see is a new posting 1 credit.
+ */
+export const POSTING_PRICE_LINE = `On Free, ${COMPANY_PRICE} credits open a company with its job postings. Once you already see the company, a new job posting there is 1 credit. Your first company each day is free.`;
+function PostingUnlock({ onJoin }: { onJoin?: () => void }) {
+  return <Unlock onJoin={onJoin} cost={COMPANY_PRICE} say={`Join free. ${POSTING_PRICE_LINE}`} />;
 }
 
 /** A missing fact: add it and earn a credit. */
@@ -175,7 +187,7 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
                 <span className="lp-val lp-val-wrap">{open.title}</span>
               </Row>
               <Row k="Job posting">
-                <Unlock onJoin={onJoin} what="the job posting" />
+                <PostingUnlock onJoin={onJoin} />
               </Row>
             </dl>
           </div>
@@ -192,7 +204,8 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
               {seat.rnMember ? <span className="chip lp-member">Revenue Nomad member</span> : null}
             </Row>
             <Row k="Name and role">
-              <Unlock onJoin={onJoin} what="who held the seat and the role they held" />
+              {/* Fellow fractionals are free (PEERS_FREE): who held a seat shows at no charge once the company is open. */}
+              <span className="lp-val">Free once the company is open</span>
             </Row>
             <Row k="Rate">
               <Locked w={84} />
@@ -204,6 +217,7 @@ export function HeroRecord({ example, onJoin }: { example: PreviewExample | null
       <figcaption className="lp-visual-cap">
         A real record on Merlin today. {co.name}
         {open ? ` is hiring for ${open.function}, and whoever held its ${seat.function} seat is on file.` : `: whoever held its ${seat.function} seat is on file.`}
+        {open ? ` ${POSTING_PRICE_LINE}` : ""}
       </figcaption>
     </figure>
   );
@@ -226,7 +240,7 @@ export function DemoAdd() {
 export function DemoUnlock() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Seat holder</span>
+      <span className="lp-demo-k">Hiring exec</span>
       <Unlock />
       <span className="lp-demo-arrow">→</span>
       <span className="lp-demo-v">Alex Sample</span>
