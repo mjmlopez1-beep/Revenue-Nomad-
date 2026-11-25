@@ -149,7 +149,7 @@ export type Place = ReturnType<typeof parsePlace>;
  * `opts.ui2`: the new look is on, so its pages are places too and old pages open their new home
  * (UI2_FROM_OLD; ?p=proposals&ct=1 is Contracts). Off, the place is exactly as before.
  */
-export function parsePlace(me: Me, search: string, off: Set<string>, from?: string, opts?: { ui2?: boolean }) {
+export function parsePlace(me: Me, search: string, off: Set<string>, from?: string, opts?: { ui2?: boolean; ui3?: boolean }) {
   const ui2 = !!opts?.ui2;
   const d = placeDefaults(me, off);
   const q = new URLSearchParams(from ?? search);
@@ -179,7 +179,8 @@ export function parsePlace(me: Me, search: string, off: Set<string>, from?: stri
         : PLACE_PAGES.find((x) => x === asked) ?? (ui2 ? UI2_PAGES.find((x) => x === asked) : undefined) ?? null;
   // The Fractionals directory (and Referral partners before it) lives in Peers now: their old addresses open Peers' Every fractional.
   const p1: PlacePage | Ui2Page | null = p0 === "fractionals" || p0 === "partners" ? "peers" : p0;
-  const p: PlacePage | Ui2Page | null = ui2 && p1 ? ui2PageOf(p1) : p1;
+  // The new design (RN_UI3) has its own My Network: ?p=network stays there instead of opening Warm paths.
+  const p: PlacePage | Ui2Page | null = ui2 && p1 ? (opts?.ui3 && p1 === "network" ? p1 : ui2PageOf(p1)) : p1;
   const pt = p === "peers" && (p0 !== "peers" || q.get("pt") === "all");
   // The radar's range the member picked (?p=radar&range=7d); a day (?sig=) wins.
   const range = p === "radar" && !sig ? radarRangeOf(q.get("range")) : null;

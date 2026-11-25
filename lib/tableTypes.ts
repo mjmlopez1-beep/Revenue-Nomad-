@@ -430,6 +430,14 @@ export interface Me {
   ui2Optin?: true;
   /** The "what this page is for" strips they dismissed (page keys), with the new look on. */
   stripsOff?: string[];
+  /* The new design (lib/ui3.ts, RN_UI3). With the flag off, or for a member it doesn't reach, none of these is sent. */
+  /** The new design is on for this member (RN_UI3=on, or optin and the admin chose it). */
+  ui3?: boolean;
+  /** RN_UI3=optin, admins only: the account menu offers "Try the new design" or "Back to the current design". */
+  ui3Optin?: true;
+  /** The new design's Saved companies and the companies left out of its lists (public ids), while it is on. */
+  ui3Saved?: string[];
+  ui3Hidden?: string[];
   /** The one-screen Proposals is on (RN_PROPOSALS2, lib/proposals/flag.ts). Left out while it is off. */
   proposals2?: true;
   /**
@@ -1238,7 +1246,7 @@ export type Action =
    * (false), only while RN_UI2 is optin; `stripOff` dismisses a page's "what this page is for"
    * strip and `stripOn` brings it back (Profile.stripsOff).
    */
-  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; headline?: string; city?: string; leads?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean; ui2?: boolean; stripOff?: string; stripOn?: string }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean; peerEmail?: boolean; partners?: boolean; fractionals?: boolean; nameHidden?: boolean; headline?: string; city?: string; leads?: boolean; radar?: boolean; radarEmail?: "daily" | "twice" | "weekly" | "off"; radarSlack?: boolean; ui2?: boolean; stripOff?: string; stripOn?: string; ui3?: boolean; ui3Save?: { id: string; on: boolean }; ui3Hide?: { id: string; on: boolean } }
   /**
    * Fractionals: "Unlock · 1 credit" on a fractional not on Merlin yet (FractionalRec.id). The same
    * purchase as who held one of their seats: every seat of theirs then shows who held it, with the role.

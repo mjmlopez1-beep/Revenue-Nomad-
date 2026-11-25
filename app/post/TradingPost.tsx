@@ -116,6 +116,12 @@ import { Spot, type SpotKind } from "../ui/fractions/lazy";
 import { AppCtxProvider, opensTable, pageDef, preloadPages, preloadUi2, tableSlotOf, type AppCtx, type ShellPage } from "./shell/pages";
 import { atOf as settingsAtOf, openSettings } from "./settings/at";
 import { setPeopleStart } from "./people/start";
+// The new design (RN_UI3, lib/ui3.ts): its shell and pages load on their own, only while it is on.
+import nextDynamic from "next/dynamic";
+import { ui3Action } from "@/lib/ui3";
+import { UI3_BUILT, Ui3HeaderCtx, type Ui3Head, type Ui3HeaderApi, type Ui3PageKey } from "./ui3/head";
+import { ui3Current } from "./ui3/current";
+const Ui3Frame = nextDynamic(() => import("./ui3/Frame").then((m) => m.Ui3Frame), { ssr: false });
 
 export interface TradingPostProps {
   view: View;
@@ -224,7 +230,7 @@ type Page = ShellPage;
 /** The page an old page key opens with the new look off (a new page's old home). */
 const OLD_PAGE: Partial<Record<Page, Page>> = { warm: "getin", alerts: "notifications", agent: "integrations", settings: "integrations", find: "table", evidence: "today", contracts: "proposals" };
 /** The page `p` opens in the look on screen (`ui2`: the new look). A page whose new one isn't built yet and stands in for the table (Find, for now) opens the table. */
-const pageFor = (p: Page, ui2: boolean): Page => (ui2 ? (opensTable(p) ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
+const pageFor = (p: Page, ui2: boolean, ui3 = false): Page => (ui3 && p === "network" ? p : ui2 ? (opensTable(p) ? "table" : ui2PageOf(p)) : OLD_PAGE[p] ?? p);
 
 /* ---------- the place in the address bar ---------- */
 
@@ -288,7 +294,7 @@ const presetsOff = (me: Me) => new Set((store.get(presetOffKey(me)) ?? "").split
 const defaultsFor = (me: Me) => placeDefaults(me, presetsOff(me));
 const sortDefault = (me: Me, v: Tab, f?: Filters): SortKey => placeSortDefault(me, v, f, presetsOff(me));
 /** A place as an address query: the URL's own (read on mount and on Back and Forward), or a saved view's. */
-const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "undefined" ? "" : window.location.search, presetsOff(me), from, { ui2: !!me.ui2 });
+const readPlace = (me: Me, from?: string) => parsePlace(me, typeof window === "undefined" ? "" : window.location.search, presetsOff(me), from, { ui2: !!me.ui2, ui3: !!me.ui3 && !!me.ui2 });
 
 /** The address is Today's: no place in it. */
 const atHome = () => !PLACE_KEYS.some((k) => new URLSearchParams(window.location.search).has(k));
@@ -431,22 +437,26 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    */
   const [deepRadar] = useState(() => place0.p === "radar" && !!place0.c && start !== "seats" && view.companies.some((c) => c.id === place0.c));
   const [page, setPageRaw] = useState<Page>(() =>
-    pageFor(start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"), !!me.ui2),
+    pageFor(start === "seats" ? "seats" : deepRadar ? "table" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? (place0.home ? "today" : "table"), !!me.ui2, !!me.ui3 && !!me.ui2),
   );
   /** The new look is on (Me.ui2, RN_UI2): its shell, and old pages open their new home. */
   const ui2 = !!me.ui2;
   const ui2Ref = useRef(ui2);
   ui2Ref.current = ui2;
+  /** The new design is on (Me.ui3, RN_UI3; it rides on the new look): its shell, and its own Home, Crystal Ball and Find pages. */
+  const ui3 = ui2 && !!me.ui3;
+  const ui3Ref = useRef(ui3);
+  ui3Ref.current = ui3;
   // The new look's own pages (Home, Find, the workbench) load on their own: with it on, at once.
   useEffect(() => {
     if (ui2) for (const f of preloadUi2()) void f().catch(() => {});
   }, [ui2]);
   /** Every page change goes through here: with the new look an old page opens its new home (place.ts ui2PageOf), without it a new page its old one. */
-  const setPage = useCallback((p: Page) => setPageRaw(pageFor(p, ui2Ref.current)), []);
+  const setPage = useCallback((p: Page) => setPageRaw(pageFor(p, ui2Ref.current, ui3Ref.current)), []);
   // The member switched the look (the member menu): the page on screen moves to its home in the other look.
   useEffect(() => {
-    setPageRaw((p) => pageFor(p, ui2));
-  }, [ui2]);
+    setPageRaw((p) => pageFor(p, ui2, ui3));
+  }, [ui2, ui3]);
   /** Where you can get in shows one company's way in: ?p=getin&w=<company>. Home, the pipeline and a record open it (openWay). */
   const [wayCo, setWayCo] = useState<string | null>(() => (typeof window !== "undefined" && (place0.p === "getin" || place0.p === "warm") ? new URLSearchParams(window.location.search).get("w") : null));
   /** Peers shows its Every fractional view (the directory): ?p=peers&pt=all, and the directory's old addresses. */
@@ -3376,18 +3386,60 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const defShown = RecordPage ? pageDef("company2") : onScreen === "today" ? (Home2 ? pageDef("home2") : null) : onScreen === "table" ? (Companies2 && tableSlot ? pageDef(tableSlot) : null) : defNow;
   const headOwn = !!defShown?.ownHeader && !!defShown.component;
 
+  /*
+   * ----- the new design (RN_UI3): its shell in place of the new look's rail, header and tab bar -----
+   * ui3/Frame.tsx draws each part; its own pages take the place of Home, Crystal Ball, Target
+   * Companies (the companies list), the company record, My Network and Warm paths once built
+   * (ui3/head.ts UI3_BUILT). Every other page is today's page inside the new shell.
+   */
+  const [ui3Head, setUi3Head] = useState<Ui3Head | null>(null);
+  // The top bar's search and actions as they are now, read when a page's own header draws it (the API itself stays put).
+  const ui3Live = useRef<{ search: React.ReactNode; actions: React.ReactNode }>({ search: null, actions: null });
+  ui3Live.current = { search: searchField, actions: headerActions };
+  const ui3Api = useMemo<Ui3HeaderApi | null>(
+    () =>
+      ui3
+        ? {
+            setHead: setUi3Head,
+            phone: !navSide,
+            top: (h) => (navSide ? <Ui3Frame part="top" crumbs={h.crumbs} title={h.title} search={ui3Live.current.search} actions={h.actions ?? ui3Live.current.actions} hosts={h.hosts} /> : <>{h.hosts}</>),
+          }
+        : null,
+    [ui3, navSide],
+  );
+  const ui3Key: Ui3PageKey | null = !ui3
+    ? null
+    : RecordPage
+      ? "company"
+      : onScreen === "today"
+        ? "home"
+        : onScreen === "radar"
+          ? "crystal"
+          : onScreen === "network"
+            ? "network"
+            : (onScreen === "warm" || onScreen === "getin")
+              ? "warm"
+              : onScreen === "table" && recordType === "companies" && tab !== "hiring" && !!Companies2
+                ? "targets"
+                : null;
+  const ui3Page = ui3Key && (UI3_BUILT as readonly string[]).includes(ui3Key) ? ui3Key : null;
+  const ui3Nav = ui3 ? ui3Current(onScreen, recordType, tab, !!RecordPage, navOn2?.key ?? null) : null;
+  const ui3Menu = ui3 ? (navSide ? menuRef : moreRef) : null;
+
   /* ----- layout ----- */
   return (
     <UiCtx.Provider value={ui}>
       <CellUiCtx.Provider value={cellUi}>
       <FitWhyCtx.Provider value={fitWhy}>
       <AppCtxProvider value={ctx}>
-      <div className={`tp-app tp-${layout}${ui2 ? " tp-ui2" : ""}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
+      <Ui3HeaderCtx.Provider value={ui3Api}>
+      <div className={`tp-app tp-${layout}${ui2 ? " tp-ui2" : ""}${ui3 ? " ui3" : ""}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
         <a href={page === "table" && !RecordPage ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
           {page === "table" && !RecordPage ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
         </a>
-        {navSide && ui2 && (
+        {navSide && ui3 && <Ui3Frame part="nav" nav2={nav2} current={ui3Nav} onNav={navTo2} me={me} onHome={goHome} onAccount={() => setPop((p) => (p === "menu" ? null : "menu"))} accountRef={menuRef} />}
+        {navSide && ui2 && !ui3 && (
           <Rail
             items={nav2}
             me={me}
@@ -3416,9 +3468,12 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           />
         )}
         <div className="tp-col">
+        {ui3 && !navSide && <Ui3Frame part="mtop" onHome={goHome} search={searchField} actions={headerActions} onAccount={() => (setMoreOpen(false), setPop((p) => (p === "menu" ? null : "menu")))} accountRef={moreRef} />}
         {ui2 ? (
           <>
-            {!headOwn && (
+            {ui3 ? (
+              navSide && (ui3Page || !headOwn) && <Ui3Frame part="top" crumbs={ui3Page && ui3Head ? ui3Head.crumbs : headCrumbs} title={ui3Page && ui3Head ? ui3Head.title : headTitle} search={searchField} actions={headerActions} />
+            ) : !headOwn && (
               <ShellHeader
                 crumbs={headCrumbs}
                 title={headTitle}
@@ -3477,7 +3532,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           </div>
         )}
 
-        {RecordPage ? (
+        {ui3Page ? (
+          <Ui3Frame part="page" page={ui3Page} />
+        ) : RecordPage ? (
           <RecordPage />
         ) : onScreen === "today" ? (
           Home2 ? <Home2 /> : homeEl
@@ -3496,8 +3553,9 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
           tableEl
         )}
         </div>
-        {!navSide && ui2 && <TabBar2 items={nav2} onNav={navTo2} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
-        {moreOpen && !navSide && ui2 && (
+        {!navSide && ui3 && <Ui3Frame part="tabbar" nav2={nav2} current={ui3Nav} onNav={navTo2} moreOpen={moreOpen} setMoreOpen={(f) => (setPop(null), setMoreOpen(f))} moreRef={moreRef} />}
+        {!navSide && ui2 && !ui3 && <TabBar2 items={nav2} onNav={navTo2} onMore={() => (setPop(null), setMoreOpen((x) => !x))} moreRef={moreRef} moreOpen={moreOpen} />}
+        {moreOpen && !navSide && ui2 && !ui3 && (
           <MoreSheet2
             items={nav2}
             me={me}
@@ -3709,6 +3767,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
                 : []),
               // RN_UI2=optin: the member tries the new look, or goes back to the old one (lib/ui2.ts). Kept on their profile, so a second device agrees.
               ...(me.ui2Optin ? [{ group: "The new look", label: ui2 ? "Back to the old look" : "Try the new Merlin", onClick: () => void act(ui2Action({ ui2: !ui2 })) }] : []),
+              // RN_UI3=optin (admins only): the new design, or back to the current one (lib/ui3.ts). Kept on their profile.
+              ...(me.ui3Optin ? [{ group: "The new design", label: ui3 ? "Back to the current design" : "Try the new design", onClick: () => void act(ui3Action({ ui3: !ui3 })) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
               ...(me.admin || me.asMember ? [{ group: "Admin", label: "See what members see", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
             ]}
@@ -3716,6 +3776,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
         <SendHost />
       </div>
+      </Ui3HeaderCtx.Provider>
       </AppCtxProvider>
       </FitWhyCtx.Provider>
       </CellUiCtx.Provider>

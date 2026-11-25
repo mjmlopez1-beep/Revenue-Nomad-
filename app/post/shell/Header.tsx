@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconPlus, IconSearch, IconX } from "../../ui/shared";
 import { ownClick, Mark } from "./Rail";
+import { useUi3Header } from "../ui3/head";
 import "./shell.css";
 
 export interface Crumb {
@@ -64,10 +65,13 @@ export function ShellHeader({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // The new design (RN_UI3): its own top bar with this page's breadcrumb (on phones, the shell's forest bar).
+  const ui3 = useUi3Header();
   const shown = phone && !!search && (open || !!searching);
   useEffect(() => {
     if (open) box.current?.querySelector<HTMLInputElement>("input")?.focus();
   }, [open]);
+  if (ui3) return <>{ui3.top({ crumbs, title, actions, hosts })}</>;
   if (shown)
     return (
       <header className="ws-head ws-head-phone">

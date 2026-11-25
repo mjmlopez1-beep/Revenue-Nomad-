@@ -157,6 +157,7 @@ import type { StoredDocument } from "./documents/types";
 import { proposalToPipeline, setPipelineHook } from "./proposals/pipelineHook";
 import { proposals2On } from "./proposals/flag";
 import { ui2Me, ui2Setting } from "./ui2";
+import { ui3Me, ui3Setting } from "./ui3";
 import { nameMayShow } from "./california";
 setPipelineHook(proposalToPipeline);
 export type { Action, ActionResult, View } from "./tableTypes";
@@ -402,6 +403,11 @@ interface Profile {
   ui2?: boolean;
   /** The "what this page is for" strips they dismissed in the new look (page keys, lib/ui2.ts). */
   stripsOff?: string[];
+  /** "Try the new design" (lib/ui3.ts): an admin's choice while RN_UI3 is optin. */
+  ui3?: boolean;
+  /** The new design's Saved companies, and the ones left out of its lists (public company ids, lib/ui3.ts). */
+  ui3Saved?: string[];
+  ui3Hidden?: string[];
   /** Crystal Ball's "What counts most" (lib/radar/tune.ts): only the groups set off Normal. Absent: every score as it was. */
   radarTune?: RadarTune;
 }
@@ -4914,6 +4920,8 @@ async function fullView(
       looking: typeof prof.looking === "boolean" ? prof.looking : null,
       // The new look (RN_UI2): nothing at all while the flag is off.
       ...ui2Me(prof),
+      // The new design (RN_UI3): nothing at all while the flag is off, or for a member it doesn't reach.
+      ...ui3Me(prof, { admin: isAdmin(me), ui2: !!ui2Me(prof).ui2 }),
       // The one-screen Proposals (RN_PROPOSALS2): left out while it is off.
       ...(proposals2On() ? { proposals2: true as const } : {}),
       // Their plan, only while billing is live (lib/billing). Without it nothing is gated.
@@ -7977,6 +7985,16 @@ export async function perform(
             };
           }
           // The new look (lib/ui2.ts): "Try the new Merlin", "Back to the old look", and the page strips dismissed.
+          // The new design (lib/ui3.ts): "Try the new design", and its Saved and Hidden companies.
+          {
+            const prof3 = s.profiles[me.id] ?? {};
+            const u = ui3Setting(a, prof3, { admin: isAdmin(me), ui2: !!ui2Me(prof3).ui2 });
+            if (u && "refused" in u) throw new ActionError(u.refused);
+            if (u) {
+              s.profiles[me.id] = u.profile;
+              return { message: u.message };
+            }
+          }
           {
             const u = ui2Setting(a, s.profiles[me.id] ?? {});
             if (u && "refused" in u) throw new ActionError(u.refused);
