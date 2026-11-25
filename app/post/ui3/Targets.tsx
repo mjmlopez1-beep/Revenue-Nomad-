@@ -133,6 +133,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
       <div className="u3-wrap">
         <Band art="titleSpy" title="Target Companies" lede="Find and prioritize the right companies for your next engagement." />
 
+        <h2 className="sr-only">Start from a question</h2>
         <div className="m-qcards">
           <button type="button" className="m-qcard am" aria-pressed={tile === "hiring"} onClick={() => (setTile(tile === "hiring" ? "all" : "hiring"), setTab("all"))}>
             <Ic n="brief" className="m-qi" />

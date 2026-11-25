@@ -854,7 +854,8 @@ async function journeyE() {
   const notes = ((await outbox(who))?.items ?? []).filter((x) => x.kind === "workflow" && x.status !== "draft");
   await sleep(2500);
   const done = (await wfRuns(who, wf.id)).find((r) => r.id === run?.id);
-  check("approve twice at once: one answer taken, the run goes on", [y1, y2].filter((x) => x.status === 200).length >= 1 && done?.status !== "waiting" && notes.length <= 1, { y1: y1.json?.error ?? "ok", y2: y2.json?.error ?? "ok", status: done?.status, notes: notes.length });
+  // The run goes on past the approval: done, or at its next wait (the template watches for a reply), never still at the note.
+  check("approve twice at once: one answer taken, the run goes on", [y1, y2].filter((x) => x.status === 200).length >= 1 && !(done?.status === "waiting" && done?.waiting === "send") && notes.length <= 1, { y1: y1.json?.error ?? "ok", y2: y2.json?.error ?? "ok", status: done?.status, waiting: done?.waiting, notes: notes.length });
   const r3 = await W2(who, { op: "answer", run: run?.id, yes: true });
   check("a retry of the answer is refused (already answered)", r3.status !== 200, r3.json);
   const detail = (await req("GET", `/api/workflows2?id=${wf.id}&run=${run?.id}`, { as: who })).json;
