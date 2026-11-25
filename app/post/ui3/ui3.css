@@ -25,7 +25,7 @@
   --m-gold: #d6a04d; --m-gold-wash: #fbefdb; --m-gold-soft: #f1d7a8; --m-gold-ink: #8a5f17;
   --m-peach-wash: #fbeee2;
   /* navigation */
-  --m-nav: #0f3a2f; --m-nav-2: #164a3c; --m-nav-active: #2c5e4c; --m-nav-ink: rgba(246, 242, 232, .8); --m-nav-hi: #f6f2e8; --m-nav-faint: rgba(246, 242, 232, .5);
+  --m-nav: #0f3a2f; --m-nav-2: #164a3c; --m-nav-active: #2c5e4c; --m-nav-ink: rgba(246, 242, 232, .8); --m-nav-hi: #f6f2e8; --m-nav-faint: rgba(246, 242, 232, .65);
   /* action */
   --m-action: #103e32; --m-action-hover: #1d5a47; --m-on-action: #f7f3ec;
   /* illustration palette (illustrations.js reads these, so art follows the theme) */

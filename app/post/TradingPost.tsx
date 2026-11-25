@@ -2722,7 +2722,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const skip = (e: React.MouseEvent) => {
     // Move focus without a hash in the address bar (it would be a history entry of its own).
     e.preventDefault();
-    const to = document.getElementById("tp-results") ?? document.querySelector<HTMLElement>(".tp-col main h1, .tp-col main");
+    // The new design's pages (Target Companies included) are #tp-page; the current look's table is #tp-results.
+    const to = document.getElementById("tp-results") ?? document.getElementById("tp-page") ?? document.querySelector<HTMLElement>(".tp-col main h1, .tp-col main");
     if (to && !to.hasAttribute("tabindex")) to.setAttribute("tabindex", "-1");
     to?.focus();
   };
@@ -3458,8 +3459,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       <Ui3HeaderCtx.Provider value={ui3Api}>
       <div className={`tp-app tp-${layout}${ui2 ? " tp-ui2" : ""}${ui3 ? " ui3" : ""}${emberTaken >= 2 ? " tp-ember-full" : ""}${navSide ? ` tp-navside${navCollapsed ? " tp-nav-folded" : ""}` : " tp-navbar"}${onScreen === "today" ? " tp-on-home" : ""}`}>
         {/* The first Tab stop: past the sidebar, to the list or the page. */}
-        <a href={page === "table" && !RecordPage ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
-          {page === "table" && !RecordPage ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
+        <a href={page === "table" && !RecordPage && !ui3Page ? "#tp-results" : "#tp-page"} className="tp-skip" onClick={skip}>
+          {page === "table" && !RecordPage && !ui3Page ? `Skip to the ${phone ? "list" : "table"}` : "Skip to the page"}
         </a>
         {navSide && ui3 && <Ui3Frame part="nav" nav2={nav2} current={ui3Nav} onNav={navTo2} me={me} onHome={goHome} onAccount={() => setPop((p) => (p === "menu" ? null : "menu"))} accountRef={menuRef} />}
         {navSide && ui2 && !ui3 && (

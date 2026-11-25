@@ -10,10 +10,10 @@
 .ui3 .w3 .wfs { padding: 0; display: grid; grid-template-columns: minmax(0, 760px) 320px; gap: 24px; justify-content: start; overflow: visible; }
 .ui3 .w3 .wfs-side { position: sticky; top: 12px; }
 /* the four stage colors: gold, purple, forest, terracotta */
-.ui3 .w3 .wf3-n01, .ui3 .w3 .wf3-mini .g1 .wf3-mn, .ui3 .w3 .wf3-test .g1 .wf3-mn { background: #c58a2e; }
+.ui3 .w3 .wf3-n01, .ui3 .w3 .wf3-mini .g1 .wf3-mn, .ui3 .w3 .wf3-test .g1 .wf3-mn { background: #9c6a1c; }
 .ui3 .w3 .wf3-n02, .ui3 .w3 .wf3-mini .g2 .wf3-mn, .ui3 .w3 .wf3-test .g2 .wf3-mn { background: #7856b5; }
 .ui3 .w3 .wf3-n03, .ui3 .w3 .wf3-mini .g3 .wf3-mn, .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #103e32; }
-.ui3 .w3 .wf3-n04, .ui3 .w3 .wf3-mini .g4 .wf3-mn, .ui3 .w3 .wf3-test .g4 .wf3-mn { background: #b76143; }
+.ui3 .w3 .wf3-n04, .ui3 .w3 .wf3-mini .g4 .wf3-mn, .ui3 .w3 .wf3-test .g4 .wf3-mn { background: #a5543a; }
 :root[data-theme="dark"] .ui3 .w3 .wf3-n03, :root[data-theme="dark"] .ui3 .w3 .wf3-mini .g3 .wf3-mn, :root[data-theme="dark"] .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #2f7a5f; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .w3 .wf3-n03, :root:not([data-theme="light"]) .ui3 .w3 .wf3-mini .g3 .wf3-mn, :root:not([data-theme="light"]) .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #2f7a5f; } }
 .ui3 .w3 .wfs-n b { color: #fff; }
@@ -47,10 +47,10 @@
 .ui3 .wf3-prev p { margin: 0 0 4px; font-weight: 600; color: var(--m-ink); font-size: 14.5px; }
 .ui3 .wf3-prev ul { margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--m-ink-2); line-height: 1.45; }
 .ui3 .wf3-prev .wf3-mn { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font: 600 12px/1 var(--m-f-mono); color: #fff; }
-.ui3 .wf3-prev .g1 .wf3-mn { background: #c58a2e; }
+.ui3 .wf3-prev .g1 .wf3-mn { background: #9c6a1c; }
 .ui3 .wf3-prev .g2 .wf3-mn { background: #7856b5; }
 .ui3 .wf3-prev .g3 .wf3-mn { background: #103e32; }
-.ui3 .wf3-prev .g4 .wf3-mn { background: #b76143; }
+.ui3 .wf3-prev .g4 .wf3-mn { background: #a5543a; }
 :root[data-theme="dark"] .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; } }
 .ui3 .wf3-prev-cap { margin-right: auto; }

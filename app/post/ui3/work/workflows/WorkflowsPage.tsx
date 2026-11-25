@@ -324,6 +324,7 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
         </Gate>
       )}
       <Chips items={GOALS.map((g) => ({ k: g, label: g, n: g === "All" ? TEMPLATES.length : TEMPLATES.filter((t) => t.goal === g).length }))} on={goal} set={setGoal} label="Goals" />
+      <h2 className="w-sr">Templates</h2>
       <div className="wf-tgrid">
         {shown.map((t) => (
           <article key={t.k} className="wf-tcard">

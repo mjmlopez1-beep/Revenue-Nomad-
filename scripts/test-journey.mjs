@@ -791,9 +791,29 @@ async function journeyE() {
   lst = await wfList(who);
   const on = (lst?.workflows ?? []).find((w) => w.id === wf.id);
   check("Make live turns it on", on?.on === true, on);
-  // The event: a new role in the member's function at a company in their Crystal Ball.
+  // The monthly limit, made reachable: the same template with Find their email on (1 credit on every plan, Close included)
+  // and a limit of 1 credit, live before the event, so the first of two events spends the 1 and the second meets the limit.
+  const saved0 = JSON.parse(posts.find((x) => /"op":"save"/.test(x)) ?? "null");
+  let capWf = null;
+  if (saved0?.version?.nodes) {
+    const v = structuredClone(saved0.version);
+    if (!v.nodes.some((n) => n.type === "find.email")) {
+      v.nodes.push({ id: "s_email", type: "find.email", name: "Find their email", on: true, settings: {}, pos: { x: 0, y: 350 } });
+      v.edges = v.edges.filter((e) => !(e.from === "s_dm" && e.to === "s_way"));
+      v.edges.push({ id: "e_s_dm_main_s_email", from: "s_dm", out: "main", to: "s_email" }, { id: "e_s_email_main_s_way", from: "s_email", out: "main", to: "s_way" });
+    }
+    const sv = await W2(who, { ...saved0, name: "Monthly limit check", cap: 1, version: v });
+    note("the limit check: the template with Find their email, a limit of 1", sv.json?.error ?? sv.json?.id);
+    if (sv.status === 200) {
+      const lv = await W2(who, { op: "live", id: sv.json.id });
+      const onv = await W2(who, { op: "on", id: sv.json.id, on: true });
+      note("the limit check made live", lv.json?.error ?? onv.json?.error ?? "live");
+      capWf = sv.json.id;
+    }
+  }
+  // The event: a new role in the member's function at a company in their Crystal Ball (two of them, for the limit check).
   const runs0 = (await wfRuns(who, wf.id)).filter((r) => !r.test).length;
-  await scan([scanRole("e1", 48, "Sales", "Fractional Head of Sales")]);
+  await scan([scanRole("e1", 48, "Sales", "Fractional Head of Sales"), scanRole("e1b", 48, "Sales", "Fractional VP Sales")]);
   for (let i = 0; i < 4; i++) {
     await req("GET", "/api/table", { as: who });
     await sleep(1500);
@@ -808,12 +828,28 @@ async function journeyE() {
   }
   check("the run waits at the approval, nothing sent", run?.status === "waiting" && gmailSent.length === sent0, run && { status: run.status, wait: run.wait });
   const ib = await inboxOf(who);
-  check("the approval is asked in the bell", (ib?.items ?? []).some((x) => x.ask?.run === run?.id), ib?.items?.map((x) => x.line));
-  // Approve once, twice at once.
-  const [y1, y2] = await Promise.all([W2(who, { op: "answer", run: run?.id, yes: true }), W2(who, { op: "answer", run: run?.id, yes: true })]);
+  // The approval is asked in the bell: a yes/no question carries the run (ask.run); a note to approve says so and opens the outbox.
+  check("the approval is asked in the bell", (ib?.items ?? []).some((x) => x.ask?.run === run?.id || /^A note waits for (your tap|you)/.test(x.line ?? "")), ib?.items?.map((x) => x.line));
+  const waitOn = (await req("GET", `/api/workflows2?id=${wf.id}&run=${run?.id}`, { as: who })).json?.run?.wait?.outbox ?? null;
+  const note0 = ((await outbox(who))?.items ?? []).find((x) => x.status === "draft" && x.kind === "workflow" && (!waitOn || x.id === waitOn));
+  let y1, y2;
+  if (note0 && !note0.to) {
+    // Who decides there has no email open on this plan (a paid detail): the note waits with an empty To (journey E1, fixed).
+    check("with no address open, the note waits in the outbox for the member to add who it is to (never failed, never sent to nobody)", note0.to === "" && run?.status === "waiting", note0);
+    const noAddr = await W2(who, { op: "answer", run: run?.id, yes: true });
+    check("a yes from the run before the address is added is refused, and nothing is sent", noAddr.status !== 200 && /Add who it is to first/.test(noAddr.json?.error ?? "") && gmailSent.length === sent0, noAddr.json);
+    // The member types the address in the outbox, then Approve and send: twice at once.
+    const draft = { key: note0.key, id: note0.id, kind: "workflow", to: `buyer@${seedCo(48).fields.website}`, toName: note0.toName, subject: note0.subject, body: note0.body, company: note0.company };
+    [y1, y2] = await Promise.all([tap(who, "/api/send", { op: "approve", draft }), tap(who, "/api/send", { op: "approve", draft })]);
+    for (let i = 0; i < 3; i++) (await req("GET", "/api/table", { as: who }), await sleep(1200));
+  } else {
+    // Approve once, twice at once.
+    [y1, y2] = await Promise.all([W2(who, { op: "answer", run: run?.id, yes: true }), W2(who, { op: "answer", run: run?.id, yes: true })]);
+  }
+  const notes = ((await outbox(who))?.items ?? []).filter((x) => x.kind === "workflow" && x.status !== "draft");
   await sleep(2500);
   const done = (await wfRuns(who, wf.id)).find((r) => r.id === run?.id);
-  check("approve twice at once: one answer taken, the run goes on", [y1, y2].filter((x) => x.status === 200).length >= 1 && done?.status !== "waiting", { y1: y1.json?.error ?? "ok", y2: y2.json?.error ?? "ok", status: done?.status });
+  check("approve twice at once: one answer taken, the run goes on", [y1, y2].filter((x) => x.status === 200).length >= 1 && done?.status !== "waiting" && notes.length <= 1, { y1: y1.json?.error ?? "ok", y2: y2.json?.error ?? "ok", status: done?.status, notes: notes.length });
   const r3 = await W2(who, { op: "answer", run: run?.id, yes: true });
   check("a retry of the answer is refused (already answered)", r3.status !== 200, r3.json);
   const detail = (await req("GET", `/api/workflows2?id=${wf.id}&run=${run?.id}`, { as: who })).json;
@@ -826,7 +862,19 @@ async function journeyE() {
   note("this plan's prices (a company, a person)", prices);
   // The limit on a plan where a run spends: the same template saved for the Free member with a limit of 1.
   const graph = JSON.parse(posts.find((x) => /"op":"save"/.test(x)) ?? "null");
-  if (prices?.company > 0) check("cap reached makes a run wait for a yes", false, "not reached on this plan");
+  if (capWf) {
+    // The limit check's runs: the first spends Find their email's 1 credit, the next meets the limit of 1 and waits for a yes.
+    const capRuns = await until(async () => {
+      const rs = (await wfRuns(who, capWf)).filter((r) => !r.test);
+      return rs.length >= 2 ? rs : null;
+    }, 20_000, 1500);
+    const rs = capRuns ?? (await wfRuns(who, capWf)).filter((r) => !r.test);
+    note("the limit check's runs", rs.map((r) => ({ status: r.status, waiting: r.waiting, spent: r.spent, quote: r.quote })));
+    const spent = rs.reduce((n, r) => n + (r.spent ?? 0), 0);
+    check("the limit check: a run spends Find their email's 1 credit, quoted before", rs.some((r) => r.spent === 1) && rs.every((r) => (r.spent ?? 0) <= (r.quote ?? Infinity)), rs.map((r) => [r.spent, r.quote]));
+    check("cap reached makes a run wait for a yes, and the month never spends past the limit", rs.some((r) => r.status === "waiting" && r.waiting === "cap") && spent <= 1, rs.map((r) => [r.status, r.waiting, r.spent]));
+    await W2(who, { op: "on", id: capWf, on: false });
+  } else if (prices?.company > 0) check("cap reached makes a run wait for a yes", false, "not reached on this plan");
   else if (graph) {
     const fr = await W2("free", { ...graph, cap: 1 });
     note("the template saved on Free with a limit of 1", fr.json?.error ?? fr.json?.id);
@@ -886,11 +934,12 @@ async function journeyP() {
   const direct = await wayOf("trial", DIRECT_K);
   const dr = (direct?.routes ?? []).find((r) => r.src === "linkedin") ?? direct?.routes?.[0];
   check("the CEO known directly: the route has no one in between (graph: you and them)", dr?.between === 0 && dr?.nodes?.length === 2, dr && { between: dr.between, nodes: dr.nodes?.length });
-  check("a route with no one in between is not labelled Warm intro (direct connection)", dr && dr.way !== "Warm intro" && !/warm intro/i.test(`${dr.kind} ${dr.title} ${dr.short}`), dr && { way: dr.way, kind: dr.kind, title: dr.title, between: dr.between });
-  check("…and its steps don't promise a reply or a meeting (they are possible next steps)", dr && !(dr.how ?? []).some((h) => /\breplies\b|You meet/.test(h)), dr?.how);
+  // The label every surface shows is the route's type (lib/paths routeTypeOf); its warmth band (way) only orders and places.
+  check("a route with no one in between is not labelled Warm intro (direct connection)", dr && /^Direct (connection|outreach)$/.test(dr.type ?? "") && !/warm intro/i.test(`${dr.kind} ${dr.title} ${dr.short}`), dr && { type: dr.type, way: dr.way, kind: dr.kind, title: dr.title, between: dr.between });
+  check("…and its steps don't promise a reply or a meeting (they are possible next steps)", dr && !(dr.how ?? []).some((h) => /^\S+ replies$|^You meet /.test(h)) && (dr.how ?? []).some((h) => /may reply|^If .+ replies/.test(h)), dr?.how);
   const intro = await wayOf("trial", INTRO_K);
   const ir = (intro?.routes ?? []).find((r) => r.between === 1);
-  check("the opening reached through Tatum: one person in between, labelled Warm intro", ir?.way === "Warm intro" && ir?.nodes?.length === 3 && !!intro?.openRole, ir && { way: ir.way, nodes: ir.nodes?.length, openRole: intro?.openRole });
+  check("the opening reached through Tatum: one person in between, labelled Warm intro", (ir?.type ?? ir?.way) === "Warm intro" && ir?.nodes?.length === 3 && !!intro?.openRole, ir && { type: ir.type, way: ir.way, nodes: ir.nodes?.length, openRole: intro?.openRole });
   const warm = (await req("GET", "/api/paths?warm=1", { as: "trial" })).json?.warm;
   for (const [k, r] of [[DIRECT_K, dr], [INTRO_K, ir]]) {
     const row = (warm?.rows ?? []).find((x) => x.id === co(k).id);
@@ -898,21 +947,23 @@ async function journeyP() {
       unverified(`Warm paths summary agrees with the route for Qaco${k}`, "the company is not on the member's Warm paths map (it doesn't fit their ideal client)");
       continue;
     }
-    check(`Warm paths summary agrees with the route for Qaco${k} (same label, same kind)`, row.way === r?.way && (r?.between === 0 ? row.src === "direct" || !/intro/i.test(row.via ?? "") : true), { row: { way: row.way, src: row.src, via: row.via }, route: { way: r?.way, between: r?.between } });
+    check(`Warm paths summary agrees with the route for Qaco${k} (same label, same kind)`, (row.wayType ?? row.way) === (r?.type ?? r?.way) && (r?.between === 0 ? row.src === "direct" || !/intro/i.test(row.via ?? "") : true), { row: { wayType: row.wayType, way: row.way, src: row.src, via: row.via }, route: { type: r?.type, way: r?.way, between: r?.between } });
   }
   {
     const ctx = await contextFor("trial");
     const page = await ctx.newPage();
     await page.goto(`${BASE}/?p=table`);
     await settle(page);
-    const warmTab = page.getByRole("button", { name: /Warm intros/ }).first();
+    const warmTab = page.getByRole("button", { name: /Warm (intros|ways in)/ }).first();
     const all = (await page.locator("main").innerText()).replace(/\s+/g, " ");
     const inTargets = new RegExp(seedCo(DIRECT_K).fields.name).test(all);
     if ((await warmTab.count()) && (await warmTab.isEnabled())) {
       await warmTab.click();
       await page.waitForTimeout(800);
       const txt = await page.locator("main").innerText();
-      check("the Targets Warm intros badge doesn't count the CEO known directly", !new RegExp(seedCo(DIRECT_K).fields.name).test(txt), "Qaco3 (no one in between) is listed under Warm intros");
+      // The chip is Warm ways in (people the member knows, directly or through someone): the direct one is there as a note to write yourself, never an intro.
+      const direct3 = new RegExp(seedCo(DIRECT_K).fields.name).test(txt);
+      check("the Targets warm filter never calls the CEO known directly an intro", !direct3 || /yourself|Direct connection/.test(txt), txt.slice(0, 300));
       check("…and does count the opening reached through Tatum", new RegExp(seedCo(INTRO_K).fields.name).test(txt) || !new RegExp(seedCo(INTRO_K).fields.name).test(all), txt.slice(0, 300));
     } else if (inTargets) check("the Targets badge for the CEO known directly reads as a direct note", /Direct note|direct/i.test(all), all.slice(0, 300));
     else unverified("the Targets badge for the direct route", "Qaco3 is not among this member's prioritized opportunities, so its badge isn't drawn");
@@ -928,7 +979,7 @@ async function journeyP() {
   const hi = await wayOf("trial", HIGH_NO_VACANCY);
   check("a high-signal company with no vacancy says no open role (never a posting it doesn't have)", hi && !hi.openRole && /Hired/.test(hi.hired ?? ""), hi && { openRole: hi.openRole, hired: hi.hired });
   const un = await wayOf("trial", UNMATCHED);
-  check("an unmatched prospect has no warm route", un && !(un.routes ?? []).some((r) => r.way === "Warm intro"), un?.routes?.map((r) => r.way));
+  check("an unmatched prospect has no warm route", un && !(un.routes ?? []).some((r) => (r.type ?? r.way) === "Warm intro"), un?.routes?.map((r) => r.type ?? r.way));
 
   // Identity from search to outreach: the company found by name is the one in the note and the pipeline.
   const f = await act("fin", { type: "find", text: seedCo(INTRO_K).fields.name });

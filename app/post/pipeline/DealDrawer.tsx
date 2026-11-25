@@ -7,7 +7,7 @@
  * proposal or contract and what happened to it, the way in, private notes and the log, then Mark
  * won, Lost and Refer it to a peer. The Example drawer says what an example is and takes the examples away.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { LINE, STAGE_WORDS, isOpen, type FollowUpRec, type MoveStage, type PipelineRec, type PipelineView } from "@/lib/pipeline";
 import { COMPANY_PRICE } from "@/lib/tableFields";
@@ -246,6 +246,16 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
   const [pitch, setPitch] = useState(r.pitch ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Keyboard (journey K2): Add the value puts focus in the value field, and Save or Cancel puts it back on the link.
+  const linkRef = useRef<HTMLButtonElement>(null);
+  const backToLink = useRef(false);
+  useEffect(() => {
+    if (!edit && backToLink.current) {
+      backToLink.current = false;
+      linkRef.current?.focus({ preventScroll: true });
+    }
+  }, [edit]);
+  const close = () => ((backToLink.current = true), setEdit(false));
   useEffect(() => {
     setVal(r.value ? String(r.value) : "");
     setPitch(r.pitch ?? "");
@@ -261,7 +271,7 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
     setBusy(false);
     if (!res.ok) return setErr(res.message);
     toast(res.message);
-    setEdit(false);
+    close();
   };
   const won = r.stage === "won" && r.won;
   return (
@@ -273,7 +283,7 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
             {won ? `Won at ${money(r.won!.monthly)} a month, from the terms. ` : r.stage === "won" ? "Won, with no terms yet. Add the terms and the totals count it. " : r.value ? `${money(r.value)} a month, as you typed it. ` : "No value yet. Type what it is worth a month and the totals count it. "}
             {r.pitch ? `You pitch ${r.pitch}.` : "No seat set yet."}
           </span>
-          <button type="button" className="pl2-link" onClick={() => setEdit(true)}>
+          <button ref={linkRef} type="button" className="pl2-link" onClick={() => setEdit(true)}>
             {r.value || r.pitch ? "Change the value or the seat" : "Add the value and the seat"}
           </button>
         </>
@@ -288,7 +298,7 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
           <label className="pl2-lab" htmlFor={`pl2-v-${r.id}`}>
             Value a month, in dollars
           </label>
-          <input id={`pl2-v-${r.id}`} className="pl2-in" inputMode="numeric" autoComplete="off" value={val} placeholder="9000" onChange={(e) => setVal(e.target.value)} />
+          <input id={`pl2-v-${r.id}`} className="pl2-in" inputMode="numeric" autoComplete="off" autoFocus value={val} placeholder="9000" onChange={(e) => setVal(e.target.value)} />
           {hint && <span className="pl2-small">{hint}</span>}
           <label className="pl2-lab" htmlFor={`pl2-p-${r.id}`}>
             Seat you are pitching
@@ -303,7 +313,7 @@ function ValueBox({ r, i }: { r: PipelineRec; i: CoInfo | undefined }) {
             <button type="submit" className="pl2-big pl2-pine" disabled={busy} aria-busy={busy}>
               Save
             </button>
-            <button type="button" className="pl2-mini" onClick={() => setEdit(false)}>
+            <button type="button" className="pl2-mini" onClick={close}>
               Cancel
             </button>
           </span>

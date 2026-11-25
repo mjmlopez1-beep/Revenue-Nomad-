@@ -196,6 +196,7 @@ export function Ui3Nav({
       <Art name="navLand" className="m-nav-art" />
       <a
         className="m-brand"
+        aria-label="Merlin, home"
         href="/"
         onClick={(e) => {
           if (!ownClick(e)) return;
@@ -327,6 +328,7 @@ export function Ui3MobileTop({ onHome, search, actions, onAccount, accountRef, h
       <header className="m-mtop u3">
         <a
           className="m-brand"
+          aria-label="Merlin, home"
           href="/"
           onClick={(e) => {
             if (!ownClick(e)) return;

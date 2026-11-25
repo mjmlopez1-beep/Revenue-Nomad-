@@ -561,15 +561,66 @@ export function Ui3Pipeline() {
         </button>
       </p>
       {side && (
-        <>
-          <div className="w-drawer-scrim" onClick={() => setPanel(null)} />
-          <div className="w-drawer wide w3-host pl3-side" role="dialog" aria-modal="true" aria-label={panel?.kind === "deal" ? `Deal with ${cur ? nameOf(cur) : ""}` : panel?.kind === "add" ? "Add a deal" : "Add from a list"}>
-            {side}
-          </div>
-        </>
+        <SidePanel key={panel?.kind === "deal" ? `deal:${panel.id}` : panel?.kind ?? ""} label={panel?.kind === "deal" ? `Deal with ${cur ? nameOf(cur) : ""}` : panel?.kind === "add" ? "Add a deal" : "Add from a list"} back={panel?.kind === "deal" ? panel.id : null} onClose={() => setPanel(null)}>
+          {side}
+        </SidePanel>
       )}
       {winning && deals.find((r) => r.id === winning) && <WonSheet rec={deals.find((r) => r.id === winning)!} onClose={() => setWinning(null)} />}
     </WorkMain>
+  );
+}
+
+/**
+ * The panel from the right (a deal, Add a deal, Add from a list), keyboard first (journey K2): focus moves
+ * into it when it opens, Tab stays inside, Escape closes it, and focus goes back to the deal it was opened
+ * from (its card, else whatever had focus before).
+ */
+function SidePanel({ label, back, onClose, children }: { label: string; back: string | null; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const was = document.activeElement as HTMLElement | null;
+    const t = setTimeout(() => {
+      const el = ref.current;
+      if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    }, 30);
+    const key = (e: KeyboardEvent) => {
+      const el = ref.current;
+      if (!el) return;
+      // A dialog opened over this one (a follow-up, the won sheet) keeps the keys.
+      const top = (document.activeElement as HTMLElement | null)?.closest?.("[role='dialog']");
+      if (top && top !== el) return;
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const f = [...el.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")].filter((x) => x.getClientRects().length > 0);
+      if (!f.length) return;
+      const at = document.activeElement;
+      if (e.shiftKey && (at === f[0] || at === el || !el.contains(at))) (e.preventDefault(), f[f.length - 1].focus());
+      else if (!e.shiftKey && (at === f[f.length - 1] || !el.contains(at))) (e.preventDefault(), f[0].focus());
+    };
+    document.addEventListener("keydown", key);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("keydown", key);
+      // Back to the deal's card (it is still on the board), else to what had focus before.
+      setTimeout(() => {
+        const card = back ? document.querySelector<HTMLElement>(`[data-deal="${CSS.escape(back)}"]`) : null;
+        (card ?? (was?.isConnected ? was : null))?.focus({ preventScroll: true });
+      }, 0);
+    };
+  }, [back]);
+  return (
+    <>
+      <div className="w-drawer-scrim" onClick={onClose} />
+      <div ref={ref} tabIndex={-1} className="w-drawer wide w3-host pl3-side" role="dialog" aria-modal="true" aria-label={label}>
+        {children}
+      </div>
+    </>
   );
 }
 

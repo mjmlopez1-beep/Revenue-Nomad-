@@ -1400,6 +1400,17 @@ export function AddModal({ infos: tableInfos, opts, onClose }: { infos: CoInfo[]
   const dq = useDebounced(q, 400);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Opened by keyboard (journey K1): focus moves into the sheet at once, onto its first field or control, if
+  // nothing inside has it yet (an autofocused field keeps it). Escape still returns it to the opener (the caller).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const box = rootRef.current?.closest<HTMLElement>('[role="dialog"]') ?? rootRef.current;
+      if (!box || box.contains(document.activeElement)) return;
+      const field = box.querySelector<HTMLElement>("input:not([disabled]):not([type='hidden']), textarea:not([disabled]), select:not([disabled])");
+      (field ?? rootRef.current?.querySelector<HTMLElement>("button:not([disabled]), [tabindex]:not([tabindex='-1'])") ?? box.querySelector<HTMLElement>("button:not([disabled])"))?.focus({ preventScroll: true });
+    }, 60);
+    return () => clearTimeout(t);
+  }, []);
   const i = selected ? infos.find((x) => x.c.id === selected) ?? null : null;
   const me = ui.me;
   const capped = earnNote(me).capped;

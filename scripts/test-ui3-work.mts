@@ -514,6 +514,28 @@ async function main() {
     check("L1: a hidden table is hidden in the new design's styles", /\.ui3 \.w3 \[hidden\] \{ display: none !important; \}/.test(src("app/post/ui3/work/work.css")));
   }
 
+  console.log("\nKeyboard and contrast (journey K1, K2, X1)");
+  {
+    const src = (f: string) => readFileSync(path.join(ROOT, f), "utf8");
+    const am = src("app/post/AddModal.tsx");
+    check("K1: Add what you know moves focus into the sheet when it opens (a field first)", /Opened by keyboard \(journey K1\)/.test(am) && /if \(!box \|\| box\.contains\(document\.activeElement\)\) return;/.test(am));
+    const pl = src("app/post/ui3/work/pipeline/PipelinePage.tsx");
+    check("K2: the deal panel takes focus, keeps Tab inside, closes on Escape and gives focus back to the deal's card", /function SidePanel\(/.test(pl) && /el\.focus\(\{ preventScroll: true \}\)/.test(pl) && /e\.key === "Escape"/.test(pl) && /\[data-deal="\$\{CSS\.escape\(back\)\}"\]/.test(pl) && /<SidePanel key=/.test(pl));
+    const dd = src("app/post/pipeline/DealDrawer.tsx");
+    check("K2: Add the value puts focus in the value field; Save and Cancel put it back on the link", /autoFocus value=\{val\}/.test(dd) && /linkRef\.current\?\.focus/.test(dd) && /onClick=\{close\}/.test(dd));
+    const L = (h: string) => { const c = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a: string, b: string) => { const [x, y] = [L(a), L(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const wf = src("app/post/ui3/work/workflows/workflows.css");
+    const tiles = [...wf.matchAll(/\.wf3-mn \{ background: #([0-9a-f]{6}); \}/g)].map((m) => m[1]);
+    check("X1: the four-stage numerals keep white text at 4.5:1 or more (gold and terracotta darkened within the palette)", tiles.length >= 6 && tiles.every((h) => ratio("ffffff", h) >= 4.5), tiles.map((h) => [h, ratio("ffffff", h).toFixed(2)]));
+    const ui3css = src("app/post/ui3/ui3.css");
+    const faint = Number(/--m-nav-faint: rgba\(246, 242, 232, ([.\d]+)\)/.exec(ui3css)?.[1]);
+    const blend = (a: number, bg: string) => [246, 242, 232].map((f, i) => Math.round(f * a + parseInt(bg.slice(i * 2, i * 2 + 2), 16) * (1 - a))).map((v) => v.toString(16).padStart(2, "0")).join("");
+    check("X1: the sidebar's section headings and counts reach 4.5:1 on the nav (and its hover)", ratio(blend(faint, "0f3a2f"), "0f3a2f") >= 4.5 && ratio(blend(faint, "164a3c"), "164a3c") >= 4.5, faint);
+    check("X1: the logo link has an accessible name, in the sidebar and the phone bar", (src("app/post/ui3/Shell.tsx").match(/className="m-brand"\s+aria-label="Merlin, home"/g) ?? []).length === 2);
+    check("X1: the skip link reaches the new design's page (Target Companies included)", /page === "table" && !RecordPage && !ui3Page \? "#tp-results" : "#tp-page"/.test(src("app/post/TradingPost.tsx")));
+  }
+
   console.log("\nCopy");
   const files = [...walk(path.join(ROOT, "app/post/ui3/work")).filter((f) => /\.tsx?$/.test(f)), path.join(ROOT, "lib/workflows/simple.ts")];
   const AI = /\b(insights?|leverag\w*|seamless\w*|empower\w*|actionable|supercharge\w*|synerg\w*|unlock (your|new|more|the power))\b/i;
