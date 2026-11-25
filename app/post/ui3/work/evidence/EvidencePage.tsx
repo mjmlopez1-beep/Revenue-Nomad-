@@ -329,7 +329,7 @@ function Bank() {
                   <div className="ev-title">{titleOf(x)}</div>
                   {res && <div className="ev-result">{res}</div>}
                 </div>
-                <div className="ev-tags m-ph-hide" role="cell">
+                <div className="w3-tags m-ph-hide" role="cell">
                   {x.workType.slice(0, 2).map((t) => (
                     <span key={t} className="m-chip soft">
                       {t}

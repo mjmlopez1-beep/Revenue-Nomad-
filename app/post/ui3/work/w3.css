@@ -50,3 +50,5 @@
 .ui3 .w3 .w3-host .input { border-radius: 10px; border-color: var(--m-line-2); background: var(--m-panel); color: var(--m-ink); }
 .ui3 .w3 .w3-ev-up h2, .ui3 .w3 .w3-ev-up h1 { font-family: var(--m-f-display); font-weight: 500; letter-spacing: -.015em; }
 .ui3 .w3 .ex-band.w3-band-moderate { min-height: 148px !important; }
+.ui3 .w3 .w3-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ui3 .w3 .w3-tags .m-chip { display: inline-flex; width: auto; height: 26px; font-size: 13px; padding: 0 10px; }

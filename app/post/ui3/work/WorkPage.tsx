@@ -18,8 +18,10 @@ const PAGES: Partial<Record<Ui3WorkKey, React.ComponentType>> = {
   "w:contracts": dynamic(() => import("./contracts/ContractsPage").then((m) => m.Ui3Contracts), { ssr: false, loading: wait }),
   "w:evidence": dynamic(() => import("./evidence/EvidencePage").then((m) => m.Ui3Evidence), { ssr: false, loading: wait }),
 };
+const Community = dynamic(() => import("./community/CommunityPage").then((m) => m.Ui3Community), { ssr: false, loading: wait });
 
 export function WorkPage({ k }: { k: Ui3WorkKey }) {
+  if (k === "w:fractionals" || k === "w:messages") return <Community tab={k === "w:messages" ? "messages" : "fractionals"} />;
   const P = PAGES[k];
   return P ? <P /> : null;
 }
