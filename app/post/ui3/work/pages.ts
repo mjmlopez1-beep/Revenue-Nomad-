@@ -27,7 +27,7 @@ export const UI3_WORK: Readonly<Record<string, Ui3WorkKey>> = {
 };
 
 /** The ones built so far (the rest draw today's page inside the new shell). */
-export const UI3_WORK_BUILT: readonly Ui3WorkKey[] = ["w:proposals", "w:contracts"];
+export const UI3_WORK_BUILT: readonly Ui3WorkKey[] = ["w:proposals", "w:contracts", "w:evidence"];
 
 /** The new page for today's page on screen, or null. */
 export const ui3WorkKey = (page: string): Ui3WorkKey | null => {

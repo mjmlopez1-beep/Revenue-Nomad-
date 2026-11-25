@@ -1,0 +1,25 @@
+/* Evidence Bank in the new design (RN_UI3): extras on work.css's .ev-* classes. */
+.ui3 .w3 .ev-match { margin-bottom: 16px; }
+.ui3 .w3 .ev-match .m-eyebrow { display: inline-flex; gap: 8px; align-items: center; }
+.ui3 .w3 .ev-match .m-eyebrow svg { width: 15px; height: 15px; }
+.ui3 .w3 .ev3-q { font: 500 24px/1.2 var(--m-f-display); letter-spacing: -.01em; }
+.ui3 .w3 .ev3-mnone { display: flex; flex-direction: column; gap: 8px; justify-content: center; height: 100%; }
+.ui3 .w3 .ev-mrow > div b { font-size: 15.5px; }
+.ui3 .w3 .ev-seats svg { flex: none; }
+.ui3 .w3 .ev3-gold { color: var(--m-gold-ink); }
+.ui3 .w3 .ev3-resume { background: var(--m-forest-wash); color: var(--m-forest-ink); }
+.ui3 .w3 .ev3-head { flex-wrap: wrap; margin: 8px 0 4px; }
+.ui3 .w3 .ev-table .m-co small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .ev-table .m-tr:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
+.ui3 .w3 .ev-table .m-btn:disabled { opacity: .45; }
+.ui3 .w3 .ev3-foot { margin: 14px 0 8px; }
+.ui3 .w3 .ev3-wiz, .ui3 .w3 .ev3-bfm { margin: 8px 0 16px; }
+.ui3 .w3 .ev3-switches { font-size: 14.5px; padding: 4px 0; }
+.ui3 .w3 .ev3-form { list-style: none; padding: 0; margin: 0; }
+.ui3 .w3 .ev3-form > * { border-radius: 14px; }
+.ui3 .w3 .ev3-proof { margin-top: 18px; }
+.ui3 .w3 .ev3-empty { margin-top: 8px; }
+@media (max-width: 760px) {
+  .ui3 .w3 .ev3-head .w-search { flex: 1 1 100%; order: 5; }
+  .ui3 .w3 .ev-table .m-tr > .ev3-st { grid-column: 1 / -1; }
+}
