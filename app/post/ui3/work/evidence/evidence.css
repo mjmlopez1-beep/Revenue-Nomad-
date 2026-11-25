@@ -23,3 +23,6 @@
   .ui3 .w3 .ev3-head .w-search { flex: 1 1 100%; order: 5; }
   .ui3 .w3 .ev-table .m-tr > .ev3-st { grid-column: 1 / -1; }
 }
+/* a laptop: the actions stay in view */
+@media (max-width: 1400px) { .ui3 .w3 .ev-table { --cols: minmax(170px, 1fr) minmax(190px, 1.4fr) minmax(120px, .8fr) 110px minmax(190px, auto) !important; } }
+.ui3 .w3 .ev-table .w3-tags .m-chip { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }

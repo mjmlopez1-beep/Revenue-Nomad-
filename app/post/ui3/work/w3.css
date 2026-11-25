@@ -55,3 +55,9 @@
 /* headings keep the new ink in both themes (today's page CSS colors h1 and h2 with its own tokens) */
 .ui3 .w3 .m-band h1, .ui3 .w3 h1.m-display, .ui3 .w3 h2.m-h2, .ui3 .w3 h2.m-h3, .ui3 .w3 .m-h3 { color: var(--m-ink); }
 .ui3 .w3 .pr3-empty { padding: 22px; border-radius: var(--m-r-lg); background: var(--m-panel-2); border: 1px dashed var(--m-line-2); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* a 1280 laptop: dense tables keep their actions in view */
+@media (max-width: 1400px) {
+  .ui3 .w3 .cm-dir { --cols: minmax(190px, 1.2fr) minmax(120px, .8fr) minmax(130px, 1fr) minmax(110px, .8fr) 100px minmax(110px, auto) !important; }
+  .ui3 .w3 .wf-mine { --cols: minmax(220px, 2fr) 150px 90px 130px 50px minmax(140px, auto) !important; }
+  .ui3 .w3 .pl-table { --cols: 28px minmax(190px, 1.2fr) 104px minmax(180px, 1.3fr) minmax(140px, 1fr) minmax(150px, auto) !important; }
+}
