@@ -260,6 +260,12 @@ export interface SixInput {
   seen?: boolean;
   /** Steps done before in this browser stay done (a refund never takes a tick back). */
   stuck?: Set<string>;
+  /**
+   * On Pro, Close or the trial (acceptance F38): credits don't open companies there, so the seats
+   * step leads with what a seat does for them, not what it earns, and bringing in who you know (the
+   * warm paths, the most valuable next step on a plan that opens everything) comes before it.
+   */
+  paid?: boolean;
   /** The member has Close or the Close trial (or billing is off): step 6, Evidence Bank, is theirs. */
   close?: boolean;
   /** Evidence Bank is built (EVIDENCE_ON; the tests pass it). */
@@ -296,6 +302,14 @@ export function sixSteps(x: SixInput): SixSteps {
     { key: "alert", n: 5, label: "Save a list with an alert", takes: "Save a list and keep its email on.", gives: "Merlin watches the list and tells you when a company on it starts hiring.", time: "1 minute", go: "Go to your lists", done: (me.savedViews ?? []).some(alertOn) },
     { key: "evidence", n: 6, label: "Write your first case study", takes: "The problem, what you did, and the numbers before and after. The client name stays hidden unless you show it.", gives: "It fills the Proof part of every proposal you send.", time: "10 minutes", go: "Go to Evidence Bank", done: (x.evidenceReady ?? 0) > 0 },
   ];
+  if (x.paid) {
+    const seat = all.findIndex((s) => s.key === "seat");
+    all[seat] = { ...all[seat], gives: "Each seat becomes a way in, and Merlin finds companies like your past clients.", pill: undefined, pillKind: undefined };
+    const net = all.findIndex((s) => s.key === "network");
+    const [n] = all.splice(net, 1);
+    all.splice(seat, 0, n);
+    all.forEach((s, k) => (s.n = k + 1));
+  }
   const steps = all
     .filter((s) => (s.key !== "evidence" || ((x.evidence ?? EVIDENCE_ON) && !!x.close)) && (s.key !== "network" || !me.started?.networkOff || !!me.started?.filesOn || s.done))
     .map((s) => (stuck(s.key) ? { ...s, done: true } : s));

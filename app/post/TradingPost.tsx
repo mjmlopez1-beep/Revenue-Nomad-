@@ -2771,7 +2771,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
   const { summary: evidence } = useClosest([], closeOn && ui2);
   const evidenceReady = evidence?.ready ?? 0;
   const six = useMemo(
-    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, close: closeOn, evidenceReady, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
+    () => sixSteps({ me, seatsHeld: seatStats.n, seen: stepSeen, paid: !!me.plan && me.plan.tier !== "free", close: closeOn, evidenceReady, stuck: new Set((store.get(sixDoneKey) ?? "").split(",").filter(Boolean)) }),
     [me, seatStats.n, stepSeen, closeOn, evidenceReady, sixDoneKey],
   );
   useEffect(() => {

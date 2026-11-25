@@ -6,7 +6,7 @@
 import type { Me, PlanView } from "@/lib/tableTypes";
 import type { RadarRow, RadarView } from "@/lib/radar/types";
 import { FEATURE_NAME } from "@/lib/radar/types";
-import { COMPANY_PRICE, OPENS_RULE } from "@/lib/tableFields";
+import { COMPANY_PRICE, OPEN_LINE, TRIAL_OPENS_DAILY } from "@/lib/tableFields";
 import { TRIAL_NAME } from "@/lib/billing/rules";
 import type { MovesWire } from "@/lib/moves";
 import { isFirm, isOpenRole, namedFn, shown, type CoInfo } from "./model";
@@ -138,11 +138,14 @@ export function roleTermsLine(cells: Record<string, { s: string; v?: unknown } |
  * Ball today." (OPENS_RULE). `opens` is Me.proOpens (left out: no count); `crystal` the Crystal Ball's
  * companies today, said apart with its own words so the two numbers never read as one.
  */
+/** OPEN_LINE's second half: what credits are for, on every paid plan and the trial. */
+const TRIAL_CREDITS = OPEN_LINE.replace(/^Pro opens everything\.\s*/, "");
 export function trialCardLine(daysLeft: number | null, opens: { left: number; of: number } | null | undefined, crystal = 0): string {
   const days = daysLeft && daysLeft > 0 ? daysLeft : 21;
   const left = opens ? (opens.left > 0 ? ` ${opens.left} of ${opens.of} companies left to open today.` : ` Today's ${opens.of} companies are open. More open tomorrow.`) : "";
   const ball = crystal > 0 ? ` ${crystal === 1 ? "1 company is" : `${crystal} companies are`} in your ${FEATURE_NAME} today.` : "";
-  return `Your trial runs ${days === 1 ? "until tomorrow" : `${days} more days`}. ${OPENS_RULE}${left}${ball}`;
+  // The trial is Close: it says what the trial opens, never "Pro opens everything" to a Close trial (acceptance F27). OPENS_RULE is the plans' sentence elsewhere.
+  return `Your ${TRIAL_NAME} runs ${days === 1 ? "until tomorrow" : `${days} more days`}, with everything on Close: up to ${TRIAL_OPENS_DAILY} companies a day open in full. ${TRIAL_CREDITS}${left}${ball}`;
 }
 /** The trial on Home, for a phone (the top bar's pill is in its More sheet there): "Close trial · 18 days left". Null off the trial. */
 export function trialPillWords(plan: Pick<PlanView, "name" | "trialDaysLeft"> | null | undefined): string | null {
