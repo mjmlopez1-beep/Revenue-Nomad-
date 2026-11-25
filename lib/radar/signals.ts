@@ -82,9 +82,12 @@ export interface RawSignal {
    * When the event itself happened (YYYY-MM-DD), where Merlin knows it and it differs from `at`: a
    * hire's start month (its first day), an ended seat's end month, a posting's own day. The page
    * dates the signal by this, so "New this week" means it happened this week, never that Merlin
-   * noticed it this week (acceptance F5).
+   * noticed it this week (acceptance F5). Every kind sets it where the event has a date of its own (see
+   * eventDay); a standing state with none is `ongoing` instead, never dated by today.
    */
   happened?: string;
+  /** A state with no event date (a leadership gap a team page shows): the page says "Ongoing", never new, never at Now. */
+  ongoing?: boolean;
   /** Internal ids: never sent. */
   companyId: string;
   engagementId: string | null;
@@ -410,6 +413,23 @@ const monthDay = (ym: string, nowMs: number) => {
   return d > today ? today : d;
 };
 
+/** A month index (year * 12 + month - 1) as its first day, never after today. */
+const monthIdxDay = (m: number, nowMs: number) => monthDay(`${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}`, nowMs);
+/** "2026-09" (or "2026-09-14") as the month's first day; a year alone, or nothing, is no date. */
+const sinceDay = (since: string | null | undefined, nowMs: number) => (since && /^\d{4}-\d{2}/.test(since) ? monthDay(since.slice(0, 7), nowMs) : undefined);
+/** When a leader of this function was last seen gone from the company's website, by nowMs (the day a gap there began, as far as Merlin knows). */
+const leftDay = (s: State, companyId: string, fn: string, nowMs: number) =>
+  (s.leaderDepartures ?? [])
+    .filter((x) => x.companyId === companyId && x.fn === fn && Date.parse(x.at) <= nowMs)
+    .map((x) => x.at.slice(0, 10))
+    .sort()
+    .pop();
+/** A gap's date: the day its leader left, where Merlin saw one leave; else none (a state: "Ongoing"). */
+const gapDate = (s: State, companyId: string, fn: string, nowMs: number): Pick<RawSignal, "happened" | "ongoing"> => {
+  const d = leftDay(s, companyId, fn, nowMs);
+  return d ? { happened: d } : { ongoing: true };
+};
+
 export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: number, funding: FundingEvent[] = []): RawSignal[] {
   const r = readTable(seed, s, nowMs);
   const { g, tracks, push, out, addedOf } = r;
@@ -460,7 +480,8 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     const raw = T.live(e, s, "role");
     let title = raw ? titleWithout(raw, c?.name ?? "", T.live(c, s, "website") ?? null, fallback).trim() : fallback;
     if (!title || title.length > 90 || /https?:|www\.|@/i.test(title)) title = fallback;
-    push({ key: `role:${T.pubId(e.id)}`, kind: "role", at: t.firstSeen, ...(Number.isFinite(posted) && posted <= nowMs ? { happened: new Date(posted).toISOString().slice(0, 10) } : {}), companyId: e.companyId, engagementId: e.id, fn, title });
+    // Dated by the posting's own day; a board that gives none: the day the scan first saw it, the earliest Merlin knows.
+    push({ key: `role:${T.pubId(e.id)}`, kind: "role", at: t.firstSeen, happened: (Number.isFinite(posted) && posted <= nowMs ? new Date(posted).toISOString() : t.firstSeen).slice(0, 10), companyId: e.companyId, engagementId: e.id, fn, title });
   }
 
   // 3. Seats that just ended: the end (or the status Ended) was recorded in the window.
@@ -484,7 +505,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
   for (const f of funding) {
     const at = Date.parse(f.at);
     if (!inWindow(at) || !g.companies.has(f.companyId)) continue;
-    push({ key: `fund:${T.pubId(f.companyId)}:${f.at.slice(0, 10)}`, kind: "funding", at: new Date(at).toISOString(), atMs: at, companyId: f.companyId, engagementId: null, fn: null, title: null, round: f.round, amount: f.amount, ...(f.note ? { fundNote: f.note } : {}) });
+    push({ key: `fund:${T.pubId(f.companyId)}:${f.at.slice(0, 10)}`, kind: "funding", at: new Date(at).toISOString(), atMs: at, happened: f.at.slice(0, 10), companyId: f.companyId, engagementId: null, fn: null, title: null, round: f.round, amount: f.amount, ...(f.note ? { fundNote: f.note } : {}) });
   }
 
   // 5. First sales hires posted, or a jump in them (the career feeds' counts).
@@ -493,7 +514,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     for (const x of rec.rises ?? []) {
       const at = Date.parse(x.at);
       if (!inWindow(at)) continue;
-      push({ key: `build:${T.pubId(companyId)}:${x.at.slice(0, 10)}`, kind: "sales-build", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: null, title: null, build: { from: x.from, to: x.to } });
+      push({ key: `build:${T.pubId(companyId)}:${x.at.slice(0, 10)}`, kind: "sales-build", at: new Date(at).toISOString(), atMs: at, happened: x.at.slice(0, 10), companyId, engagementId: null, fn: null, title: null, build: { from: x.from, to: x.to } });
     }
   }
 
@@ -501,7 +522,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
   for (const x of s.leaderDepartures ?? []) {
     const at = Date.parse(x.at);
     if (!inWindow(at) || !g.companies.has(x.companyId)) continue;
-    push({ key: `gone:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "departure", at: new Date(at).toISOString(), atMs: at, companyId: x.companyId, engagementId: null, fn: x.fn, title: null, gone: { kind: x.kind, level: x.level } });
+    push({ key: `gone:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "departure", at: new Date(at).toISOString(), atMs: at, happened: x.at.slice(0, 10), companyId: x.companyId, engagementId: null, fn: x.fn, title: null, gone: { kind: x.kind, level: x.level } });
   }
 
   // 7. Tenure: an active fractional seat reached the months seats like it usually last (predict.ts TENURE_MARKS), on a
@@ -514,7 +535,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     for (const mark of TENURE_MARKS) {
       const ms = dayInMonthMs(t.m + mark, `${e.id}:tenure`);
       if (!inWindow(ms) || ms <= at) continue;
-      push({ key: `tenure:${T.pubId(e.id)}:${mark}`, kind: "tenure", at: new Date(ms).toISOString(), atMs: ms, companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months: mark, mark } });
+      push({ key: `tenure:${T.pubId(e.id)}:${mark}`, kind: "tenure", at: new Date(ms).toISOString(), atMs: ms, happened: monthIdxDay(t.m + mark, nowMs), companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months: mark, mark } });
     }
   }
 
@@ -527,14 +548,14 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (at === undefined) continue;
     const ms = dayInMonthMs(x.span.to + REHIRE_MONTHS[0], `${e.id}:rehire`);
     if (!inWindow(ms) || ms <= at || monthOfMs(nowMs) > x.span.from + REHIRE_MONTHS[1]) continue;
-    push({ key: `rehire:${T.pubId(e.id)}`, kind: "rehire", at: new Date(ms).toISOString(), atMs: ms, companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: REHIRE_MONTHS[0] } });
+    push({ key: `rehire:${T.pubId(e.id)}`, kind: "rehire", at: new Date(ms).toISOString(), atMs: ms, happened: monthIdxDay(x.span.to, nowMs), companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: REHIRE_MONTHS[0] } });
   }
 
   // 9. A new leader on the company's own website, read OK both times (State.leaderArrivals, lib/table.ts saveLeaders).
   for (const x of s.leaderArrivals ?? []) {
     const at = Date.parse(x.at);
     if (!inWindow(at) || !g.companies.has(x.companyId)) continue;
-    push({ key: `arrive:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "arrival", at: new Date(at).toISOString(), atMs: at, companyId: x.companyId, engagementId: null, fn: x.fn, title: null, arrived: { kind: x.kind, level: x.level, ...(x.since ? { since: x.since } : {}) } });
+    push({ key: `arrive:${T.pubId(x.companyId)}:${x.fn}:${x.at.slice(0, 10)}`, kind: "arrival", at: new Date(at).toISOString(), atMs: at, happened: sinceDay(x.since, nowMs) ?? x.at.slice(0, 10), companyId: x.companyId, engagementId: null, fn: x.fn, title: null, arrived: { kind: x.kind, level: x.level, ...(x.since ? { since: x.since } : {}) } });
   }
 
   // 10. A burst of full-time hires in a function besides sales (the career feeds' counts, State.teamBuild).
@@ -544,7 +565,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
       for (const x of rec.rises ?? []) {
         const at = Date.parse(x.at);
         if (!inWindow(at)) continue;
-        push({ key: `team:${T.pubId(companyId)}:${fn}:${x.at.slice(0, 10)}`, kind: "team-build", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn, title: null, team: { from: x.from, to: x.to } });
+        push({ key: `team:${T.pubId(companyId)}:${fn}:${x.at.slice(0, 10)}`, kind: "team-build", at: new Date(at).toISOString(), atMs: at, happened: x.at.slice(0, 10), companyId, engagementId: null, fn, title: null, team: { from: x.from, to: x.to } });
       }
   }
 
@@ -555,7 +576,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
       const at = Date.parse(h[i].at);
       const [from, to] = [h[i - 1].band, h[i].band];
       if (!inWindow(at) || !HEADCOUNT_PRIORS[to] || SIZE_BANDS.indexOf(from) < 0 || SIZE_BANDS.indexOf(to) <= SIZE_BANDS.indexOf(from)) continue;
-      push({ key: `size:${T.pubId(companyId)}:${to}:${h[i].at.slice(0, 10)}`, kind: "headcount", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: null, title: null, size: { from, to } });
+      push({ key: `size:${T.pubId(companyId)}:${to}:${h[i].at.slice(0, 10)}`, kind: "headcount", at: new Date(at).toISOString(), atMs: at, happened: h[i].at.slice(0, 10), companyId, engagementId: null, fn: null, title: null, size: { from, to } });
     }
   }
 
@@ -564,7 +585,8 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     for (const x of gapsAt(r, s, companyId, nowMs)) {
       const at = Date.parse(x.at);
       if (!inWindow(at)) continue;
-      push({ key: x.key, kind: "gap", at: new Date(at).toISOString(), atMs: at, companyId, engagementId: null, fn: x.fn, title: null });
+      // A gap is a state: dated by the day its leader left where Merlin saw that, else "Ongoing" (never the day the page was read).
+      push({ key: x.key, kind: "gap", at: new Date(at).toISOString(), atMs: at, ...gapDate(s, companyId, x.fn, nowMs), companyId, engagementId: null, fn: x.fn, title: null });
     }
   }
 
@@ -580,7 +602,9 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
  *   tenure    an active fractional seat 12 to 24 months in (past the median of ended seats)
  *   rehire    a fractional seat that ended REHIRE_MONTHS ago
  *   gap       a leadership gap its team page still shows (read in the last KNOWN_DAYS)
- * Each is dated now: nothing happened today, and the card says so ("Still a good time: …").
+ * Each lists on today (nothing happened today, and the card says so: "Still a good time: …"), but is dated by
+ * its own event (`happened`: the hire's start, the tenure mark's month, the seat's end), or is `ongoing` (a
+ * gap): never "new this week" for being true today.
  */
 export function standingSignals(seed: Seed, s: State, nowMs: number): RawSignal[] {
   const r = readTable(seed, s, nowMs);
@@ -595,19 +619,19 @@ export function standingSignals(seed: Seed, s: State, nowMs: number): RawSignal[
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
     const ym = hireMonth(T.live(e, s, "start"));
     if (ym && monthsAgo(ym, nowMs) >= 1 && monthsAgo(ym, nowMs) <= HIRE_FRESH_MONTHS)
-      push({ key: `still:hire:${pub}`, of: `hire:${pub}`, sameAs: [`hire:${pub}`, `hire:${pub}:open`], standing: true, kind: "adjacent", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: on });
+      push({ key: `still:hire:${pub}`, of: `hire:${pub}`, sameAs: [`hire:${pub}`, `hire:${pub}:open`], standing: true, kind: "adjacent", at, atMs: nowMs, happened: monthDay(ym, nowMs), companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: on });
     const t = tenureSeat(e, s, tracks, nowMs);
     const months = t ? nowM - t.m : -1;
     if (t && months >= TENURE_MARKS[0] && months <= TENURE_UNTIL) {
       const mark = [...TENURE_MARKS].reverse().find((m) => months >= m)!;
-      push({ key: `still:tenure:${pub}`, sameAs: TENURE_MARKS.map((m) => `tenure:${pub}:${m}`), standing: true, kind: "tenure", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months, mark } });
+      push({ key: `still:tenure:${pub}`, sameAs: TENURE_MARKS.map((m) => `tenure:${pub}:${m}`), standing: true, kind: "tenure", at, atMs: nowMs, happened: monthIdxDay(t.m + mark, nowMs), companyId: e.companyId, engagementId: e.id, fn: t.fn, title: null, tenure: { start: t.start, months, mark } });
     }
     const x = endedSeat(e, s, tracks, nowMs);
     if (x && nowM >= x.span.to + REHIRE_MONTHS[0] && nowM <= x.span.from + REHIRE_MONTHS[1])
-      push({ key: `still:rehire:${pub}`, sameAs: [`rehire:${pub}`], standing: true, kind: "rehire", at, atMs: nowMs, companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: nowM - x.span.to } });
+      push({ key: `still:rehire:${pub}`, sameAs: [`rehire:${pub}`], standing: true, kind: "rehire", at, atMs: nowMs, happened: monthIdxDay(x.span.to, nowMs), companyId: e.companyId, engagementId: e.id, fn: x.fn, title: null, endReason: T.live(e, s, "endReason"), ended: { end: x.end, months: nowM - x.span.to } });
   }
   for (const companyId of Object.keys(s.leaders ?? {}))
-    for (const x of gapsAt(r, s, companyId, nowMs)) push({ key: `still:${x.key}`, sameAs: [x.key], standing: true, kind: "gap", at, atMs: nowMs, companyId, engagementId: null, fn: x.fn, title: null });
+    for (const x of gapsAt(r, s, companyId, nowMs)) push({ key: `still:${x.key}`, sameAs: [x.key], standing: true, kind: "gap", at, atMs: nowMs, ...gapDate(s, companyId, x.fn, nowMs), companyId, engagementId: null, fn: x.fn, title: null });
   return out;
 }
 
@@ -636,4 +660,70 @@ export function recordHeadcount(d: State, seed: Seed, nowIso: string): number {
     n++;
   }
   return n;
+}
+
+/**
+ * When the event behind a signal key happened, read from the table as it is now: what the day's view puts on a
+ * row kept with a delivery (State.radar.members[id].days), so a row kept before every kind was dated by its event
+ * (or one a standing state dated by its delivery day) never reads as new this week for being sent this week.
+ *   hire, still:hire           the seat's start month          end      the seat's end month
+ *   rehire, still:rehire       the seat's end month            tenure   the month the mark was reached
+ *   role                       the posting's own day           arrive   the leader's "since" month on the page
+ *   gap, still:gap             the day its leader left where Merlin saw it, else ongoing (no event date)
+ * Null: nothing better than what the row says (a funding filing, a build, a departure, a size change carry their
+ * own day in the key and on the row; an unknown key keeps its row's date).
+ */
+export function signalDates(seed: Seed, s: State, nowMs: number): (key: string) => { a?: string; o?: 1 } | null {
+  const g = T.graph(seed, s);
+  const tracks = T.tracksOf(seed, s);
+  const seats = new Map<string, EngNode>();
+  for (const e of g.engagements.values()) seats.set(T.pubId(e.id), e);
+  const cos = new Map<string, string>();
+  for (const c of g.companies.values()) cos.set(T.pubId(c.id), c.id);
+  const posted = new Map<string, string>();
+  for (const t of tracks.values()) if (t.postedAt && Date.parse(t.postedAt) <= nowMs) posted.set(t.engagementId, t.postedAt.slice(0, 10));
+  const nowM = monthOfMs(nowMs);
+  const ymDay = (v: string | null | undefined) => {
+    const ym = hireMonth(v);
+    return ym ? monthDay(ym, nowMs) : null;
+  };
+  return (key) => {
+    const p = (key.startsWith("still:") ? key.slice(6) : key).split(":");
+    const e = seats.get(p[1] ?? "");
+    switch (p[0]) {
+      case "hire": {
+        const d = e ? ymDay(T.live(e, s, "start")) : null;
+        return d ? { a: d } : null;
+      }
+      case "end":
+      case "rehire": {
+        const span = e ? monthSpan(T.live(e, s, "end")) : null;
+        return span ? { a: monthIdxDay(span.to, nowMs) } : null;
+      }
+      case "tenure": {
+        const t = e ? tenureSeat(e, s, tracks, nowMs) : null;
+        if (!t) return null;
+        const mark = Number(p[2]) || [...TENURE_MARKS].reverse().find((m) => nowM - t.m >= m);
+        return mark ? { a: monthIdxDay(t.m + mark, nowMs) } : null;
+      }
+      case "role": {
+        const d = e ? posted.get(e.id) : undefined;
+        return d ? { a: d } : null;
+      }
+      case "arrive": {
+        const co = cos.get(p[1] ?? "");
+        const x = co ? (s.leaderArrivals ?? []).find((y) => y.companyId === co && y.fn === p[2] && y.at.slice(0, 10) === p[3]) : undefined;
+        const d = sinceDay(x?.since, nowMs);
+        return d ? { a: d } : null;
+      }
+      case "gap": {
+        const co = cos.get(p[1] ?? "");
+        if (!co || !p[2]) return { o: 1 };
+        const d = leftDay(s, co, p[2], nowMs);
+        return d ? { a: d } : { o: 1 };
+      }
+      default:
+        return null;
+    }
+  };
 }

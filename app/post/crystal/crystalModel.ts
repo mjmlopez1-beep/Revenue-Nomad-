@@ -68,10 +68,11 @@ export function sourcesLine(sigs: readonly Pick<RadarSigView, "kind">[]): string
  * no validated outcome data, so "within 3 months" would be false precision). "Open now" for an open
  * role, else the newest signal's day ("Nov 20"), else null.
  */
-export function whenWords(h: readonly [number, number] | null | undefined, sigs: readonly Pick<RadarSigView, "at">[] = [], today = ""): string | null {
+export function whenWords(h: readonly [number, number] | null | undefined, sigs: readonly Pick<RadarSigView, "at" | "ongoing">[] = [], today = ""): string | null {
   if (h && h[1] <= 1) return "Open now";
   const at = latestAt(sigs);
-  return at && today ? `Signal ${dateWords(at, today)}` : null;
+  // A state with no date (a leadership gap): "Ongoing", never a day it was noticed.
+  return at && today ? `Signal ${dateWords(at, today)}` : sigs.some((x) => x.ongoing) ? "Ongoing" : null;
 }
 /** The side panel's line: "Hiring now" for an open role, else nothing (Merlin doesn't guess when). */
 export const whenLong = (h: readonly [number, number] | null | undefined) => (h && h[1] <= 1 ? "Hiring now" : null);

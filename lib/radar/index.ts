@@ -72,7 +72,7 @@ import { billingLive, gated, hasPro, type PlanRecord } from "../plan";
 import { deliver, functionFor } from "../notify";
 import { logAlert, pushInbox } from "../inbox";
 import { radarAlert } from "./format";
-import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, standingSignals, type RawSignal } from "./signals";
+import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, signalDates, standingSignals, type RawSignal } from "./signals";
 import { deliverable, icpMisses, inIcp, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
 import { isOut, type RadarOutRow } from "./out";
 import { isTuned } from "./tune";
@@ -235,9 +235,10 @@ const sentRow = (x: MemberSignal & { horizon?: [number, number]; score?: number 
   l: viewLine(x),
   ...(x.band ? { b: x.band } : {}),
   ...(x.whyNow ? { w: x.whyNow } : {}),
-  // When it happened (the event's own day where Merlin knows it, else when it was seen), when a hire is likely and its
-  // score: what the page's side panel and the member's tuning read.
-  ...(x.happened || x.at ? { a: (x.happened ?? x.at).slice(0, 10) } : {}),
+  // When it happened (the event's own day: signals.ts sets it for every kind that has one), or "ongoing" for a state with
+  // none (a gap, or a standing state without a date): never the day it was sent, so New this week means it happened this
+  // week. Then when a hire is likely and its score: what the page's side panel and the member's tuning read.
+  ...(x.ongoing || (x.standing && !x.happened) ? { o: 1 as const } : x.happened || x.at ? { a: (x.happened ?? x.at).slice(0, 10) } : {}),
   ...(x.horizon ? { h: x.horizon } : {}),
   ...(typeof x.score === "number" && Number.isFinite(x.score) ? { s: Math.round(x.score * 1000) / 1000 } : {}),
 });
@@ -359,8 +360,17 @@ function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready:
     // A line kept from before loses its predicted window ("in 3–9 months"): never shown (predict.ts noWindow).
     return y && (tuned || y.held) ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x.w ? { ...x, w: noWindow(x.w) } : x;
   };
+  // Each row dated by its event as the table has it now (signals.ts signalDates): a row kept with a delivery says what it
+  // said when it went out, but its date is the event's, so one sent this week about an old hire is not "new this week".
+  const dateOf = signalDates(seed, s, nowMs);
+  const redated = (x: RadarSentRow): RadarSentRow => {
+    const d = dateOf(x.k);
+    if (!d) return x;
+    const { a: _a, o: _o, ...rest } = x; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { ...rest, ...d };
+  };
   for (const d of wanted) {
-    const rows = kept[d]?.length ? kept[d].map(retuned) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);
+    const rows = (kept[d]?.length ? kept[d].map(retuned) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow)).map(redated);
     // A company merged away or taken out since is no row.
     const onFile = rows.filter((x) => c.g.companies.has(x.c));
     // [ux ws3] Any company (no profile yet): the day's most likely companies, not every one (the rows come most likely first).

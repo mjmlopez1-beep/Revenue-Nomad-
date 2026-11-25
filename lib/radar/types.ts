@@ -257,7 +257,10 @@ export interface RadarSigView {
   line: string;
   band?: RadarBand;
   whyNow?: string;
+  /** When the event happened (YYYY-MM-DD). */
   at?: string;
+  /** A state with no event date (a leadership gap a team page shows): "Ongoing", never new this week, never at Now. */
+  ongoing?: true;
   h?: [number, number];
   /** Strong (High on its own), Some (Medium), Light (Low). */
   weight?: "Strong" | "Some" | "Light";
@@ -317,6 +320,8 @@ export interface RadarSentRow {
   w?: string;
   /** When the signal happened (YYYY-MM-DD), when a hire is likely (months from now, as of `k`'s day), and its score (never shown). Rows kept before Crystal Ball's page explained them have none. */
   a?: string;
+  /** A state with no event date (a leadership gap): the page says "Ongoing" and never counts it new. Never with `a`. */
+  o?: 1;
   h?: [number, number];
   s?: number;
 }

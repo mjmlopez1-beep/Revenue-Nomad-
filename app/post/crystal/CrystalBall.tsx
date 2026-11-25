@@ -769,7 +769,7 @@ function WhyCell({ row, fn, today }: { row: RadarRow; fn: string | null; today: 
   const sigs: RadarSigView[] = row.sigs?.length ? row.sigs : row.kinds.map((k, n) => ({ kind: k, line: row.lines[n] ?? row.lines[0] ?? "" }));
   const labels = [...new Set(sigs.map((x) => kindLabel(x.kind, fn)))];
   const lead = sigs[0];
-  const when = dateWords(lead?.at ?? row.day, today);
+  const when = lead?.ongoing ? "Ongoing" : dateWords(lead?.at ?? row.day, today);
   return (
     <span className="cb-why">
       <span className="cb-why-chips">
@@ -877,7 +877,7 @@ function WhyPanel({
               <span>
                 <span className="cb-p-sig-h">
                   <strong>{kindLabel(x.kind, fn)}</strong>
-                  {x.at && <span className="cb-muted">{dateWords(x.at, view.today)}</span>}
+                  {x.at ? <span className="cb-muted">{dateWords(x.at, view.today)}</span> : x.ongoing ? <span className="cb-muted">Ongoing</span> : null}
                   {x.weight && <span className={`cb-weight w-${x.weight.toLowerCase()}`}>{x.weight}</span>}
                 </span>
                 <span className="cb-p-sig-l">{x.whyNow || x.line}</span>

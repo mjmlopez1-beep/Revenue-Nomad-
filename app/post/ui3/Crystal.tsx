@@ -303,7 +303,7 @@ function OppRow({ r, fn, today, open, onWhy, onExplore, onWatch }: { r: CRow; fn
                     <span>
                       <b>{g.line.split(" · ")[0]}</b>
                       {g.line.includes(" · ") && <small className="sig-more">{g.line.split(" · ").slice(1).join(" · ")}</small>}
-                      <small>{[kindLabel(g.kind, fn), at ? dateWords(at, today) : null].filter(Boolean).join(" · ")}</small>
+                      <small>{[kindLabel(g.kind, fn), at ? dateWords(at, today) : g.ongoing ? "Ongoing" : null].filter(Boolean).join(" · ")}</small>
                     </span>
                   </li>
                 );
@@ -420,7 +420,10 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
           </text>
           {lanes.map((r, li) => {
             const y = top + li * LH + LH / 2;
-            const sigs = (r.row.sigs ?? []).filter((g) => g.at && now - dayMs(g.at) <= span);
+            // Every dated signal: one from before the six months sits at the left edge (its tip says when). A state with no
+            // date (a leadership gap) is no dot: the lane reads "Ongoing", never a dot at Now.
+            const sigs = (r.row.sigs ?? []).filter((g) => g.at && dayMs(g.at) <= now);
+            const ongoing = !sigs.length && (r.row.sigs ?? []).some((g) => g.ongoing);
             const name = r.row.name ?? coTitle(r.i);
             const facts = r.i.c.hidden && !r.row.name ? coFacts(r.i) : "";
             const hot = sigs.some((g) => now - dayMs(g.at!) < 7 * DAY);
@@ -436,9 +439,14 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
               >
                 <rect x="0" y={y - LH / 2 + 2} width={W} height={LH - 4} rx="12" className="rv-hit" />
                 <line x1={lx} x2={rx} y1={y} y2={y} className="rv-base" />
+                {ongoing && (
+                  <text className="rv-on" x={lx + 8} y={y - 8}>
+                    Ongoing
+                  </text>
+                )}
                 {sigs.map((g, k) => {
                   const fresh = now - dayMs(g.at!) < 7 * DAY;
-                  const cx = Math.min(rx - 8, x(g.at!));
+                  const cx = Math.max(lx + 8, Math.min(rx - 8, x(g.at!)));
                   const words = `${dateWords(g.at, today)} · ${kindLabel(g.kind, null)}`;
                   return (
                     <g key={k}>
@@ -467,7 +475,7 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
                     </text>
                     <text className="rv-s" x="42" y={y + 15}>
                       {facts ? `${facts.length > 30 ? `${facts.slice(0, 29)}…` : facts}` : GROUP_WORD[r.group]}
-                      {hot ? " · new" : ""}
+                      {hot ? " · new" : ongoing ? " · ongoing" : ""}
                     </text>
                   </>
                 )}

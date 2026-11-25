@@ -260,6 +260,56 @@ async function main() {
   const endSig = all.find((x) => x.key === k("end", "e_beta_sales"));
   check("a hire is dated by its start month, not the day it came into the table", hireSig?.happened === `${monthAgo(1)}-01` && hireSig.at.slice(0, 10) !== hireSig.happened, [hireSig?.at, hireSig?.happened]);
   check("an ended seat is dated by its end month, not the day the end was recorded", endSig?.happened === `${monthAgo(1)}-01`, [endSig?.at, endSig?.happened]);
+
+  // Every kind is dated by its own event, never by the day Merlin noticed it or the day it was sent (the owner's ball, Nov 25:
+  // all 30 read "New this week" at Now, one of them "Hired a fractional Marketing leader in Dec 2025"). Old-dated fixtures of
+  // each kind, on a copy of the table: a hire 13 months in, a seat that ended 4 months ago, a gap its team page shows (with and
+  // without a leader seen leaving), a sales build 20 days ago, a leader who arrived with a "since" month.
+  {
+    const old = seat("e_old_cmo", "c_delta", { source: "Seat scan", role: "Fractional CMO", function: "Marketing", type: "Fractional", start: monthAgo(13), status: "Active", end: "Ongoing" });
+    const gone = seat("e_old_vpm", "c_gamma", { source: "Seat scan", role: "Fractional VP Marketing", function: "Marketing", type: "Fractional", start: monthAgo(10), status: "Ended", end: monthAgo(4) });
+    const seedX = { ...seedLoaded, engagements: [...seedLoaded.engagements, old, gone] } as typeof seedLoaded;
+    const sx = structuredClone(s1);
+    const readAt = ago(2 * DAY);
+    sx.leaders = { ...(sx.leaders ?? {}), c_beta: { status: "found", checkedAt: readAt, ok: true, team: true, teamAt: readAt, hash: "hgapfixture1", hashAt: readAt, functions: {} } } as typeof sx.leaders;
+    sx.leaderArrivals = [{ companyId: "c_echo", fn: "Finance", kind: "full-time", level: "VP", since: monthAgo(5), at: ago(3 * DAY) }];
+    sx.salesBuild = { c_fox: { n: 3, at: ago(20 * DAY), hist: [{ n: 0, at: ago(60 * DAY) }, { n: 3, at: ago(20 * DAY) }], rises: [{ at: ago(20 * DAY), from: 0, to: 3 }] } };
+    const nowMs = Date.now();
+    const wk = (d: string | undefined) => !!d && nowMs - Date.parse(`${d}T12:00:00Z`) < 7 * DAY;
+    // The gaps the page shows at Beta; a leader of the first of them was seen leaving 40 days ago.
+    const gapFns = sig.detectSignals(seedX, sx, nowMs - 30 * DAY, nowMs).filter((x) => x.kind === "gap" && x.companyId === "c_beta").map((x) => x.fn!);
+    check("old dates: the fixture's team page shows at least two gaps", gapFns.length >= 2, gapFns);
+    sx.leaderDepartures = [{ companyId: "c_beta", fn: gapFns[0], kind: "full-time", level: "VP", at: ago(40 * DAY) }];
+    const ev = sig.detectSignals(seedX, sx, nowMs - 30 * DAY, nowMs);
+    const st = sig.standingSignals(seedX, sx, nowMs);
+    const by = (xs: typeof ev, f: (x: (typeof ev)[number]) => boolean) => xs.filter(f);
+    const stillHire = st.find((x) => x.key === `still:hire:${pub("e_old_cmo")}`);
+    check("old dates: a hire that started 13 months ago, still a good time today, is dated by its start (not today)", stillHire?.happened === `${monthAgo(13)}-01` && !wk(stillHire.happened), stillHire && [stillHire.at, stillHire.happened]);
+    const stillTen = st.find((x) => x.key === `still:tenure:${pub("e_old_cmo")}`);
+    check("old dates: a seat a year in is dated by the month it reached the mark", stillTen?.happened === `${monthAgo(1)}-01`, stillTen && [stillTen.at, stillTen.happened]);
+    const stillRe = st.find((x) => x.key === `still:rehire:${pub("e_old_vpm")}`);
+    check("old dates: a repeat hirer is dated by the month its seat ended", stillRe?.happened === `${monthAgo(4)}-01`, stillRe && [stillRe.at, stillRe.happened, st.map((x) => x.key)]);
+    const gaps = by(ev, (x) => x.kind === "gap" && x.companyId === "c_beta");
+    const gapLeft = gaps.find((x) => x.fn === gapFns[0]);
+    const gapOpen = gaps.find((x) => x.fn !== gapFns[0]);
+    check("old dates: a gap whose leader Merlin saw leave 40 days ago is dated by that day, not the page's read this week", gapLeft?.happened === ago(40 * DAY).slice(0, 10) && !gapLeft.ongoing, gapLeft && [gapLeft.at, gapLeft.happened, gaps.map((x) => x.fn)]);
+    check("old dates: a gap with no leaving on file has no date: ongoing, never this week's read", !!gapOpen && gapOpen.ongoing === true && !gapOpen.happened, gapOpen && [gapOpen.fn, gapOpen.at, gapOpen.happened, gapOpen.ongoing]);
+    const stillGaps = by(st, (x) => x.kind === "gap" && x.companyId === "c_beta");
+    check("old dates: a standing gap is never dated today", stillGaps.length > 0 && stillGaps.every((x) => (x.ongoing && !x.happened) || (!!x.happened && !wk(x.happened))), stillGaps.map((x) => [x.fn, x.happened, x.ongoing]));
+    const build = ev.find((x) => x.kind === "sales-build" && x.companyId === "c_fox");
+    check("old dates: a sales build 20 days ago is dated that day (not new this week)", build?.happened === ago(20 * DAY).slice(0, 10) && !wk(build.happened), build && [build.at, build.happened]);
+    const arr = ev.find((x) => x.kind === "arrival" && x.companyId === "c_echo");
+    check("old dates: a new leader whose page says since 5 months ago is dated by that month, not the read", arr?.happened === `${monthAgo(5)}-01`, arr && [arr.at, arr.happened]);
+    check("every event signal and standing state has its own date or says ongoing", [...ev, ...st].every((x) => !!x.happened || x.ongoing === true), [...ev, ...st].filter((x) => !x.happened && !x.ongoing).map((x) => x.key));
+    // Rows kept with a delivery before this (dated by the day they went out) read the event's date from the table now.
+    const dateOf = sig.signalDates(seedX, sx, nowMs);
+    const gapKey = gapOpen?.key ?? "gap:none";
+    check("a kept row of an old hire is re-dated by its start month", dateOf(`hire:${pub("e_old_cmo")}`)?.a === `${monthAgo(13)}-01` && dateOf(`still:hire:${pub("e_old_cmo")}`)?.a === `${monthAgo(13)}-01`);
+    check("a kept row of a repeat hirer or an ended seat is re-dated by the end month", dateOf(`still:rehire:${pub("e_old_vpm")}`)?.a === `${monthAgo(4)}-01` && dateOf(`end:${pub("e_old_vpm")}`)?.a === `${monthAgo(4)}-01`);
+    check("a kept row of a tenure mark is re-dated by the mark's month", dateOf(`tenure:${pub("e_old_cmo")}:12`)?.a === `${monthAgo(1)}-01`);
+    check("a kept row of a gap reads ongoing (or the day its leader left)", JSON.stringify(dateOf(gapKey)) === JSON.stringify({ o: 1 }) && JSON.stringify(dateOf(`still:${gapKey}`)) === JSON.stringify({ o: 1 }) && dateOf(gapLeft?.key ?? "gap:x:y:z")?.a === ago(40 * DAY).slice(0, 10));
+    check("a kept row of a kind dated by its own key (a build, a filing) keeps its date", dateOf(`build:${pub("c_fox")}:${ago(20 * DAY).slice(0, 10)}`) === null && dateOf("test:anything") === null);
+  }
   check("a seat whose title reads below Lead is not", !keys.includes(k("hire", "e_acme_mgr")));
   check("a full-time seat is not", !keys.includes(k("hire", "e_fox_ft")));
   check("a seat that started years ago is not, even found today", !keys.includes(k("hire", "e_beta_old")));

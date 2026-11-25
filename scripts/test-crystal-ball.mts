@@ -371,6 +371,35 @@ async function main() {
   check("the view says how far back its picks go", typeof vs?.since === "string" && vs!.since! <= td && (vs!.ranges ?? []).length === 3, vs?.since);
   const cbSrc2 = readFileSync(new URL("../app/post/crystal/CrystalBall.tsx", import.meta.url), "utf8");
   check("the page shows the note beside the ranges", /rangesNote\(view\.ranges, view\.since, view\.today\)/.test(cbSrc2));
+
+  /* ---------- New this week means it happened this week ---------- */
+  console.log("\nNew this week: the event's own date, never the day it was sent");
+  // Today's delivery as kept before every kind was dated by its event: each row dated today. An old hire (Feb 2023, as
+  // "Hired a fractional Marketing leader in Dec 2025" on the owner's ball), a repeat hirer (ended Nov 2023), a gap.
+  const today0 = ago(0);
+  const gapK = `gap:${P.h}:Finance:fixturehash`;
+  await T.mutate((d) => {
+    d.radar!.members.mem_jor.days![today0] = [
+      ...(d.radar!.members.mem_jor.days![today0] ?? []),
+      { k: `still:hire:${T.pubId("e_c_c")}`, c: "c_c", kind: "adjacent", l: "Hired a fractional Marketing leader in Feb 2023", b: "Medium", a: today0 },
+      { k: `still:rehire:${T.pubId("e_c_l")}`, c: "c_l", kind: "rehire", l: "Had a fractional Marketing leader until Nov 2023", b: "Medium", a: today0 },
+      { k: gapK, c: "c_h", kind: "gap", l: "No Finance leader on their team page", b: "Medium", a: today0 },
+    ];
+  });
+  const vn = await view(JOR, "7d");
+  const rowOf = (c: string) => vn?.rows.find((r) => r.id === P[c]);
+  const sigOf = (c: string, kind: string) => rowOf(c)?.sigs?.find((g) => g.kind === kind);
+  check("a kept row about an old hire reads its start month, not the day it was sent", sigOf("c", "adjacent")?.at === "2023-02-01", rowOf("c")?.sigs);
+  check("a kept row about a repeat hirer reads the month its seat ended", sigOf("l", "rehire")?.at === "2023-11-01", rowOf("l")?.sigs);
+  check("a kept gap reads Ongoing: no date at all", sigOf("h", "gap")?.ongoing === true && !sigOf("h", "gap")?.at, rowOf("h")?.sigs);
+  const isNew = (c: string) => {
+    const at = CM.latestAt(rowOf(c)?.sigs ?? []);
+    return !!at && Date.parse(`${vn!.today}T12:00:00Z`) - Date.parse(`${at}T12:00:00Z`) < 7 * DAY;
+  };
+  check("none of the three is new this week (the page's own count)", !isNew("c") && !isNew("l") && !isNew("h"));
+  check("the table's When column says Ongoing for a gap, and the old hire's month for the hire", CM.whenWords(null, rowOf("h")?.sigs ?? [], vn!.today) === "Ongoing" && CM.whenWords(null, [sigOf("c", "adjacent")!], vn!.today) === "Signal Feb 2023");
+  const ui3Src = readFileSync(new URL("../app/post/ui3/Crystal.tsx", import.meta.url), "utf8");
+  check("the timeline never puts an undated signal at Now (it reads Ongoing) and keeps an old one at its left edge", /ongoing && \(/.test(ui3Src) && /Math\.max\(lx \+ 8, Math\.min\(rx - 8, x\(g\.at!\)\)\)/.test(ui3Src));
 }
 
 main()
