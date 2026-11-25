@@ -564,3 +564,17 @@
 .ui3 .u3-backbar { padding: 8px 28px 0; }
 .u3p .fitfig .m-traits i.on { background: var(--m-forest-3); }
 .u3p .sigs .sig-more { color: var(--m-ink-2); margin: 2px 0; }
+
+/* Target Companies */
+.u3p .tg-why { margin: -6px 0 14px; max-width: 760px; }
+.u3p .tg-more { display: flex; align-items: center; gap: 14px; justify-content: center; margin-top: 16px; }
+.u3p .tg-hidden { margin-top: 14px; text-align: center; }
+.u3p .u3-link { color: var(--m-co-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.u3p a.m-co { text-decoration: none; color: inherit; }
+.u3p a.m-co:hover .m-name span { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.u3p .m-thead > span { display: inline-flex; align-items: center; gap: 2px; }
+.u3p .m-qcard > .m-qart > svg { width: 100%; height: 100%; display: block; }
+.u3p .m-qcard > svg.m-qi { width: 26px; height: 26px; }
+.u3p .tg .m-name .m-chip { flex: none; }
+.u3p .tg .m-btn-done { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+@media (max-width: 760px) { .u3p .tg-phtools { display: flex; gap: 8px; margin-top: 10px; } }

@@ -13,10 +13,12 @@ const wait = () => (
   </main>
 );
 const Home = dynamic(() => import("./Home").then((m) => m.Ui3Home), { ssr: false, loading: wait });
+const Targets = dynamic(() => import("./Targets").then((m) => m.Ui3Targets), { ssr: false, loading: wait });
 const Crystal = dynamic(() => import("./Crystal").then((m) => m.Ui3Crystal), { ssr: false, loading: wait });
 
 export function Ui3Page({ k }: { k: Ui3PageKey }) {
   if (k === "home") return <Home />;
   if (k === "crystal") return <Crystal />;
+  if (k === "targets") return <Targets />;
   return null;
 }
