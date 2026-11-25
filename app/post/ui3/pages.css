@@ -545,3 +545,22 @@
 /* the current look's one-time cards inside the new design keep their own styles, spaced */
 .u3p .u3-wrap > :is(.td-trial, .td-card, .bl-sum, .hm-trial) { margin-bottom: 18px; }
 @media (max-width: 760px) { .u3p .h-start { flex-direction: column; align-items: stretch; } }
+
+/* Crystal Ball */
+.u3p .cb-meta .m-chip { cursor: default; }
+.u3p .cb-meta button.m-chip { cursor: pointer; }
+.u3p .cb-range { margin-left: 4px; }
+.u3p .rv-ini { font: 650 13px var(--m-f-text); fill: var(--m-am-ink); pointer-events: none; }
+.u3p .rv-more { padding: 0 24px 18px; }
+.u3p .rv .m-tip { position: absolute; pointer-events: none; }
+.u3p .fitfig .m-traits { margin-top: 10px; }
+.u3p .fitlist { margin-top: 10px; display: grid; gap: 4px; font-size: 13px; color: var(--m-muted); }
+.u3p .fitlist li { display: flex; align-items: center; gap: 7px; }
+.u3p .fitlist li svg { width: 13px; height: 13px; flex: none; }
+.u3p .fitlist li.on { color: var(--m-ink-2); }
+.u3p .fitlist li.on svg { color: var(--m-forest-3); }
+.u3p .op-main .m-co { min-width: 0; }
+.u3p .op-main .m-co .m-name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .u3-backbar { padding: 8px 28px 0; }
+.u3p .fitfig .m-traits i.on { background: var(--m-forest-3); }
+.u3p .sigs .sig-more { color: var(--m-ink-2); margin: 2px 0; }

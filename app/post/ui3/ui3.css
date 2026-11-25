@@ -417,3 +417,7 @@
   .ui3 .m-scrim { place-items: end center; padding: 0; }
   .ui3 .m-sheet { border-radius: 22px 22px 0 0; padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* the new design's headings take its ink and its fonts, whatever the current look sets for h1 to h4 */
+:where(.ui3) .u3 :where(h1, h2, h3, h4) { color: inherit; font-family: inherit; font-weight: 600; letter-spacing: inherit; }
+.ui3 .u3-acts .tp-credits * { color: inherit; }

@@ -18,6 +18,7 @@ import { TrialStarted } from "../Home";
 import { TrialEnded } from "../Today";
 import { ProWelcome, TrialSummaryCard } from "../Billing";
 import { kindLabel } from "../crystal/crystalModel";
+import { useCrystalClick } from "../CrystalOpen";
 import { useUi3Head } from "./head";
 import { goTargets, isWarm, useTargets, useWarmShared, setWarmFocus } from "./data";
 import { Art } from "./illustrations";
@@ -68,6 +69,8 @@ export function Ui3Home() {
   const { opps } = useTargets();
   const warm = useWarmShared().data;
   const fn = me.function ?? null;
+  // Crystal Ball's own open: free on Trial and Pro, one a day on Free, else the record with its price.
+  const crystalClick = useCrystalClick();
 
   const hello = useMemo(() => ((h) => (h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"))(new Date().getHours()), []);
   const today = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }), []);
@@ -167,7 +170,7 @@ export function Ui3Home() {
                   const fit = fit7(i, me);
                   return (
                     <li key={row.id}>
-                      <button type="button" className="cbp-row" onClick={() => c.openCompany(row.id)}>
+                      <button type="button" className="cbp-row" onClick={() => void crystalClick(row.id, !!i.c.hidden, () => c.openCompany(row.id))}>
                         <CoLogo i={i} s={44} />
                         <span className="cbp-t">
                           <b>{row.name ?? coName(i)}</b>
