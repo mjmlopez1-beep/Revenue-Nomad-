@@ -124,3 +124,6 @@ html[data-theme="dark"]:has(.tp-app.ui3) body { background: #0f1412; }
 .ui3 .u3-macts .tp-credits * { color: var(--m-nav-hi); }
 .ui3 .u3-acts .ws-add { white-space: nowrap; }
 @media (max-width: 1500px) { .ui3 .m-search { width: 320px; } }
+.ui3 .m-logo .logo-locked { width: 100%; height: 100%; display: grid; place-items: center; background: var(--m-bg-2); color: var(--m-faint); border-radius: inherit; }
+.ui3 .m-logo .logo-locked-in { display: grid; place-items: center; }
+.ui3 .m-logo .logo-locked-in svg { width: 15px; height: 15px; }
