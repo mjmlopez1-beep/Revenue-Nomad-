@@ -248,6 +248,8 @@ run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
 run nudges npx tsx scripts/test-nudges.mts
 # The way around (app/post/navModel.ts, Sidebar.tsx): every page one link away, one item on and the right one, admin-only items for admins, the counts the table's own (place.ts placeRows), Home's search by page name. In process, on a made-up seed.
 run nav npx tsx scripts/test-nav.mts
+# The new design (RN_UI3, lib/ui3.ts, app/post/ui3): off sends nothing and keeps every place, optin for admins only, on for everyone with the new shell; Saved and Hidden; the seven-trait fit; scoped styles; no em dashes, AI words or percentages in its copy. In process.
+run ui3 npx tsx scripts/test-ui3.mts
 # Click a column header to sort (scripts/test-sort.mts): text A to Z, numbers and money high to low, dates newest first, a second click reverses, blanks and locks last both ways, stable, never by a hidden value, and every listed table uses the shared header. In process.
 run sort npx tsx scripts/test-sort.mts
 # The QA fixes (scripts/test-qafix.mts): names that are a greeting or a page's words refused and hidden (and scripts/clean-bad-names.mjs on a copy), odd company names for review, outcomes counted only for stages that happened, no logo a 204, an unlock already done elsewhere a calm notice, Home's Crystal Ball line, ?sig= clamped; then in Chromium as a Pixel 7 on its own server: Back closes the sheet on top and keeps what was typed, its X never pops twice, a long search, logos, a used sign-in link, ?sig=2099-12-31.
