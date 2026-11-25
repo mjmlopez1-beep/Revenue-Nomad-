@@ -314,5 +314,14 @@ try {
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
+// Owner review, simulated operators 5: the words beside an invite say when the credits come (the rule checked above), never at once.
+{
+  const { readFileSync } = await import("node:fs");
+  const F = await import("../lib/tableFields");
+  const rd = (f: string) => readFileSync(path.join(import.meta.dirname, "..", f), "utf8");
+  check("sim 5: the invite offer says 'Earn 10 credits when they contribute'", F.INVITE_EARN === "Earn 10 credits when they contribute" && /once they add their first fact to a company already on Merlin or claim their seat\. Joining alone earns nothing/.test(F.INVITE_EARN_RULE));
+  check("sim 5: the new design's invite button carries it, with the rule on hover, never a bare +10", /Invite a fractional <span className="m-chip gold sm" title=\{INVITE_EARN_RULE\}>\{INVITE_EARN\}<\/span>/.test(rd("app/post/ui3/work/community/CommunityPage.tsx")) && !/\+10 credits/.test(rd("app/post/ui3/work/community/CommunityPage.tsx")));
+  check("sim 5: Get credits' invite says it too; no invite line says the credits come on joining", /label: `Invite a fractional\. \$\{INVITE_EARN\}`/.test(rd("app/post/ui.tsx")) && !/credits when they join, and/.test(rd("app/post/AddModal.tsx")) && !/who joins with your link/.test(rd("app/post/AddModal.tsx")) && /not when they join/.test(rd("app/post/Fractionals.tsx")));
+}
 console.log(`\n${failed ? "FAILED" : "ok"}: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

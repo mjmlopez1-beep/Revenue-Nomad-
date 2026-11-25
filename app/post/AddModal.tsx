@@ -1147,7 +1147,7 @@ function KnownKind({ i, onPerson }: { i: CoInfo | null; onPerson: () => void }) 
       </p>
       <ul>
         <li>Who hired for it, who it reported to, or who decides{ i ? ` at ${i.c.name}` : ""}. Each answer earns 1 credit.</li>
-        <li>The fractional who held it, invited with your link from Credits and usage. You each get {REFERRAL_BONUS} credits when they join, and they add the seat.</li>
+        <li>The fractional who held it, invited with your link from Credits and usage. You each get {REFERRAL_BONUS} credits once they contribute: they claim the seat or add a first fact to a company already on Merlin. Joining alone earns nothing.</li>
         <li>A name on a seat that looks wrong: Verify it on the seat. It earns nothing, and keeps Merlin right.</li>
       </ul>
       <button type="button" className="btn btn-volt" onClick={onPerson}>
@@ -1242,7 +1242,7 @@ function AddAside() {
             ["A fact already on file", "0"],
             ["Claiming a seat Merlin found", "0, 3 a day"],
             ["Confirming or reporting a name", "0"],
-            ["A fractional who joins with your link", `+${REFERRAL_BONUS} each`],
+            ["A fractional you invite, once they contribute", `+${REFERRAL_BONUS} each`],
           ].map(([w, n]) => (
             <div key={w}>
               <dt>{w}</dt>

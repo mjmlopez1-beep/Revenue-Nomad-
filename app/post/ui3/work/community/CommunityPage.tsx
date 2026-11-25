@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FractionalRec } from "@/lib/tableTypes";
 import { KNOWN_WORDS, type LeadRec, type PeerRec, type TeamRec } from "@/lib/peersCore";
+import { INVITE_EARN, INVITE_EARN_RULE } from "@/lib/tableFields";
 import { useToast, timeAgo } from "../../../../ui/shared";
 import { useApp } from "../../../shell/pages";
 import { ConnectButton, MessagesPage } from "../../../Messages";
@@ -97,7 +98,7 @@ export function Ui3Community({ tab: tab0 }: { tab: CommunityTab }) {
           extra={
             <div className="w-row" style={{ marginTop: 6, flexWrap: "wrap" }}>
               <button type="button" className="m-btn m-btn-sm m-btn-secondary" onClick={() => setInvite(true)}>
-                <WIc n="plus" /> Invite a fractional <span className="m-chip gold sm">+10 credits</span>
+                <WIc n="plus" /> Invite a fractional <span className="m-chip gold sm" title={INVITE_EARN_RULE}>{INVITE_EARN}</span>
               </button>
               <button type="button" className="m-btn m-btn-sm m-btn-ghost" onClick={() => setYou(true)}>
                 <WIc n="user" /> Your card

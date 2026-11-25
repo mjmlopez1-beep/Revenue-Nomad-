@@ -15,7 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Action, Cell, Me } from "@/lib/tableTypes";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, INVITE_EARN, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, monoTint, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { benchRead } from "@/lib/rates";
@@ -345,7 +345,7 @@ export function ZeroCredits({ anchor, id, onClose, need = 1 }: { anchor: HTMLEle
         ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: toSeats(false) }
         : { label: ui.seats.n > 0 ? "Find another seat you held" : "Find a seat you held", go: toSeats(true) },
     );
-  ways.push({ label: `Invite a fractional (+${REFERRAL_BONUS} each)`, go: () => setInviting(true) });
+  ways.push({ label: `Invite a fractional. ${INVITE_EARN}`, go: () => setInviting(true) });
   const lead = earn.capped
     ? `To see ${what}, you need ${aCredit}. You've earned today's ${ui.me.earnCap}, and you can earn again ${atTime(ui.me.earnResetsAt)}.`
     : ui.seats.missing > 0

@@ -344,6 +344,14 @@ export const FREE_EARN_RULE = `On Free you keep earning up to ${EARN_CAP} credit
 export const REFERRAL_BONUS = 10;
 /** Paid invites per member per 30 days. */
 export const REFERRAL_LIMIT = 5;
+/**
+ * The invite offer beside every invite action (owner review, simulated operators 5): the credits come
+ * when the invitee contributes (lib/table.ts referralBonus: their first fact on a record, or claiming
+ * their seat through the inviter's link), never when they only join, and never at once.
+ */
+export const INVITE_EARN = `Earn ${REFERRAL_BONUS} credits when they contribute`;
+/** What "contribute" means, in a line. */
+export const INVITE_EARN_RULE = `You both get ${REFERRAL_BONUS} credits once they add their first fact to a company already on Merlin or claim their seat. Joining alone earns nothing, and up to ${REFERRAL_LIMIT} invites a month pay.`;
 
 export interface FieldDef {
   key: string;

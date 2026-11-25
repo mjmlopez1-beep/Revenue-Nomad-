@@ -717,7 +717,7 @@ export function InviteSheet({ r, onClose, restore, reload }: { r: FractionalRec;
           </button>
         </div>
         <p className="fr-inv-note">
-          Merlin doesn&apos;t have their email. You send this yourself, and when they join you&apos;re connected and you both earn credits ({REFERRAL_BONUS} each when they&apos;re new to Merlin).
+          Merlin doesn&apos;t have their email. You send this yourself, and when they join you&apos;re connected. If they are new to Merlin, you both earn {REFERRAL_BONUS} credits once they contribute (their first fact or their seat), not when they join.
         </p>
       </div>
     </Sheet>
