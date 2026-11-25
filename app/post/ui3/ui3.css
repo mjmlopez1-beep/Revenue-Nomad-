@@ -86,6 +86,9 @@
 :where(.u3) a { color: inherit; text-decoration: none; }
 .u3 [hidden] { display: none !important; }
 .u3 :focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; border-radius: 6px; }
+/* A page's heading takes focus when the page opens (TradingPost), so a screen reader says where it is. It can't be
+   reached with Tab (tabindex -1), so a ring on it only ever means a script moved focus: never drawn. */
+.ui3 :is(h1, h2, h3)[tabindex="-1"]:focus, .ui3 :is(h1, h2, h3)[tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }
 .ui3 .m-num { font-variant-numeric: tabular-nums; }
 .ui3 .m-ic { width: 18px; height: 18px; flex: none; }
 
@@ -141,7 +144,7 @@
 .ui3 .m-search svg { width: 18px; height: 18px; flex: none; }
 .ui3 .m-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 15px; color: var(--m-ink); }
 .ui3 .m-kbd { font-size: 12px; color: var(--m-muted); background: var(--m-bg-2); border-radius: 6px; padding: 3px 7px; }
-.ui3 .m-page { max-width: 1320px; padding: 0 40px 96px; }
+.ui3 .m-page { max-width: none; padding: 0 40px 96px; }
 
 /* ---------- title band: compact, with a small illustration slot at the right ---------- */
 .ui3 .m-band { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 150px; padding: 8px 0 22px; margin-bottom: 6px; isolation: isolate; }

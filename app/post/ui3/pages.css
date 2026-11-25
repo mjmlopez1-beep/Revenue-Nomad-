@@ -75,6 +75,7 @@
 .u3p .rv-dot:hover { stroke: var(--m-ink); stroke-width: 2.4; }
 .u3p .rv-t { font: 600 14.5px var(--m-f-text); fill: var(--m-ink); }
 .u3p .rv-s { font: 400 13px var(--m-f-text); fill: var(--m-muted); }
+.u3p .rv-on { font: 600 11.5px var(--m-f-text); letter-spacing: .06em; text-transform: uppercase; fill: var(--m-am-ink); opacity: .8; }
 .u3p .rv-lane.hot .rv-s { fill: var(--m-gold-ink); }
 .u3p .cb-tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 26px 0 14px; }
 .u3p .cb-tabs .m-tabs { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -685,3 +686,38 @@
 /* My Network's chip row wraps on wider screens (never clipped at the column's edge); phones scroll it sideways */
 @media (min-width: 761px) { .u3p .nw-main .m-fchips { flex-wrap: wrap; overflow: visible; } }
 .u3p .nw-src { flex: none; }
+
+/* ---------- wide screens (a 1920 to 2560 monitor): the page fills the width beside the navigation ----------
+   Nothing here applies at 1700px and under, so laptops and phones are as before. Data-dense pages (tables,
+   boards, the canvas, Crystal Ball's timeline and list) simply grow; composed pages add columns, and reading
+   text keeps a comfortable measure inside its card. */
+@media (min-width: 1800px) {
+  /* Home: Crystal Ball, the next move and the practice side by side; today's moves under them, in three columns */
+  .u3p .h-cols { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cb nm kp" "mv mv mv"; gap: 18px; margin-top: 6px; }
+  .u3p .h-cols > .h-grid { display: contents; }
+  .u3p .h-cols .cbprev { grid-area: cb; }
+  .u3p .h-cols .nextmove { grid-area: nm; }
+  .u3p .h-cols .kpis { grid-area: kp; }
+  .u3p .h-cols > .h-grid.two > :first-child { grid-area: mv; }
+  .u3p .h-cols .moves { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 32px; }
+  /* Company: Why it fits over Who you know, then Need over time and How you get in, each its own column */
+  .u3p .cv-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1.1fr); grid-template-rows: auto 1fr; }
+  .u3p .cv-grid > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .u3p .cv-grid > :nth-child(2) { grid-column: 2; grid-row: 1 / span 2; }
+  .u3p .cv-grid > :nth-child(3) { grid-column: 1; grid-row: 2; }
+  .u3p .cv-grid > :nth-child(4) { grid-column: 3; grid-row: 1 / span 2; }
+  /* My Network: the list grows, the side column stays a readable width */
+  .u3p .nw-grid { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); }
+  /* Lookalikes: the profile column a touch wider, the move beside the comparison wider, the others in two columns */
+  .u3p .lk-grid { grid-template-columns: 360px minmax(0, 1fr); }
+  .u3p .tm-body { grid-template-columns: minmax(0, 1fr) 320px; }
+  .u3p .others ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+  .u3p .others li:nth-last-child(2):nth-child(odd) .ot-row { border-bottom: 0; }
+  /* Reading text keeps its measure on a wide card */
+  .u3p .op-wt, .u3p .mv-t, .u3p .m-panel .m-sub, .u3p .nw-next .m-sub { max-width: 72ch; }
+}
+@media (min-width: 2200px) {
+  /* Home on the widest screens: all four panels in one row */
+  .u3p .h-cols { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cb mv nm kp"; }
+  .u3p .h-cols .moves { display: block; }
+}

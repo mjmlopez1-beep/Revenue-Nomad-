@@ -933,7 +933,8 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     const h = document.querySelector<HTMLElement>(onScreen === "table" ? "#tp-h1" : ".tp-main-page h1");
     if (h) {
       if (!h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1");
-      h.focus({ preventScroll: true });
+      // A script's focus, never a keyboard's: no ring (focusVisible where the browser knows it; the CSS says the same).
+      h.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
     }
   }, [onScreen]);
 

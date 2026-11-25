@@ -91,7 +91,11 @@ html[data-theme="dark"]:has(.tp-app.ui3) body { background: #0f1412; }
 
 /* ---------- the new design's pages ---------- */
 .tp-app.ui3 .tp-main-page.u3p { padding: 0 40px 96px; background: var(--m-bg); }
-.ui3 .u3p > .u3-wrap { max-width: 1320px; }
+/* No outer cap: a page uses the width beside the navigation (a wide monitor included). At 1440 and under the
+   column is narrower than any cap was, so laptops are as before; wide screens get more columns (pages.css). */
+.ui3 .u3p > .u3-wrap { max-width: none; }
+/* Today's pages drawn inside the new shell (Credits, Billing, Rates) fill it the same way. */
+.tp-app.ui3 .cnu-page, .tp-app.ui3 .rt-page { max-width: none; }
 @media (max-width: 1100px) { .tp-app.ui3 .tp-main-page.u3p, .ui3 .m-top { padding-left: 28px; padding-right: 28px; } }
 .tp-app.ui3.tp-phone .tp-main-page.u3p, .tp-app.ui3.tp-tablet.tp-navbar .tp-main-page.u3p { padding: 0 16px 40px; }
 .ui3 .m-logo > .logo, .ui3 .m-logo > img { width: 100%; height: 100%; border-radius: inherit; display: block; object-fit: contain; }

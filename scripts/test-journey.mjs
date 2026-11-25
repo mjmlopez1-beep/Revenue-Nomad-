@@ -23,7 +23,8 @@
  *      is Won with its value, the agreement is on Contracts; cancel mid-flow, double submit, retry
  *   E  a workflow from a template: Make live, the event, the approval waits, approve once, the
  *      follow-through; the monthly cap makes a run wait for a yes; a test run spends nothing
- *   R  every primary page at 337, 779 and 1363 CSS px: no sideways scroll, the navigation reachable
+ *   R  every primary page at 337, 779 and 1363 CSS px: no sideways scroll, the navigation reachable; and at 1920 and
+ *      2560 (a wide monitor): no sideways scroll and no empty band wider than 120px at the right of the page's content
  *   K  the keyboard: the shell, a filter, a drawer or sheet, a composer (Tab, Shift+Tab, Enter,
  *      Escape; focus visible and returned)
  *   X  axe-core on every primary page (when node_modules/axe-core is there), violations by impact
@@ -1100,6 +1101,35 @@ async function overflowOf(page) {
     return { w, sw, wide };
   });
 }
+/**
+ * How far the page's drawn content stops short of the right edge of its column (the main element's content box): the
+ * rightmost box that draws something (a leaf, an image or icon, a field, or anything with a background, border or
+ * shadow), the title band's illustration left out. A capped, left-aligned page leaves a band here on a wide monitor.
+ */
+async function deadBandOf(page) {
+  return page.evaluate(() => {
+    const main = document.querySelector("main#tp-page") || document.querySelector("main.tp-main-page") || document.querySelector("main");
+    if (!main) return null;
+    const mr = main.getBoundingClientRect();
+    const cs = getComputedStyle(main);
+    const right = mr.right - parseFloat(cs.paddingRight) - (main.offsetWidth - main.clientWidth);
+    let maxR = -Infinity;
+    let who = "";
+    for (const el of main.querySelectorAll("*")) {
+      if ((el.closest("svg") && el.tagName.toLowerCase() !== "svg") || el.closest(".m-band-art")) continue;
+      const s = getComputedStyle(el);
+      if (s.position === "fixed" || s.visibility === "hidden") continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4 || r.bottom < 0) continue;
+      const draws = !el.children.length || /^(svg|img|input|textarea|select|button|canvas|video)$/i.test(el.tagName) || (s.backgroundColor !== "rgba(0, 0, 0, 0)" && s.backgroundColor !== "transparent") || s.backgroundImage !== "none" || parseFloat(s.borderRightWidth) > 0 || parseFloat(s.borderTopWidth) > 0 || s.boxShadow !== "none";
+      if (draws && r.right > maxR) {
+        maxR = r.right;
+        who = `${el.tagName.toLowerCase()}${typeof el.className === "string" && el.className ? "." + el.className.split(" ")[0] : ""}`;
+      }
+    }
+    return { band: Math.round(right - maxR), who, right: Math.round(right) };
+  });
+}
 async function navReachable(page, keys) {
   // A nav link counts when it is drawn (not hidden, some size), on screen or by scrolling the navigation.
   const hrefKey = new Map((PAGES ?? []).map((p) => [p.href, p.key]));
@@ -1155,6 +1185,19 @@ async function journeyR() {
       else check(`${p.label} at ${width}px: every primary page reachable from the navigation`, false, n);
     }
     check(`at ${width}px the navigation reaches every primary page from every primary page`, navOk === pages.length, `${navOk} of ${pages.length} pages`);
+    await ctx.close();
+  }
+  // A wide monitor: every primary page fills the width beside the navigation (no capped, left-aligned page).
+  for (const width of [1920, 2560]) {
+    const ctx = await contextFor("wf", { width, height: 1080 });
+    const page = await ctx.newPage();
+    for (const p of pages) {
+      await openPage(page, BASE + p.href, true);
+      const o = await overflowOf(page);
+      check(`${p.label} at ${width}px: no sideways scroll`, o.sw <= o.w + 1, o);
+      const d = await deadBandOf(page);
+      check(`${p.label} at ${width}px: fills the width (no empty band over 120px at the right)`, !!d && d.band <= 120, d);
+    }
     await ctx.close();
   }
 }
