@@ -498,9 +498,12 @@ export async function queueFromWorkflow(memberId: string, a: { key: string; to: 
   const subject = flat(a.subject, SUBJECT_MAX);
   const body = String(a.body ?? "").replace(/\r\n?/g, "\n").trim().slice(0, BODY_MAX);
   if (!subject || !body) throw new ActionError("The note needs a subject and a body.");
-  const to = cleanAddress(a.to);
-  if (!to) throw new ActionError(WORDS.badAddress);
-  const p = addressProblem(seed, s, m, to);
+  // No address yet (who decides there has no email open to the member): the draft waits with an empty To, as an
+  // agent's does, and the member adds who it is to before Approve and send (approve checks the address). Never sent to nobody.
+  const blank = !String(a.to ?? "").trim();
+  const to = blank ? "" : cleanAddress(a.to);
+  if (!blank && !to) throw new ActionError(WORDS.badAddress);
+  const p = to ? addressProblem(seed, s, m, to) : null;
   if (p) throw new ActionError(p);
   const companyId = companyIdOf(seed, s, a.companyPub);
   const key = flat(a.key, 160);
@@ -513,7 +516,7 @@ export async function queueFromWorkflow(memberId: string, a: { key: string; to: 
     const had = b.items.find((x) => x.key === key);
     if (had) return had.id;
     const x: OutboxItem = {
-      id: newId(), key, status: "draft", to, toName: a.toName ? flat(a.toName, 120) : null, subject, body, kind: "workflow", companyId, pipelineId: null,
+      id: newId(), key, status: "draft", to: to ?? "", toName: a.toName ? flat(a.toName, 120) : null, subject, body, kind: "workflow", companyId, pipelineId: null,
       effect: companyId ? { type: "pipeline.sent", companyId: T.pubId(companyId), channel: "email", from: "record" } : null, createdAt: iso(nowMs), approvedAt: null, sendAt: null, sentAt: null,
       ...(expiresAt ? { expiresAt } : {}),
     };

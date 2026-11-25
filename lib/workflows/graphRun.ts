@@ -972,6 +972,10 @@ async function decide(cx: Cx, n: G.GNode): Promise<string[]> {
   return [out];
 }
 
+/** The approval step's words when the note has no address yet: who it is to is the member's to add, at the tap. */
+export const ADD_TO_FIRST = "Add who it is to first: open the note in your outbox, type their email, then Approve and send. Nothing was sent.";
+export const NO_TO_YET = "Waits for your tap. Their email isn't open to you, so add who it is to in your outbox, then Approve and send. Nothing goes without it.";
+
 /** Approve, then send: the note goes to the member's outbox as a draft and the run waits for their tap. Nothing goes without it. */
 async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
   const { run, m } = cx;
@@ -1023,10 +1027,11 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
     );
     return ["skipped"];
   }
-  if (!to) throw new Error("Who is it to? Put their email in the step's To, or open who decides first.");
+  // No address (who decides there has no email open to the member, journey E1): the run still waits for the member's tap, as a
+  // test does, and the draft waits in the outbox with an empty To. The member adds who it is to, then Approve and send. Never sent to nobody.
   const expires = iso(cx.nowMs + days * DAY);
   const outbox = await queueFromWorkflow(m.id, { key: `wf:${visitKey}`, to, toName: oneLineWf(s0.toName, 120) || null, subject, body, companyPub: run.event.company, expiresAt: expires }, cx.nowMs);
-  put(cx, n, "waiting", "Waits for your tap: Approve and send, in your outbox. Nothing goes without it.", 0, { output: preview });
+  put(cx, n, "waiting", to ? "Waits for your tap: Approve and send, in your outbox. Nothing goes without it." : NO_TO_YET, 0, { output: preview });
   pause(cx, { kind: "send", node: n.id, outbox, expires });
   // The approval request is written first (the run waiting on its note), then the member is told, once: a stop between
   // the two carries on from this wait, and a second pass never sends a second email or bell line.
@@ -1034,7 +1039,7 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
   await notifyOnce(
     cx,
     `send:${visitKey}`,
-    { id: `wf2-send:${visitKey}`, at: iso(cx.nowMs), kind: "workflow", line: "A note waits for your tap: Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` },
+    { id: `wf2-send:${visitKey}`, at: iso(cx.nowMs), kind: "workflow", line: to ? "A note waits for your tap: Approve and send" : "A note waits for you: add who it is to, then Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` },
     s0.email === true ? { line: `A note waits for your tap: Approve and send. It is skipped if you don't answer in ${days === 1 ? "1 day" : `${days} days`}.`, href: "/?p=messages" } : null,
   );
   return "pause";
@@ -1270,6 +1275,8 @@ export function answerRun(memberId: string, runId: string, yes: boolean, origin?
         return "Skipped. Nothing was sent.";
       }
       if (!st || st.status !== "draft") throw new RunAnswer("That note isn't waiting in your outbox anymore.");
+      // No address yet: the member adds who it is to in the outbox first. A yes here never sends to nobody.
+      if (!st.to) throw new RunAnswer(ADD_TO_FIRST);
       // The tap: lib/send's own approve (the address, the daily cap, one send per note, the 30 seconds to undo).
       // The note's own key (one send per note, and a retried run finds it by that key).
       const a = await send.approve(cx.m.token, { key: st.key, id: w.outbox!, to: st.to, subject: st.subject ?? "", body: st.body ?? "", kind: "workflow", company: cx.run.event.company });

@@ -212,6 +212,24 @@ async function main() {
   const q2 = await S.queueFromWorkflow("mem_c", { key: key2, to: "dana@client.example", subject: "Hi", body: "Hi Dana, again." });
   check("approved from the run's tap, then the run retried: no second message", it2.status !== "draft" && q2 === it2.id && (await items()).filter((x) => x.key === key2 || x.key.startsWith(`wf:${r2.id}:`)).length === 1, { it2, q2, key2, items: (await items()).filter((x) => x.key.includes(r2.id)).map((x) => [x.id, x.key, x.status]) });
 
+  /* ---------- 2b. journey E1: no address, the live run waits like the test, and nothing goes to nobody ---------- */
+  console.log("\n2b. A live run whose note has no address waits for the member's tap (journey E1)");
+  const wNo = await mk("No address yet", [N("t", "trig.manual"), N("s", "act.send", { to: "", toName: "Their CFO", subject: "Hello", body: "Hi, a short hello.", email: true }), ...tails("WNo")], [E("t", "s"), ...tailEdges()]);
+  await route("POST", { op: "run", id: wNo });
+  await settle();
+  const rNo = (await lastRun(wNo))!;
+  const itNo = (await items()).find((x) => x.id === rNo.wait?.outbox);
+  check("E1: with no address the live run waits at the approval, never failed", rNo.status === "waiting" && rNo.wait?.kind === "send" && !rNo.failedAt, { status: rNo.status, nodes: rNo.nodes.map((x) => [x.node, x.status, x.note]) });
+  check("E1: its note waits in the outbox with an empty To and who it is for, for the member to fill in", !!itNo && itNo.status === "draft" && itNo.to === "" && (itNo as unknown as { toName: string | null }).toName === "Their CFO", itNo);
+  check("E1: the step says so: add who it is to, then Approve and send", rNo.nodes.find((x) => x.node === "s")?.note === GR.NO_TO_YET, rNo.nodes.find((x) => x.node === "s")?.note);
+  check("E1: the bell says add who it is to", (await bells(/^A note waits for you: add who it is to, then Approve and send/)).length >= 1);
+  const yesNo = await route("POST", { op: "answer", run: rNo.id, yes: true });
+  check("E1: a yes from the run with no address is refused in plain words, and nothing is queued or sent", yesNo.status >= 400 && yesNo.j.error === GR.ADD_TO_FIRST && (await items()).find((x) => x.id === itNo!.id)?.status === "draft", yesNo);
+  const noTo = await S.approve("tok-c-000000001", { key: itNo!.key, id: itNo!.id, to: "", subject: "Hello", body: "Hi, a short hello.", kind: "workflow" } as never).then(() => null, (e: Error) => e.message);
+  check("E1: the outbox's own approve refuses an empty To too", !!noTo, noTo);
+  const withTo = await S.approve("tok-c-000000001", { key: itNo!.key, id: itNo!.id, to: "cfo@client.example", subject: "Hello", body: "Hi, a short hello.", kind: "workflow" } as never);
+  check("E1: with the address the member typed, Approve and send queues that one note, to that address", ["queued", "grant"].includes(withTo.item.status) && withTo.item.to === "cfo@client.example" && (await items()).filter((x) => x.key === itNo!.key).length === 1, withTo.item);
+
   /* ---------- 3. an expired approval is refused where the member taps ---------- */
   console.log("\n3. Expiry at the approve endpoint itself");
   const w3 = await mk("Expires", [N("t", "trig.manual"), N("s", "act.send", { to: "dana@client.example", subject: "Late", body: "Hi Dana, a late one.", days: 1 }), ...tails("W3")], [E("t", "s"), ...tailEdges()]);
