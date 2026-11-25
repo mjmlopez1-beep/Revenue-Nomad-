@@ -22,6 +22,7 @@
  */
 import { closestOf } from "../workbench/closest";
 import type { EngagementRec, Me, SavedViewRec } from "@/lib/tableTypes";
+import { wayBandOf } from "@/lib/paths/rank";
 import type { ColumnDef, Fill } from "../workbench/columns";
 import {
   absolutePlace, criteriaOf, dayOf, icpMatch, icpParts, icpUnknown, isOpenRole, namedFn, newThisWeek, openSince, shown, sortRows, withIcpSpelled,
@@ -162,14 +163,14 @@ export interface WayIn {
 
 /**
  * The way in a row shows. Warm paths' best route when the member has one ("Through Casey Morgan,
- * then Rita Vance", with its estimated success). Otherwise what the seats say: a seat the member
+ * then Rita Vance", with how warm it is in words: Warm intro, Good path or Long shot, never a percentage). Otherwise what the seats say: a seat the member
  * held there, or a fellow fractional who held one (named once the company is open, free), else
  * "No path yet". `first`: a first visit, when the next step is bringing in who you know.
  */
 export function wayOf(r: Row, ways: WayMap | null, first = false): WayIn {
   const i = r.i;
   const w = ways?.get(i.c.id);
-  if (w?.via && !i.c.hidden) return { text: w.via, sub: w.best != null ? `Estimated success ${w.best}%` : "From Warm paths", has: true };
+  if (w?.via && !i.c.hidden) return { text: w.via, sub: w.best != null ? wayBandOf(w.best) : "From Warm paths", has: true };
   if (i.engs.some((e) => e.yours)) return { text: "You held a seat here", sub: "Your own way in", has: true };
   const held = i.engs.filter((e) => !isOpenRole(e) && !e.yours && (e.cells.operator?.s === "value" || e.cells.operator?.s === "locked"));
   if (held.length) {
@@ -178,7 +179,7 @@ export function wayOf(r: Row, ways: WayMap | null, first = false): WayIn {
     if (named && named.cells.operator?.s === "value") return { text: `Through ${named.cells.operator.v}`, sub: "Held a seat here", has: true };
     return { text: "Through a fractional", sub: "1 credit shows who held the seat", has: true };
   }
-  if (w && w.best != null) return { text: "Through someone you know", sub: i.c.hidden ? "Name shows when open" : `Estimated success ${w.best}%`, has: true };
+  if (w && w.best != null) return { text: "Through someone you know", sub: i.c.hidden ? "Name shows when open" : wayBandOf(w.best), has: true };
   return { text: "No path yet", sub: first ? "Bring in who you know" : "Find one in Warm paths", has: false };
 }
 

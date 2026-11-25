@@ -63,10 +63,20 @@ export function sourcesLine(sigs: readonly Pick<RadarSigView, "kind">[]): string
   return `From ${xs.length === 1 ? xs[0] : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`}.`;
 }
 
-/** "Now", "Within 3 months", "In 2 to 6 months"; null when not on file (a row kept before windows were stored). */
-export const whenWords = (h: readonly [number, number] | null | undefined) => (!h ? null : h[1] <= 1 ? "Now" : h[0] <= 0 ? `Within ${h[1]} months` : `In ${h[0]} to ${h[1]} months`);
-/** The side panel's longer words: "Hiring now", "Likely within 3 months", "Likely in 2 to 6 months". */
-export const whenLong = (h: readonly [number, number] | null | undefined) => (!h ? "When is not on file yet" : h[1] <= 1 ? "Hiring now" : h[0] <= 0 ? `Likely within ${h[1]} months` : `Likely in ${h[0]} to ${h[1]} months`);
+/**
+ * The When column: real, dated facts only, never a predicted window (owner, 2026-11-25: Merlin has
+ * no validated outcome data, so "within 3 months" would be false precision). "Open now" for an open
+ * role, else the newest signal's day ("Nov 20"), else null.
+ */
+export function whenWords(h: readonly [number, number] | null | undefined, sigs: readonly Pick<RadarSigView, "at">[] = [], today = ""): string | null {
+  if (h && h[1] <= 1) return "Open now";
+  const at = latestAt(sigs);
+  return at && today ? `Signal ${dateWords(at, today)}` : null;
+}
+/** The side panel's line: "Hiring now" for an open role, else nothing (Merlin doesn't guess when). */
+export const whenLong = (h: readonly [number, number] | null | undefined) => (h && h[1] <= 1 ? "Hiring now" : null);
+/** The newest dated signal's day (YYYY-MM-DD), or null. */
+export const latestAt = (sigs: readonly Pick<RadarSigView, "at">[]) => sigs.map((x) => x.at).filter((x): x is string => !!x && /^\d{4}-\d{2}-\d{2}$/.test(x)).sort().pop() ?? null;
 
 /** "Nov 19", "Oct 2026" when older than this year. */
 export function dateWords(day: string | null | undefined, today: string): string {
@@ -170,17 +180,18 @@ export function fitWords(icp: Icp | null | undefined, facts: { industry?: string
   return unknown.length ? `${said} ${list(unknown).replace(/^./, (c) => c.toUpperCase())} ${unknown.length === 1 ? "is" : "are"} not on file.` : said;
 }
 
-/** The timeline: 12 months back to 12 ahead, each signal's dot and the window it points to, as shares of the width (0 to 1). */
-export function timeline(sigs: readonly Pick<RadarSigView, "at">[], h: readonly [number, number] | null | undefined, today: string): { dots: (number | null)[]; win: [number, number] | null } {
+/** Room kept at each end of the timeline, as a share of its width, so a dot today stays inside. */
+export const TL_EDGE = 0.03;
+/** The timeline: the last 12 months up to today, each signal's dot as a share of the width (today at 1 - TL_EDGE). Dated facts only: no window ahead. */
+export function timeline(sigs: readonly Pick<RadarSigView, "at">[], today: string): { dots: (number | null)[] } {
   const now = Date.parse(`${today}T12:00:00Z`);
   const MONTH = 30.44 * 86_400_000;
   const dots = sigs.map((s) => {
     if (!s.at) return null;
     const back = Math.min(12, Math.max(0, (now - Date.parse(`${s.at}T12:00:00Z`)) / MONTH));
-    return (12 - back) / 24;
+    return TL_EDGE + (1 - 2 * TL_EDGE) * ((12 - back) / 12);
   });
-  const win: [number, number] | null = h ? [(12 + Math.min(12, h[0])) / 24, (12 + Math.min(12, Math.max(h[0] + 1, h[1]))) / 24] : null;
-  return { dots, win };
+  return { dots };
 }
 
 /** How many rows each tuning group is behind ("Behind 4 of 16 companies"). */

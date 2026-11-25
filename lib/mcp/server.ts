@@ -510,7 +510,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
   registerEvidenceTools(server, ctx, run);
   // Peers (lib/mcp/peers.ts): the member's peers, referring a company to a peer (asks first), and the referrals for them.
   registerPeerTools(server, ctx, run);
-  // Your way into a company (lib/mcp/ways.ts): the routes with Est. success, read only. With ways in on (RN_PATHS): the
+  // Your way into a company (lib/mcp/ways.ts): the routes with how warm each is in words, read only. With ways in on (RN_PATHS): the
   // sources are independent, so the LinkedIn file, a contacts CSV and fellow fractionals give routes without Google. The
   // locked-match rule holds there as in the app (a locked company's routes stay closed; people from the member's own files are never named).
   if (pathsOn()) registerWayTools(server, ctx, run);

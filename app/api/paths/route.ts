@@ -14,7 +14,7 @@
  * POST { op: "suggestAdd", keys }  add the ticked people (name, title and relationship only), 1 credit each within the day's cap
  * POST { op: "suggestSkip", keys } never suggest these again
  * GET ?map=1                 GetInView: Where you can get in, every company that fits the member, placed (lib/paths/ways.ts)
- * GET ?way=<public id>       WayInView: Your way into that company, its routes with Est. success, and the member's plan
+ * GET ?way=<public id>       WayInView: Your way into that company, its routes with how warm each is in words, and the member's plan
  * GET ?plans=1               { plans: PlanLine[] }: the member's plans, for Home's move and the pipeline's route line
  * POST { op: "way", company, do: "go", route }                 go with a route (creates or updates the pipeline deal)
  * POST { op: "way", company, do: "step", step, answer }        what happened at a step (sent, intro, noreply, nudged, cant, booked)

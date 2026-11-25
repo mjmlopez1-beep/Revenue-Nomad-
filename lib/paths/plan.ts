@@ -9,7 +9,7 @@
  *  - plan B (another route's id);
  *  - the log: what happened when (a kind of event and the step, never a name or any text);
  *  - the outcomes of each step (made the intro, no reply yet, can't help, meeting booked) and the
- *    route's Est. success when chosen, so the estimate can be calibrated later;
+ *    route's internal score when chosen, so it can be calibrated later;
  *  - where the route came from (google, linkedin, csv): deleting that data deletes the plan with it.
  * Names are worked out when the plan is shown, by the rules that hold then.
  *
@@ -63,7 +63,7 @@ export interface RoutePlan {
   nudge?: string | null;
   /** Plan B took over because someone couldn't help: the route it came from. Cleared once the member goes with it. */
   fromCant?: string;
-  /** Est. success when it was chosen (5 to 85). */
+  /** The internal score when it was chosen (5 to 85). Never shown. */
   est: number;
   /** Where the route came from: the member's own Google network, their LinkedIn import. */
   src?: ("google" | "linkedin" | "csv")[];

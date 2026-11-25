@@ -78,7 +78,7 @@ export interface RadarCard {
   why: string;
   /** How likely, in a word. */
   band?: RadarBand;
-  /** Why now, from the rule: "Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months". */
+  /** Why now, from the rule: "Fractional CMO hired 5 months ago · Sales usually follows". */
   whyNow?: string;
   /** The company's name when the member's table shows it. Null otherwise. */
   company: string | null;
@@ -231,7 +231,7 @@ export interface RadarRow {
   kinds: RadarKind[];
   /** A line for each signal, never naming the company: "Hired a fractional Finance leader · Finance usually comes before Sales". */
   lines: string[];
-  /** Beside each line: its band and why-now ("High · Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months"). */
+  /** Beside each line: its band and why-now ("High · Fractional CRO hired 2 months ago · RevOps usually follows"). */
   notes?: string[];
   /** The best band of the company's signals. */
   band?: RadarBand;

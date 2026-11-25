@@ -347,7 +347,7 @@ async function main() {
   check("someone who isn't the buyer: Ask Priya for an intro", mCorv.do === "intro" && mCorv.title === "Ask Priya for an intro" && mCorv.way.kind === "know" && !mCorv.way.person.dm, mCorv);
   check("an open role in her function where she knows someone: Reply to the open role, Hiring now", mHarb.do === "reply" && mHarb.title === "Reply to the open role" && mHarb.hiring && /let Nia know/.test(mHarb.line), mHarb);
   check("Likely to hire with its band, never a percentage", !mLark.hiring && mLark.band === "Medium" && mCorv.band === "High" && !/%/.test(JSON.stringify(mor.moves)));
-  check("why now is the Crystal Ball's own words", mLark.why === "Fractional CRO hired 2 months ago. RevOps usually follows in 1–4 months.", mLark.why);
+  check("why now is the Crystal Ball's own words", mLark.why === "Fractional CRO hired 2 months ago. RevOps usually follows.", mLark.why);
   check("the person: warmth, last met and meetings", mLark.way.kind === "know" && /^Last met in [A-Z][a-z]+( \d{4})? · 4 meetings$/.test(M.knowLine(mLark.way.person)), mLark.way.kind === "know" ? M.knowLine(mLark.way.person) : null);
   check("named free: a company she knows someone at is hers to see", mor.moves.every((m) => !m.hidden && !!m.name && nameOf(m.id) === m.name), mor.moves.map((m) => m.name));
   check("the connector is on and connected", mor.today.moves!.google === "on" && mor.today.moves!.month === 0);

@@ -597,7 +597,7 @@ export type PersonKind = "fractional" | "investor" | "recruiter" | "seller";
 export interface HireOdds {
   band: "High" | "Medium" | "Low";
   score: number;
-  /** Why, in Crystal Ball's own words: "Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months". */
+  /** Why, in Crystal Ball's own words: "Fractional CRO hired 2 months ago · RevOps usually follows". */
   why: string;
   /** What happened, as a Crystal Ball row says it (a note can say "I saw ..."): the kind and the line. */
   saw: { kind: "role" | "seat" | "adjacent"; line: string } | null;

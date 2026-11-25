@@ -267,7 +267,7 @@ export function viewLine(sig: MemberSignal): string {
   }
 }
 
-/** The note beside a line: "High · Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months". Null when unscored. */
+/** The note beside a line: "High · Fractional CRO hired 2 months ago · RevOps usually follows". Null when unscored. */
 export const noteOf = (sig: Pick<MemberSignal, "band" | "whyNow">): string | null => (sig.band && sig.whyNow ? `${sig.band} · ${sig.whyNow}` : null);
 
 /** One delivery: every card, and the day's companies. Null with no signals (a nothing-day is never sent). */

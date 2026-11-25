@@ -76,7 +76,7 @@ import { detectSignals, fundingCompanies, observedTransitions, recordHeadcount, 
 import { deliverable, icpMisses, inIcp, pickDaily, profileOf, signalsFor, icpIsEmpty, type RadarProfile, type Scored } from "./match";
 import { isOut, type RadarOutRow } from "./out";
 import { isTuned } from "./tune";
-import { bandOf } from "./predict";
+import { bandOf, noWindow } from "./predict";
 import { isCalendar } from "./signals";
 import { networkWarmth } from "../google/types"; // [google network]
 import { dayOf, rowsOf, viewLine, type CardContext, type MemberSignal } from "./present";
@@ -355,7 +355,8 @@ function dayRows(c: Ctx, m: Member, wanted: string[]): { p: RadarProfile; ready:
   const now = new Map(scored.map((x) => [x.key, x]));
   const retuned = (x: RadarSentRow): RadarSentRow => {
     const y = now.get(x.k);
-    return y && (tuned || y.held) ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x;
+    // A line kept from before loses its predicted window ("in 3–9 months"): never shown (predict.ts noWindow).
+    return y && (tuned || y.held) ? { ...x, b: y.band, w: y.whyNow, h: y.horizon, s: Math.round(y.score * 1000) / 1000 } : x.w ? { ...x, w: noWindow(x.w) } : x;
   };
   for (const d of wanted) {
     const rows = kept[d]?.length ? kept[d].map(retuned) : live.filter((x) => x.at.slice(0, 10) === d).map(sentRow);

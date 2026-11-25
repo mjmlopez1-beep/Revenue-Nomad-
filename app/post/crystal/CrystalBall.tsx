@@ -55,7 +55,7 @@ import { useNetwork } from "../network/useNetwork"; // [google network]
 import { usePaths } from "../network/usePaths"; // [smart ways in]
 import { firstOf, ownOf } from "../firstVisit";
 import { plural } from "../hooks";
-import { dateWords, fitWords, groupCounts, kindLabel, moveOf, movedCount, newSince, rangesNote, sinceWords, sourcesLine, timeline, whenLong, whenWords, withStep, type WayFacts } from "./crystalModel";
+import { dateWords, fitWords, groupCounts, kindLabel, latestAt, moveOf, movedCount, newSince, rangesNote, sinceWords, sourcesLine, timeline, TL_EDGE, whenLong, whenWords, withStep, type WayFacts } from "./crystalModel";
 import "../workbench/workbench.css";
 import "./crystal.css";
 
@@ -82,7 +82,7 @@ const CB_COLUMNS = (): ColumnDef[] => [
   { ...COMPANY_COLUMNS.find((c) => c.id === "company")!, width: "minmax(180px, 1.2fr)" },
   { id: "cb-band", type: "companies", label: "Likely", cost: "free", word: "rated", fill: () => "value", width: "minmax(84px, 84px)", tip: "High, Medium or Low: how likely they hire a fractional like you next. Never a percentage." },
   { id: "cb-why", type: "companies", label: "Why now", cost: "free", word: "with a signal", fill: () => "value", width: "minmax(200px, 2fr)", tip: "The signals behind it, strongest first." },
-  { id: "cb-when", type: "companies", label: "When", cost: "free", word: "dated", fill: () => "value", width: "minmax(92px, 92px)", tip: "When a hire is likely, from the signal's usual window." },
+  { id: "cb-when", type: "companies", label: "When", cost: "free", word: "dated", fill: () => "value", width: "minmax(112px, 112px)", tip: "Open now for an open role, else the day of the newest signal. Merlin doesn't guess when they hire." },
   { id: "cb-move", type: "companies", label: "Your move and way in", cost: "free", word: "with a way in", fill: () => "empty", width: "minmax(150px, 1fr)", tip: "What to do next, and who can get you in." },
 ];
 
@@ -171,8 +171,8 @@ export function CrystalBallPage() {
     () => ({
       "cb-band": { kind: "number", get: (r) => BAND_RANK[byRow.get(r.i.c.id)?.band ?? ""] ?? null },
       "cb-why": { kind: "text", get: (r) => byRow.get(r.i.c.id)?.lines[0] ?? null },
-      // Soonest first on the first click: months from now, the other way round.
-      "cb-when": { kind: "number", get: (r) => (byRow.get(r.i.c.id)?.h ? -byRow.get(r.i.c.id)!.h![0] : null) },
+      // Newest first: an open role, then the newest signal's day.
+      "cb-when": { kind: "number", get: (r) => { const x = byRow.get(r.i.c.id); if (!x) return null; if (x.h && x.h[1] <= 1) return Number.MAX_SAFE_INTEGER; const at = latestAt(x.sigs ?? []); return at ? Date.parse(`${at}T12:00:00Z`) : null; } },
       "cb-move": { kind: "number", get: (r) => (moveOf(byRow.get(r.i.c.id) ?? { kinds: [] }, wayOf(r.i)).hasWay ? 1 : 0) },
     }),
     [byRow, wayOf],
@@ -634,7 +634,7 @@ export function CrystalBallPage() {
                     );
                   if (id === "cb-band") return rr.band ? <LikelihoodChip band={rr.band} /> : null;
                   if (id === "cb-why") return <WhyCell row={rr} fn={fn} today={today} />;
-                  if (id === "cb-when") return <span className="cb-when">{whenWords(rr.h) ?? "Not on file"}</span>;
+                  if (id === "cb-when") return <span className="cb-when">{whenWords(rr.h, rr.sigs ?? [], today) ?? "Not dated"}</span>;
                   if (id === "cb-move") {
                     const m = moveOf(rr, wayOf(r.i));
                     return (
@@ -827,7 +827,7 @@ function WhyPanel({
   const i = r.i;
   const sigs: RadarSigView[] = row.sigs?.length ? row.sigs : row.kinds.map((k, n) => ({ kind: k, line: row.lines[n] ?? "" }));
   const m = moveOf(row, way);
-  const tl = timeline(sigs, row.h, view.today);
+  const tl = timeline(sigs, view.today);
   const lead = fn ? i.leads.find((l) => l.fn === fn) : null;
   const teamAt = i.c.leads?.teamAt;
   const leadWords = !fn
@@ -853,7 +853,7 @@ function WhyPanel({
       </div>
       <div className="cb-p-band">
         {row.band && <LikelihoodChip band={row.band} long />}
-        <span>{whenLong(row.h)}</span>
+        {whenLong(row.h) && <span>{whenLong(row.h)}</span>}
       </div>
       {i.c.hidden && (
         <div className="cb-p-open">
@@ -898,9 +898,9 @@ function WhyPanel({
 
       <section className="cb-p-sec" aria-label="Signals over time">
         <h3>
-          Timeline <span className="cb-muted cb-legend"><span className="cb-key sig" aria-hidden /> Signal <span className="cb-key win" aria-hidden /> May hire</span>
+          Timeline <span className="cb-muted cb-legend"><span className="cb-key sig" aria-hidden /> Signal</span>
         </h3>
-        <div className="cb-tl" role="img" aria-label={`${plural(sigs.length, "signal")} in the last 12 months. ${whenLong(row.h)}.`}>
+        <div className="cb-tl" role="img" aria-label={`${plural(sigs.length, "signal")} in the last 12 months.${whenLong(row.h) ? ` ${whenLong(row.h)}.` : ""}`}>
           <div className="cb-tl-box" style={{ height: sigs.length * 20 + 14 }}>
             {sigs.map((_, k) => (
               <span key={`l${k}`} className="cb-tl-lane" style={{ top: k * 20 + 8 }} />
@@ -912,13 +912,12 @@ function WhyPanel({
                 </span>
               ),
             )}
-            <span className="cb-tl-now" style={{ left: "50%" }} />
-            {tl.win && <span className="cb-tl-win" style={{ top: sigs.length * 20 + 2, left: `${(tl.win[0] * 100).toFixed(1)}%`, width: `${((tl.win[1] - tl.win[0]) * 100).toFixed(1)}%` }} />}
+            <span className="cb-tl-now" style={{ left: `${((1 - TL_EDGE) * 100).toFixed(1)}%` }} />
           </div>
           <div className="cb-tl-axis">
             <span>12 months ago</span>
+            <span>6 months ago</span>
             <strong>Today</strong>
-            <span>12 months ahead</span>
           </div>
         </div>
       </section>

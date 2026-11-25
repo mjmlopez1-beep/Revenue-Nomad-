@@ -161,7 +161,7 @@ async function main() {
 
   /* ----- the way in ----- */
   check("an open company where a fellow fractional held a seat: their name, free", H.wayOf(rCp, null).text === "Through Rita Okafor" && H.wayOf(rCp, null).has);
-  check("Warm paths' route, with its estimated success", H.wayOf(rCp, new Map([["c_cp", { via: "Through Casey Morgan, then Rita Vance", best: 35, locked: false }]])).sub === "Estimated success 35%");
+  check("Warm paths' route, with how warm it is in words, never a percentage", H.wayOf(rCp, new Map([["c_cp", { via: "Through Casey Morgan, then Rita Vance", best: 35, locked: false }]])).sub === "Warm intro" && H.wayOf(rCp, new Map([["c_cp", { via: "Through Casey Morgan", best: 10, locked: false }]])).sub === "Long shot");
   const own = co("c_own", "Larkspur Learning", [role("e_own_role", "Sales"), seat("e_own_seat", "Sales", v("Jordan Avery"), { yours: true })]);
   check("a seat the member held there", H.wayOf(rowOf(own), null).text === "You held a seat here");
   check("no path: says so, and on a first visit the next step", H.wayOf(rNw, null).text === "No path yet" && H.wayOf(rNw, null, true).sub === "Bring in who you know" && !H.wayOf(rNw, null).has);

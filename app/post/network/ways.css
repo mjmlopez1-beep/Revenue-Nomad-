@@ -203,11 +203,13 @@
   font-weight: 700;
   color: var(--ink);
 }
+/* The route's band in words (Warm intro, Good path, Long shot): never a number. */
 .wy-facts dd.wy-est-n {
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 20px;
+  line-height: 26px;
   font-weight: 800;
   color: var(--pine);
+  white-space: nowrap;
 }
 .wy-est {
   display: flex;

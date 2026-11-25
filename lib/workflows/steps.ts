@@ -149,7 +149,7 @@ export async function stepWay(seed: Seed, s: State, m: Member, companyId: string
   const routes = routesOf(seed, s, m, companyId, nowMs);
   if (!routes.length) return { ok: true, note: "No way in on file yet. Warm paths fills in as your sources grow." };
   const best = routes[0].view;
-  return { ok: true, note: `${routes.length === 1 ? "1 way in" : `${routes.length} ways in`}. The strongest: ${best.kind.charAt(0).toLowerCase()}${best.kind.slice(1)}, about ${best.est}% to a meeting.` };
+  return { ok: true, note: `${routes.length === 1 ? "1 way in" : `${routes.length} ways in`}. The strongest: ${best.kind.charAt(0).toLowerCase()}${best.kind.slice(1)}, ${best.way.toLowerCase()}.` };
 }
 
 /** Draft a note: the move note's template in the member's voice, to nobody by name. Only for a company the member can see. */

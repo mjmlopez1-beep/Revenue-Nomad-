@@ -675,7 +675,7 @@ export interface State extends MessagingState {
    * in another member's view, the shared table or the export; account closure deletes it.
    */
   routes?: RoutesState;
-  /** The outcomes of plans' steps, counted by the step's shape only (lib/paths/plan.ts statKey): no member, company or person. For calibrating Est. success. */
+  /** The outcomes of plans' steps, counted by the step's shape only (lib/paths/plan.ts statKey): no member, company or person. For calibrating the way-in score. */
   routeStats?: RouteStats;
   /** Automatic jobs (lib/schedule.ts): the cadences the owner changed in Pilot metrics. The rest follow JOB_DEFAULTS. */
   schedule?: ScheduleState;

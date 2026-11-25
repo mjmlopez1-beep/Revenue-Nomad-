@@ -70,7 +70,7 @@ export const slackHeadline = (d: RadarDay) => {
 
 /** A card that goes by email or Slack: never a Low one. */
 const sendable = (c: RadarCard) => c.band !== "Low";
-/** "High likelihood · Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months", or null for a card from before Crystal Ball scored. */
+/** "High likelihood · Fractional CMO hired 5 months ago · Sales usually follows", or null for a card from before Crystal Ball scored. */
 export const likelyLine = (c: RadarCard) => (c.band && c.whyNow ? `${c.band} likelihood · ${c.whyNow}` : null);
 
 /** Several radar items in one batch (Pro instant posts inside 15 minutes): one post, each card once. */

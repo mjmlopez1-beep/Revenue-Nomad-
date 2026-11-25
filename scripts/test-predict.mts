@@ -155,7 +155,8 @@ async function main() {
   check("after it: falls, then a low tail, then nothing", P.timing(10.5, g) < 1 && P.timing(10.5, g) > P.TIMING_TAIL && near(P.timing(13, g), P.TIMING_TAIL) && P.timing(16, g) === 0, [P.timing(10.5, g), P.timing(13, g), P.timing(16, g)]);
   check("a window from 0 is at its peak at once", P.timing(0, [0, 2]) === 1);
   check("bands are words: High, Medium, Low", P.bandOf(0.3) === "High" && P.bandOf(0.12) === "Medium" && P.bandOf(0.05) === "Low");
-  check("the why-now line", P.hireWhyNow("Marketing", "Sales", 5, { gap: [4, 9], rule: P.RULES[4] }) === "Fractional CMO hired 5 months ago · Sales usually follows in 4–9 months" && P.gapWords([0, 2]) === "within 2 months");
+  check("the why-now line", P.hireWhyNow("Marketing", "Sales", 5, { gap: [4, 9], rule: P.RULES[4] }) === "Fractional CMO hired 5 months ago · Sales usually follows" && P.gapWords([0, 2]) === "within 2 months");
+  check("why-now lines never carry a predicted window, and old kept lines lose theirs", P.hireWhyNow("Marketing", "Sales", 12, { gap: [4, 9], rule: P.RULES[4] }) === "Fractional CMO hired 12 months ago · the usual window for Sales has passed" && P.noWindow("Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months") === "Fractional CRO hired 2 months ago · RevOps usually follows" && P.noWindow("CFO gone from its website · interim or fractional cover usually follows within 2 months") === "CFO gone from its website · interim or fractional cover usually follows" && P.noWindow("Fractional CMO hired 12 months ago · the usual 4–9 month window for Sales has passed") === "Fractional CMO hired 12 months ago · the usual window for Sales has passed" && P.noWindow("Fractional CFO seat ended in March 2026") === "Fractional CFO seat ended in March 2026");
 
   /* ---------- scoring ---------- */
   console.log("\nScoring and ranking");
@@ -168,7 +169,7 @@ async function main() {
   const weak = raw({ key: "hire:weak", fn: "Legal", ym: monthAgo(2), atMs: Date.now() + 1 });
   const ranked = M.signalsFor([weak, croRevops], revops);
   check("a CRO hired 2 months ago outranks a weak pair for RevOps", ranked[0]?.key === "hire:cro" && ranked[0].score > (ranked[1]?.score ?? 0) * 3, ranked.map((x) => [x.key, x.score.toFixed(3), x.band]));
-  check("and reads High, with its window", ranked[0]?.band === "High" && ranked[0].whyNow === "Fractional CRO hired 2 months ago · RevOps usually follows in 1–4 months", ranked[0]?.whyNow);
+  check("and reads High, its window weighed but never shown", ranked[0]?.band === "High" && ranked[0].whyNow === "Fractional CRO hired 2 months ago · RevOps usually follows", ranked[0]?.whyNow);
   const role = raw({ key: "role:r", kind: "role", fn: "RevOps", title: "Fractional RevOps lead" });
   const ended = raw({ key: "end:s", kind: "seat", fn: "RevOps" });
   const all3 = M.signalsFor([croRevops, ended, role, weak], revops);
@@ -195,12 +196,12 @@ async function main() {
   check("fit: every asked part on file and matching is 1, unknown parts count less", M.fitOf({ ...icp, countries: ["United States"] }, co()) === 1 && M.fitOf({ ...icp, countries: ["United States"] }, co({ country: null })) < 1);
   const dep = raw({ key: "gone:x", kind: "departure", fn: "Finance", gone: { kind: "full-time", level: "C-level" } });
   const depFin = M.scoreFor(dep, fin);
-  check("a leader departure in the member's function: High, cover within 2 months", depFin?.band === "High" && /within 2 months/.test(depFin.whyNow) && /^CFO gone from its website · interim or fractional cover usually follows within 2 months$/.test(depFin.whyNow), depFin);
+  check("a leader departure in the member's function: High, cover usually follows (no window in words)", depFin?.band === "High" && !/months/.test(depFin.whyNow) && /^CFO gone from its website · interim or fractional cover usually follows$/.test(depFin.whyNow), depFin);
   check("and nothing for another function", M.scoreFor(dep, revops) === null);
   const sales = { memberId: "m", fn: "Sales", icp, before: [], beforeFromMember: false };
   const build = raw({ key: "build:x", kind: "sales-build", fn: null, build: { from: 0, to: 2 } });
   const bs = M.scoreFor(build, sales);
-  check("first sales hires posted: Medium for a Sales member, a sales leader in 3–9 months", bs?.band === "Medium" && /First full-time sales roles posted · a fractional Sales leader usually follows in 3–9 months/.test(bs.whyNow), bs);
+  check("first sales hires posted: Medium for a Sales member, a sales leader usually follows", bs?.band === "Medium" && /First full-time sales roles posted · a fractional Sales leader usually follows$/.test(bs.whyNow), bs);
   check("RevOps next, weaker", (M.scoreFor(build, revops)?.score ?? 0) < bs!.score);
   check("a company with a fractional Sales already: nothing", M.scoreFor({ ...build, hiredFns: ["Sales"] }, sales) === null);
   check("never a percentage on a line", ![...all3, bs!, depFin!].some((x) => /\d+\s*%/.test(`${x.whyNow} ${x.why}`)));
@@ -351,7 +352,7 @@ async function main() {
   const hire = S.detectSignals(seed3, s5, Date.now() - DAY, Date.now() + 5000).find((x) => x.key === `hire:${pub("e_one_ops")}`);
   check("an adjacent hire carries its stage (revenue when it started) and the company's ownership", hire?.stage === "$1M–$5M" && hire.owner === "Bootstrapped" && (hire.recent ?? []).some((x) => x.fn === "Finance"), hire && { stage: hire.stage, owner: hire.owner, recent: hire.recent });
   const forSales = M.scoreFor(hire!, { memberId: "m", fn: "Marketing", icp, before: [], beforeFromMember: false }, { counts: S.observedTransitions(seed3, s5) });
-  check("a bootstrapped $1M–$5M company's CFO, 5 months in: Marketing follows (rule 4), Medium or better", !!forSales && forSales.band !== "Low" && /Fractional CFO hired 5 months ago · Marketing usually follows in 3–9 months/.test(forSales.whyNow), forSales && [forSales.band, forSales.whyNow]);
+  check("a bootstrapped $1M–$5M company's CFO, 5 months in: Marketing follows (rule 4), Medium or better", !!forSales && forSales.band !== "Low" && /Fractional CFO hired 5 months ago · Marketing usually follows$/.test(forSales.whyNow), forSales && [forSales.band, forSales.whyNow]);
   check("a seat's 'PE deal' reads the company as PE-backed when nothing else is on file", S.ownershipOf({ values: {} } as never, "c_x", []) === null);
 
   /* ---------- who leads it: never claimed unless checked ---------- */
@@ -412,7 +413,7 @@ async function main() {
   const atArrival = M.scoreFor({ ...pend, key: "hire:pend", reopen: undefined, of: undefined }, mktSales, { nowMs: arrived })!;
   const re = M.scoreFor(pend, mktSales, { nowMs: Math.max(nowMs, open + 1) });
   check("a CMO hire read Low when it came in, its window still months off", !!atArrival && atArrival.band === "Low", atArrival && [atArrival.band, atArrival.score]);
-  check("it comes back once its window opens, Medium or better, dated the day it opened", !!re && re.band !== "Low" && re.atMs === open && /Sales usually follows in 4–9 months/.test(re.whyNow), re && [re.band, re.whyNow, re.at]);
+  check("it comes back once its window opens, Medium or better, dated the day it opened", !!re && re.band !== "Low" && re.atMs === open && /Sales usually follows$/.test(re.whyNow), re && [re.band, re.whyNow, re.at]);
   check("not when its window opened before this run's window", M.scoreFor({ ...pend, reopen: { from: open + 1, to: open + 2 * DAY } }, mktSales, { nowMs: open + DAY }) === null);
   check("not when the window was already open when it came in", M.scoreFor({ ...pend, addedMs: open + 1 }, mktSales, { nowMs: Math.max(nowMs, open + 1) }) === null);
   check("windows open at whole months", P.GAP_STARTS.includes(4) && P.GAP_STARTS.every((a) => a > 0));
@@ -565,7 +566,7 @@ async function main() {
   check("read OK both times, team page both times: one arrival, no name, no link", sArr.leaderArrivals?.length === 1 && sArr.leaderArrivals[0].fn === "Sales" && sArr.leaderArrivals[0].kind === "full-time" && !/https?:/.test(JSON.stringify(sArr.leaderArrivals)), sArr.leaderArrivals);
   const arr = S.detectSignals(seedF, sArr, Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "arrival");
   const arrOps = arr[0] ? M.scoreFor(arr[0], revops) : null;
-  check("an arrival signal: a new CRO reads for RevOps", arr.length === 1 && !!arrOps && arrOps.band !== "Low" && /^New full-time CRO on their team page \(\w{3} \d{4}\) · RevOps help often follows a new sales leader within 6 months$/.test(arrOps.whyNow), arrOps && [arrOps.band, arrOps.whyNow]);
+  check("an arrival signal: a new CRO reads for RevOps", arr.length === 1 && !!arrOps && arrOps.band !== "Low" && /^New full-time CRO on their team page \(\w{3} \d{4}\) · RevOps help often follows a new sales leader$/.test(arrOps.whyNow), arrOps && [arrOps.band, arrOps.whyNow]);
   check("and nothing for Sales members (a full-time Sales leader lowers their odds) or a function no rule names", !!arr[0] && M.scoreFor(arr[0], salesM) === null && M.scoreFor(arr[0], { ...salesM, fn: "Legal" }) === null);
 
   console.log("\nA team being hired");
@@ -580,7 +581,7 @@ async function main() {
   const teamSig = S.detectSignals(seedF, await t.loadState(), Date.now() - DAY, Date.now() + 5000).filter((x) => x.kind === "team-build");
   const mktM = { memberId: "m", fn: "Marketing", icp, before: [], beforeFromMember: false };
   const teamS = teamSig[0] ? M.scoreFor(teamSig[0], mktM) : null;
-  check("a team-build signal for Marketing members", teamSig.length === 1 && teamSig[0].fn === "Marketing" && !!teamS && /^3 full-time marketing roles posted \(0 before\) · a marketing team being hired can need fractional marketing leadership or senior help within 6 months$/.test(teamS.whyNow), teamS?.whyNow);
+  check("a team-build signal for Marketing members", teamSig.length === 1 && teamSig[0].fn === "Marketing" && !!teamS && /^3 full-time marketing roles posted \(0 before\) · a marketing team being hired can need fractional marketing leadership or senior help$/.test(teamS.whyNow), teamS?.whyNow);
   check("a full-time Marketing leader on their team page: page only", !!teamSig[0] && M.scoreFor(teamSig[0], mktM)!.band === "Low" === !!teamSig[0].lead?.ft.Marketing);
 
   console.log("\nHeadcount crossings");

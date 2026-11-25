@@ -1,6 +1,7 @@
 /**
  * Your way into a company in Claude (lib/paths/ways.ts): ways_in(company) gives the member's routes
- * there, best first, each with its Est. success, the people in between, the time to a meeting and
+ * there, best first, each with how warm it is in words (Warm intro, Good path or Long shot, never a
+ * percentage or a time to a meeting: Merlin has no outcome data yet), the people in between and
  * its steps. Read only: it chooses nothing and sends nothing (the member goes with a route on Merlin).
  *
  * Naming, stricter than the app:
@@ -17,7 +18,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { loadSeed, loadState } from "../table";
 import { companyInternalOf, routesOf, wayInOf } from "../paths/ways";
-import { HOW_ESTIMATED, estWords, betweenWords } from "../paths/rank";
+import { HOW_ESTIMATED, WAY_BANDS, betweenWords } from "../paths/rank";
 import { ToolProblem, type Ctx, type ToolOut } from "./tools";
 
 type Run = (ctx: Ctx, work: () => Promise<ToolOut>) => Promise<CallToolResult>;
@@ -49,9 +50,8 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
     return {
       route_id: r.id,
       ...(k === 0 ? { recommended: true } : {}),
-      est_success: `${r.est}%`,
+      way_in: r.way,
       people_in_between: betweenWords(r.between),
-      time_to_a_meeting: r.time,
       through: ["You", ...named].join(" → "),
       links: r.links.map((l) => l.band),
       steps: r.steps.map((st) => say(st.title)),
@@ -63,7 +63,7 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
     routes: out,
     ...(v.plan?.current ? { your_plan: { route_id: v.plan.route, step: `${Math.min(v.plan.step, v.plan.steps)} of ${v.plan.steps}`, done: v.plan.done } } : {}),
     how_merlin_estimates: HOW_ESTIMATED,
-    how_to_use: `Est. success is Merlin's estimate (${estWords(5)} to ${estWords(85)}), not a promise. The member goes with a route on Merlin, in Your way into ${v.name}, where the people they know are named and the notes are drafted. Nothing is sent without them.`,
+    how_to_use: `way_in is Merlin's read in words (${[...WAY_BANDS].reverse().join(", ")}), not a prediction: never turn it into a percentage or a time to a meeting. The member goes with a route on Merlin, in Your way into ${v.name}, where the people they know are named and the notes are drafted. Nothing is sent without them.`,
   };
 }
 
@@ -73,7 +73,7 @@ export function registerWayTools(server: McpServer, ctx: Ctx, run: Run): void {
     {
       title: "My ways into a company",
       description:
-        "The member's routes into one company, best first: each with Est. success (Merlin's estimate, 5% to 85%, from how well each person knows the next, how many hand-offs it takes and whether the last person decides), the people in between, the time to a meeting and its steps. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
+        "The member's routes into one company, best first: each with way_in, how warm it is in words (Warm intro, Good path or Long shot, from how well each person knows the next, how many hand-offs it takes and whether the last person decides; a guide, never a percentage or a promise), the people in between and its steps. Merlin gives no time to a meeting. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
       inputSchema: { company_id: z.string().describe("The company's id, from search_companies or get_company.") },
       annotations: { title: "My ways into a company", readOnlyHint: true, openWorldHint: false },
     },

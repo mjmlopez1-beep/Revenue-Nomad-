@@ -33,7 +33,7 @@ import { PATH_RAW, personOfContact, type Contact, type WLeader, type WSeat, type
 import { factsOf, foundFor, pathsOn, shownName, who, type Found } from "./index";
 import { worldOf } from "./world";
 import {
-  EST, HOW_ESTIMATED, betweenWords, compareRoutes, estRaw, estWords, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, timeWords, companyScore,
+  EST, HOW_ESTIMATED, WAY_BANDS, betweenWords, compareRoutes, estRaw, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, wayBandOf, wayCoarse, companyScore,
   type Evidence, type OddsBand, type PathBand, type Split, type Zone,
 } from "./rank";
 import { networkOn } from "../google/types";
@@ -719,7 +719,7 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
     between,
     decides: d.decides,
     est,
-    time: timeWords(d.links.map((l) => l.band), between),
+    way: wayBandOf(est),
     why: whyOf(d, sig, cx.nowMs),
     how: howOf(d),
     steps: stepsOfDraft(cx, d, name, sig),
@@ -748,19 +748,19 @@ function becauseOf(list: Built[]): void {
     const weakest = v.links.reduce((a, l) => Math.min(a, l.strength), 1);
     v.because =
       k === 0
-        ? `The best Est. success of your routes to ${(() => {
+        ? `The warmest of your routes to ${(() => {
             const t = v.nodes[v.nodes.length - 1];
             return t.locked || t.company ? lc(t.label) : t.label;
           })()}.`
         : v.between === 0
-          ? "Fastest to try. Worth it if you want an answer this week."
+          ? "The most direct way to try: no one in between."
           : weakest >= 0.8
             ? "Every link is strong, so the intro arrives with a real recommendation."
-            : `${estWords(v.est)}, with ${betweenWords(v.between).toLowerCase()} in between.`;
+            : `${v.way}, with ${betweenWords(v.between).toLowerCase()} in between.`;
   });
 }
 
-/** Every route into a company, best first (the highest Est. success), the member's own plan's route kept even when it falls out of the top. */
+/** Every route into a company, best first (the highest score), the member's own plan's route kept even when it falls out of the top. */
 export function routesAt(cx: Cx, companyId: string, fit: number): { all: Built[]; sig: Signals } {
   const sig = signalsAt(cx, companyId, fit);
   const x = cx.f.byCompany.get(companyId);
@@ -890,7 +890,7 @@ function logWords(l: Plan.PlanLog, byId: Map<string, RouteView>, est: number): s
   const step = l.step ?? 1;
   switch (l.k) {
     case "chose":
-      return r ? `Chose ${r.short} (${estWords(r.est || est).toLowerCase()})` : "Chose a route";
+      return r ? `Chose ${r.short} (${(r.est ? r.way : wayBandOf(est)).toLowerCase()})` : "Chose a route";
     case "switched":
       return r ? `Switched to ${r.short}` : "Switched route";
     case "planb":
@@ -931,7 +931,7 @@ function planViewOf(p: Plan.RoutePlan, all: Built[], nowMs: number): PlanView {
     done: Plan.isDone(p),
     decision: `${cur?.short ?? "Your route"} · chosen ${whenWords(p.at, nowMs).toLowerCase()}`,
     because: cur?.because ?? "",
-    planB: b ? `${b.short}: ${estWords(b.est).toLowerCase()}${extra}.` : null,
+    planB: b ? `${b.short}: ${b.way.toLowerCase()}${extra}.` : null,
     planBId: b?.id ?? null,
     nudge: p.nudge ?? null,
     nudgeDue: Plan.nudgeDue(p, nowMs),
@@ -1053,7 +1053,7 @@ const memo = new WeakMap<State, Map<string, GetInView>>();
 /**
  * Where you can get in (the old look): every company that fits the member, estimated and placed by
  * their best way in (across) and how likely they hire (up). The middle line across is placed from
- * the data (rank.ts splitLine), not fixed at 35%, and the map draws the best of each quadrant first,
+ * the data (rank.ts splitLine), not fixed at one band, and the map draws the best of each quadrant first,
  * so a member without contacts of their own still sees all four. Their own clients never show.
  */
 export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): GetInView {
@@ -1065,8 +1065,10 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
   const cx = cxOf(seed, s, m, nowMs);
   const L = listsOf(cx);
   const cores = coresOf(cx, L);
-  const sp = splitLine(cores.map((c) => c.top?.view.est ?? null), cores.map((c) => wayFine(c.top)));
-  const xs = placeAxis(cores.map((c) => c.top?.view.est ?? null), cores.map((c) => wayFine(c.top)), sp, { lo0: 8, none: 6 });
+  // Across by the way-in band (Long shot, Good path, Warm intro), so the middle line falls between bands.
+  const coarseWay = cores.map((c) => wayCoarse(c.top?.view.est ?? null));
+  const sp = splitLine(coarseWay, cores.map((c) => wayFine(c.top)));
+  const xs = placeAxis(coarseWay, cores.map((c) => wayFine(c.top)), sp, { lo0: 8, none: 6 });
   const all: (GetInRow & { r: number; ty: number })[] = [];
   const countsAll = zeros();
   const viewN = new Map<string, number>();
@@ -1075,7 +1077,7 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
   const mine = (s as WithRoutes).routes?.[m.id] ?? {};
   cores.forEach((c, i) => {
     const best = c.top ? c.top.view.est : null;
-    const warm = isHigh(sp, best, wayFine(c.top));
+    const warm = isHigh(sp, coarseWay[i], wayFine(c.top));
     const zone = zoneBy(c.odds.band !== "Low", warm);
     countsAll[zone]++;
     if (c.fit.ball) ball++;
@@ -1092,6 +1094,7 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
       hiringNow: !!c.sig.openRole,
       zone,
       best,
+      way: c.top ? c.top.view.way : null,
       via: c.name ? viaWords(c.top?.view) : null,
       band: c.top ? c.top.view.links[0].band : null,
       x: xs[i],
@@ -1171,14 +1174,17 @@ function icpWords(cx: Cx, L: Lists): string | null {
 
 /** The words for where a line sits. */
 const fitLineWords = (sp: Split): WarmLine => ({ at: sp.at, words: sp.at !== null ? `Fit ${sp.at} of 5 or more` : sp.fineAt === Infinity ? "Every company here fits about the same" : "The better fitting half" });
-const wayLineWords = (sp: Split): WarmLine => ({ at: sp.at, words: sp.at !== null ? `Est. success ${sp.at}% or more` : sp.fineAt === Infinity ? "No way in yet" : "Your warmer half of these ways in" });
+const wayLineWords = (sp: Split): WarmLine => ({
+  at: sp.at,
+  words: sp.at !== null ? (sp.at >= WAY_BANDS.length - 1 ? WAY_BANDS[WAY_BANDS.length - 1] : sp.at <= 0 ? "Any way in" : `${WAY_BANDS[sp.at]} or warmer`) : sp.fineAt === Infinity ? "No way in yet" : "Your warmer half of these ways in",
+});
 
 const warmMemo = new WeakMap<State, Map<string, WarmView>>();
 
 /**
  * Warm paths (the new look): every company that fits the member, placed by how well it fits them
- * (up, fit of 5 with its odds as the tie-break) and how strong their best way in is (across, by Est.
- * success). Both middle lines are placed from these companies (rank.ts splitLine), and the map
+ * (up, fit of 5 with its odds as the tie-break) and how warm their best way in is (across, by its
+ * band: Long shot, Good path, Warm intro). Both middle lines are placed from these companies (rank.ts splitLine), and the map
  * draws the best few of each quadrant, so the marks spread across all four; the list holds them
  * all, best first. Names follow the same rules as Your way in; a locked company is its facts.
  */
@@ -1196,7 +1202,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
   const fitF = cores.map((c, i) => fitC[i] + Math.min(1, c.odds.score / 0.6) * 0.9);
   // The best route, as Your way in recommends it. A cold note to who decides (Write to them yourself) is the weakest way in, and says so.
   const tops = cores.map((c) => c.top);
-  const wayC = tops.map((t) => t?.view.est ?? null);
+  const wayC = tops.map((t) => wayCoarse(t?.view.est ?? null));
   const wayF = tops.map((t) => wayFine(t));
   const spFit = splitLine(fitC, fitF);
   const spWay = splitLine(wayC, wayF);
@@ -1251,6 +1257,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       ball: c.fit.ball,
       list: c.fit.view,
       best: top ? top.view.est : null,
+      way: top ? top.view.way : null,
       band: top ? top.view.links[0].band : null,
       src: top ? top.src : null,
       via,
@@ -1281,7 +1288,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       r.x = at.get(r.id)!.x;
       r.y = at.get(r.id)!.y;
     }
-  const ways = wayC.filter((x): x is number => x !== null);
+  const ways = tops.map((t) => t?.view.est ?? null).filter((x): x is number => x !== null);
   const paths = (s as State & { paths?: Record<string, { linkedin?: unknown; csv?: unknown }> }).paths?.[m.id];
   const view: WarmView = {
     on: true,
@@ -1292,6 +1299,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
     total: cores.length,
     lines: { fit: fitLineWords(spFit), way: wayLineWords(spWay) },
     warmest: ways.length ? Math.max(...ways) : null,
+    warmestWay: ways.length ? wayBandOf(Math.max(...ways)) : null,
     bySource,
     own: { google: networkOn() && !!s.network?.[m.id]?.google, linkedin: !!paths?.linkedin, csv: !!paths?.csv },
     conversations: cx.convWith.size,

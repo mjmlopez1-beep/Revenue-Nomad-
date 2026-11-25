@@ -5,6 +5,7 @@
  * `x.value` under its "Example" label, and its detail has nothing to press.
  */
 import type { PathBand, Zone } from "@/lib/paths/rank";
+import { wayBandOf } from "@/lib/paths/rank";
 import type { RouteView, WarmRow, WaySource } from "@/lib/paths/types";
 import { example, type Example } from "../examples";
 
@@ -45,6 +46,7 @@ export const EXAMPLE_ROWS: Example<WarmRow>[] = SPECS.map(([name, facts, zone, x
     ball: fit >= 4,
     list: null,
     best,
+    way: best === null ? null : wayBandOf(best),
     band,
     src,
     via,
@@ -90,7 +92,7 @@ export function exampleRoute(r: WarmRow): RouteView | null {
     between: direct ? 0 : 1,
     decides: direct,
     est: r.best,
-    time: direct ? "Days" : "1–2 weeks",
+    way: wayBandOf(r.best),
     why: direct ? `You and ${r.person.name.split(" ")[0]} know each other well, and they decide on fractional hires.` : `You know ${r.person.name.split(" ")[0]}, who knows the company from the inside. One hand-off to whoever decides.`,
     how: [],
     steps: [],

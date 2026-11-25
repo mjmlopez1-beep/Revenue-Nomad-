@@ -9,11 +9,13 @@
  *     held at the same company at the same time, a former client, a peer on Merlin, or a LinkedIn
  *     connection from the member's own import alone (weak). The strength is a number from 0 to 1;
  *     its word (Strong, Good, Fading, Cold) is what the link says on screen.
- *  2. One number for a route, "Est. success" (estSuccess): the links multiplied together, lowered
- *     for each hand-off, lowered when the last person doesn't decide on fractional hires, and
- *     weighed by the company's hiring signals (an open role, a recent fractional hire, how well it
- *     fits the member). Rounded to the nearest 5 and kept between 5% and 85%, so it never claims
- *     near-certainty. The recommended route is the one with the highest number.
+ *  2. One internal score for a route (estSuccess): the links multiplied together, lowered for each
+ *     hand-off, lowered when the last person doesn't decide on fractional hires, and weighed by the
+ *     company's hiring signals (an open role, a recent fractional hire, how well it fits the
+ *     member). Rounded to the nearest 5, between 5 and 85. It orders routes and places the map's
+ *     marks; it is never shown. Merlin has no validated outcome data yet, so a member sees only its
+ *     band in words (wayBandOf: Warm intro, Good path, Long shot), never a percentage, and never a
+ *     predicted time to a meeting (owner, 2026-11-25: no false precision).
  *  3. A company's best route is then placed by its hiring odds (zoneOf, companyScore, mapPoint).
  *
  * The weights are EST below. They are a first estimate: plans record what happened at each step
@@ -192,7 +194,7 @@ export function pathBand(steps: readonly PathBand[]): PathBand {
   return BANDS[low];
 }
 
-/* ---------- 2. Est. success ---------- */
+/* ---------- 2. a route's score (internal) ---------- */
 
 /**
  * The weights. handoff: what each person in between keeps (each hand-off is another chance it
@@ -248,16 +250,36 @@ export function roundEst(raw: number): number {
   return Math.max(EST.min, Math.min(EST.max, pct));
 }
 
-/** Est. success, a whole percentage: 5 to 85, in steps of 5. */
+/** The internal score, 5 to 85 in steps of 5: it orders and places, and is never shown. */
 export const estSuccess = (x: EstInput): number => roundEst(estRaw(x));
-/** "Est. success 60%". */
-export const estWords = (pct: number) => `Est. success ${pct}%`;
 
-/** How Merlin estimates this: the one line behind the link of that name. */
+/* ---------- the words a member sees ---------- */
+
+/** How warm a way in is, in words: what a member sees instead of a number. */
+export type WayBand = "Warm intro" | "Good path" | "Long shot";
+/** Coldest first. */
+export const WAY_BANDS: readonly WayBand[] = ["Long shot", "Good path", "Warm intro"];
+/** A best route at WARM_EST or more is a Warm intro; at GOOD_EST or more a Good path; under that a Long shot. */
+export const GOOD_EST = 15;
+export const wayBandOf = (est: number): WayBand => (est >= WARM_EST ? "Warm intro" : est >= GOOD_EST ? "Good path" : "Long shot");
+export const wayBandIdx = (b: WayBand) => WAY_BANDS.indexOf(b);
+export const isWayBand = (x: unknown): x is WayBand => typeof x === "string" && (WAY_BANDS as readonly string[]).includes(x);
+/** The band's index from the score (0 coldest), or null with no route: the map's coarse value across. */
+export const wayCoarse = (est: number | null) => (est === null ? null : wayBandIdx(wayBandOf(est)));
+/** What a band means, in a line. */
+export const WAY_BAND_HINT: Record<WayBand, string> = {
+  "Warm intro": "Someone who knows them well can introduce you.",
+  "Good path": "A real way in, with a hand-off or a weaker link.",
+  "Long shot": "Worth a try, but nobody close vouches for you yet.",
+};
+/** The map's axis across. */
+export const WAY_AXIS = "How warm your way in is";
+
+/** How Merlin judges this: the one line behind the link of that name. */
 export const HOW_ESTIMATED =
-  "Merlin's estimate from how well each person knows the next, how many hand-offs it takes, and whether the last person decides. It gets sharper as members record what worked.";
+  "Merlin's read of how well each person knows the next, how many hand-offs it takes, and whether the last person decides. A guide, not a prediction: Merlin has no outcome data yet.";
 
-/** What orders a company's routes, best first: Est. success (unrounded), then fewer hand-offs, then reaching who decides, then the finder's own order. */
+/** What orders a company's routes, best first: the score (unrounded), then fewer hand-offs, then reaching who decides, then the finder's own order. */
 export interface RouteKey {
   raw: number;
   handoffs: number;
@@ -266,24 +288,6 @@ export interface RouteKey {
 }
 export function compareRoutes(a: RouteKey, b: RouteKey): number {
   return b.raw - a.raw || a.handoffs - b.handoffs || Number(b.decides) - Number(a.decides) || b.tie - a.tie;
-}
-
-/* ---------- time to a meeting ---------- */
-
-/** Roughly how long one link takes, a range of days by its warmth: a warm one answers in days, a cold one in weeks. */
-export const STEP_DAYS: Record<PathBand, [number, number]> = { Strong: [1, 3], Good: [2, 7], Fading: [5, 12], Cold: [10, 21] };
-/** Booking the meeting once the last person said yes, and each extra person passing it on. */
-const MEET_DAYS: [number, number] = [1, 3];
-const HANDOFF_DAYS: [number, number] = [2, 5];
-
-/** "1–2 weeks", or "Days, if they reply" for a note straight to who decides. */
-export function timeWords(links: readonly PathBand[], handoffs: number): string {
-  if (handoffs <= 0) return links[0] === "Strong" || links[0] === "Good" ? "Days" : "Days, if they reply";
-  const lo = links.reduce((a, b) => a + STEP_DAYS[b][0], MEET_DAYS[0] + HANDOFF_DAYS[0] * Math.max(0, handoffs - 1));
-  const hi = links.reduce((a, b) => a + STEP_DAYS[b][1], MEET_DAYS[1] + HANDOFF_DAYS[1] * Math.max(0, handoffs - 1));
-  const a = Math.max(1, Math.round(lo / 7));
-  const b = Math.max(a + 1, Math.ceil(hi / 7));
-  return `${a}–${b} weeks`;
 }
 
 /** "1 person", "2 people", "No one". */
@@ -308,7 +312,7 @@ export function oddsFallback(x: { openRole: boolean; pastHires: number; fnsHired
   return x.pastHires >= 2 || x.fnsHired >= 2 ? "Medium" : "Low";
 }
 
-/** A warm way in: a best route at 35% or more. */
+/** A warm way in (a Warm intro): a best route scored 35 or more. */
 export const WARM_EST = 35;
 /** Likely to hire is High or Medium odds; a warm way in is a best route at WARM_EST or more. No route at all is cold. */
 export function zoneOf(best: number | null, odds: OddsBand): Zone {
@@ -389,11 +393,11 @@ export function spread<T extends { x: number; y: number }>(points: T[], gap = 7,
 /* ---------- lines placed from the data ---------- */
 
 /**
- * The fixed middle line (WARM_EST, 35%) leaves a member with no contacts of their own on one side:
- * routes through fellow fractionals they haven't met top out near 15%, so every mark sat in the
+ * The fixed middle line (WARM_EST, 35) leaves a member with no contacts of their own on one side:
+ * routes through fellow fractionals they haven't met top out near 15, so every mark sat in the
  * "no route" corner. Warm paths places each middle line from the companies on the page instead:
  * where they split about evenly, on a whole value when one splits them well enough (fit 3 of 5,
- * Est. success 20%), else by rank (the better half). The words say which, so the quadrants never
+ * Good path or warmer), else by rank (the better half). The words say which, so the quadrants never
  * claim more than they mean.
  */
 export interface Split {

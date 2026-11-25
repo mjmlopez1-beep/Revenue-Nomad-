@@ -9,13 +9,14 @@
  *     other routes below as cards to compare (picking one redraws the route above); Go with it, and
  *     it becomes a plan: one step at a time with the drafted note and the action, What happened?
  *     (made the intro, no reply yet, can't help), the decision with plan B, the log, Switch route.
- *   - Where you can get in (GetInPage): every company that fits the member, by its best route's Est.
- *     success and its odds of hiring. A map whose dots are buttons, a list view, and the list alone
+ *   - Where you can get in (GetInPage): every company that fits the member, by how warm its best
+ *     route is and its odds of hiring. A map whose dots are buttons, a list view, and the list alone
  *     on a phone. A company opens its way in.
  *   - Home's move (RouteMove), the pipeline card's route line (RouteLine) and the record's Your ways
  *     in (RecordWays), where a chosen route leads and the others fold away.
  *
- * One number a route, Est. success, never a promise. Nothing is sent without the member's click:
+ * One word a route, how warm it is (Warm intro, Good path, Long shot), never a percentage, a time to
+ * a meeting or a promise: Merlin has no outcome data yet. Nothing is sent without the member's click:
  * the actions are the ones Merlin already has (Message on Merlin, Invite to connect, the drafted
  * note opened in Gmail, Follow, the usual unlock). A locked company is said by its facts and opens
  * with the usual unlock. Animation is CSS only (ways.css), still with reduced motion.
@@ -30,7 +31,7 @@ import { CompanyLogo, useToast } from "../../ui/shared";
 import { Chip, EmptyState, PageHead } from "../../ui/system";
 import { Prop } from "../../ui/fractions/lazy";
 import { gmailLink } from "@/lib/moveNote";
-import { ZONES, ZONE_WORDS, betweenWords, estWords, type Zone } from "@/lib/paths/rank";
+import { HOW_ESTIMATED, WAY_AXIS, WAY_BANDS, ZONES, ZONE_WORDS, betweenWords, wayBandIdx, type Zone } from "@/lib/paths/rank";
 import type { GetInRow, GetInView, PlanLine, PlanView, RouteNote, RouteStepView, RouteView, WayInView } from "@/lib/paths/types";
 import { lockedWaysWords } from "@/lib/paths/types";
 import type { StepOp } from "@/lib/paths/plan";
@@ -113,16 +114,16 @@ function Hero({ r, label, phone, busy, onGo }: { r: RouteView; label: string; ph
         </div>
         <dl className="wy-facts">
           <div>
-            <dt>Est. success</dt>
-            <dd className="wy-est-n num">{r.est}%</dd>
+            <dt>Way in</dt>
+            <dd className="wy-est-n">{r.way}</dd>
           </div>
           <div>
             <dt>In between</dt>
             <dd>{betweenWords(r.between)}</dd>
           </div>
           <div>
-            <dt>Time to a meeting</dt>
-            <dd>{r.time}</dd>
+            <dt>Reaches who decides</dt>
+            <dd>{decidesWords(r)}</dd>
           </div>
         </dl>
       </div>
@@ -143,7 +144,7 @@ function Hero({ r, label, phone, busy, onGo }: { r: RouteView; label: string; ph
           Go with {r.short}
         </button>
         <button type="button" className="btn btn-lg" aria-expanded={explain} onClick={() => setExplain(!explain)}>
-          How Merlin estimates this
+          How Merlin judges this
         </button>
         <span className="wy-small">Nothing is sent until you press send.</span>
       </div>
@@ -151,7 +152,9 @@ function Hero({ r, label, phone, busy, onGo }: { r: RouteView; label: string; ph
     </section>
   );
 }
-const WAY_EXPLAIN = "Merlin's estimate from how well each person knows the next, how many hand-offs it takes, and whether the last person decides. It gets sharper as members record what worked.";
+const WAY_EXPLAIN = HOW_ESTIMATED;
+/** A fact about the route, not a prediction: does its last person decide on fractional hires. */
+const decidesWords = (r: RouteView) => (r.decides ? "Yes" : "Not directly");
 
 function Cards({ routes, picked, onPick }: { routes: RouteView[]; picked: string; onPick: (id: string) => void }) {
   return (
@@ -159,7 +162,7 @@ function Cards({ routes, picked, onPick }: { routes: RouteView[]; picked: string
       {routes.map((r, k) => (
         <button key={r.id} type="button" className="wy-card" aria-pressed={r.id === picked} onClick={() => onPick(r.id)} data-card={r.id}>
           <span className="wy-card-top">
-            <span className="wy-badge">{estWords(r.est)}</span>
+            <span className="wy-badge">{r.way}</span>
             {k === 0 ? <span className="wy-tag">Recommended</span> : null}
           </span>
           <span className="wy-card-short">{r.short}</span>
@@ -169,7 +172,7 @@ function Cards({ routes, picked, onPick }: { routes: RouteView[]; picked: string
               In between <strong>{betweenWords(r.between)}</strong>
             </span>
             <span>
-              Time to a meeting <strong>{r.time}</strong>
+              Reaches who decides <strong>{decidesWords(r)}</strong>
             </span>
           </span>
         </button>
@@ -184,10 +187,10 @@ function OtherRows({ routes, onPick }: { routes: RouteView[]; onPick: (id: strin
       {routes.map((r) => (
         <button key={r.id} type="button" className="wy-other" onClick={() => onPick(r.id)} data-card={r.id}>
           <span className="wy-other-main">
-            <span className="wy-badge">{estWords(r.est)}</span>
+            <span className="wy-badge">{r.way}</span>
             <span className="wy-card-short">{r.short}</span>
             <span className="wy-small">
-              {betweenWords(r.between)} in between · {r.time}
+              {betweenWords(r.between)} in between
             </span>
           </span>
           <span aria-hidden className="wy-muted">
@@ -689,7 +692,7 @@ const H = 460;
 const LABELS_MAX = 14;
 const dotR = (fit: 1 | 2 | 3) => (fit === 3 ? 13 : fit === 2 ? 10 : 7);
 const rowName = (r: GetInRow) => r.name ?? `A locked company, ${r.facts || "facts on its record"}`;
-const dotLabel = (r: GetInRow) => `${rowName(r)}, ${ZONE_WORDS[r.zone].title}${r.best !== null ? `, ${estWords(r.best).toLowerCase()}` : ", no route yet"}, hiring odds ${r.odds}${r.hiringNow ? ", hiring now" : ""}`;
+const dotLabel = (r: GetInRow) => `${rowName(r)}, ${ZONE_WORDS[r.zone].title}${r.way !== null ? `, ${r.way.toLowerCase()}` : ", no route yet"}, hiring odds ${r.odds}${r.hiringNow ? ", hiring now" : ""}`;
 
 function GetInMap({ rows, focus, onFocus, onOpen }: { rows: GetInRow[]; focus: string | null; onFocus: (id: string) => void; onOpen: (id: string) => void }) {
   // Labels that fit: the one in focus first, then best first, never over another label, a dot or a zone's title.
@@ -799,10 +802,10 @@ function GetInMap({ rows, focus, onFocus, onOpen }: { rows: GetInRow[]; focus: s
         </svg>
         <div className="gi-xaxis" aria-hidden>
           <span>No route</span>
-          <span>Cold</span>
-          <span className="gi-xaxis-t">Your best way in, by Est. success</span>
-          <span>Warm</span>
-          <span>85%</span>
+          <span>{WAY_BANDS[0]}</span>
+          <span className="gi-xaxis-t">{WAY_AXIS}</span>
+          <span>{WAY_BANDS[1]}</span>
+          <span>{WAY_BANDS[2]}</span>
         </div>
       </div>
     </div>
@@ -833,8 +836,8 @@ function ListRow({ r, info, open }: { r: GetInRow; info: CoInfo | undefined; ope
       </span>
       <span className="gi-row-meta">
         <span>
-          Way in: <strong>{r.best === null ? "None yet" : `${r.best}%`}</strong>
-          <Segs n={r.best === null ? 0 : Math.max(1, Math.round(r.best / 85 * 4))} of={4} />
+          Way in: <strong>{r.way ?? "None yet"}</strong>
+          <Segs n={r.way === null ? 0 : wayBandIdx(r.way) + 1} of={3} />
         </span>
         <span>
           Hiring odds: <strong>{r.odds}</strong>
@@ -890,7 +893,7 @@ function Panel({ r, info, open, openCompany }: { r: GetInRow; info: CoInfo | und
         </div>
       ) : null}
       <div className="wx-route">
-        <span className="wy-badge">{r.best === null ? "No route yet" : estWords(r.best)}</span>
+        <span className="wy-badge">{r.way ?? "No route yet"}</span>
         <span className="wy-card-chain">{r.locked ? "Open this company to see your routes." : r.via ?? "Nobody you know leads there yet."}</span>
       </div>
       <div className="wy-step-acts">
@@ -1164,7 +1167,7 @@ export function RecordWaysBody({ v }: { v: WayInView }) {
       ) : (
         <article className="wx-route">
           <span className="wy-card-top">
-            <span className="wy-badge">{estWords(lead.est)}</span>
+            <span className="wy-badge">{lead.way}</span>
             <span className="wy-tag">Merlin recommends</span>
           </span>
           <span className="wy-card-short">{lead.short}</span>
@@ -1185,7 +1188,7 @@ export function RecordWaysBody({ v }: { v: WayInView }) {
             others.map((r) => (
               <button key={r.id} type="button" className="wy-other" onClick={() => openWay(v.id)}>
                 <span className="wy-other-main">
-                  <span className="wy-badge">{estWords(r.est)}</span>
+                  <span className="wy-badge">{r.way}</span>
                   <span className="wy-card-short">{r.short}</span>
                   <span className="wy-small">{r.chain}</span>
                 </span>

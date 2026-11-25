@@ -238,7 +238,7 @@ export function moveFacts(c: CompanyRec): string {
 
 /**
  * What happened and why now, from the Crystal Ball row: its note ("Medium · Fractional CRO hired
- * 2 months ago · RevOps usually follows in 1–4 months") without the band, else its line. These
+ * 2 months ago · RevOps usually follows") without the band, else its line. These
  * never name the company or a person (lib/radar/present.ts).
  */
 export function moveWhy(row: RadarRow): string {

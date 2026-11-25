@@ -291,8 +291,8 @@ async function main() {
   const salSigs = match.signalsFor(all, pSal);
   check("each signal has a band and a why-now line", salSigs.every((x) => ["High", "Medium", "Low"].includes(x.band) && x.whyNow.length > 10 && !/%/.test(x.whyNow)), salSigs.map((x) => [x.band, x.whyNow]));
   check(
-    "the Marketing hire's why-now names the hire, when, and the window",
-    /^Fractional CMO hired (this month|1 month ago) · Sales usually follows in 4–9 months$/.test(salSigs.find((x) => x.key === k("hire", "e_acme_mkt"))?.whyNow ?? ""),
+    "the Marketing hire's why-now names the hire and when, never a predicted window",
+    /^Fractional CMO hired (this month|1 month ago) · Sales usually follows$/.test(salSigs.find((x) => x.key === k("hire", "e_acme_mkt"))?.whyNow ?? ""),
     salSigs.map((x) => x.whyNow),
   );
   check("a member with no function gets nothing", !match.signalsFor(all, match.profileOf(seedLoaded, s1, "mem_nofn", null)).length);
@@ -372,7 +372,7 @@ async function main() {
   check("but the day's companies keep it", ((await state()).radar?.members.mem_mo?.days?.[day0] ?? []).some((x) => x.k === k("hire", "e_fox_sales") && x.b === "Low"));
   check(
     "the email shows each card's band as a chip and its reason, split from the why-now",
-    /Open role · High likelihood\n[^\n]+\n[^\n]+\nA direct opening in Sales\.\n/.test(sm?.text ?? "") && /Marketing leader\n(Sales|RevOps|\w+)[^\n]* usually follows in [^\n]+\.\n/.test(sm?.text ?? "") && />High<span class="cb-wide"> likelihood<\/span><\/td>/.test(sm?.html ?? "") && !/Open now/.test(sm?.text ?? ""),
+    /Open role · High likelihood\n[^\n]+\n[^\n]+\nA direct opening in Sales\.\n/.test(sm?.text ?? "") && /Marketing leader\n(Sales|RevOps|\w+)[^\n]* usually follows\.\n/.test(sm?.text ?? "") && !/usually follows (in|within) \d/.test(sm?.text ?? "") && />High<span class="cb-wide"> likelihood<\/span><\/td>/.test(sm?.html ?? "") && !/Open now/.test(sm?.text ?? ""),
     sm?.text,
   );
   check("Mo's email names nothing", !named(moMail).length && !pubLeaks(outsideLinks(moMail)).length, { named: named(moMail), ids: pubLeaks(outsideLinks(moMail)) });

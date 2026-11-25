@@ -598,8 +598,18 @@ const LEAD: Record<string, string> = { Sales: "CRO", Marketing: "CMO", Finance: 
 export const leadWord = (fn: string) => LEAD[fn] ?? `${fn} leader`;
 /** "this month", "1 month ago", "5 months ago". */
 export const agoWords = (months: number) => (months <= 0 ? "this month" : months === 1 ? "1 month ago" : `${months} months ago`);
-/** "in 4–9 months", "within 3 months". */
+/** A rule's window in words. Internal (checks and comments): never in a member-facing line, see noWindow. */
 export const gapWords = (g: Gap) => (g[0] <= 0 ? `within ${g[1]} months` : `in ${g[0]}–${g[1]} months`);
+/**
+ * A why-now line without a predicted window ("usually follows in 3–9 months" reads "usually
+ * follows"): the window still weighs the score, but a member never sees it (owner, 2026-11-25:
+ * Merlin has no validated outcome data, so a timeline would be false precision). Also cleans lines
+ * kept from before.
+ */
+export const noWindow = (line: string) =>
+  line
+    .replace(/ (?:within \d+ months?|in \d+(?:–|-| to )\d+ months)(?=$| ·|[.,;])/g, "")
+    .replace(/the usual \d+(?:–|-| to )\d+ month window/g, "the usual window");
 
 /** After a window closes, a hire still says something for this many months (timing's fall); past that it says nothing on a card. */
 export const WINDOW_GRACE = 3;
@@ -615,6 +625,6 @@ export const windowGone = (months: number, gap: Gap) => months > gap[1] + WINDOW
  */
 export function hireWhyNow(from: string, to: string, months: number, l: Pick<Likelihood, "gap" | "rule">): string {
   const lead = `Fractional ${leadWord(from)} hired ${agoWords(months)}`;
-  if (windowPassed(months, l.gap)) return `${lead} · the usual ${l.gap[0] <= 0 ? `0–${l.gap[1]}` : `${l.gap[0]}–${l.gap[1]}`} month window for ${to} has passed`;
-  return l.rule ? `${lead} · ${to} usually follows ${gapWords(l.gap)}` : `${lead} · ${to} can follow ${gapWords(l.gap)}`;
+  if (windowPassed(months, l.gap)) return `${lead} · the usual window for ${to} has passed`;
+  return l.rule ? `${lead} · ${to} usually follows` : `${lead} · ${to} can follow`;
 }

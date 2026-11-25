@@ -49,7 +49,7 @@ import type { CompanyFacts, RawSignal } from "./signals";
 import { isCalendar, isLeaderRaw } from "./signals";
 import { RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_DAY_MIN, RADAR_STILL, type RadarBand } from "./types";
 import {
-  ARRIVAL_PRIORS, GAP_MIN_SHARE, HEADCOUNT_PRIORS, HIGH_AT, MEDIUM_AT, REHIRE_MONTHS, REHIRE_NEXT_SHARE, REHIRE_SAME_P, SCORE_FLOOR, SIGNAL_PRIORS, TEAM_PRIORS, TENURE_MARKS, TENURE_PRIOR, agoWords, bandOf, gapWords,
+  ARRIVAL_PRIORS, GAP_MIN_SHARE, HEADCOUNT_PRIORS, HIGH_AT, MEDIUM_AT, REHIRE_MONTHS, REHIRE_NEXT_SHARE, REHIRE_SAME_P, SCORE_FLOOR, SIGNAL_PRIORS, TEAM_PRIORS, TENURE_MARKS, TENURE_PRIOR, agoWords, bandOf,
   hireWhyNow, isStage, leadWord, likelihood, monthSpan, monthWords, ownerOf, propensity, thinLift, timing, windowGone, windowOpensMs, windowPassed, type TenureMark, type TransitionCounts,
 } from "./predict";
 import { LEADER_LEVELS, fullTimeWords, noLeaderWords, roleLabel, type FnKnow, type LeaderHow, type LeaderLevel } from "../leaders/types";
@@ -211,7 +211,7 @@ export interface Scored extends RawSignal {
   score: number;
   band: RadarBand;
   whyNow: string;
-  /** When a hire is likely, in months from now [from, to] (the page's "When"): the rule's window from where the company is in it. */
+  /** When a hire is likely, in months from now [from, to]: the rule's window from where the company is in it. Internal (it weighs and orders); a member sees only "Open now" or dated signals, never the window. */
   horizon: [number, number];
   /** A full-time leader of the member's function is known there now, so the score is held under Medium (FT_CAP). */
   held?: true;
@@ -220,8 +220,6 @@ export interface Scored extends RawSignal {
 /** A rule's window [a, b] months after the event, `t` months after it: months from now. Past the window: soon, if at all. */
 export const aheadOf = (gap: readonly [number, number], t: number): [number, number] =>
   t > gap[1] ? [0, 3] : [Math.max(0, gap[0] - t), Math.max(1, gap[1] - t)];
-/** "Now", "Within 3 months", "In 2 to 6 months". */
-export const horizonWords = (h: readonly [number, number]) => (h[1] <= 1 ? "Now" : h[0] <= 0 ? `Within ${h[1]} months` : `In ${h[0]} to ${h[1]} months`);
 
 export interface ScoreCtx {
   /** Merlin's observed transitions (signals.ts observedTransitions). None: the research's priors alone. */
@@ -285,7 +283,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
       ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       // The leader who left may already be replaced: a full-time leader of the function there now says the seat looks filled.
-      whyNow = ftLed ? `${leadWord(p.fn)} gone from its website · ${inPlaceWords(p.fn, know)}, so the seat looks filled` : `${leadWord(p.fn)} gone from its website · ${pr.why} ${gapWords(pr.gap)}`;
+      whyNow = ftLed ? `${leadWord(p.fn)} gone from its website · ${inPlaceWords(p.fn, know)}, so the seat looks filled` : `${leadWord(p.fn)} gone from its website · ${pr.why}`;
       break;
     }
     case "sales-build": {
@@ -297,14 +295,14 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       score = p0 * timing(t, gap) * fit * (ftLed ? FT_PENALTY : 1);
       ahead = aheadOf(gap, t);
       const posted = jump ? `${sig.build!.to} full-time sales roles posted` : "First full-time sales roles posted";
-      whyNow = pr ? `${posted} · ${pr.why} ${gapWords(gap)}` : `${posted} · a sales build sometimes brings other seats`;
+      whyNow = pr ? `${posted} · ${pr.why}` : `${posted} · a sales build sometimes brings other seats`;
       break;
     }
     case "funding": {
       const pr = SIGNAL_PRIORS.funding[p.fn];
       score = (pr ? pr.p : 0.08) * timing(sinceMonths(sig.atMs, nowMs), pr ? pr.gap : [0, 6]) * fit;
       ahead = aheadOf(pr ? pr.gap : [0, 6], sinceMonths(sig.atMs, nowMs));
-      whyNow = pr ? `Raised money · ${pr.why} ${gapWords(pr.gap)}` : "Raised money · a round usually brings new seats";
+      whyNow = pr ? `Raised money · ${pr.why}` : "Raised money · a round usually brings new seats";
       break;
     }
     case "adjacent": {
@@ -371,7 +369,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
       ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
       const role = sig.arrived ? roleLabel(sig.fn, (LEADER_LEVELS as readonly string[]).includes(sig.arrived.level) ? (sig.arrived.level as LeaderLevel) : "Head") : leadWord(sig.fn);
-      whyNow = `New ${sig.arrived?.kind === "full-time" ? "full-time " : ""}${role} on their team page (${monthWords(sig.at.slice(0, 7))}) · ${pr.why} ${gapWords(pr.gap)}`;
+      whyNow = `New ${sig.arrived?.kind === "full-time" ? "full-time " : ""}${role} on their team page (${monthWords(sig.at.slice(0, 7))}) · ${pr.why}`;
       break;
     }
     case "team-build": {
@@ -379,7 +377,7 @@ export function scoreFor(sig: RawSignal, p: RadarProfile, ctx: ScoreCtx = {}): S
       if (!pr || !sig.team) return null;
       score = pr.p * timing(sinceMonths(sig.atMs, nowMs), pr.gap) * fit;
       ahead = aheadOf(pr.gap, sinceMonths(sig.atMs, nowMs));
-      whyNow = `${sig.team.to} full-time ${teamWord(p.fn)} roles posted (${sig.team.from} before) · ${pr.why} ${gapWords(pr.gap)}`;
+      whyNow = `${sig.team.to} full-time ${teamWord(p.fn)} roles posted (${sig.team.from} before) · ${pr.why}`;
       break;
     }
     case "headcount": {

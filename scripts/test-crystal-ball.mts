@@ -255,14 +255,16 @@ async function main() {
   check("a fractional held a seat at an open company: ask them by name", CM.moveOf({ kinds: ["seat"], band: "High" }, way({ held: true, holder: "Rowan Hale" })).move === "Ask Rowan Hale");
   check("at a locked company the holder is never named", !/Rowan/.test(JSON.stringify(CM.moveOf({ kinds: ["seat"], band: "High" }, way({ held: true, holder: null, open: false })))));
   check("a role: reply to the posting; Low: follow it", CM.moveOf({ kinds: ["role"], band: "High" }, way({})).move === "Reply to the posting" && CM.moveOf({ kinds: ["gap"], band: "Low" }, way({})).go === "follow");
-  check("when: Now, Within, In", CM.whenWords([0, 1]) === "Now" && CM.whenWords([0, 3]) === "Within 3 months" && CM.whenWords([2, 6]) === "In 2 to 6 months" && CM.whenWords(undefined) === null);
+  check("when: dated facts only, never a predicted window", CM.whenWords([0, 1]) === "Open now" && CM.whenWords([0, 3], [{ at: "2026-11-20" }, { at: "2026-10-02" }], "2026-11-25") === "Signal Nov 20" && CM.whenWords([2, 6]) === null && CM.whenWords(undefined) === null && CM.whenLong([0, 1]) === "Hiring now" && CM.whenLong([2, 6]) === null);
+  check("no when-words or panel line says months ahead", [CM.whenWords([0, 3], [{ at: "2026-11-20" }], "2026-11-25"), CM.whenWords([2, 6], [], "2026-11-25"), CM.whenLong([0, 3]), CM.whenLong([2, 6])].every((x) => !x || !/months|within|likely in/i.test(x)));
   check("fit in words, never a number", !/\d/.test(CM.fitWords({ industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: [] }, { industry: "SaaS", employees: null })) && /not on file/.test(CM.fitWords({ industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: [] }, { industry: "SaaS", employees: null })));
   check("sources never name LinkedIn or Sales Navigator", !/linkedin|navigator/i.test(Object.values(CM.SOURCE_OF).join(" ")));
   check("moved places counts companies whose place changed", CM.movedCount(["a", "b", "c"], ["b", "a", "c"]) === 2 && CM.movedCount(["a"], ["a"]) === 0);
-  check("the timeline puts a signal today at the middle and a window ahead of it", (() => {
-    const tl = CM.timeline([{ at: ago(0) }], [0, 3], ago(0));
-    return Math.abs((tl.dots[0] ?? 0) - 0.5) < 0.01 && !!tl.win && tl.win[0] >= 0.5 && tl.win[1] > tl.win[0];
+  check("the timeline is the last 12 months up to today, with no window ahead", (() => {
+    const tl = CM.timeline([{ at: ago(0) }, { at: ago(183) }], ago(0)) as { dots: (number | null)[]; win?: unknown };
+    return Math.abs((tl.dots[0] ?? 0) - (1 - CM.TL_EDGE)) < 0.01 && (tl.dots[1] ?? 1) < 0.6 && (tl.dots[1] ?? 0) > 0.4 && !("win" in tl);
   })());
+  check("the page draws no May hire window and no months ahead", !/May hire|12 months ahead|cb-tl-win/.test(readFileSync(new URL("../app/post/crystal/CrystalBall.tsx", import.meta.url), "utf8")));
   check("groups count the companies behind them", CM.groupCounts([{ kinds: ["role", "seat"] }, { kinds: ["tenure"] }]).seat === 2 && CM.groupCounts([{ kinds: ["role"] }]).role === 1);
 
   /* ---------- a leader gone while a full-time leader is in place: the ranking agrees with the panel ---------- */

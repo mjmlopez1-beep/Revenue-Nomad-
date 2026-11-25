@@ -202,8 +202,8 @@ async function main() {
   check("a seat held together and a former client count by how long ago", s({ kind: "together", active: true, endYear: null }) > s({ kind: "together", active: false, endYear: yr - 1 }) && s({ kind: "together", active: false, endYear: yr - 1 }) > s({ kind: "together", active: false, endYear: yr - 8 }) && s({ kind: "client", active: false, endYear: yr - 1 }) > s({ kind: "client", active: false, endYear: yr - 9 }));
   check("a LinkedIn connection alone is weak: Fading at best, never Good", R.rateEvidence({ kind: "linkedin", since: recent(30) }, nowMs) === "Fading" && R.rateEvidence({ kind: "linkedin", since: "2014-01-02" }, nowMs) === "Cold" && s({ kind: "linkedin", since: recent(30) }) < s({ kind: "peer" }));
   check("each link keeps its word: Strong, Good, Fading, Cold", R.bandOf(0.9) === "Strong" && R.bandOf(0.7) === "Good" && R.bandOf(0.45) === "Fading" && R.bandOf(0.2) === "Cold");
-  check("the explainer, word for word", R.HOW_ESTIMATED === "Merlin's estimate from how well each person knows the next, how many hand-offs it takes, and whether the last person decides. It gets sharper as members record what worked.");
-  check("Est. success words", R.estWords(60) === "Est. success 60%");
+  check("the explainer, word for word: a guide, not a prediction", R.HOW_ESTIMATED === "Merlin's read of how well each person knows the next, how many hand-offs it takes, and whether the last person decides. A guide, not a prediction: Merlin has no outcome data yet.");
+  check("a route's words: its band, never a percentage", R.wayBandOf(60) === "Warm intro" && R.wayBandOf(20) === "Good path" && R.wayBandOf(10) === "Long shot" && !("estWords" in R) && !("timeWords" in R));
   const pts = ([null, 5, 20, 34, 35, 60, 85] as const).flatMap((b) => (["High", "Medium", "Low"] as const).map((o) => ({ b, o, p: R.mapPoint(b, o, 0.5) })));
   check("on the map, a dot's quadrant is its zone", pts.every(({ b, o, p }) => (R.zoneOf(b, o) === "go") === (p.x > 50 && p.y > 50) && (R.zoneOf(b, o) === "watch") === (p.x < 50 && p.y < 50)), pts);
 
@@ -289,7 +289,7 @@ async function main() {
   check("best first by Est. success, each one 5 to 85 in steps of 5", h.routes.every((r, i) => r.est >= 5 && r.est <= 85 && r.est % 5 === 0 && (i === 0 || h.routes[i - 1].est >= r.est)));
   check("each link keeps its word as context, and what it rests on", r1.links.map((l) => l.band).join(",") === "Strong,Good" && /messages on Merlin/.test(r1.links[0].words) && /^Reported to them until \d{4}$/.test(r1.links[1].words), r1.links);
   check("the cold note says so", r3.links.length === 1 && r3.links[0].band === "Cold" && r3.links[0].words === "You have never met" && r3.est <= 20);
-  check("cards: people in between and time to a meeting", r1.between === 1 && /^\d–\d weeks$/.test(r1.time) && /^Days/.test(r3.time), [r1.time, r2.time, r3.time]);
+  check("cards: people in between and how warm, never a time to a meeting", r1.between === 1 && h.routes.every((r) => r.way === R.wayBandOf(r.est) && !("time" in r)), h.routes.map((r) => [r.est, r.way]));
   check("the why line: what you share, who decides", /Casey/.test(r1.why) && /Rita decides on fractional hires, and has hired 3 before/.test(r1.why) && /leans on timing/.test(r3.why), [r1.why, r3.why]);
   check("what happens, numbered: ask, the intro, meet", r1.how.join(" / ") === "You ask Casey for an intro / Casey introduces you to Rita / You meet Rita" && r2.how.length === 4 && r3.how[0] === "You send Rita a short note", [r1.how, r2.how]);
   check("the steps: Casey is a peer on Merlin, so the ask is Message on Merlin with the drafted note", r1.steps[0].act?.kind === "message" && r1.steps[0].primary === "Send to Casey on Merlin" && !!r1.steps[0].note?.body && r1.steps[1].alt === "No reply yet" && r1.steps[1].cant === "Casey can't help" && r1.steps[2].primary === "Meeting booked", r1.steps.map((x) => [x.title, x.primary, x.alt, x.cant]));
@@ -301,8 +301,8 @@ async function main() {
   const pipe0 = await import("../lib/pipelineActions.ts");
   const go1 = await act("c_halcyon", { do: "go", route: r1.id });
   const pl = go1.view.plan!;
-  check("a plan at step 1 of 3, with plan B and the decision", !!pl && pl.route === r1.id && pl.step === 1 && pl.steps === 3 && pl.decision === "Casey's route · chosen today" && /^Ana's route: est\. success \d+%, one more hand-off\.$/.test(pl.planB ?? ""), pl);
-  check("the log: chose Casey's route", pl.log.length === 1 && pl.log[0].when === "Today" && /^Chose Casey's route \(est\. success \d+%\)$/.test(pl.log[0].what), pl.log);
+  check("a plan at step 1 of 3, with plan B and the decision", !!pl && pl.route === r1.id && pl.step === 1 && pl.steps === 3 && pl.decision === "Casey's route · chosen today" && /^Ana's route: (warm intro|good path|long shot), one more hand-off\.$/.test(pl.planB ?? ""), pl);
+  check("the log: chose Casey's route", pl.log.length === 1 && pl.log[0].when === "Today" && /^Chose Casey's route \((warm intro|good path|long shot)\)$/.test(pl.log[0].what), pl.log);
   const deal0 = (await pipe0.pipelineViewFor(SAM))!.entries.find((x) => x.company === pub("c_halcyon"));
   check("Go with created the pipeline deal at To reach out, nothing sent yet, the route on it", !!deal0 && deal0.stage === "reach" && !!deal0.dates.reach && !deal0.dates.sent && deal0.route === true && deal0.next === "Take the first step of your route" && deal0.due === null && deal0.follow === 0, deal0);
   check("Go with says where the deal is, and that nothing is sent", /To reach out/.test(go1.message) && /Nothing is sent until you send it/.test(go1.message), go1.message);
@@ -324,7 +324,7 @@ async function main() {
   const s3 = await act("c_halcyon", { do: "step", step: 2, answer: "cant" });
   const pb = s3.view.plan!;
   check("Casey can't help: plan B, Ana's route, is picked for the member and says why", pb.route === r2.id && pb.step === 1 && pb.steps === 4 && pb.switchedWhy === "Casey couldn't help this time. Ana's route is the next best way to Rita, so it's picked for you." && /^Plan B: Ana's route/.test(s3.message), pb);
-  check("the log tells it: chose, asked, no reply, couldn't help, plan B", pb.log.map((l) => l.what).join(" / ").replace(/\(est\. success \d+%\)/, "(x)") === "Chose Casey's route (x) / Asked Casey for an intro / No reply yet from Casey. Nudge drafted / Casey couldn't help / Plan B: Ana's route", pb.log.map((l) => l.what));
+  check("the log tells it: chose, asked, no reply, couldn't help, plan B", pb.log.map((l) => l.what).join(" / ").replace(/\((warm intro|good path|long shot)\)/, "(x)") === "Chose Casey's route (x) / Asked Casey for an intro / No reply yet from Casey. Nudge drafted / Casey couldn't help / Plan B: Ana's route", pb.log.map((l) => l.what));
   const s4 = await act("c_halcyon", { do: "go", route: r2.id });
   check("Go with Ana's route: the banner goes, still step 1", s4.view.plan!.switchedWhy === null && s4.view.plan!.step === 1);
   const s5 = await act("c_halcyon", { do: "step", step: 1, answer: "sent" });
@@ -363,7 +363,8 @@ async function main() {
   const mDune = JSON.stringify(await MCP.waysIn({ member: sam, origin: ORIGIN }, { company_id: pub("c_dune") }));
   const mAcorn = JSON.stringify(await MCP.waysIn({ member: sam, origin: ORIGIN }, { company_id: pub("c_acorn") }));
   if (process.env.SHOW) console.log(mHal.slice(0, 900));
-  check("ways_in: the routes with Est. success, people in between, time and steps", /"est_success":"\d+%"/.test(mHal) && /"people_in_between"/.test(mHal) && /"time_to_a_meeting"/.test(mHal) && /"steps":\[/.test(mHal) && /"recommended":true/.test(mHal), mHal.slice(0, 400));
+  check("ways_in: the routes with how warm each is in words, people in between and steps", /"way_in":"(Warm intro|Good path|Long shot)"/.test(mHal) && /"people_in_between"/.test(mHal) && /"steps":\[/.test(mHal) && /"recommended":true/.test(mHal), mHal.slice(0, 400));
+  check("ways_in: no percentage, no Est. success and no time to a meeting in what the connector returns", !/\d\s?%/.test(mHal) && !/est_success|Est\. success|time_to_a_meeting|\d+\s?(?:–|-|to)\s?\d+\s?weeks/i.test(mHal), mHal.match(/[^"]*\d\s?%[^"]*/)?.[0]);
   check("ways_in names a member on Merlin (Casey), never someone from her Google (Ana) or LinkedIn", mHal.includes("Casey Morgan") && !/Ana|Brooks/.test(mHal) && /someone you know/.test(mHal), mHal);
   check("ways_in never names Rae (her calendar)", !/Rae|Kim/.test(mDune) && /someone you know/.test(mDune), mDune);
   check("ways_in at a locked company: no name, no routes, unlock first", !/Acorn|Owen/.test(mAcorn) && /"routes":\[\]/.test(mAcorn) && /unlock/.test(mAcorn), mAcorn);
@@ -440,12 +441,12 @@ async function main() {
   const body = (v: WayInView, mode: "choose" | "plan", phone = false) => render(React.createElement(V.WayInBody, { v, phone, i: null, mode, pickedId: null, onPick: noop, onMode: noop, onAct: async () => {}, busy: false, onBack: noop }));
   const choose = body(h, "choose");
   check("the page head, the recommendation, its why line and Go with", /class="page-head/.test(choose) && /Your way into Halcyon Freight/.test(text(choose)) && /Merlin recommends/.test(text(choose)) && text(choose).includes(r1.why) && /Go with Casey's route/.test(text(choose)));
-  check("one number, Est. success, and none of the old measures", text(choose).includes(`Est. success`) && text(choose).includes(`${r1.est}%`) && !/Most likely|Warmest|Fewest steps|Chance|Warmth/.test(text(choose)), text(choose).slice(0, 300));
+  check("one word, how warm, and none of the old measures or numbers", text(choose).includes(r1.way) && !/Est\. success|\d\s?%|to a meeting|\d+\s?(?:–|-|to)\s?\d+\s?weeks/i.test(text(choose)) && !/Most likely|Warmest|Fewest steps|Chance|Warmth/.test(text(choose)), text(choose).slice(0, 300));
   check("the route drawn link by link: each person pops, each link grows, its word under it, labelled for screen readers", (choose.match(/rn-pop/g) ?? []).length >= 3 && (choose.match(/rn-grow"/g) ?? []).length + (choose.match(/rn-grow /g) ?? []).length >= 2 && /data-band="Strong"[^>]*>|wr-strong/.test(choose) && /role="img" aria-label="You → Casey Morgan → Rita Vance, CFO/.test(choose) && /Strong · /.test(text(choose)));
   check("the line is as thick as the link is warm: Strong, then Good", /wr-line wr-strong/.test(choose) && /wr-line wr-good/.test(choose));
   check("what happens, numbered", /aria-label="What happens"/.test(choose) && text(choose).includes("You ask Casey for an intro"));
-  check("How Merlin estimates this, behind a button", /aria-expanded="false"[^>]*>How Merlin estimates this</.test(choose));
-  check("the routes to compare: a card each, the picked one pressed, Est. success, people in between, time to a meeting", (choose.match(/class="wy-card"/g) ?? []).length === h.routes.length && /aria-pressed="true"[^>]*data-card="/.test(choose) && /Est\. success \d+%/.test(text(choose)) && /In between/.test(text(choose)) && /Time to a meeting/.test(text(choose)));
+  check("How Merlin judges this, behind a button", /aria-expanded="false"[^>]*>How Merlin judges this</.test(choose));
+  check("the routes to compare: a card each, the picked one pressed, its band, people in between, who decides", (choose.match(/class="wy-card"/g) ?? []).length === h.routes.length && /aria-pressed="true"[^>]*data-card="/.test(choose) && /class="wy-badge">(Warm intro|Good path|Long shot)</.test(choose) && /In between/.test(text(choose)) && /Reaches who decides/.test(text(choose)) && !/Time to a meeting/.test(text(choose)));
   check("ember at most twice a screen, no violet", (choose.match(/chip-ember/g) ?? []).length <= 2 && !/violet/i.test(choose), (choose.match(/chip-ember/g) ?? []).length);
   check("buttons are big enough to tap (btn-lg on the actions)", /btn btn-pine btn-lg/.test(choose));
   const phoneChoose = body(h, "choose", true);
@@ -463,7 +464,7 @@ async function main() {
   check("the map: an SVG, every company a button with a label", /<svg[^>]*role="group"/.test(desk) && dots.length === map.rows.length && dots.every((d) => /role="button"/.test(d) && /tabindex="0"/.test(d) && /aria-label="[^"]+"/.test(d)), dots.slice(0, 2));
   check("a locked company's dot says its facts, never its name", dots.some((d) => /aria-label="A locked company, Freight/.test(d)) && !desk.includes("Acorn"));
   check("the map's page: its head, the zones with their counts, a Map and List view", /class="page-head/.test(desk) && /Where you can get in/.test(text(desk)) && ["Go now", "Find a way in", "Keep warm", "Watch"].every((z) => text(desk).includes(z)) && /aria-pressed="true"[^>]*>Map</.test(desk) && />List</.test(desk));
-  check("the map says Est. success, never the old measures", /est\. success/i.test(desk) && !/Most likely|Warmest|Fewest steps/.test(desk));
+  check("the map's axis says how warm your way in is, in band names, never a percentage or the old measures", desk.includes("How warm your way in is") && /Long shot/.test(desk) && /Warm intro/.test(desk) && !/est\. success|\d\s?%<|>\d+%/i.test(desk) && !/Most likely|Warmest|Fewest steps/.test(desk));
   check("ember at most twice on the map", (desk.match(/chip-ember/g) ?? []).length <= 2, (desk.match(/chip-ember/g) ?? []).length);
   const ph = render(React.createElement(V.GetInBody, { view: map, infos: [], phone: true, openCompany: noop }));
   check("on a phone it is the list: grouped by zone, a button a company, no map", !/<svg/.test(ph) && /class="gi-group/.test(ph) && map.rows.every((r) => ph.includes(`data-row="${r.id}"`)));

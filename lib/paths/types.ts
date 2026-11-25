@@ -23,7 +23,7 @@
  */
 import type { Warmth } from "../google/types";
 import type { IntroPlanView } from "./intro";
-import type { OddsBand, PathBand, Zone } from "./rank";
+import type { OddsBand, PathBand, WayBand, Zone } from "./rank";
 import type { ExportStore } from "../linkedin/types";
 
 /* ---------- what is kept ---------- */
@@ -131,20 +131,23 @@ export const lockedKnowWords = (n: number) => (n > 0 ? `You know someone at ${n}
  * and each filter counts what picking it lists. `capped`: more companies fit than the list holds,
  * and the page says how many.
  */
-export function warmCounts(rows: readonly Pick<WarmRow, "zone" | "ball" | "list" | "hiringNow" | "src">[], total: number) {
+export function warmCounts(rows: readonly (Pick<WarmRow, "zone" | "ball" | "list" | "hiringNow" | "src"> & { way?: WayBand | null })[], total: number) {
   const zones: Record<Zone, number> = { go: 0, find: 0, warm: 0, watch: 0 };
   const lists = new Map<string, number>();
   let ball = 0;
   let hiring = 0;
   let fellow = 0;
+  /** Companies whose best way in is a Warm intro: the band filter (never a percentage). */
+  let warmIntro = 0;
   for (const r of rows) {
     zones[r.zone]++;
     if (r.ball) ball++;
     if (r.hiringNow) hiring++;
     if (r.src === "fellow") fellow++;
+    if (r.way === "Warm intro") warmIntro++;
     if (r.list) lists.set(r.list, (lists.get(r.list) ?? 0) + 1);
   }
-  return { all: rows.length, zones, total: Math.max(total, rows.length), capped: total > rows.length, ball, hiring, fellow, lists };
+  return { all: rows.length, zones, total: Math.max(total, rows.length), capped: total > rows.length, ball, hiring, fellow, warmIntro, lists };
 }
 
 export const lockedWaysWords = (n: number) => (n > 0 ? `You have a way in at ${n} locked ${n === 1 ? "company" : "companies"} through people you know. Open ${n === 1 ? "it" : "them"} to see who.` : null);
@@ -428,10 +431,10 @@ export interface RouteView {
   between: number;
   /** The last person decides on fractional hires there. */
   decides: boolean;
-  /** Est. success, 5 to 85, in steps of 5. */
+  /** The internal score, 5 to 85 in steps of 5: orders routes, never shown. */
   est: number;
-  /** Time to a meeting: "1–2 weeks". */
-  time: string;
+  /** How warm this way in is, in words: what the member sees (never a percentage). */
+  way: WayBand;
   /** The short why line. */
   why: string;
   /** What happens, numbered. */
@@ -456,7 +459,7 @@ export interface PlanView {
   /** "Casey's route · chosen today". */
   decision: string;
   because: string;
-  /** "Ana's route: Est. success 55%, one more hand-off." Null without one. */
+  /** "Ana's route: good path, one more hand-off." Null without one. */
   planB: string | null;
   planBId: string | null;
   /** The nudge is due on this day (YYYY-MM-DD), after No reply yet. */
@@ -503,8 +506,10 @@ export interface GetInRow {
   odds: OddsBand;
   hiringNow: boolean;
   zone: Zone;
-  /** The best route's Est. success, null with no route. */
+  /** The best route's internal score (orders and places, never shown), null with no route. */
   best: number | null;
+  /** The best route's band in words, null with no route. */
+  way: WayBand | null;
   /** The best route in a few words: "Through Casey Morgan, then Rita Vance". Null while the company is locked. */
   via: string | null;
   /** The best route's first link, for the phone's line. */
@@ -551,8 +556,10 @@ export interface WarmRow {
   ball: boolean;
   /** The saved list it matches, if any. */
   list: string | null;
-  /** The best route's Est. success, null with no route. */
+  /** The best route's internal score (orders and places, never shown), null with no route. */
   best: number | null;
+  /** The best route's band in words, null with no route. */
+  way: WayBand | null;
   /** The best route's first link and where it comes from. */
   band: PathBand | null;
   src: WaySource | null;
@@ -577,9 +584,9 @@ export interface WarmRow {
 
 /** Where a quadrant line sits, from the companies on the page, and the words for it. */
 export interface WarmLine {
-  /** The value a company needs to be on the high side (fit of 5, or Est. success), or null when it is the better half by rank. */
+  /** The value a company needs to be on the high side (fit of 5, or the way-in band's index), or null when it is the better half by rank. */
   at: number | null;
-  /** "Fit 3 of 5 or more", "Est. success 20% or more", "The better fitting half". */
+  /** "Fit 3 of 5 or more", "Good path or warmer", "The better fitting half". */
   words: string;
 }
 
@@ -593,8 +600,10 @@ export interface WarmView {
   countsAll: Record<Zone, number>;
   total: number;
   lines: { fit: WarmLine; way: WarmLine };
-  /** The warmest best route among them (Est. success), or null with no route at all. */
+  /** The warmest best route among them (internal score), or null with no route at all. */
   warmest: number | null;
+  /** Its band in words, or null with no route at all. */
+  warmestWay: WayBand | null;
   /** Ways in by where the best route comes from (a company counts once). */
   bySource: Partial<Record<WaySource, number>>;
   /** The member's own sources that are in: Google, the LinkedIn file, a CSV. */
