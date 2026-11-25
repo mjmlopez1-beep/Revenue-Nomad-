@@ -38,9 +38,9 @@ export interface WfScope {
   list?: string;
 }
 
-export type WfStepKey = "open" | "dm" | "draft" | "pipe" | "way" | "evidence" | "proposal" | "sow" | "followup" | "deck" | "claude" | "remind" | "tell";
+export type WfStepKey = "open" | "dm" | "email" | "draft" | "pipe" | "way" | "evidence" | "proposal" | "sow" | "followup" | "deck" | "claude" | "remind" | "tell";
 /** The order steps run in, and the builder lists them in. Opening comes first: the steps after it need the company. A note's credits (opening a locked company) are quoted with the other paid steps, before any step runs. */
-export const STEP_ORDER: WfStepKey[] = ["open", "dm", "pipe", "way", "draft", "evidence", "proposal", "sow", "followup", "deck", "claude", "remind", "tell"];
+export const STEP_ORDER: WfStepKey[] = ["open", "dm", "email", "pipe", "way", "draft", "evidence", "proposal", "sow", "followup", "deck", "claude", "remind", "tell"];
 export interface WfStep {
   key: WfStepKey;
   /** Remind me in N days. */
@@ -240,6 +240,7 @@ export const STEPS: Record<WfStepKey, StepInfo> = {
   open: { name: "Open the company", sub: "Its name, website and open roles, at the price in the app", paid: true, fits: COMPANY_T, words: "open the company" },
   dm: { name: "Open who decides", sub: "The name and title of who decides there. The company opens first if it is locked", paid: true, fits: COMPANY_T, words: "open who decides" },
   draft: { name: "Draft a note", sub: "A draft in Messages, in your voice. Never sent", paid: true, fits: COMPANY_T, words: "draft a note" },
+  email: { name: "Find their email", sub: "The email of who decides, where a fellow fractional added it. 1 credit on every plan. Who decides opens first", paid: true, fits: COMPANY_T, words: "find their email" },
   pipe: { name: "Add it to my pipeline", sub: "At To reach out. A company still locked waits until it is open", paid: false, fits: COMPANY_T, words: "add it to my pipeline" },
   way: { name: "Find my way in", sub: "Your ways in there, strongest first", paid: false, fits: COMPANY_T, words: "find my way in" },
   evidence: { name: "Start an Evidence Bank draft", sub: "A draft case from the signed work. Client name hidden", paid: false, close: true, fits: ["signed"], words: "start an Evidence Bank draft" },
@@ -348,7 +349,11 @@ export interface StepPrices {
   opensLeft: number;
   /** A person's name and title: one purchase. */
   person: number;
+  /** A person's email (PAID_DETAILS): 1 credit on every plan. Missing: 1. */
+  detail?: number;
 }
+/** What an email or phone costs (lib/tableFields.ts PAID_DETAILS: 1 credit on every plan). */
+export const DETAIL_PRICE = 1;
 
 /** The most one run can spend, from the prices: what the builder shows before it is turned on ("Up to 3 credits a run"). */
 export function runCeiling(steps: WfStep[], scope: WfScope, p: StepPrices): { total: number; per: Partial<Record<WfStepKey, number>> } {
@@ -364,6 +369,8 @@ export function runCeiling(steps: WfStep[], scope: WfScope, p: StepPrices): { to
       companyCharged = true;
     }
     if (k === "dm") n += p.person;
+    // Their email: who decides opens first (once), then the email itself.
+    if (k === "email") n += (keys.has("dm") ? 0 : p.person) + (p.detail ?? DETAIL_PRICE);
     per[k] = n;
   }
   return { total: Object.values(per).reduce((a, b) => a + (b ?? 0), 0), per };
@@ -468,6 +475,7 @@ export function doneWords(steps: RunStep[]): string {
 const DONE_WORDS: Record<WfStepKey, string> = {
   open: "opened the company",
   dm: "opened who decides",
+  email: "opened their email",
   draft: "drafted a note in Messages",
   pipe: "added it to your pipeline",
   way: "found your ways in",
@@ -550,6 +558,8 @@ export interface WorkflowsView {
   credits: number;
   /** A call ends (RN_CALL_TRIGGERS): offered, the member's call recorders, the templates to pick from, and whether Merlin's AI reads the call. */
   calls?: CallsInfo;
+  /** RN_WORKFLOWS_V2=optin with the new design off: the workflows saved in the new design, paused (kept, not run) until it is back on. */
+  paused?: string[];
 }
 export interface CallsInfo {
   recorders: { key: string; name: string; connected: boolean }[];

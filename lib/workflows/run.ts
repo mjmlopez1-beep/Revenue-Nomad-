@@ -207,7 +207,7 @@ async function runOne(ev: WfEvent, wfId: string, origin: string | undefined, now
         }
         try {
           run.spent = await spendPaid(m, q.items, pp.ball, f.name, origin);
-          for (const x of toBuy) put(x.key, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : "Opened the company for the note.", q.per[x.key] ?? 0);
+          for (const x of toBuy) put(x.key, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : x.key === "email" ? "Opened their email: it is on the company's page, for you to write from." : "Opened the company for the note.", q.per[x.key] ?? 0);
         } catch (e) {
           run.spent = 0;
           for (const x of toBuy) put(x.key, "skipped", `Merlin's limits: ${e instanceof Error ? e.message : "it didn't go through"}`);

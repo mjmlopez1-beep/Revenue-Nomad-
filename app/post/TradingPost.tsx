@@ -3394,6 +3394,19 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
    * (ui3/head.ts UI3_BUILT). Every other page is today's page inside the new shell.
    */
   const [ui3Head, setUi3Head] = useState<Ui3Head | null>(null);
+  /**
+   * "Back to the current design": the workflows saved in the new design pause there (RN_WORKFLOWS_V2=optin,
+   * lib/workflows/v2mode.ts), so the member is told before, and can stay.
+   */
+  const backToCurrent = async () => {
+    let n = 0;
+    try {
+      const r = await fetch("/api/workflows2", { headers: { accept: "application/json" } });
+      if (r.ok) n = ((await r.json()) as { workflows?: { stored?: boolean }[] }).workflows?.filter((x) => x.stored).length ?? 0;
+    } catch {}
+    if (n && !window.confirm(`${n === 1 ? "Your workflow" : `Your ${n} workflows`} from the new design will pause while you use the current design. Nothing runs or spends until you switch back, and nothing is lost. Go back to the current design?`)) return;
+    await act(ui3Action({ ui3: false }));
+  };
   // The top bar's search and actions as they are now, read when a page's own header draws it (the API itself stays put).
   const ui3Live = useRef<{ search: React.ReactNode; actions: React.ReactNode }>({ search: null, actions: null });
   ui3Live.current = { search: searchField, actions: headerActions };
@@ -3769,7 +3782,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               // RN_UI2=optin: the member tries the new look, or goes back to the old one (lib/ui2.ts). Kept on their profile, so a second device agrees.
               ...(me.ui2Optin ? [{ group: "The new look", label: ui2 ? "Back to the old look" : "Try the new Merlin", onClick: () => void act(ui2Action({ ui2: !ui2 })) }] : []),
               // RN_UI3=optin (admins only): the new design, or back to the current one (lib/ui3.ts). Kept on their profile.
-              ...(me.ui3Optin ? [{ group: "The new design", label: ui3 ? "Back to the current design" : "Try the new design", onClick: () => void act(ui3Action({ ui3: !ui3 })) }] : []),
+              ...(me.ui3Optin ? [{ group: "The new design", label: ui3 ? "Back to the current design" : "Try the new design", onClick: () => void (ui3 ? backToCurrent() : act(ui3Action({ ui3: true }))) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
               ...(me.admin || me.asMember ? [{ group: "Admin", label: "See what members see", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
             ]}

@@ -51,6 +51,16 @@ export async function paidPlan(m: Member, companyPub: string | null, keys: WfSte
   out.ball = mv.ball.has(companyPub);
   let companyTaken = !i.c.hidden;
   const company: FactRef = { entity: "company", id: i.c.id, field: "identity" };
+  /** Who decides there, as the member's view has them (hiring for the seat first). */
+  const buyer = () =>
+    i.people
+      .filter(({ p }) => {
+        const n = p.cells.name as { s?: string } | undefined;
+        const rel = cellV(p.cells.relationship);
+        return (n?.s === "value" || n?.s === "locked") && rel !== null && rel in BUYER_RANK;
+      })
+      .sort((a, b) => BUYER_RANK[cellV(a.p.cells.relationship)!] - BUYER_RANK[cellV(b.p.cells.relationship)!])[0];
+  let nameTaken = false;
   for (const k of keys) {
     const items: FactRef[] = [];
     if (!companyTaken) {
@@ -68,8 +78,19 @@ export async function paidPlan(m: Member, companyPub: string | null, keys: WfSte
         .sort((a, b) => BUYER_RANK[cellV(a.p.cells.relationship)!] - BUYER_RANK[cellV(b.p.cells.relationship)!]);
       const b = buyers[0];
       if (!b) note = "Nobody who decides is on file there yet.";
-      else if ((b.p.cells.name as { s?: string }).s === "locked") items.push({ entity: "contact", id: b.p.id, field: "name" });
+      else if ((b.p.cells.name as { s?: string }).s === "locked") items.push({ entity: "contact", id: b.p.id, field: "name" }), (nameTaken = true);
       else note = "Who decides there is open to you already.";
+    } else if (k === "email") {
+      // Their email: the name and title open first (once), then the email, 1 credit on every plan.
+      const b = buyer();
+      const em = (b?.p.cells.email as { s?: string } | undefined)?.s;
+      if (!b) note = "Nobody who decides is on file there yet.";
+      else if (em === "value") note = "Their email is open to you already.";
+      else if (em !== "locked") note = "No email on file for who decides there yet.";
+      else {
+        if (!nameTaken && (b.p.cells.name as { s?: string }).s === "locked") items.push({ entity: "contact", id: b.p.id, field: "name" }), (nameTaken = true);
+        items.push({ entity: "contact", id: b.p.id, field: "email" });
+      }
     } else if (k === "open" && !items.length) note = "The company is open to you already.";
     out.per.push({ key: k, items, note });
   }
@@ -146,14 +167,32 @@ export async function stepPipe(m: Member, companyPub: string): Promise<{ ok: boo
 /** Find my way in: how many routes Merlin sees, and the strongest one's kind. Never a name. */
 export async function stepWay(seed: Seed, s: State, m: Member, companyId: string, nowMs: number): Promise<{ ok: boolean; note: string }> {
   const { routesOf } = await import("../paths/ways");
-  const routes = routesOf(seed, s, m, companyId, nowMs);
-  if (!routes.length) return { ok: true, note: "No way in on file yet. Warm paths fills in as your sources grow." };
+  // Through people only: writing to who decides yourself is a cold note, never called a way in or a good path.
+  const all = routesOf(seed, s, m, companyId, nowMs);
+  const routes = all.filter((r) => r.view.kind !== DIRECT);
+  const direct = routes.length !== all.length;
+  if (!routes.length) return { ok: true, note: direct ? "No warm way in on file yet. You can write to who decides yourself." : "No way in on file yet. Warm paths fills in as your sources grow." };
   const best = routes[0].view;
-  return { ok: true, note: `${routes.length === 1 ? "1 way in" : `${routes.length} ways in`}. The strongest: ${best.kind.charAt(0).toLowerCase()}${best.kind.slice(1)}, ${best.way.toLowerCase()}.` };
+  return { ok: true, note: `${routes.length === 1 ? "1 way in" : `${routes.length} ways in`} through people you know. The strongest: ${best.kind.charAt(0).toLowerCase()}${best.kind.slice(1)}, ${best.way.toLowerCase()}.` };
 }
 
-/** Draft a note: the move note's template in the member's voice, to nobody by name. Only for a company the member can see. */
-export async function stepDraft(s: State, m: Member, trigger: WfTrigger, company: string, fn: string | null): Promise<{ subject: string; body: string }> {
+/** The route Warm Paths offers when nobody stands between: a cold note from the member. */
+const DIRECT = "Write to them yourself";
+
+/** Who decides at the company, by name, when the member can see them: their name for the note's greeting. Never a locked name. */
+export async function deciderName(m: Member, companyPub: string | null): Promise<string | null> {
+  if (!companyPub) return null;
+  const { memberView } = await import("../mcp/view");
+  const i = (await memberView(m)).byId.get(companyPub);
+  if (!i || i.c.hidden) return null;
+  const b = i.people
+    .filter(({ p }) => (p.cells.name as { s?: string } | undefined)?.s === "value" && (cellV(p.cells.relationship) ?? "") in BUYER_RANK)
+    .sort((a, b2) => BUYER_RANK[cellV(a.p.cells.relationship)!] - BUYER_RANK[cellV(b2.p.cells.relationship)!])[0];
+  return b ? cellV(b.p.cells.name) : null;
+}
+
+/** Draft a note: the move note's template in the member's voice, to who decides when the member can see them (else nobody by name). Only for a company the member can see. */
+export async function stepDraft(s: State, m: Member, trigger: WfTrigger, company: string, fn: string | null, to: string | null = null): Promise<{ subject: string; body: string }> {
   const { draftNote } = await import("../moveNote");
   const { functionFor } = await import("../notify/index");
   const myFn = functionFor(s, m);
@@ -163,7 +202,7 @@ export async function stepDraft(s: State, m: Member, trigger: WfTrigger, company
     {
       kind: "buyer",
       company,
-      to: null,
+      to: to ? { name: to, email: null, from: null } : null,
       since: null,
       saw: sawOf(trigger, company, fn),
       me: { first, name: m.name, as: f ? `a fractional ${f} leader` : "a fractional leader", fn: f, clients: null },

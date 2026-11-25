@@ -195,7 +195,7 @@ async function main() {
   /* ---------- the watch pass sets off Jordan's workflows ---------- */
   // Open data on paid plans: on Pro and Close nothing a workflow opens costs a credit (everything is open), so the spend,
   // the cap and the yes are checked with billing off, where every member is on credits and every plan feature is on.
-  check("on Pro a workflow's steps cost nothing: everything opens", JSON.stringify(W.pricesFor(await t.loadState(), "mem_jordan")) === JSON.stringify({ company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0 }), W.pricesFor(await t.loadState(), "mem_jordan"));
+  check("on Pro a workflow's opens cost nothing: everything opens; only an email (Find their email) costs 1 credit", JSON.stringify(W.pricesFor(await t.loadState(), "mem_jordan")) === JSON.stringify({ company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0, detail: 1 }), W.pricesFor(await t.loadState(), "mem_jordan"));
   const billingEnv = process.env.RN_BILLING;
   delete process.env.RN_BILLING;
   console.log("\nFrom the watch pass (billing off: credits)");

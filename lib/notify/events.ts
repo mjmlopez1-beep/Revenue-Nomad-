@@ -396,6 +396,12 @@ export async function alertOffByLink(m: unknown, keys: unknown, sig: unknown): P
           f.on = false;
           names.push(f.name);
         }
+        // A workflow saved in the new design (lib/workflows/graph.ts): paused the same way.
+        const gw = d.workflows?.[member.id]?.graphs?.find((x) => x.id === key.slice(3));
+        if (gw && gw.on) {
+          gw.on = false;
+          if (!f) names.push(gw.name);
+        }
         continue;
       }
       if (key === "follows" || key === "known") {

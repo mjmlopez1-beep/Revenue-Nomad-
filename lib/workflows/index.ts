@@ -15,7 +15,7 @@ import { loadSeed, loadState, ActionError, tableInternals as T, memberByToken, t
 import { COMPANY_PRICE } from "../tableFields";
 import {
   RECIPES, STEPS, TRIGGERS, WF_LIMITS, WfProblem, cleanFlow, planHolds, runCeiling, sayFlow, triggerWords,
-  type FlowRow, type StepPrices, type WfDraft, type WfTrigger, type Workflow, type WorkflowsAnswer,
+  DETAIL_PRICE, type FlowRow, type StepPrices, type WfDraft, type WfTrigger, type Workflow, type WorkflowsAnswer,
 } from "./types";
 import { WfAnswer, approveRun, capWorkflows, monthSpent, planFor, remindersDue, runEvents, wfIn, workflowsOn, type WfEvent } from "./run";
 import { newWfId } from "./steps";
@@ -36,10 +36,10 @@ const PERSON_PRICE = 1;
 /** What a paid step costs this member now, from the app's own rules. */
 export function pricesFor(s: State, memberId: string, nowMs = Date.now()): StepPrices {
   // Pro and Close open everything: nothing a workflow opens costs a credit (an email or phone it unlocks still does). The trial: companies free, up to its daily count.
-  if (T.openPlan(s, memberId, nowMs)) return { company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0 };
+  if (T.openPlan(s, memberId, nowMs)) return { company: 0, companyFull: 0, ballFree: true, opensLeft: 0, person: 0, detail: DETAIL_PRICE };
   const opensLeft = T.freeCompaniesLeft(s, memberId, nowMs);
   const trial = T.accessFor(s, memberId, nowMs) === "trial";
-  return { company: opensLeft > 0 ? 0 : COMPANY_PRICE, companyFull: trial ? 0 : COMPANY_PRICE, ballFree: T.crystalOf(s, memberId, nowMs) === "all", opensLeft, person: trial ? 0 : PERSON_PRICE };
+  return { company: opensLeft > 0 ? 0 : COMPANY_PRICE, companyFull: trial ? 0 : COMPANY_PRICE, ballFree: T.crystalOf(s, memberId, nowMs) === "all", opensLeft, person: trial ? 0 : PERSON_PRICE, detail: DETAIL_PRICE };
 }
 
 const listsOf = (s: State, memberId: string) => (s.connector?.alerts?.[memberId] ?? []).map((v) => ({ id: v.id, name: v.name }));
@@ -93,6 +93,7 @@ export function viewOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Wor
     drafts: w?.drafts.length ?? 0,
     credits: T.balance(s, m.id),
     ...(callTriggersOn() ? { calls: callsInfo(s, m, nowMs) } : {}),
+    ...(runnerOf(v2Of(s, emailsFrom(seed, s))(m.id), w) === "paused" ? { paused: (w?.graphs ?? []).map((g) => g.name).slice(0, 20) } : {}),
   };
 }
 const fundingOn = () => process.env.RN_FUNDING === "1";

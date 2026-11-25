@@ -6,8 +6,10 @@
  *   01 When this happens      one of today's company triggers, watching the member's Crystal Ball, a
  *                             saved list, or the companies they follow
  *   02 Merlin does this       research the company (opens it, at the app's price), find the decision
- *                             maker (opens who decides), find my warmest way in, draft an
- *                             introduction in my voice (always on: the approval needs a note)
+ *                             maker (opens who decides), find their email (off by default: 1 credit
+ *                             on every plan, the one step that spends on Pro and Close), find my
+ *                             warmest way in, draft an introduction in my voice (always on: the
+ *                             approval needs a note)
  *   03 I approve              Approve, then send: the note waits for the member's tap, asked in the
  *                             bell and, when they choose, by email; skipped when not answered in N
  *                             days. Nothing goes out without it (the engine refuses any other path).
@@ -32,6 +34,8 @@ export interface SimpleCfg {
   /** 02: research the company (open it), find the decision maker, find my warmest way in. The draft is always on. */
   research: boolean;
   dm: boolean;
+  /** Find their email: who decides' email, 1 credit on every plan. Off unless the member turns it on. */
+  email: boolean;
   way: boolean;
   /** 03: how the member is asked (the bell always; email too when on), and the days before an unanswered draft is skipped. */
   ask: { email: boolean; days: number };
@@ -44,6 +48,7 @@ export const SIMPLE_DEFAULT: SimpleCfg = {
   scope: { kind: "radar" },
   research: true,
   dm: true,
+  email: false,
   way: true,
   ask: { email: true, days: 7 },
   follow: { pipe: true, reply: true, replyDays: 4, followup: true },
@@ -74,11 +79,13 @@ export function compileSimple(c: SimpleCfg): Pick<GraphVersion, "nodes" | "edges
     node("s_trigger", trigType, TRIGGER_SAY[c.trigger].line, { scope }, 0, 0),
     node("s_open", "find.open", "Research the company", {}, 0, 140, c.research),
     node("s_dm", "find.dm", "Find the decision maker", {}, 0, 280, c.dm),
+    // Find their email is in the graph only when it is on, so a workflow saved before it reads back the same.
+    ...(c.email ? [node("s_email", "find.email", "Find their email", {}, 0, 350)] : []),
     node("s_way", "find.way", "Find my warmest way in", {}, 0, 420, c.way),
     node("s_draft", "ai.draft", "Draft an introduction in my voice", {}, 0, 560),
     node("s_send", "act.send", "I approve", { days, email: c.ask.email }, 0, 700),
   ];
-  const edges: GEdge[] = [edge("s_trigger", "main", "s_open"), edge("s_open", "main", "s_dm"), edge("s_dm", "main", "s_way"), edge("s_way", "main", "s_draft"), edge("s_draft", "main", "s_send")];
+  const edges: GEdge[] = [edge("s_trigger", "main", "s_open"), edge("s_open", "main", "s_dm"), ...(c.email ? [edge("s_dm", "main", "s_email"), edge("s_email", "main", "s_way")] : [edge("s_dm", "main", "s_way")]), edge("s_way", "main", "s_draft"), edge("s_draft", "main", "s_send")];
   let after = "s_send";
   let out = "sent";
   if (c.follow.pipe) {
@@ -111,7 +118,7 @@ export function parseSimple(v: Pick<GraphVersion, "nodes" | "edges"> | null | un
   if (!t || !send || !by.get("s_draft") || send.type !== "act.send") return null;
   const trigger = t.type.replace(/^trig\./, "") as SimpleTrigger;
   if (!SIMPLE_TRIGGERS.includes(trigger)) return null;
-  const known = new Set(["s_trigger", "s_open", "s_dm", "s_way", "s_draft", "s_send", "s_pipe", "s_reply", "s_move", "s_fdraft", "s_fsend"]);
+  const known = new Set(["s_trigger", "s_open", "s_dm", "s_email", "s_way", "s_draft", "s_send", "s_pipe", "s_reply", "s_move", "s_fdraft", "s_fsend"]);
   if (v.nodes.some((n) => !known.has(n.id))) return null;
   const sc = (t.settings.scope ?? { kind: "radar" }) as WfScope;
   const reply = by.get("s_reply");
@@ -120,6 +127,7 @@ export function parseSimple(v: Pick<GraphVersion, "nodes" | "edges"> | null | un
     scope: sc.kind === "list" ? { kind: "list", list: sc.list } : { kind: sc.kind },
     research: by.get("s_open")?.on ?? false,
     dm: by.get("s_dm")?.on ?? false,
+    email: by.get("s_email")?.on === true,
     way: by.get("s_way")?.on ?? false,
     ask: { email: send.settings.email === true, days: Number(send.settings.days ?? 7) },
     follow: { pipe: by.has("s_pipe"), reply: !!reply, replyDays: Number(reply?.settings.days ?? 4), followup: by.has("s_fsend") },
@@ -131,7 +139,8 @@ export function parseSimple(v: Pick<GraphVersion, "nodes" | "edges"> | null | un
 }
 
 /** Credits a run of these four stages can spend, in words for each paid step: what the app's prices say. */
-export const SIMPLE_PAID: { id: string; what: "company" | "person" }[] = [
+export const SIMPLE_PAID: { id: string; what: "company" | "person" | "detail" }[] = [
   { id: "s_open", what: "company" },
   { id: "s_dm", what: "person" },
+  { id: "s_email", what: "detail" },
 ];

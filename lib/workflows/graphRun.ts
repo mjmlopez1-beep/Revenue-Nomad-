@@ -37,7 +37,7 @@ import { loadSeed, loadState, tableInternals as T, type Member, type Seed, type 
 import { emailEnabled, sendEmail } from "../email";
 import { pushInbox, settleAsk } from "../inbox";
 import { CALL_STEPS, WF_LIMITS, creditWords, doneWords, monthOf, oneLineWf, type MemberWorkflows, type RunStep, type WfRun, type WfStepKey, type WfTrigger, type Workflow } from "./types";
-import { companyOpen, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
+import { companyOpen, deciderName, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
 import { capWorkflows, matches, monthSpent, planFor, wfIn, type WfEvent } from "./run";
 import * as G from "./graph";
 import { emailsFrom, v2Any, v2Mode, v2Of } from "./v2mode";
@@ -375,7 +375,7 @@ async function segment(cx: Cx, S: G.GNode[]): Promise<"ok" | "discard" | "failed
           for (const x of toBuy) {
             const n = nodeByStep(cx, paid, x.key);
             run.bought.push(n.id);
-            put(cx, n, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : "Opened the company for the note.", q.per[x.key] ?? 0);
+            put(cx, n, "done", x.key === "open" ? "Opened the company. It is yours to see now." : x.key === "dm" ? "Opened who decides: their name and title are on the company's page." : x.key === "email" ? "Opened their email: it is on the company's page, for you to write from." : "Opened the company for the note.", q.per[x.key] ?? 0);
           }
           await refreshCompany(cx);
         } catch (e) {
@@ -468,7 +468,7 @@ async function freeNodes(cx: Cx, S: G.GNode[], waiting: boolean, again?: Set<str
           locked(n);
           continue;
         }
-        const d = await stepDraft(now.s, m, ev.trigger as WfTrigger, now.name, ev.fn ?? null);
+        const d = await stepDraft(now.s, m, ev.trigger as WfTrigger, now.name, ev.fn ?? null, await deciderName(m, run.event.company));
         run.item["Draft subject"] = oneLineWf(d.subject, 160);
         run.item["Draft body"] = String(d.body).slice(0, WF_LIMITS.body);
         if (cx.test) {

@@ -71,6 +71,8 @@ export interface CatItem {
 }
 interface ListView {
   on: true;
+  /** Merlin's runner is on (RN_WORKFLOWS). Off: nothing runs or spends, so nothing says Live. */
+  running?: boolean;
   plan: { tier: string; paid: boolean; proposals: boolean; evidence: boolean };
   prices?: StepPrices;
   opens?: { access: "open" | "trial" | "credits"; trialDaily: number; left: number };
@@ -109,18 +111,26 @@ const GOALS = ["All", "New clients", "Crystal Ball", "Relationships"] as const;
 
 /* ---------------- words ---------------- */
 
-const statusOf = (w: { live: unknown; draft: unknown; on: boolean }): { words: string; tone: Tone } =>
-  !w.live ? { words: "Draft", tone: "gold" } : w.draft ? { words: "Unpublished changes", tone: "gold" } : w.on ? { words: "Live", tone: "forest" } : { words: "Paused", tone: "" };
+const statusOf = (w: { live: unknown; draft: unknown; on: boolean }, running = true): { words: string; tone: Tone } =>
+  !w.live ? { words: "Draft", tone: "gold" } : w.draft ? { words: "Unpublished changes", tone: "gold" } : !w.on ? { words: "Paused", tone: "" } : running ? { words: "Live", tone: "forest" } : { words: "Ready, not running yet", tone: "gold" };
+/** Said once on the page while Merlin's runner is off (RN_WORKFLOWS): honest, never Live. */
+const NOT_RUNNING = "Merlin isn't running workflows yet. You can build and test them now; nothing runs or spends until it starts, and the page will say Live then.";
 const creditWords = (n: number) => (n === 1 ? "1 credit" : `${n} credits`);
 const DEFAULT_CAP = 60;
 
 /** What each paid Simple step costs this member now, from the engine's prices. */
-function stepPrice(p: StepPrices | undefined, cfg: SimpleCfg, step: "research" | "dm"): number {
-  if (!p) return 0;
+function stepPrice(p: StepPrices | undefined, cfg: SimpleCfg, step: "research" | "dm" | "email"): number {
+  if (!p) return step === "email" ? 1 : 0;
   const company = cfg.scope.kind === "radar" && p.ballFree ? 0 : p.companyFull;
   if (step === "research") return company;
-  return p.person + (cfg.research ? 0 : company);
+  if (step === "dm") return p.person + (cfg.research ? 0 : company);
+  return (p.detail ?? 1) + (cfg.dm ? 0 : p.person + (cfg.research ? 0 : company));
 }
+/** The most a run of these stages can spend now: 0 means nothing in it costs credits on the plan. */
+const simpleCeiling = (p: StepPrices | undefined, cfg: SimpleCfg, paid: boolean) =>
+  !paid ? 0 : (cfg.research ? stepPrice(p, cfg, "research") : 0) + (cfg.dm ? stepPrice(p, cfg, "dm") : 0) + (cfg.email ? stepPrice(p, cfg, "email") : 0);
+/** The spending line of a template, said only when one of its steps can spend. */
+const capWords = (n: number) => (n ? `Up to ${creditWords(n)} a run, and it stops at ${DEFAULT_CAP} a month unless you change it` : "Nothing in it costs credits on your plan");
 
 /* ---------------- the page ---------------- */
 
@@ -181,6 +191,11 @@ export function Ui3Workflows() {
         />
         {waitingN > 0 && tab !== "runs" && <span className="w-st hot">{waitingN === 1 ? "1 run waits for you" : `${waitingN} runs wait for you`}</span>}
       </div>
+      {list && list.running === false && (
+        <p className="wf3-notrun" role="status">
+          {NOT_RUNNING}
+        </p>
+      )}
       {err && !list ? (
         <p className="w3-err">{err}</p>
       ) : !list ? (
@@ -204,7 +219,7 @@ function stageRows(cfg: SimpleCfg): { n: string; cls: string; kicker: string; he
   const say = TRIGGER_SAY[cfg.trigger];
   return [
     { n: "01", cls: "g1", kicker: "When this happens", head: say.head, lines: [`${say.line}${cfg.trigger === "known" ? "" : ` ${SCOPE_SAY[cfg.scope.kind] ?? ""}`}`] },
-    { n: "02", cls: "g2", kicker: "Merlin does this", lines: [cfg.research && "Research the company", cfg.dm && "Find the decision maker", cfg.way && "Find my warmest way in", "Draft an introduction in my voice"].filter(Boolean) as string[] },
+    { n: "02", cls: "g2", kicker: "Merlin does this", lines: [cfg.research && "Research the company", cfg.dm && "Find the decision maker", cfg.email && "Find their email", cfg.way && "Find my warmest way in", "Draft an introduction in my voice"].filter(Boolean) as string[] },
     { n: "03", cls: "g3", kicker: "I approve", head: "Nothing goes out without me.", lines: [`Skipped if I don't answer in ${cfg.ask.days} days`] },
     { n: "04", cls: "g4", kicker: "Merlin follows through", lines: [cfg.follow.pipe && "Update my pipeline", cfg.follow.reply && "Watch for a reply", cfg.follow.followup && "Prepare a follow-up for approval"].filter(Boolean) as string[] },
   ];
@@ -241,14 +256,14 @@ function MiniStages({ cfg }: { cfg: SimpleCfg }) {
   );
 }
 /** A template in full: every stage with each step it takes. */
-function TemplatePreview({ t, paid, busy, onUse, onClose }: { t: (typeof TEMPLATES)[number]; paid: boolean; busy: boolean; onUse: () => void; onClose: () => void }) {
+function TemplatePreview({ t, paid, prices, busy, onUse, onClose }: { t: (typeof TEMPLATES)[number]; paid: boolean; prices?: StepPrices; busy: boolean; onUse: () => void; onClose: () => void }) {
   return (
     <Sheet
       title={t.t}
       onClose={onClose}
       foot={
         <>
-          <span className="m-small wf3-prev-cap">{paid ? `Stops at ${DEFAULT_CAP} credits a month unless you change it.` : "Research and drafting are on Pro."}</span>
+          <span className="m-small wf3-prev-cap">{paid ? `${capWords(simpleCeiling(prices, t.cfg, paid))}.` : "Research and drafting are on Pro."}</span>
           {paid ? (
             <button type="button" className="m-btn m-btn-primary" disabled={busy} aria-busy={busy || undefined} onClick={onUse}>
               Use template
@@ -314,7 +329,7 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
             <p>{t.say}</p>
             <MiniStages cfg={t.cfg} />
             <div className="wf3-tfoot">
-              <span className="m-small">{list.plan.paid ? `Stops at ${DEFAULT_CAP} credits a month unless you change it` : "Research and drafting are on Pro"}</span>
+              <span className="m-small">{list.plan.paid ? capWords(simpleCeiling(list.prices, t.cfg, true)) : "Research and drafting are on Pro"}</span>
               <div className="w-row">
                 <button type="button" className="m-btn m-btn-sm m-btn-ghost wf3-prevbtn" aria-label={`Preview ${t.t}`} onClick={() => setPrev(t)}>
                   Preview
@@ -334,7 +349,7 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
           </article>
         ))}
       </div>
-      {prev && <TemplatePreview t={prev} paid={list.plan.paid} busy={!!busy} onUse={() => void use(prev)} onClose={() => setPrev(null)} />}
+      {prev && <TemplatePreview t={prev} paid={list.plan.paid} prices={list.prices} busy={!!busy} onUse={() => void use(prev)} onClose={() => setPrev(null)} />}
     </>
   );
 }
@@ -368,7 +383,7 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
         <span />
       </div>
       {list.workflows.map((x) => {
-        const st = statusOf({ live: x.live, draft: x.draft, on: x.on });
+        const st = statusOf({ live: x.live, draft: x.draft, on: x.on }, list.running !== false);
         return (
           <div key={x.id} className="m-tr" role="row" onClick={() => open(x.id, "editor")}>
             <div className="m-co" role="cell">
@@ -379,7 +394,7 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
                 <div className="m-name">
                   <span>{x.name}</span>
                 </div>
-                <small>{x.mode === "simple" ? "Simple" : "Advanced"} · up to {creditWords(x.ceiling)} a run</small>
+                <small>{x.mode === "simple" ? "Simple" : "Advanced"} · {x.ceiling ? `up to ${creditWords(x.ceiling)} a run` : "no credits a run"}</small>
               </div>
             </div>
             <span role="cell" className="m-ph-hide">
@@ -389,7 +404,7 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
               {x.runs30}
             </span>
             <span role="cell" className="m-small m-ph-hide">
-              {x.cap !== null ? `${x.spentMonth} of ${x.cap} credits` : `${creditWords(x.spentMonth)}, no limit`}
+              {!x.ceiling && !x.spentMonth ? "Nothing spent" : x.cap !== null ? `${x.spentMonth} of ${x.cap} credits` : `${creditWords(x.spentMonth)}, no limit`}
             </span>
             <span role="cell" onClick={(e) => e.stopPropagation()}>
               <Switch sm on={x.on} disabled={!x.live} label={`${x.name} on`} set={(v) => void flip(x, v)} />
@@ -439,7 +454,8 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
   const w = one.workflow;
   const ver = (w.draft ?? w.live) as GraphVersion | null;
   const check = w.draft ? one.draftCheck : one.liveCheck;
-  const st = statusOf({ live: w.live, draft: w.draft, on: w.on });
+  const running = list.running !== false;
+  const st = statusOf({ live: w.live, draft: w.draft, on: w.on }, running);
   const cap = w.cap;
   const spent = item?.spentMonth ?? 0;
   const ceiling = check?.ceiling ?? 0;
@@ -469,7 +485,7 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
     setBusy(false);
     setSheet(null);
     if (r.error) return toast(r.error, true);
-    toast(w.live ? "Published. New runs use these changes." : "Live. Merlin starts watching now.");
+    toast(!running ? "Saved as ready. It runs once Merlin starts running workflows." : w.live ? "Published. New runs use these changes." : "Live. Merlin starts watching now.");
     await get();
     void reload();
   };
@@ -511,6 +527,8 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
     </div>
   );
 
+  const planWords = list.opens?.access === "trial" ? "in your trial" : list.plan.tier === "close" ? "on Close" : list.plan.paid ? "on Pro" : "on your plan";
+  // The monthly limit shows only where a step can spend: on Pro and Close today that is Find their email (1 credit).
   const spending = (
     <section className="m-panel wfs-card wf3-spend" aria-label="Workflow spending">
       <div className="w-kicker">Workflow spending</div>
@@ -523,29 +541,34 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
         ) : (
           <>
             No credits
-            <small> per run {list.opens?.access === "trial" ? "in your trial" : list.plan.tier === "close" ? "on Close" : list.plan.paid ? "on Pro" : "on your plan"}</small>
+            <small> per run {planWords}</small>
           </>
         )}
       </div>
       {!ceiling && list.opens?.access === "trial" && <p className="w-help">Within your trial&apos;s {list.opens.trialDaily} company opens a day. Past them, Merlin skips the company steps until tomorrow and spends nothing.</p>}
-      {!ceiling && list.opens?.access === "open" && <p className="w-help">Your plan opens every company. An email or phone still costs a credit.</p>}
-      <div className="wf3-cap">
-        <div className="w-row">
-          <span className="m-small">Monthly credit limit</span>
-          <span className="w-sp" />
-          <b>{cap !== null ? `${spent} / ${cap}` : "None set"}</b>
-        </div>
-        {cap !== null && (
-          <div className="wf3-bar-track" role="progressbar" aria-label="Credits used this month" aria-valuemin={0} aria-valuemax={cap} aria-valuenow={Math.min(spent, cap)}>
-            <i style={{ width: `${cap ? Math.min(100, (spent / cap) * 100) : 0}%` }} />
+      {ceiling ? (
+        <>
+          <div className="wf3-cap">
+            <div className="w-row">
+              <span className="m-small">Monthly credit limit</span>
+              <span className="w-sp" />
+              <b>{cap !== null ? `${spent} / ${cap}` : "None set"}</b>
+            </div>
+            {cap !== null && (
+              <div className="wf3-bar-track" role="progressbar" aria-label="Credits used this month" aria-valuemin={0} aria-valuemax={cap} aria-valuenow={Math.min(spent, cap)}>
+                <i style={{ width: `${cap ? Math.min(100, (spent / cap) * 100) : 0}%` }} />
+              </div>
+            )}
+            <span className="m-small">{cap !== null ? `${Math.max(0, cap - spent)} credits remaining this month` : "Set a limit: Simple workflows need one."}</span>
           </div>
-        )}
-        <span className="m-small">{cap !== null ? `${Math.max(0, cap - spent)} credits remaining this month` : "Set a limit: Simple workflows need one."}</span>
-      </div>
-      <p className="w-help">You&apos;re always in control. Merlin pauses spending at your monthly limit and asks before continuing.</p>
-      <button type="button" className="w-link" onClick={() => setSheet("spend")}>
-        Manage spending limit
-      </button>
+          <p className="w-help">You&apos;re always in control. Merlin pauses spending at your monthly limit and asks before continuing.</p>
+          <button type="button" className="w-link" onClick={() => setSheet("spend")}>
+            Manage spending limit
+          </button>
+        </>
+      ) : (
+        <p className="w-help">Nothing this workflow does costs credits {planWords}, so there is no limit to watch. {list.plan.paid ? "Find their email costs 1 credit; turn it on and your monthly limit keeps it in check." : ""}</p>
+      )}
     </section>
   );
   const checks = (
@@ -580,7 +603,7 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
       {bar}
       {mode === "simple" && cfg ? (
         <div className="wfs">
-          <Simple cfg={cfg} prices={list.prices} busy={busy} save={(n) => void saveCfg(n)} open={open} setOpen={setOpen} lists={(c.me.savedViews ?? []).map((v) => ({ id: v.id, name: v.name }))} holds={check?.holds ?? {}} toAdvanced={() => setMode("advanced")} />
+          <Simple cfg={cfg} prices={list.prices} paid={list.plan.paid} busy={busy} save={(n) => void saveCfg(n)} open={open} setOpen={setOpen} lists={(c.me.savedViews ?? []).map((v) => ({ id: v.id, name: v.name }))} holds={check?.holds ?? {}} toAdvanced={() => setMode("advanced")} />
           <aside className="wfs-side">
             {spending}
             {checks}
@@ -609,14 +632,20 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
           <div className="wfs-cap">
             <WIc n="lock" className="w-ic" />
             <span>
-              <b>
-                Up to {creditWords(ceiling)} a run.{cap !== null ? ` Stops at ${cap} credits this month` : ""}
-              </b>
-              {cap !== null ? ` (${spent} used). At the limit, runs wait for your yes instead of spending.` : ""} Each run quotes before it spends and never goes past the quote.
+              {ceiling ? (
+                <>
+                  <b>
+                    Up to {creditWords(ceiling)} a run.{cap !== null ? ` Stops at ${cap} credits this month` : ""}
+                  </b>
+                  {cap !== null ? ` (${spent} used). At the limit, runs wait for your yes instead of spending.` : ""} Each run quotes before it spends and never goes past the quote.
+                </>
+              ) : (
+                <b>Nothing it does costs credits {planWords}.</b>
+              )}
             </span>
           </div>
           {check && !check.ok && <p className="w3-err">{check.problems[0]}</p>}
-          <p className="w-help">{w.live ? "Runs already in flight finish on the version they started with." : "It starts with the next event Merlin sees."}</p>
+          <p className="w-help">{!running ? NOT_RUNNING : w.live ? "Runs already in flight finish on the version they started with." : "It starts with the next event Merlin sees."}</p>
         </Sheet>
       )}
       {sheet === "spend" && <SpendSheet w={w} spent={spent} ver={ver} simple={mode === "simple" && !!cfg} onClose={() => setSheet(null)} onSaved={async () => (setSheet(null), await get(), void reload())} />}
@@ -631,9 +660,9 @@ function Editor({ id, list, item, reload, onGone }: { id: string; list: ListView
 const TRIG_ORDER: SimpleTrigger[] = ["seat", "role", "hire", "funding", "leader", "known", "fact"];
 const TRIG_LABEL: Record<SimpleTrigger, string> = { seat: "A fractional seat ends", role: "A fractional role is posted", hire: "A company hires a fractional", funding: "A funding round is filed", leader: "A new leader shows", known: "Someone I know changes jobs", fact: "A fact changes" };
 
-function Simple({ cfg, prices, busy, save, open, setOpen, lists, holds, toAdvanced }: { cfg: SimpleCfg; prices?: StepPrices; busy: boolean; save: (c: SimpleCfg) => void; open: string | null; setOpen: (k: string | null) => void; lists: { id: string; name: string }[]; holds: Record<string, string>; toAdvanced: () => void }) {
+function Simple({ cfg, prices, paid, busy, save, open, setOpen, lists, holds, toAdvanced }: { cfg: SimpleCfg; prices?: StepPrices; paid: boolean; busy: boolean; save: (c: SimpleCfg) => void; open: string | null; setOpen: (k: string | null) => void; lists: { id: string; name: string }[]; holds: Record<string, string>; toAdvanced: () => void }) {
   const say = TRIGGER_SAY[cfg.trigger];
-  const price = (k: "research" | "dm") => stepPrice(prices, cfg, k);
+  const price = (k: "research" | "dm" | "email") => stepPrice(prices, cfg, k);
   const row = (k: string, on: boolean, label: string, set: ((v: boolean) => void) | null, more: { cost?: number; sub?: string; hold?: string; detail?: ReactNode }) => (
     <li key={k} className={on ? "" : "off"}>
       <div className="wfs-row">
@@ -695,7 +724,7 @@ function Simple({ cfg, prices, busy, save, open, setOpen, lists, holds, toAdvanc
             <select className="wfs-sel" aria-label="What sets it off" disabled={busy} value={cfg.trigger} onChange={(e) => save({ ...cfg, trigger: e.target.value as SimpleTrigger, scope: e.target.value === "known" ? { kind: "contacts" } : cfg.scope.kind === "contacts" ? { kind: "radar" } : cfg.scope })}>
               {TRIG_ORDER.map((t) => (
                 <option key={t} value={t}>
-                  {TRIG_LABEL[t].toLowerCase()}
+                  {TRIG_LABEL[t].charAt(0).toLowerCase() + TRIG_LABEL[t].slice(1)}
                 </option>
               ))}
             </select>{" "}
@@ -711,6 +740,7 @@ function Simple({ cfg, prices, busy, save, open, setOpen, lists, holds, toAdvanc
         <ul className="wfs-rows">
           {row("research", cfg.research, "Research the company", (v) => save({ ...cfg, research: v }), { cost: price("research"), hold: holds.s_open, detail: <p className="w-help">Opens the company at the app&apos;s price: its name, website and open roles. A company already open costs nothing.</p> })}
           {row("dm", cfg.dm, "Find the decision maker", (v) => save({ ...cfg, dm: v }), { cost: price("dm"), hold: holds.s_dm, detail: <p className="w-help">Opens who decides there: their name and title. Their email or phone stays a separate choice.</p> })}
+          {row("email", cfg.email, "Find their email", (v) => save({ ...cfg, email: v }), { cost: price("email"), hold: paid ? undefined : "On Pro", detail: <p className="w-help">Opens the email of who decides, where a fellow fractional added it: 1 credit on every plan. Off until you turn it on. Your monthly limit stops it, and asks you first.</p> })}
           {row("way", cfg.way, "Find my warmest way in", (v) => save({ ...cfg, way: v }), { cost: 0, detail: <p className="w-help">Your ways in there, strongest first, from people you know. Free.</p> })}
           {row("draft", true, "Draft an introduction in my voice", null, { sub: "Using my voice", hold: holds.s_draft, detail: <p className="w-help">A draft from your voice. It goes nowhere until you approve it below.</p> })}
         </ul>,
@@ -803,7 +833,7 @@ function SpendSheet({ w, spent, ver, simple, onClose, onSaved }: { w: OneView["w
         </>
       }
     >
-      <p className="w-help">This workflow has spent {creditWords(spent)} this month. At the limit it stops spending and asks you in the bell before going on.</p>
+      <p className="w-help">This workflow has spent {creditWords(spent)} this month. At the limit it stops spending and asks you first, in your in-app notifications.</p>
       <label className="w-field">
         <span>Monthly credit limit</span>
         <input className="w-in" type="number" min={simple ? 1 : 0} max={500} value={cap} onChange={(e) => setCap(e.target.value)} />
@@ -839,7 +869,7 @@ function SettingsSheet({ w, id, onClose, onGone, onChanged }: { w: OneView["work
         <span style={{ flex: 1 }}>Tell me when a run fails</span>
         <span className="m-small">{w.notifyOnFail ? "On" : "Off"}</span>
       </div>
-      <p className="w-help">Three failed runs in a row turn it off, and the bell says so. The last {w.versions.length ? `${w.versions.length + 1} versions are` : "version is"} kept.</p>
+      <p className="w-help">Three failed runs in a row turn it off, and your in-app notifications say so. The last {w.versions.length ? `${w.versions.length + 1} versions are` : "version is"} kept.</p>
       <button type="button" className="m-btn m-btn-sm m-btn-ghost w-btn-danger" onClick={() => window.confirm("Remove this workflow? Its runs stay in the log for 90 days.") && void post({ op: "remove", id }).then((ok) => ok && onGone())}>
         <WIc n="trash" /> Remove workflow
       </button>

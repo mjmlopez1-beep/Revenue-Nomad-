@@ -1,6 +1,7 @@
 /* Workflows in the new design (RN_UI3): Simple mode's four stages, the spending panel, the canvas. No illustration (round 9). */
 .ui3 .w3 .wf3-head { padding: 14px 0 6px; }
 .ui3 .w3 .wf3-tabs { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 18px; }
+.ui3 .w3 .wf3-notrun { margin: 0 0 16px; padding: 10px 14px; border-radius: 12px; background: var(--m-gold-wash); color: var(--m-gold-ink); font-size: 14px; line-height: 1.45; }
 .ui3 .w3 .wf3-lead { margin: 0 0 6px; }
 .ui3 .w3 .wf3-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-radius: 16px; background: var(--m-panel); border: 1px solid var(--m-line); margin-bottom: 18px; }
 .ui3 .w3 .wf3-name { font: 500 22px/1.15 var(--m-f-display); letter-spacing: -.01em; color: var(--m-ink); margin: 0; max-width: 460px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
