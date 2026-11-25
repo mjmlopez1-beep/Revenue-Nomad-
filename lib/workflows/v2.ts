@@ -80,7 +80,9 @@ export async function list(token: string | null, nowMs = Date.now()) {
     opens: { access: T.accessFor(s, m.id, nowMs), trialDaily: TRIAL_OPENS_DAILY, left: T.trialOpensLeft(s, m.id, nowMs) },
     catalog: catalogFor(gates),
     workflows: graphsOf(w).map(({ g, stored }) => {
+      // Live runs only: a test spends and sends nothing, and is counted apart (tests30), so the list never reads a test as a lost run.
       const mine = runs.filter((r) => r.wf === g.id && !r.test);
+      const tests = runs.filter((r) => r.wf === g.id && r.test);
       return {
         id: g.id,
         name: g.name,
@@ -98,6 +100,7 @@ export async function list(token: string | null, nowMs = Date.now()) {
         warn: g.warn,
         spentMonth: monthSpentV2(w, g.id, nowMs),
         runs30: mine.filter((r) => r.at >= month).length,
+        tests30: tests.filter((r) => r.at >= month).length,
         waiting: mine.filter((r) => r.status === "waiting").length,
         failed: mine.filter((r) => r.status === "failed").length,
       };

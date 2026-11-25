@@ -102,3 +102,4 @@
   .ui3 .w3 .wf3-name { font-size: 18px; max-width: 100%; flex: 1 1 100%; }
   .ui3 .w3 .wf-mine .m-tr > span[role="cell"]:nth-of-type(4) { grid-column: 1; }
 }
+.ui3 .w3 .wf3-runs-rule { margin: 10px 0 0; }

@@ -34,7 +34,7 @@ import { usePlans } from "../../../network/useWays";
 import { COL_NONE, FILTERS, SORTS, colOf, dropStage, nextOf, passes, sortDeals, toWords, wayOf, closedWords, type ColKey, type FilterKey, type RouteHint, type SortKey } from "../../../pipeline/model";
 import { DealDrawer } from "../../../pipeline/DealDrawer";
 import { AddDeal, AddFromList } from "../../../pipeline/AddDeal";
-import { Band, Chips, CoMark, Failed, More, Skel, St, Tabs, WorkMain, money, type MenuItem, type Tone } from "../parts";
+import { Band, Chips, CoMark, Failed, MatchCount, More, NoMatch, Skel, St, Tabs, WorkMain, money, type MenuItem, type Tone } from "../parts";
 import { kMoney, moneyOf } from "./money";
 import { WIc } from "../icons";
 import "../../../workbench/workbench.css";
@@ -45,6 +45,7 @@ const WonSheet = dynamic(() => import("../../../WonSheet").then((m) => m.WonShee
 
 type View = "board" | "table" | "intros";
 type Panel = { kind: "deal"; id: string } | { kind: "add" } | { kind: "pick" } | null;
+const DEAL_NOUN = ["deal", "deals"] as const;
 const OPEN: readonly ColKey[] = ["reach", "sent", "replied", "meeting", "proposal"];
 const STAGE_TONE: Record<string, Tone> = { reach: "", sent: "co", replied: "co", meeting: "am", proposal: "gold", won: "forest", lost: "", notnow: "", quiet: "" };
 const VIEW_KEY = "rn-ui3-pl-view";
@@ -171,6 +172,9 @@ export function Ui3Pipeline() {
   const openCount = deals.filter((r) => (OPEN as readonly string[]).includes(r.stage)).length;
   const sub = !deals.length ? "Every company you are trying to win, from the first note to signed." : hot.length ? `${hot.length} next ${hot.length === 1 ? "move is" : "moves are"} due today.` : "Nothing is due today. Every next move is on its way.";
   const first = deals.length === 0;
+  // A filter that matches none of the member's deals (owner review L1): said by name, with Show all, in place of an empty board or table.
+  const filterLabel = FILTERS.find((f) => f.key === filter)?.label ?? "All deals";
+  const noMatch = mode !== "intros" && !first && filter !== "all" && !shown.length;
 
   const card = (r: PipelineRec) => {
     const n = nextOf(r, today);
@@ -406,7 +410,7 @@ export function Ui3Pipeline() {
             </div>
           );
         })}
-        {!shown.length && <p className="m-small" style={{ padding: 18 }}>No deals here yet.</p>}
+        {!shown.length && first && <p className="m-small" style={{ padding: 18 }}>No deals here yet.</p>}
       </div>
     </>
   );
@@ -540,13 +544,14 @@ export function Ui3Pipeline() {
         </button>
       </div>
       {mode !== "intros" && <Chips items={FILTERS.map((f) => ({ k: f.key, label: f.label, n: nFilter(f.key) }))} on={filter} set={setFilter} label="Filter deals" cls="pl3-chips" />}
+      {mode !== "intros" && !first && <MatchCount shown={shown.length} total={deals.length} noun={DEAL_NOUN} filter={filter === "all" ? null : filterLabel} />}
       {first && mode !== "intros" && (
         <div className="pr3-empty pl3-first">
           <b className="w-h4">No deals yet</b>
           <p className="w-help">Add a company you want to win, or pick from your lists. Merlin moves the card when it sees your note go out, a reply or a meeting, and the money above adds up from the values you type.</p>
         </div>
       )}
-      <div id="pl-body">{mode === "board" ? board : mode === "table" ? table : intros}</div>
+      <div id="pl-body">{noMatch ? <NoMatch noun={DEAL_NOUN} filter={filterLabel} total={deals.length} onShowAll={() => setFilter("all")} /> : mode === "board" ? board : mode === "table" ? table : intros}</div>
       <p className="w-help pl3-sees">
         {view.sees.gmail || view.sees.calendar ? `Merlin reads ${[view.sees.gmail && "who wrote back in Gmail", view.sees.calendar && "meetings on your calendar"].filter(Boolean).join(" and ")} (never the words) to move your cards.` : "Connect Google and Merlin moves your cards when someone writes back or a meeting is booked."}{" "}
         <button type="button" className="w-link" onClick={() => c.openPage("settings")}>

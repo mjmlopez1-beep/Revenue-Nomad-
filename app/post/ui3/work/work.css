@@ -15,6 +15,7 @@
 .ui3 .w3 .w-muted { color: var(--m-muted); }
 .ui3 .w3 .w-hot { color: var(--w-hot); }
 .ui3 .w3 .w-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ui3 .w3 [hidden] { display: none !important; }
 .ui3 .w3 .w-link { color: var(--m-co-ink); font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
 .ui3 .w3 .w-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ui3 .w3 .w-link svg { width: 15px; height: 15px; }

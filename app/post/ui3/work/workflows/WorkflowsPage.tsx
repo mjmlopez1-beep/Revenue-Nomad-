@@ -29,11 +29,11 @@ import { pageDef, useApp } from "../../../shell/pages";
 import { compileSimple, parseSimple, SCOPE_SAY, SIMPLE_DEFAULT, TRIGGER_SAY, type SimpleCfg, type SimpleTrigger } from "@/lib/workflows/simple";
 import type { GraphVersion, GraphWorkflow, GraphCheck, GraphRun, GNode, NodeType } from "@/lib/workflows/graph";
 import type { StepPrices } from "@/lib/workflows/types";
-import { Chips, Gate, Sheet, Skel, St, Switch, Tabs, WorkMain, type Tone } from "../parts";
+import { Chips, Gate, MatchCount, NoMatch, Sheet, Skel, St, Switch, Tabs, WorkMain, type Tone } from "../parts";
 import { openPlans } from "../../../Billing";
 import { WIc, type WIconName } from "../icons";
 import { Canvas } from "./Canvas";
-import { DEFAULT_CAP, capWords, creditWords, planSpendLine, planStages, simpleCeiling, stepPrice } from "./plan";
+import { DEFAULT_CAP, RUNS_LIST_LINE, RUNS_RULE, capWords, creditWords, planSpendLine, planStages, runsCell, simpleCeiling, stepPrice } from "./plan";
 import "./workflows.css";
 
 /* ---------------- the API ---------------- */
@@ -54,7 +54,9 @@ interface ListItem {
   cap: number | null;
   warn: number | null;
   spentMonth: number;
+  /** Live runs in the last 30 days; tests are counted apart (tests30), never in it. */
   runs30: number;
+  tests30?: number;
   waiting: number;
   failed: number;
 }
@@ -373,11 +375,12 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
       </div>
     );
   return (
-    <div className="m-table wf-mine" role="table" aria-label="Your workflows">
+    <>
+    <div className="m-table wf-mine" role="table" aria-label="Your workflows" aria-describedby="wf3-runs-rule">
       <div className="m-thead" role="row">
         <span>Workflow</span>
         <span>Status</span>
-        <span>Runs, 30 days</span>
+        <span>Live runs, 30 days</span>
         <span>This month</span>
         <span>On</span>
         <span />
@@ -401,7 +404,7 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
               <St tone={x.waiting ? "hot" : st.tone}>{x.waiting ? `${x.waiting} waiting for you` : x.failed ? "Needs attention" : st.words}</St>
             </span>
             <span role="cell" className="m-small m-ph-hide">
-              {x.runs30}
+              {runsCell(x.runs30, x.tests30 ?? 0)}
             </span>
             <span role="cell" className="m-small m-ph-hide">
               {!x.ceiling && !x.spentMonth ? "Nothing spent" : x.cap !== null ? `${x.spentMonth} of ${x.cap} credits` : `${creditWords(x.spentMonth)}, no limit`}
@@ -421,6 +424,10 @@ function Mine({ list, reload, open, onTemplates }: { list: ListView; reload: () 
         );
       })}
     </div>
+    <p className="m-small wf3-runs-rule" id="wf3-runs-rule">
+      {RUNS_RULE}
+    </p>
+    </>
   );
 }
 
@@ -943,6 +950,9 @@ function TestSheet({ run, ver, cfg, onClose }: { run: GraphRun; ver: GraphVersio
 
 /* ---------------- runs ---------------- */
 
+const RUN_NOUN = ["run", "runs"] as const;
+const RUN_FILTER = { all: "All", waiting: "Waiting for you", failed: "Failed", done: "Done" } as const;
+
 function Runs({ id, reload, catalog }: { id: string; reload: () => Promise<unknown>; catalog: CatItem[] }) {
   const toast = useToast();
   const c = useApp();
@@ -974,8 +984,11 @@ function Runs({ id, reload, catalog }: { id: string; reload: () => Promise<unkno
   const TONE: Record<string, Tone> = { waiting: "hot", failed: "hot", done: "forest", running: "co", stopped: "" };
   return (
     <>
-      <Chips items={[{ k: "all", label: "All", n: rows.length }, { k: "waiting", label: "Waiting for you", n: rows.filter((r) => r.status === "waiting").length }, { k: "failed", label: "Failed", n: rows.filter((r) => r.status === "failed").length }, { k: "done", label: "Done", n: rows.filter((r) => r.status === "done").length }]} on={filter} set={setFilter} />
-      <div className="m-table wf-runs-t" role="table" aria-label="Runs">
+      <p className="m-small wf3-runs-rule">{RUNS_LIST_LINE}</p>
+      <Chips items={[{ k: "all", label: "All", n: rows.length }, { k: "waiting", label: "Waiting for you", n: rows.filter((r) => r.status === "waiting").length }, { k: "failed", label: "Failed", n: rows.filter((r) => r.status === "failed").length }, { k: "done", label: "Done", n: rows.filter((r) => r.status === "done").length }]} on={filter} set={setFilter} label="Show runs" />
+      <MatchCount shown={list.length} total={rows.length} noun={RUN_NOUN} filter={filter === "all" ? null : RUN_FILTER[filter]} />
+      {!list.length && <NoMatch noun={RUN_NOUN} filter={RUN_FILTER[filter]} total={rows.length} onShowAll={() => setFilter("all")} />}
+      <div className="m-table wf-runs-t" role="table" aria-label="Runs" hidden={!list.length}>
         {list.map((r) => (
           <div key={r.id} className="m-tr" role="row" onClick={() => void show(r)}>
             <div className="m-co" role="cell">

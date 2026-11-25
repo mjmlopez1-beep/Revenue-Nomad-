@@ -24,6 +24,7 @@ import { useUi3Head } from "../head";
 import { initialsOf, tintOf } from "../model";
 import { WArt, type WorkArt } from "./art";
 import { WIc, type WIconName } from "./icons";
+import { matchLine, noMatchWords, type Noun } from "./empty";
 import "./work.css";
 import "./w3.css";
 
@@ -67,7 +68,7 @@ export function Chips<K extends string>({ items, on, set, label = "Show", cls }:
   return (
     <div className={`m-fchips w-chiprow${cls ? ` ${cls}` : ""}`} role="group" aria-label={label}>
       {items.map((x) => (
-        <button key={x.k} type="button" className="m-fchip" aria-pressed={on === x.k} onClick={() => set(x.k)}>
+        <button key={x.k} type="button" className="m-fchip" data-chip={x.k} aria-pressed={on === x.k} onClick={() => set(x.k)}>
           {x.label}
           {x.n != null ? ` (${x.n})` : ""}
         </button>
@@ -342,3 +343,37 @@ export const Skel = ({ rows = 4 }: { rows?: number }) => (
     ))}
   </div>
 );
+
+/**
+ * A filter (or a search) that matches nothing in a list that has rows (owner review L1): a heading
+ * that names the filter, a line that says the rows are still there, and Show all, which clears the
+ * filter and puts focus on the chip that shows everything (`chipAll`), so the keyboard is never lost.
+ */
+export function NoMatch({ noun, filter, q, total, onShowAll, chipAll = "all" }: { noun: Noun; filter: string | null; q?: string; total: number; onShowAll: () => void; chipAll?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const w = noMatchWords({ noun, filter, q, total });
+  const show = () => {
+    // The chip lives in the same page: found from here, so another page's chips are never taken.
+    const root = ref.current?.closest(".w3, main") ?? document;
+    onShowAll();
+    setTimeout(() => root.querySelector<HTMLElement>(`[data-chip="${chipAll}"]`)?.focus(), 30);
+  };
+  return (
+    <div ref={ref} className="pr3-empty w-nomatch" data-empty="filtered">
+      <b className="w-h4">{w.head}</b>
+      <p className="w-help">{w.line}</p>
+      <button type="button" className="m-btn m-btn-sm m-btn-secondary" onClick={show}>
+        {w.button}
+      </button>
+    </div>
+  );
+}
+
+/** Read out (never shown) when the filter or the search changes how many rows match. */
+export function MatchCount({ shown, total, noun, filter, q }: { shown: number; total: number; noun: Noun; filter: string | null; q?: string }) {
+  return (
+    <p className="w-sr" aria-live="polite" aria-atomic="true">
+      {matchLine(shown, total, noun, filter, q)}
+    </p>
+  );
+}

@@ -32,11 +32,12 @@ import { api } from "../../../ProposalParts";
 import { LearnTemplate } from "../../../proposalsPage/LearnTemplate";
 import type { Home2Props } from "../../../proposalsPage/Home2";
 import { openPlans } from "../../../Billing";
-import { Band, Chips, CoMark, Gate, More, Sheet, St, useCoFinder, money, type MenuItem, type Tone } from "../parts";
+import { Band, Chips, CoMark, Gate, MatchCount, More, NoMatch, Sheet, St, useCoFinder, money, type MenuItem, type Tone } from "../parts";
 import { WIc } from "../icons";
 import "./proposals.css";
 
 type Filter = "all" | "needs" | "out" | "signed";
+const PROPOSAL_NOUN = ["proposal", "proposals"] as const;
 const FILTERS: { k: Filter; label: string }[] = [
   { k: "all", label: "All" },
   { k: "needs", label: "Needs you" },
@@ -384,7 +385,9 @@ export function Ui3ProposalsHome({ data, view, infos, onOpen, onOpenTab, onGone,
           ) : (
             <>
               <Chips items={FILTERS.map((f) => ({ ...f, n: counts[f.k] }))} on={filter} set={(k) => (setFilter(k), setAll(false))} cls="pr3-chips" />
-              <div className="m-table pr3-list">
+              <MatchCount shown={rows.length} total={data.proposals.length} noun={PROPOSAL_NOUN} filter={filter === "all" ? null : FILTERS.find((f) => f.k === filter)!.label} />
+              {!shown.length && <NoMatch noun={PROPOSAL_NOUN} filter={FILTERS.find((f) => f.k === filter)!.label} total={data.proposals.length} onShowAll={() => (setFilter("all"), setAll(false))} />}
+              <div className="m-table pr3-list" hidden={!shown.length}>
                 {shown.map((p) => {
                   const n = nextOf(p);
                   const fee = moneyOf(p.fields["pricing.monthlyFee"]);
@@ -414,7 +417,6 @@ export function Ui3ProposalsHome({ data, view, infos, onOpen, onOpenTab, onGone,
                     </div>
                   );
                 })}
-                {!shown.length && <p className="m-small" style={{ padding: 18 }}>Nothing here.</p>}
               </div>
               {rows.length > shown.length && (
                 <button type="button" className="w-link" style={{ marginTop: 12 }} onClick={() => setAll(true)}>

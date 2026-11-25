@@ -84,3 +84,12 @@ export function planSpendLine(cfg: SimpleCfg, prices: StepPrices | undefined, pa
   if (!n) return "Nothing in it costs credits on your plan.";
   return `Expected cost: up to ${creditWords(n)} a run. Monthly credit limit ${DEFAULT_CAP}: Merlin pauses spending at the limit and asks before continuing. You can change it before it goes live.`;
 }
+
+/* ---------- run counts (owner review L2) ---------- */
+
+/** "0 live · 1 test": the live runs the list counts, and the tests beside them, never in them. */
+export const runsCell = (live: number, tests: number) => (tests ? `${live} live · ${tests} ${tests === 1 ? "test" : "tests"}` : String(live));
+/** The counting rule, said under Your workflows. */
+export const RUNS_RULE = "Live runs counts what ran for real in the last 30 days. Tests show beside it and are never counted: a test spends and sends nothing. Every run, tests included, is under Runs.";
+/** Said above a workflow's Runs: this list has every run, tests too. */
+export const RUNS_LIST_LINE = "Every run of this workflow, tests included (marked Test). Your workflows counts live runs only.";

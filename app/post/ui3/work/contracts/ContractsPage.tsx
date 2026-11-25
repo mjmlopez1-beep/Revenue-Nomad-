@@ -29,12 +29,13 @@ import { DocDetail, c2api, dayShort } from "../../../contracts/DocDetail";
 import type { SendResult } from "../../../contracts/SendSheet";
 import { onOpenContract, takeContract } from "../../../contracts/open";
 import { openPlans } from "../../../Billing";
-import { Band, Chips, CoMark, Empty, Failed, Gate, Skel, St, RowActs, WorkMain, useCoFinder, type MenuItem, type Tone } from "../parts";
+import { Band, Chips, CoMark, Empty, Failed, Gate, MatchCount, NoMatch, Skel, St, RowActs, WorkMain, useCoFinder, type MenuItem, type Tone } from "../parts";
 import { WIc } from "../icons";
 import "../../../contracts/contracts2.css";
 import "./contracts.css";
 
 type Filter = "all" | "you" | "others" | "done" | "drafts" | "ended";
+const DOC_NOUN = ["document", "documents"] as const;
 const FILTERS: { k: Filter; label: string; has: (r: SignRow) => boolean }[] = [
   { k: "all", label: "All", has: () => true },
   { k: "you", label: "Awaiting you", has: (r) => r.status === "you" },
@@ -273,7 +274,9 @@ export function Ui3Contracts() {
                 <input type="search" value={q} placeholder="Search documents" aria-label="Search documents" onChange={(e) => setQ(e.target.value)} />
               </label>
             </div>
-            <div className="m-table ct-list" role="table" aria-label="Documents">
+            <MatchCount shown={rows.length} total={v.rows.length} noun={DOC_NOUN} filter={filter === "all" ? null : FILTERS.find((f) => f.k === filter)!.label} q={q} />
+            {!rows.length && <NoMatch noun={DOC_NOUN} filter={filter === "all" ? null : FILTERS.find((f) => f.k === filter)!.label} q={q} total={v.rows.length} onShowAll={() => (setFilter("all"), setQ(""))} />}
+            <div className="m-table ct-list" role="table" aria-label="Documents" hidden={!rows.length}>
               <div className="m-thead" role="row">
                 <span role="columnheader">Document</span>
                 <span role="columnheader">Status</span>
@@ -310,7 +313,6 @@ export function Ui3Contracts() {
                   </div>
                 );
               })}
-              {!rows.length && <p className="m-small" style={{ padding: 18 }}>{q ? `Nothing here for "${q}".` : "No documents here."}</p>}
             </div>
           </>
         )}

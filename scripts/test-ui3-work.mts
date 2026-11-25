@@ -194,6 +194,21 @@ async function main() {
   const test = await route("POST", { op: "test", id, sample: { company: T.pubId("c_cedar") } });
   const tr = test.j.run!;
   check("Test workflow: a sample through the stages, stopping at the tap, nothing spent", test.status === 200 && tr.test && tr.spent === 0 && tr.nodes.find((x) => x.node === "s_send")?.status === "waiting" && T.balance(await t.loadState(), "mem_c") === before, tr?.nodes);
+  // Owner review L2: one test and no live run. The list counts live runs only, says the test beside it, and Runs lists it, marked.
+  {
+    const l2 = await route("GET");
+    const item = (l2.j.workflows as { id: string; runs30: number; tests30: number }[]).find((x) => x.id === id);
+    const runsAll = await route("GET", undefined, `?id=${encodeURIComponent(id!)}&runs=1`);
+    const rr = (runsAll.j.runs as { test: boolean }[]) ?? [];
+    check("L2: with one test and no live run, the list counts 0 live runs and 1 test, apart", item?.runs30 === 0 && item?.tests30 === 1, item);
+    check("L2: and the workflow's Runs lists that test, marked a test (no run is lost)", rr.length === 1 && rr[0].test === true, rr);
+    const P = await import("../app/post/ui3/work/workflows/plan");
+    check("L2: the cell reads '0 live · 1 test', and a list without tests just the count", P.runsCell(0, 1) === "0 live · 1 test" && P.runsCell(3, 0) === "3" && P.runsCell(2, 2) === "2 live · 2 tests");
+    check("L2: the counting rule is said in words: live runs only, tests never counted, every run under Runs", /^Live runs counts what ran for real in the last 30 days\. Tests show beside it and are never counted/.test(P.RUNS_RULE) && /tests included/.test(P.RUNS_LIST_LINE));
+    const wfp = readFileSync(path.join(ROOT, "app/post/ui3/work/workflows/WorkflowsPage.tsx"), "utf8");
+    check("L2: Your workflows says Live runs, 30 days, the cell with its tests, and the rule under the list", /<span>Live runs, 30 days<\/span>/.test(wfp) && /\{runsCell\(x\.runs30, x\.tests30 \?\? 0\)\}/.test(wfp) && /id="wf3-runs-rule">\s*\{RUNS_RULE\}/.test(wfp) && /\{RUNS_LIST_LINE\}/.test(wfp));
+    check("L2: the server counts tests apart from live runs", /const mine = runs\.filter\(\(r\) => r\.wf === g\.id && !r\.test\);/.test(readFileSync(path.join(ROOT, "lib/workflows/v2.ts"), "utf8")) && /tests30: tests\.filter\(\(r\) => r\.at >= month\)\.length/.test(readFileSync(path.join(ROOT, "lib/workflows/v2.ts"), "utf8")));
+  }
   check("…with the draft the member would approve, and what it would cost", typeof tr.nodes.find((x) => x.node === "s_draft")?.output?.["Draft body"] === "string" && tr.nodes.some((x) => typeof x.output?.["Would spend"] === "number"), tr.nodes.map((x) => [x.node, x.output]));
   await route("POST", { op: "live", id });
   await route("POST", { op: "on", id, on: true });
@@ -457,6 +472,29 @@ async function main() {
     check("M4: the preview is a dialog: Tab stays inside it, Esc closes it and focus goes back to the button that opened it", /e\.key === "Tab" && ref\.current/.test(parts) && /e\.key !== "Escape"/.test(parts) && /was\?\.focus\?\.\(/.test(parts) && /role="dialog" aria-modal="true"/.test(parts));
     const css = readFileSync(path.join(ROOT, "app/post/ui3/work/workflows/workflows.css"), "utf8");
     check("M4: on a phone the preview scrolls inside the screen and Use template stays at its foot; steps wrap", /\.m-sheet:has\(\.wf3-prev\) \{ max-height: calc\(100vh - 32px\); overflow-y: auto; \}/.test(css) && /\.m-sheet:has\(\.wf3-prev\) \.m-acts \{ position: sticky;/.test(css) && /\.wf3-prev-step \{ display: flex; flex-wrap: wrap;/.test(css) && !/wf3-mini[^}]*text-overflow/.test(css));
+  }
+
+  console.log("\nFiltered empty states (owner review L1)");
+  {
+    const E = await import("../app/post/ui3/work/empty");
+    const w = E.noMatchWords({ noun: ["run", "runs"], filter: "Failed", total: 3 });
+    check("L1: the heading names the filter, the line says the rows are still there, Show all with the count", w.head === "No runs in Failed" && w.line === "All 3 runs are still here. Show all clears the filter." && w.button === "Show all 3", w);
+    const w2 = E.noMatchWords({ noun: ["document", "documents"], filter: "Completed", q: "acme", total: 1 });
+    check("L1: with a search too, both are named", w2.head === 'No documents in Completed matching "acme"' && w2.line === "Your document is still here. Show all clears the filter and the search.", w2);
+    check("L1: the count read out on a change: how many of how many, in which filter", E.matchLine(0, 2, ["deal", "deals"], "Next move due") === "0 of 2 deals in Next move due" && E.matchLine(2, 2, ["deal", "deals"], null) === "2 deals");
+    const partsSrc = readFileSync(path.join(ROOT, "app/post/ui3/work/parts.tsx"), "utf8");
+    check("L1: Show all clears the filter and puts focus back on the All chip of the same page; the count is aria-live", /onShowAll\(\);\s*setTimeout\(\(\) => root\.querySelector<HTMLElement>\(`\[data-chip="\$\{chipAll\}"\]`\)\?\.focus\(\), 30\);/.test(partsSrc) && /data-chip=\{x\.k\}/.test(partsSrc) && /aria-live="polite" aria-atomic="true">\s*\{matchLine\(/.test(partsSrc));
+    const src = (f: string) => readFileSync(path.join(ROOT, f), "utf8");
+    const runsSrc = src("app/post/ui3/work/workflows/WorkflowsPage.tsx");
+    check("L1 Workflows Runs: Failed (0) says so by name with Show all, never a blank table; no runs at all is its own state", /\{!list\.length && <NoMatch noun=\{RUN_NOUN\} filter=\{RUN_FILTER\[filter\]\} total=\{rows\.length\} onShowAll=\{\(\) => setFilter\("all"\)\} \/>\}/.test(runsSrc) && /hidden=\{!list\.length\}/.test(runsSrc) && /<b className="w-h4">No runs yet<\/b>/.test(runsSrc));
+    const ct = src("app/post/ui3/work/contracts/ContractsPage.tsx");
+    check("L1 Contracts: Completed (0) names the filter (and the search), never 'No documents here'; nothing sent yet is its own state", /<NoMatch noun=\{DOC_NOUN\}/.test(ct) && !/No documents here/.test(ct) && /title="Nothing sent for signature yet"/.test(ct));
+    const pl = src("app/post/ui3/work/pipeline/PipelinePage.tsx");
+    check("L1 Pipeline: Next move due (0) names the filter with Show all, in place of the board or table; no deals at all keeps its own words", /const noMatch = mode !== "intros" && !first && filter !== "all" && !shown\.length;/.test(pl) && /\{noMatch \? <NoMatch noun=\{DEAL_NOUN\} filter=\{filterLabel\}/.test(pl) && /!shown\.length && first && <p/.test(pl) && /<b className="w-h4">No deals yet<\/b>/.test(pl));
+    const pr = src("app/post/ui3/work/proposals/ProposalsHome.tsx");
+    check("L1 Proposals: a filter with none says it by name, never 'Nothing here'", /<NoMatch noun=\{PROPOSAL_NOUN\}/.test(pr) && !/>Nothing here\.</.test(pr));
+    check("L1: every page reads out the match count", [runsSrc, ct, pl, pr].every((x) => /<MatchCount /.test(x)));
+    check("L1: a hidden table is hidden in the new design's styles", /\.ui3 \.w3 \[hidden\] \{ display: none !important; \}/.test(src("app/post/ui3/work/work.css")));
   }
 
   console.log("\nCopy");
