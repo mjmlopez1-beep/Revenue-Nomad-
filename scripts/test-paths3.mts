@@ -173,6 +173,21 @@ async function main() {
   const R = await import("../lib/paths/rank.ts");
   const PL = await import("../lib/paths/plan.ts");
 
+  /* ---------- 0. the relationship band a member sees (acceptance F1) ---------- */
+  console.log("\nThe relationship band, only where Merlin derives one");
+  {
+    const now = Date.parse("2026-11-25T12:00:00Z");
+    const rb = (ev: import("../lib/paths/rank.ts").Evidence[]) => R.relBandOf(ev, now);
+    check("mail and calendar recency gives a band: 3 meetings 20 days ago is Strong", rb([{ kind: "met", meetings: 3, emails: 0, last: "2026-11-05" }]) === "Strong");
+    check("messages on Merlin give a band by the last one", rb([{ kind: "messages", count: 1, last: "2026-11-20" }]) === "Good" && rb([{ kind: "messages", count: 2, last: "2025-01-10" }]) === "Cold");
+    check("no band for a fellow fractional on Merlin, a LinkedIn connection, LinkedIn messages, a vouch, a contacts file, a seat together, a former client, or never met", [
+      [{ kind: "peer" }], [{ kind: "peer", shared: { active: true, year: null } }], [{ kind: "linkedin", since: "2023-03-01" }], [{ kind: "limsg", count: 9, both: true, last: "2026-11-20" }], [{ kind: "vouch", rec: true, theirs: true }],
+      [{ kind: "contact" }], [{ kind: "together", active: true, endYear: null }], [{ kind: "client", active: false, endYear: 2025 }], [{ kind: "none" }], [],
+    ].every((ev) => rb(ev as never) === null));
+    check("a meeting count with no day is no recency, so no band", rb([{ kind: "met", meetings: 4, emails: 2, last: null }]) === null);
+    check("with a peer and a recent message, the band is the message's, never the peer's fixed weight", rb([{ kind: "peer" }, { kind: "messages", count: 5, last: "2026-11-24" }]) === "Strong");
+  }
+
   /* ---------- 1. Est. success ---------- */
   console.log("\nEst. success");
   const est = (x: Partial<import("../lib/paths/rank.ts").EstInput>) => R.estSuccess({ links: [0.85, 0.72], handoffs: 1, decides: true, openRole: true, recentHire: true, fit: 2, ...x });
@@ -443,7 +458,9 @@ async function main() {
   check("the page head, the recommendation, its why line and Go with", /class="page-head/.test(choose) && /Your way into Halcyon Freight/.test(text(choose)) && /Merlin recommends/.test(text(choose)) && text(choose).includes(r1.why) && /Go with Casey's route/.test(text(choose)));
   check("one word, how warm, and none of the old measures or numbers", text(choose).includes(r1.way) && !/Est\. success|\d\s?%|to a meeting|\d+\s?(?:–|-|to)\s?\d+\s?weeks/i.test(text(choose)) && !/Most likely|Warmest|Fewest steps|Chance|Warmth/.test(text(choose)), text(choose).slice(0, 300));
   check("the route drawn link by link: each person pops, each link grows, its word under it, labelled for screen readers", (choose.match(/rn-pop/g) ?? []).length >= 3 && (choose.match(/rn-grow"/g) ?? []).length + (choose.match(/rn-grow /g) ?? []).length >= 2 && /data-band="Strong"[^>]*>|wr-strong/.test(choose) && /role="img" aria-label="You → Casey Morgan → Rita Vance, CFO/.test(choose) && /Strong · /.test(text(choose)));
-  check("the line is as thick as the link is warm: Strong, then Good", /wr-line wr-strong/.test(choose) && /wr-line wr-good/.test(choose));
+  // F1: a band (and its thickness) only where Merlin derives one: Casey from the member's mail and calendar is Strong;
+  // Casey to Rita rests on a seat held together, so it is drawn as connected, with no band word.
+  check("the line is as thick as the link is warm where Merlin derives it: Strong, then connected with no band", /wr-line wr-strong/.test(choose) && /wr-line wr-how/.test(choose) && !/wr-line wr-good/.test(choose));
   check("what happens, numbered", /aria-label="What happens"/.test(choose) && text(choose).includes("You ask Casey for an intro"));
   check("How Merlin judges this, behind a button", /aria-expanded="false"[^>]*>How Merlin judges this</.test(choose));
   check("the routes to compare: a card each, the picked one pressed, its band, people in between, who decides", (choose.match(/class="wy-card"/g) ?? []).length === h.routes.length && /aria-pressed="true"[^>]*data-card="/.test(choose) && /class="wy-badge">(Warm intro|Good path|Long shot)</.test(choose) && /In between/.test(text(choose)) && /Reaches who decides/.test(text(choose)) && !/Time to a meeting/.test(text(choose)));

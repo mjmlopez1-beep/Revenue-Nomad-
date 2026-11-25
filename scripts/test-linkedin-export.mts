@@ -416,8 +416,11 @@ async function main() {
 
   const kv = (await P.knownView(JORDAN)) as import("../lib/paths/types.ts").KnownView;
   const kp = (name: string) => kv.people.find((p) => p.name === name);
-  check("warmth with Your network's words: Dana, 14 messages both ways over two months, the last 10 days ago, is Strong (Hot)", kp("Dana Reyes")?.warmth === "Hot" && /14 LinkedIn messages both ways/.test(kp("Dana Reyes")!.why) && kp("Dana Reyes")?.lastKind === "Message", kp("Dana Reyes"));
-  check("Pat at Larkspur: one message over a year ago is Fading (and the endorsement agrees)", kp("Pat Lee")?.warmth === "Fading", kp("Pat Lee"));
+  // Acceptance F1 (owner rule): a relationship band only from mail and calendar recency or messages on Merlin. The export's
+  // messages and vouches say how the two are connected, in words, and still order the ways in; they show no band.
+  check("Dana's 14 LinkedIn messages are said in words, with no band and no 'last message on Merlin'", kp("Dana Reyes")?.warmth === null && /14 LinkedIn messages both ways/.test(kp("Dana Reyes")!.why) && kp("Dana Reyes")?.lastKind === null, kp("Dana Reyes"));
+  check("Pat at Larkspur: one message over a year ago and an endorsement, in words, no band", kp("Pat Lee")?.warmth === null && /1 LinkedIn message/.test(kp("Pat Lee")!.why) && /Endorsed you/.test(kp("Pat Lee")!.why), kp("Pat Lee"));
+  check("...and the export still orders who comes first: Dana (messages both ways) before Riley (an invitation)", kv.people.findIndex((p) => p.name === "Dana Reyes") < kv.people.findIndex((p) => p.name === "Riley Quinn"), kv.people.map((p) => p.name));
   check("Alex, whom the member recommended, is at least Good", kp("Alex Kim")?.warmth === "Warm" || kp("Alex Kim") === undefined, kp("Alex Kim"));
   check("Riley (a pending invitation) is placed at Cedar by profile link alone, marked invited, weaker than a connection", !!kp("Riley Quinn") && /Invited you on LinkedIn, not connected yet/.test(kp("Riley Quinn")!.why) && kp("Riley Quinn")!.company === pub("c_cedar"), kp("Riley Quinn"));
   check("Sky (invited, in California by her own location) is never placed or named", !kp("Sky Moss"));

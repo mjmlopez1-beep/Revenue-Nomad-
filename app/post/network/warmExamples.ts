@@ -50,6 +50,7 @@ export const EXAMPLE_ROWS: Example<WarmRow>[] = SPECS.map(([name, facts, zone, x
     band,
     src,
     via,
+    direct: /^You know/.test(via ?? ""),
     person: person ? { key: `example-p${k}`, name: person, sub } : null,
     people: person && band ? [{ key: `example-p${k}`, name: person, sub, band }] : [],
     fresh: best === null ? null : { word: best >= 45 ? "Fresh" : best >= 25 ? "Ageing" : "Stale", days: best >= 45 ? 10 : best >= 25 ? 60 : 200, line: "" },
@@ -79,8 +80,8 @@ export function exampleRoute(r: WarmRow): RouteView | null {
   const target = { role: "target" as const, label: r.name ?? "", sub: "Whoever decides there", initials: "", company: true };
   const p = { role: direct ? ("target" as const) : ("person" as const), label: r.person.name, sub: r.person.sub, initials: "" };
   const nodes = direct ? [{ role: "you" as const, label: "You", sub: null, initials: "You" }, p] : [{ role: "you" as const, label: "You", sub: null, initials: "You" }, p, target];
-  const first = { band: r.band, strength: 0, words: r.src === "google" ? "6 meetings, last Nov 12" : r.src === "linkedin" ? "From your LinkedIn since 2019, not met" : r.src === "messages" ? "4 messages on Merlin, last Nov 20" : "A peer on Merlin", from: SRC_FROM[r.src] };
-  const links = direct ? [first] : [first, { band: "Good" as PathBand, strength: 0, words: "Held a fractional seat there until 2026", from: SRC_FROM.seat }];
+  const first = { band: r.band, rel: r.src === "google" || r.src === "messages" ? r.band : null, strength: 0, words: r.src === "google" ? "6 meetings, last Nov 12" : r.src === "linkedin" ? "From your LinkedIn since 2019, not met" : r.src === "messages" ? "4 messages on Merlin, last Nov 20" : "A peer on Merlin", from: SRC_FROM[r.src] };
+  const links = direct ? [first] : [first, { band: "Good" as PathBand, rel: null, strength: 0, words: "Held a fractional seat there until 2026", from: SRC_FROM.seat }];
   return {
     id: `example-r-${r.id}`,
     short: "",

@@ -487,6 +487,12 @@ async function main() {
   const saltT = await recOf(TES, P.salt);
   const withBuyer = { ...saltT, people: [...saltT.people, { id: "p_made_up", engagementId: null, source: "Member added", cells: { name: { s: "locked", ver: 0 }, title: { s: "locked", ver: 0 }, relationship: { s: "value", v: "Decision maker", ver: 0 } } }] } as CompanyRec;
   check("the buyer comes before the seat holder", M.wayIn(saltT, rowOf0(tes, P.salt), undefined, tesMe).kind === "holder" && M.wayIn(withBuyer, rowOf0(tes, P.salt), undefined, tesMe).kind === "buyer");
+  {
+    // F4: the holder of a seat still going in the member's own function is a peer whose client it is, never their way in.
+    // Hana holds Saltmarsh's Sales (CRO) seat now; Tess (another function) may go through her, a Sales member may not.
+    const sameFn = M.wayIn(saltT, rowOf0(tes, P.salt), undefined, { ...tesMe, function: "Sales" });
+    check("F4: never through a peer to their own current client in the member's function (the seat holder is no way in then)", tesMe.function !== "Sales" && sameFn.kind !== "holder", [tesMe.function, sameFn.kind]);
+  }
   check("someone who only worked with the seat is not a buyer", !M.buyersOf(saltT).length && saltT.people.some((p) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Worked with"));
   const tallT = await recOf(TES, P.tall);
   const tallBuyer = { ...tallT, people: [{ id: "p_made_up2", engagementId: null, source: "Member added", cells: { name: { s: "value", v: "Gil Made", ver: 0 }, title: { s: "value", v: "CEO", ver: 0 }, relationship: { s: "value", v: "Decision maker", ver: 0 }, email: { s: "empty" } } }] } as CompanyRec;

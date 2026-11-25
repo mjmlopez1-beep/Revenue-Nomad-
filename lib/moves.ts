@@ -268,10 +268,17 @@ function emailOnFile(people: PersonRec[], name: string): string | null {
 }
 
 /** A seat someone held whose holder is on file (named for the member, or locked): the fractional way in. Never the member's own. */
+/** A seat still going in the member's own function: its holder is a peer whose client this is, never a way in (acceptance F4). */
+const rivalSeat = (e: EngagementRec, me: MoveMe) => {
+  if (!me.function || cellV(e.cells.function) !== me.function) return false;
+  const status = cellV(e.cells.status);
+  const end = cellV(e.cells.end);
+  return status === "Active" || end === "Ongoing";
+};
 function holderSeat(c: CompanyRec, me: MoveMe): EngagementRec | null {
   const held = c.engagements.filter((e) => {
     const op = e.cells.operator as { s: string; member?: { you?: boolean } } | undefined;
-    return !e.yours && !openRoleSeat(e) && !!op && (op.s === "locked" || op.s === "value") && !op.member?.you;
+    return !e.yours && !openRoleSeat(e) && !!op && (op.s === "locked" || op.s === "value") && !op.member?.you && !rivalSeat(e, me);
   });
   if (!held.length) return null;
   const before = new Set(me.before ?? []);

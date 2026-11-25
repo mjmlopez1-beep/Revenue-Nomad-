@@ -104,8 +104,14 @@ export interface Contact {
   slug: string | null;
   linkedin: string | null;
   src: PathSource[];
-  /** From the member's Google network or messages; null for a LinkedIn connection alone. */
+  /** From the member's Google network or messages (or their LinkedIn export's messages and vouches); null for a LinkedIn connection alone. Orders ways in. */
   warmth: Warmth | null;
+  /**
+   * The warmth Merlin may SHOW as a relationship band: only from mail and calendar recency (Google,
+   * with meetings or emails and the day of the last one) or messages on Merlin. Never from a
+   * LinkedIn export, a vouch, a contacts file or a Claude note (owner, 2026-11-25).
+   */
+  shown?: Warmth | null;
   why: string;
   /** Met (meetings or mail) through Google, not only a saved contact. */
   met: boolean;

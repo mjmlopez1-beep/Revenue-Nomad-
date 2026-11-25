@@ -409,7 +409,7 @@ const zoneCounts = (rows: WarmRow[]) => {
 
 /** People who can get you in, from the routes of the companies the member can see, by how many companies each opens. */
 function peopleOf(rows: WarmRow[]) {
-  const m = new Map<string, { key: string; name: string; sub: string | null; n: number; band: string; best: string; bestRank: number }>();
+  const m = new Map<string, { key: string; name: string; sub: string | null; n: number; band: string | null; best: string; bestRank: number }>();
   const order = ["Cold", "Fading", "Good", "Strong"];
   for (const r of rows)
     for (const p of r.people) {
@@ -417,11 +417,11 @@ function peopleOf(rows: WarmRow[]) {
       if (!was) m.set(p.key, { key: p.key, name: p.name, sub: p.sub, n: 1, band: p.band, best: r.id, bestRank: r.rank });
       else {
         was.n++;
-        if (order.indexOf(p.band) > order.indexOf(was.band)) was.band = p.band;
+        if (order.indexOf(p.band ?? "") > order.indexOf(was.band ?? "")) was.band = p.band;
         if (r.rank < was.bestRank) (was.best = r.id), (was.bestRank = r.rank);
       }
     }
-  return [...m.values()].sort((a, b) => b.n - a.n || order.indexOf(b.band) - order.indexOf(a.band) || a.name.localeCompare(b.name));
+  return [...m.values()].sort((a, b) => b.n - a.n || order.indexOf(b.band ?? "") - order.indexOf(a.band ?? "") || a.name.localeCompare(b.name));
 }
 
 function Tile({ r, size }: { r: WarmRow; size: number }) {
@@ -802,13 +802,14 @@ function Chain({ r, locked }: { r: RouteView; locked: boolean }) {
     );
     const l = r.links[k];
     if (l) {
-      const [wpx, col] = BAND_W[l.band] ?? [2, "#B4BDB8"];
+      const [wpx, col] = (l.rel && BAND_W[l.rel]) || [2, "#B4BDB8"];
       items.push(
         <li key={`l${k}`} className="wp-ch-link">
           <span className="wp-ch-bar" style={{ width: wpx, background: col, margin: `0 ${17 - wpx / 2}px` }} aria-hidden />
           <span className="wp-ch-text">
-            <span className={cx("wp-ch-lt", (l.band === "Strong" || l.band === "Good") && "warm")}>
-              {l.band} · {l.words}
+            <span className={cx("wp-ch-lt", (l.rel === "Strong" || l.rel === "Good") && "warm")}>
+              {l.rel ? `${l.rel} · ` : ""}
+              {l.words}
             </span>
             {l.from ? <span className="wp-ch-s">{l.from}</span> : null}
           </span>

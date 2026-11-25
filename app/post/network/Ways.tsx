@@ -78,19 +78,20 @@ export function RouteDraw({ r, vertical = false, plan = null }: { r: RouteView; 
     if (k < r.links.length) {
       const l = r.links[k];
       const ls = st ? st.link(k) : null;
-      const line = cx("wr-line", ls === "done" ? "wr-line-done" : ls === "now" ? (vertical ? "rn-flowy" : "rn-flow") : ls === "next" ? "wr-line-next" : `wr-${l.band.toLowerCase()}`, !plan && (vertical ? "rn-growy" : "rn-grow"));
-      const lineEl = <span className={line} style={plan ? undefined : delay(k * 0.55 + 0.3)} data-band={l.band} />;
+      const line = cx("wr-line", ls === "done" ? "wr-line-done" : ls === "now" ? (vertical ? "rn-flowy" : "rn-flow") : ls === "next" ? "wr-line-next" : l.rel ? `wr-${l.rel.toLowerCase()}` : "wr-how", !plan && (vertical ? "rn-growy" : "rn-grow"));
+      const lineEl = <span className={line} style={plan ? undefined : delay(k * 0.55 + 0.3)} data-band={l.rel ?? undefined} />;
       items.push(
         <div key={`l${k}`} className="wr-link" aria-hidden>
           {vertical ? <span className="wr-rail">{lineEl}</span> : lineEl}
           <span className="wr-label">
-            {l.band} · {l.words}
+            {l.rel ? `${l.rel} · ` : ""}
+            {l.words}
           </span>
         </div>,
       );
     }
   });
-  const words = r.nodes.map((n, k) => (k < r.links.length ? `${n.label}, then a ${r.links[k].band.toLowerCase()} link to` : n.label)).join(" ");
+  const words = r.nodes.map((n, k) => (k < r.links.length ? `${n.label}, then ${r.links[k].rel ? `a ${r.links[k].rel!.toLowerCase()} link` : r.links[k].words.charAt(0).toLowerCase() + r.links[k].words.slice(1)} to` : n.label)).join(" ");
   return (
     <div className={cx("wr", vertical && "wr-v")} role="img" aria-label={`${r.chain}. ${words}.`} data-route={r.id}>
       {items}

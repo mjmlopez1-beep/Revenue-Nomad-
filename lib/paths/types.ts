@@ -347,7 +347,16 @@ export interface RouteNode {
 
 /** One link between two nodes: its strength (0 to 1), its word and what it rests on ("6 messages on Merlin"). */
 export interface RouteLink {
+  /** Internal: the link's weight in words, for ordering and the map. Never shown as a relationship (see `rel`). */
   band: PathBand;
+  /**
+   * The relationship band the member may see, only where Merlin derives one (mail and calendar
+   * recency, messages on Merlin: rank.ts relBandOf). Null otherwise: `words` say how the two are
+   * connected instead ("A peer on Merlin", "From your LinkedIn since 2023, not met").
+   */
+  rel: PathBand | null;
+  /** The two have never met: a note out of the blue (drawn as not connected, never as a relationship). */
+  none?: boolean;
   strength: number;
   words: string;
   /** Where Merlin knows it from, in a few words: "Your Google contacts and calendar", "Seats on Merlin". */
@@ -512,7 +521,7 @@ export interface GetInRow {
   way: WayBand | null;
   /** The best route in a few words: "Through Casey Morgan, then Rita Vance". Null while the company is locked. */
   via: string | null;
-  /** The best route's first link, for the phone's line. */
+  /** The best route's first link's relationship band (RouteLink.rel), for the phone's line: null where Merlin derives none. */
   band: PathBand | null;
   /** Where its dot goes, 0 to 100. */
   x: number;
@@ -560,15 +569,17 @@ export interface WarmRow {
   best: number | null;
   /** The best route's band in words, null with no route. */
   way: WayBand | null;
-  /** The best route's first link and where it comes from. */
+  /** The best route's first link's relationship band (RouteLink.rel: null where Merlin derives none), and where it comes from. */
   band: PathBand | null;
   src: WaySource | null;
   /** "Through Casey Morgan", "You know Rita Vance", "Through a fellow fractional" (locked). Null with no route. */
   via: string | null;
+  /** The best route has nobody in between: the member writes to the last person themself (someone they know who decides, or a cold note). */
+  direct: boolean;
   /** The person on the best route, for the People tab (null while locked or with no route). */
   person: { key: string; name: string; sub: string | null } | null;
   /** Every person on a route there the member can see, for the People tab. */
-  people: { key: string; name: string; sub: string | null; band: PathBand }[];
+  people: { key: string; name: string; sub: string | null; band: PathBand | null }[];
   /** How fresh the best route is. */
   fresh: Freshness | null;
   zone: Zone;

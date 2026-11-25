@@ -175,6 +175,20 @@ export function linkStrength(evidence: readonly Evidence[], nowMs: number): numb
 }
 export const rateStep = (evidence: readonly Evidence[], nowMs: number): PathBand => bandOf(linkStrength(evidence, nowMs));
 
+/**
+ * The relationship band a member may SEE (Strong, Good, Fading, Cold), or null. Merlin derives a
+ * band only from how recently the two were in touch: meetings and emails from the member's own mail
+ * and calendar, or messages on Merlin, each with the day of the last one. Everything else (a peer on
+ * Merlin, a LinkedIn connection, a seat held together, a former client, a contacts file) says how
+ * the two are connected, in words, never as a band (owner, 2026-11-25: no invented strengths). The
+ * strength above still orders routes; it is never shown as a band without this.
+ */
+export function relBandOf(evidence: readonly Evidence[], nowMs: number): PathBand | null {
+  let best = -1;
+  for (const e of evidence) if ((e.kind === "met" || e.kind === "messages") && e.last && daysSince(e.last, nowMs) !== null) best = Math.max(best, evidenceStrength(e, nowMs));
+  return best < 0 ? null : bandOf(best);
+}
+
 /** The strongest piece of evidence, for the words under a link. */
 export function strongestOf(evidence: readonly Evidence[], nowMs: number): Evidence | null {
   let best: Evidence | null = null;

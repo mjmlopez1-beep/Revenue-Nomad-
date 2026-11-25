@@ -53,7 +53,9 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
       way_in: r.way,
       people_in_between: betweenWords(r.between),
       through: ["You", ...named].join(" → "),
-      links: r.links.map((l) => l.band),
+      // Each link as Merlin may say it: a relationship band only where it derives one (mail and calendar, messages on
+      // Merlin), else how the two are connected, in words. Never a band from a fixed weight (acceptance F1).
+      links: r.links.map((l) => say(l.rel ? `${l.rel} relationship: ${l.words}` : l.words)),
       steps: r.steps.map((st) => say(st.title)),
     };
   });
@@ -73,7 +75,7 @@ export function registerWayTools(server: McpServer, ctx: Ctx, run: Run): void {
     {
       title: "My ways into a company",
       description:
-        "The member's routes into one company, best first: each with way_in, how warm it is in words (Warm intro, Good path or Long shot, from how well each person knows the next, how many hand-offs it takes and whether the last person decides; a guide, never a percentage or a promise), the people in between and its steps. Merlin gives no time to a meeting. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
+        "The member's routes into one company, best first: each with way_in, how warm it is in words (Warm intro, Good path or Long shot, from how well each person knows the next, how many hand-offs it takes and whether the last person decides; a guide, never a percentage or a promise), the people in between, each link (a relationship band only where Merlin derives one from mail, calendar or messages on Merlin, else how the two are connected) and its steps. Merlin gives no time to a meeting. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
       inputSchema: { company_id: z.string().describe("The company's id, from search_companies or get_company.") },
       annotations: { title: "My ways into a company", readOnlyHint: true, openWorldHint: false },
     },

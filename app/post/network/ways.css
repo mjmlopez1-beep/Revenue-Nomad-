@@ -393,6 +393,13 @@
   border-radius: 0;
   background: repeating-linear-gradient(90deg, var(--line-input) 0 6px, transparent 6px 12px);
 }
+.wr-how {
+  /* Connected, with no band: Merlin derives none without mail, calendar or messages. */
+  height: 3px;
+  margin-top: 26px;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, rgba(7, 63, 47, 0.45) 0 10px, transparent 10px 16px);
+}
 .wr-line-done {
   background: var(--pine);
 }
@@ -459,6 +466,10 @@
 }
 .wr-v .wr-fading {
   width: 3px;
+}
+.wr-v .wr-how {
+  width: 3px;
+  background: repeating-linear-gradient(180deg, rgba(7, 63, 47, 0.45) 0 8px, transparent 8px 13px);
 }
 .wr-v .wr-cold {
   width: 2px;

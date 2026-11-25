@@ -60,8 +60,9 @@ const NAMES = ["Northwind Clinics", "Cedar and Pine", "Halcyon Freight", "Larksp
 const IDS = NAMES.map((_, i) => `c_${String.fromCharCode(97 + i)}${String.fromCharCode(97 + i)}`);
 const companies = NAMES.map((name, i) => co(IDS[i], name, i % 3 === 2 ? "Logistics" : "SaaS", i % 4 === 3 ? "201–500" : "51–200"));
 const engagements = [
-  // Rita (in the directory): Sales now at the first, Marketing and Finance before.
-  seat("e_a_rita", IDS[0], "Sales", "Rita Okafor", ym(8), null),
+  // Rita (in the directory): Marketing now at the first, Marketing and Finance before (never Sales now: a Sales peer's
+  // current client is never a way in for a Sales member, acceptance F4; Sam below is that case).
+  seat("e_a_rita", IDS[0], "Marketing", "Rita Okafor", ym(8), null),
   seat("e_b_rita", IDS[1], "Marketing", "Rita Okafor", ym(30), ym(10)),
   seat("e_c_rita", IDS[2], "Finance", "Rita Okafor", ym(70), ym(50)),
   // Nell (in the directory) at two more; one is locked for Jordan.
@@ -77,6 +78,9 @@ const engagements = [
   role("e_a_role", IDS[0], "Sales"),
   seat("e_k_x", IDS[10], "Operations", "Kim Sample", ym(30), null),
   seat("e_l_x", IDS[11], "Finance", "Sky Sample", ym(90), ym(80)),
+  // Sam (in the directory) holds the Sales seat at Kestrel now, and held Finance at Pinecrest: Kestrel is Sam's client.
+  seat("e_m_sam", IDS[7], "Sales", "Sam Rivalqa", ym(5), null),
+  seat("e_n_sam", IDS[8], "Finance", "Sam Rivalqa", ym(40), ym(20)),
 ];
 const seed = {
   builtAt: ago(30),
@@ -85,12 +89,15 @@ const seed = {
     { id: "mem_rita", name: "Rita Okafor", email: "rita.okafor@example.org", title: "Fractional CRO", token: "tok-rita-0001" },
     { id: "mem_nell", name: "Nell Brooks", email: "nell.brooks@example.org", title: "Fractional CFO", token: "tok-nell-0001" },
     { id: "mem_hugo", name: "Hugo Hiddenqa", email: "hugo.hidden@example.org", title: "Fractional CRO", token: "tok-hugo-0001" },
+    { id: "mem_sam", name: "Sam Rivalqa", email: "sam.rival@example.org", title: "Fractional VP Sales", token: "tok-sam-0001" },
   ],
   companies,
   engagements,
   contacts: [
     { id: "p_a_dm", engagementId: "e_a_rita", source: "Published engagement", fields: { name: "Dana Whitfield", title: "CEO", relationship: "Reported to" } },
     { id: "p_g_dm", companyId: IDS[6], source: "Published engagement", fields: { name: "Theo Grant", title: "Founder", relationship: "Decision maker" } },
+    // Who decides at Cedar and Pine, on file for the company (not under Rita's old seat there).
+    { id: "p_b_dm", companyId: IDS[1], source: "Published engagement", fields: { name: "Cora Deciderqa", title: "CEO", relationship: "Decision maker" } },
   ],
 };
 writeFileSync(path.join(dir, "intel-seed.json"), JSON.stringify(seed));
@@ -107,6 +114,7 @@ const state = {
     mem_rita: { fractionals: true, onboarded: true },
     mem_nell: { fractionals: true, onboarded: true },
     mem_hugo: { fractionals: false, onboarded: true },
+    mem_sam: { fractionals: true, onboarded: true },
   },
   names: {},
   connector: { alerts: {}, grants: [] },
@@ -209,12 +217,25 @@ async function main() {
   check("...and a fellow's path there says so without a name", locked.some((r) => r.via === "Through a fellow fractional"), locked.map((r) => r.via));
   const ritaRow = v.rows.find((r) => r.id === pub(IDS[0]));
   check("an open company names the fellow fractional (the directory is free)", !!ritaRow && ritaRow.via === "Through Rita Okafor" && ritaRow.people.some((p) => p.name === "Rita Okafor"), ritaRow);
+  // F1: a band only where Merlin derives one (mail and calendar, messages on Merlin). A fellow fractional, a seat or a cold note has none.
+  check("no relationship band without mail, calendar or messages: a fellow's way in and a cold note carry none", v.rows.every((r) => r.band === null && r.people.every((p) => p.band === null)), v.rows.filter((r) => r.band !== null).map((r) => [r.name, r.src, r.band]));
+  // F4: never through a peer in the member's function to that peer's own current client.
+  const samRow = v.rows.find((r) => r.id === pub(IDS[7]));
+  check("a Sales peer's current client is never routed through them for a Sales member", !!samRow && !/Sam/.test(samRow.via ?? "") && !samRow.people.some((p) => /Sam/.test(p.name)), samRow);
+  const samWay = (await W.wayIn(JO, pub(IDS[7]))) as import("../lib/paths/types.ts").WayInView;
+  check("...nor on any route there, while a peer of another function still is a way in elsewhere", !JSON.stringify(samWay.routes).includes("Sam Rivalqa") && ritaRow?.src === "fellow", samWay.routes.map((r) => r.chain));
   check("the sources: messages and the directory counted, ways in by where they come from", v.directory >= 2 && v.conversations === 0 && (v.bySource.fellow ?? 0) >= 3, { d: v.directory, by: v.bySource });
   check("the ideal client in words, for the first visit's line", /^Sales, in SaaS and [^,]+, with 51–200 and 201–500 people$/.test(v.icp ?? ""), v.icp);
 
   const way = (await W.wayIn(JO, pub(IDS[0]))) as import("../lib/paths/types.ts").WayInView;
   const fr = way.routes.find((r) => r.src === "fellow");
   check("the path: the fellow fractional's route, with where each link comes from and how fresh it is", !!fr && fr.nodes[1].label === "Rita Okafor" && fr.links[0].from === "Fellow fractionals on Merlin" && fr.links[1].from === "Seats on Merlin" && !!fr.fresh && /Newest signal/.test(fr.fresh.line), fr);
+  check("its links say how the two are connected, with no band: a peer on Merlin is no relationship strength", !!fr && fr.links.every((l) => l.rel === null && !!l.words), fr?.links);
+  // F18: who decides is the same person the company's other routes name (the seat's own decider, else the company's).
+  check("the fellow's route reaches who managed the seat, and says they decide", !!fr && fr.decides && fr.nodes[2].role === "target" && !/Nobody who decides/.test(fr.why), [fr?.nodes[2], fr?.why]);
+  const cedar = (await W.wayIn(JO, pub(IDS[1]))) as import("../lib/paths/types.ts").WayInView;
+  const cf = cedar.routes.find((r) => r.src === "fellow");
+  check("a seat with nobody on file under it still reaches the company's decider: one source with the cold note (acceptance F18)", !!cf && cf.decides && !/Nobody who decides/.test(cf.why) && cf.nodes[2].label === cedar.routes.find((r) => r.src === "direct")?.nodes[1].label, cedar.routes.map((r) => [r.src, r.chain, r.why]));
   check("its ask is a message on Merlin, drafted, and nothing is sent", fr?.steps[0].act?.kind === "message" && !!fr.steps[0].note?.body && /fellow fractional/.test(fr.steps[0].note.subject), fr?.steps[0]);
   check("who decides is said as the member may see them", !!fr && fr.nodes[2].role === "target");
 
@@ -230,14 +251,18 @@ async function main() {
   console.log("\nThe LinkedIn file, with Google off");
   await P.importConnections(JO, LINKEDIN);
   const v2 = await warm();
-  check("the file is a source on its own: own.linkedin, and a path from it where the company is open", v2.own.linkedin && v2.rows.some((r) => r.id === pub(IDS[10]) && r.src === "linkedin" && r.via === "You know Mara Quinn"), v2.rows.find((r) => r.id === pub(IDS[10])));
+  check("the file is a source on its own: own.linkedin, and a path from it where the company is open", v2.own.linkedin && v2.rows.some((r) => r.id === pub(IDS[10]) && r.src === "linkedin" && r.via === "Mara Quinn, from your LinkedIn" && r.band === null), v2.rows.find((r) => r.id === pub(IDS[10])));
   check("at a locked company the match is a count only: no path from the file, nothing that names it", v2.lockedWays === 1 && !v2.rows.some((r) => r.id === pub(IDS[12]) && r.src === "linkedin") && !JSON.stringify(v2).includes("Owen Reyes") && !JSON.stringify(v2).includes(NAMES[12]), { lw: v2.lockedWays });
+  const kn = (await P.knownView(JO)) as import("../lib/paths/types.ts").KnownView;
+  const mara = kn.people.find((x) => x.name === "Mara Quinn");
+  check("My Network shows no band for a LinkedIn connection never met, and no 'last message' from it", !!mara && mara.warmth === null && mara.lastKind === null, mara);
   const MCP = await import("../lib/mcp/ways.ts");
   const mk = JSON.stringify(await MCP.waysIn({ member: jo, origin: ORIGIN }, { company_id: pub(IDS[10]) }));
   const ml = JSON.stringify(await MCP.waysIn({ member: jo, origin: ORIGIN }, { company_id: pub(IDS[12]) }));
   const mr = JSON.stringify(await MCP.waysIn({ member: jo, origin: ORIGIN }, { company_id: pub(IDS[0]) }));
   check("the connector's ways_in works without Google: the file's person is someone you know, the fellow fractional is named", /someone you know/.test(mk) && !mk.includes("Mara") && mr.includes("Rita Okafor"), [mk.slice(0, 300), mr.slice(0, 300)]);
   check("...and a locked company stays closed there", /"routes":\[\]/.test(ml) && !ml.includes("Owen") && !ml.includes(NAMES[12]));
+  check("the connector says how each link is connected, never a band Merlin did not derive", !/"links":\[[^\]]*"(Strong|Good|Fading|Cold)"/.test(mk + mr) && /From your LinkedIn since 2021, not met/.test(mk), mk.slice(0, 400));
   const server = readFileSync(new URL("../lib/mcp/server.ts", import.meta.url), "utf8");
   check("ways_in is registered with ways in on (RN_PATHS), not only with RN_GOOGLE", /if \(pathsOn\(\)\) registerWayTools\(server, ctx, run\)/.test(server) && !/if \(networkOn\(\)\) registerWayTools/.test(server));
 

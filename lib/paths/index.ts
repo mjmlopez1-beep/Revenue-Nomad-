@@ -237,6 +237,7 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
         was.warmth = c.warmth;
         was.why = c.why;
       }
+      if (c.shown && (!was.shown || ["Hot", "Warm", "Fading", "Cold"].indexOf(c.shown) < ["Hot", "Warm", "Fading", "Cold"].indexOf(was.shown))) was.shown = c.shown;
       was.met ||= c.met;
       was.title ??= c.title;
       was.companyId ??= c.companyId;
@@ -270,7 +271,7 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
     const warmth = messageWarmth(last, nowMs);
     const c: Contact = {
       key: `m:${other}`, name: om.name, first: firstWord(om.name), nameKey: personKey(om.name), title: null, companyId: null, email: om.email?.toLowerCase() ?? null,
-      slug: null, linkedin: null, src: ["messages"], warmth, why: `Messages on Merlin, last ${lastWords(last, nowMs) ?? "a while ago"}`, met: true, connected: null, member: other,
+      slug: null, linkedin: null, src: ["messages"], warmth, shown: warmth, why: `Messages on Merlin, last ${lastWords(last, nowMs) ?? "a while ago"}`, met: true, connected: null, member: other,
       msgCount: cv.messages.filter((x) => !x.removed).length, msgLast: last.slice(0, 10), conv: cv.id,
     };
     const was = out.get(c.key);
@@ -297,7 +298,7 @@ export function contactsOf(seed: Seed, s: State, m: Member, nowMs = Date.now()):
         put({
           key: `g:${p.key}`, name: p.name, first: firstWord(p.name), nameKey: personKey(p.name), title: p.title, companyId: seat ? null : co.internal, email, slug: null, linkedin: null,
           ...(seat ? { seats: [seat] } : {}),
-          src: ["google"], warmth: p.warmth, why: p.why, met: p.meetings > 0 || p.emails > 0, connected: null, member: email ? (w.memberByEmail.get(email) ?? null) : null,
+          src: ["google"], warmth: p.warmth, shown: (p.meetings > 0 || p.emails > 0) && p.last ? p.warmth : null, why: p.why, met: p.meetings > 0 || p.emails > 0, connected: null, member: email ? (w.memberByEmail.get(email) ?? null) : null,
           meetings: p.meetings, emails: p.emails, both: p.both, firstMet: p.first, lastMet: p.last,
         });
       }
@@ -532,9 +533,10 @@ export function nowClause(row: RadarSentRow | undefined): string | null {
 }
 /** The way in's strength line: from the member's own Google counts, their messages, or their LinkedIn file. */
 function strengthOf(c: Contact, nowMs: number): string {
-  if (c.warmth && ((c.meetings ?? 0) > 0 || (c.emails ?? 0) > 0)) return strengthLine({ meetings: c.meetings, emails: c.emails, both: c.both, first: c.firstMet, last: c.lastMet, warmth: c.warmth }, nowMs);
-  if (c.warmth) return `${c.why} · ${STRENGTH_WORDS[c.warmth]}`;
-  return `${c.why} · Not met yet`;
+  // A band only where Merlin derives one (Contact.shown: mail and calendar, messages on Merlin); else how they are connected.
+  if (c.shown && ((c.meetings ?? 0) > 0 || (c.emails ?? 0) > 0)) return strengthLine({ meetings: c.meetings, emails: c.emails, both: c.both, first: c.firstMet, last: c.lastMet, warmth: c.shown }, nowMs);
+  if (c.shown) return `${c.why} · ${STRENGTH_WORDS[c.shown]}`;
+  return c.met || c.msgCount || c.liMsg ? c.why : `${c.why} · Not met yet`;
 }
 
 /**
@@ -771,8 +773,9 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
     }
     const recs = seen ? leadersOfContact(world, c).filter((l) => l.companyId === c.companyId) : [];
     const lastMet = c.lastMet ?? null;
-    // A message on Merlin, or one on LinkedIn from the member's own export (its day only).
-    const msg = [c.msgLast ?? null, c.liMsg?.last ?? null].filter((x): x is string => !!x).sort().pop() ?? null;
+    // The last touch Merlin may date: a meeting or email (Google metadata) or a message on Merlin. A LinkedIn export's
+    // message days stay in the evidence words (`why`), never as "Last message on Merlin".
+    const msg = c.msgLast ?? null;
     const last = lastMet && (!msg || lastMet >= msg) ? lastMet : msg;
     const lastKind = !last ? null : last === lastMet && lastMet ? ((c.meetings ?? 0) > 0 ? "Meeting" : "Email") : "Message";
     people.push({
@@ -781,7 +784,8 @@ export async function knownView(token: string | null, nowMs = Date.now()): Promi
       title: c.title,
       company: c.companyId && !held ? T.pubId(c.companyId) : null,
       src: c.src,
-      warmth: c.warmth,
+      // The band shown: only from mail and calendar or messages on Merlin (Contact.shown), never a LinkedIn export alone.
+      warmth: c.shown ?? null,
       why: c.why,
       last,
       lastKind,

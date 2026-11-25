@@ -33,7 +33,7 @@ import { PATH_RAW, personOfContact, type Contact, type WLeader, type WSeat, type
 import { factsOf, foundFor, pathsOn, shownName, who, type Found } from "./index";
 import { worldOf } from "./world";
 import {
-  EST, HOW_ESTIMATED, WAY_BANDS, betweenWords, compareRoutes, estRaw, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, wayBandOf, wayCoarse, companyScore,
+  EST, HOW_ESTIMATED, WAY_BANDS, betweenWords, compareRoutes, estRaw, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, relBandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, wayBandOf, wayCoarse, companyScore,
   type Evidence, type OddsBand, type PathBand, type Split, type Zone,
 } from "./rank";
 import { networkOn } from "../google/types";
@@ -260,7 +260,7 @@ interface Link {
 const linkOf = (cx: Cx, l: Link): RouteLink => {
   const strength = linkStrength(l.ev, cx.nowMs);
   const top = strongestOf(l.ev, cx.nowMs);
-  return { band: bandOf(strength), strength: Math.round(strength * 100) / 100, words: top ? evidenceWords(top, cx.nowMs, l.at) : evidenceWords({ kind: "none" }, cx.nowMs) };
+  return { band: bandOf(strength), rel: relBandOf(l.ev, cx.nowMs), ...(!top || top.kind === "none" ? { none: true } : {}), strength: Math.round(strength * 100) / 100, words: top ? evidenceWords(top, cx.nowMs, l.at) : evidenceWords({ kind: "none" }, cx.nowMs) };
 };
 const seatEv = (x: WSeat | undefined): Evidence => ({ kind: "seat", active: !!x?.active, endYear: x && !x.active ? yearOfIdx(x.to) : null });
 const reportedEv = (x: WSeat | undefined): Evidence => ({ kind: "reported", active: !!x?.active, endYear: x && !x.active ? yearOfIdx(x.to) : null });
@@ -280,6 +280,8 @@ function kindWords(c: Contact | null, ev: Evidence[], nowMs: number, kind: PathV
 
 interface Signals {
   openRole: string | null;
+  /** The open role is in the member's own function (any open role while they have none): what "Hiring now" means everywhere (acceptance F17). */
+  mine: boolean;
   recentHire: boolean;
   hiredN: number;
   /** 0 (not in any of the member's lists) to 3. */
@@ -298,7 +300,7 @@ function signalsAt(cx: Cx, id: string, fit: number): Signals {
     return !!st && nowIdx - (Number(st[1]) * 12 + Number(st[2]) - 1) <= RECENT_HIRE_MONTHS;
   });
   const fnOpen = openMine ? T.fnOf(openMine, cx.s) : null;
-  return { openRole: openMine ? `Open ${fnOpen && fnOpen !== "Other" ? `${fnOpen} ` : "fractional "}role` : null, recentHire, hiredN: held.length, fit };
+  return { openRole: openMine ? `Open ${fnOpen && fnOpen !== "Other" ? `${fnOpen} ` : "fractional "}role` : null, mine: !!openMine && (!cx.fn || fnOpen === cx.fn), recentHire, hiredN: held.length, fit };
 }
 
 /* ---------- a route ---------- */
@@ -348,12 +350,33 @@ interface Draft {
   member?: string | null;
 }
 
+/**
+ * A fellow fractional in the member's own function who holds a seat at this company now: that
+ * company is their client. Merlin never routes the member through them to it (owner, acceptance
+ * F4: never ask a peer to introduce you to their own client, for their own seat).
+ */
+function rivalAt(cx: Cx, personKey: string | null | undefined, companyId: string): boolean {
+  if (!personKey || !cx.fn) return false;
+  const p = cx.w.persons.get(personKey);
+  return !!p && p.seats.some((id) => {
+    const x = cx.w.seats.get(id);
+    return !!x && x.active && x.companyId === companyId && x.fn === cx.fn;
+  });
+}
+/** Who decides for a seat, else at the company: a seat with nobody on file under it still has the company's decider. */
+const deciderFor = (cx: Cx, seatId: string | null | undefined, companyId: string): { d: Decider | null; ofSeat: boolean } => {
+  const d = deciderOfSeat(cx, seatId);
+  return d ? { d, ofSeat: true } : { d: deciderAt(cx, companyId), ofSeat: false };
+};
+
 /** One way in the finder found, as a route. */
 function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
   const raw = PATH_RAW.get(p);
   if (!raw) return null;
   const parts = raw.parts;
   const c = raw.contact;
+  // Never through a peer in the member's function to their own current client.
+  if (rivalAt(cx, c ? personOfContact(cx.w, c) : (raw.directory?.key ?? null), companyId)) return null;
   const you: RouteNode = { role: "you", label: "You", sub: cx.f.me.words.as ? cx.f.me.words.as.charAt(0).toUpperCase() + cx.f.me.words.as.slice(1) : null, initials: "You" };
   const viaSrc: ("google" | "linkedin" | "csv" | "merlin")[] = c ? [...(c.src.includes("google") ? (["google"] as const) : []), ...(c.src.includes("linkedin") ? (["linkedin"] as const) : []), ...(c.src.includes("csv") ? (["csv"] as const) : []), ...(c.member || c.src.includes("messages") ? (["merlin"] as const) : [])] : ["merlin"];
   const y = youEvidence(cx, c, raw.directory?.key ?? null, parts.bridgeId);
@@ -415,9 +438,11 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
     case "seat":
     case "client": {
       const x = parts.ownSeat ? cx.w.seats.get(parts.ownSeat) : undefined;
+      if (x && x.active && cx.fn && x.fn === cx.fn) return null;
       addVia(parts.kind === "client" ? `Peer on Merlin · ${x?.active ? "holds" : "held"} their ${fnSeat(parts.fn)} seat` : `${x?.active ? "Holds" : "Held"} their ${fnSeat(parts.fn)} seat`);
-      const d = deciderOfSeat(cx, parts.ownSeat);
-      finish(d, d ? reportedEv(x) : seatEv(x));
+      // The seat's own decider, else who decides at the company (the same person Home and Warm Paths name).
+      const { d, ofSeat } = deciderFor(cx, parts.ownSeat, companyId);
+      finish(d, d ? (ofSeat ? reportedEv(x) : x?.active ? { kind: "colleague" } : { kind: "sameplace", year: yearOfIdx(x?.to) }) : seatEv(x));
       break;
     }
     default: {
@@ -437,6 +462,8 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
         break;
       }
       const x = parts.otherSeat ? cx.w.seats.get(parts.otherSeat) : undefined;
+      // Never on to the company's current fractional in the member's own function: it is their client.
+      if (x && x.active && cx.fn && x.fn === cx.fn) return null;
       const h = holderOf(cx, parts.otherSeat);
       const what = x?.active ? `Their ${fnSeat(parts.fn)} lead` : `Held their ${fnSeat(parts.fn)} seat${parts.tYear ? `, ${parts.tYear}` : ""}`;
       nodes.push({ role: "person", label: h.name ?? what, sub: h.name ? (h.role ? `${what} · ${h.role}` : what) : null, initials: h.name ? initialsOf(h.name) : "?", ...(h.name ? {} : { locked: true }) });
@@ -450,8 +477,8 @@ function draftOf(cx: Cx, p: PathView, companyId: string): Draft | null {
             ? { kind: "colleague" }
             : { kind: "sameplace", year: parts.year ?? null };
       pushLink({ ev: [mid], at: parts.bridge ?? null });
-      const d = deciderOfSeat(cx, parts.otherSeat);
-      finish(d, d ? reportedEv(x) : seatEv(x));
+      const { d, ofSeat } = deciderFor(cx, parts.otherSeat, companyId);
+      finish(d, d ? (ofSeat ? reportedEv(x) : x?.active ? { kind: "colleague" } : { kind: "sameplace", year: yearOfIdx(x?.to) }) : seatEv(x));
     }
   }
   const memberId = c?.member ?? raw.directory?.member ?? null;
@@ -514,6 +541,8 @@ function fellowDrafts(cx: Cx, companyId: string, taken: Set<string>): Draft[] {
   for (const x of cx.w.seatsAt.get(companyId) ?? []) {
     const p = cx.w.persons.get(x.person);
     if (!p?.member || !p.shown || p.member === cx.m.id || x.person === cx.f.me.person || taken.has(p.member)) continue;
+    // A fellow fractional in the member's function who holds a seat here now: their client, never a way in.
+    if (rivalAt(cx, x.person, companyId)) continue;
     const was = bestOf.get(p.key);
     if (!was || (x.active && !was.active) || (x.active === was.active && (x.to ?? 0) > (was.to ?? 0))) bestOf.set(p.key, x);
   }
@@ -532,10 +561,10 @@ function fellowDrafts(cx: Cx, companyId: string, taken: Set<string>): Draft[] {
     const you: RouteNode = { role: "you", label: "You", sub: null, initials: "You" };
     const via: RouteNode = { role: "person", label: name ?? "A fellow fractional", sub: `${x.active ? "Holds" : "Held"} their ${fnW} seat`, initials: name ? initialsOf(name) : "?", ...(name ? {} : { locked: true }) };
     const first = name ? firstOf(name) : "the fellow fractional";
-    const d = deciderOfSeat(cx, x.id);
+    const { d, ofSeat } = deciderFor(cx, x.id, companyId);
     const t = targetNode(cx, companyId, d);
     const l1: Link = { ev: [{ kind: "peer" }], at: null };
-    const l2: Link = { ev: [d ? reportedEv(x) : seatEv(x)], at: null };
+    const l2: Link = { ev: [d ? (ofSeat ? reportedEv(x) : x.active ? { kind: "colleague" } : { kind: "sameplace", year: yearOfIdx(x.to) }) : seatEv(x)], at: null };
     const links = [linkOf(cx, l1), linkOf(cx, l2)];
     const co = coName ?? "the company";
     out.push({
@@ -1091,12 +1120,12 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
       tags: tagsOf(c.fit),
       fit: c.lvl,
       odds: c.odds.band,
-      hiringNow: !!c.sig.openRole,
+      hiringNow: c.sig.mine,
       zone,
       best,
       way: c.top ? c.top.view.way : null,
       via: c.name ? viaWords(c.top?.view) : null,
-      band: c.top ? c.top.view.links[0].band : null,
+      band: c.top ? c.top.view.links[0].rel : null,
       x: xs[i],
       y: mapPoint(best, c.odds.band, ty).y,
       why: whyNow(c.odds),
@@ -1236,13 +1265,18 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
         : top.view.between === 0
           ? top.src === "direct"
             ? `A cold note to ${p1!.locked ? lc(p1!.label) : p1!.label}`
-            : `You know ${p1!.label}`
+            : // How the member is connected, as it is: met or messaged ("You know"), else where the connection comes from.
+              top.src === "linkedin"
+              ? `${p1!.label}, from your LinkedIn`
+              : top.src === "csv"
+                ? `${p1!.label}, from your contacts file`
+                : `You know ${p1!.label}`
           : `Through ${p1!.locked ? lc(p1!.label) : p1!.label}`;
     const people = visible
       ? c.routes
           .slice(0, ROUTES_MAX)
           .filter((r) => r.view.nodes[1] && !r.view.nodes[1].locked && !r.view.nodes[1].company && r.src !== "direct")
-          .map((r) => ({ key: `p${hash(`${m.id}|${r.shape.hops[0]}`)}`, name: r.view.nodes[1].label, sub: r.view.nodes[1].sub, band: r.view.links[0].band }))
+          .map((r) => ({ key: `p${hash(`${m.id}|${r.shape.hops[0]}`)}`, name: r.view.nodes[1].label, sub: r.view.nodes[1].sub, band: r.view.links[0].rel }))
       : [];
     const fresh = top?.view.fresh ?? null;
     return {
@@ -1253,14 +1287,15 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       fit: fitC[i],
       fitWords: traits[i],
       odds: c.odds.band,
-      hiringNow: !!c.sig.openRole,
+      hiringNow: c.sig.mine,
       ball: c.fit.ball,
       list: c.fit.view,
       best: top ? top.view.est : null,
       way: top ? top.view.way : null,
-      band: top ? top.view.links[0].band : null,
+      band: top ? top.view.links[0].rel : null,
       src: top ? top.src : null,
       via,
+      direct: !!top && top.view.between === 0,
       person: top && top.src !== "direct" && people[0] ? people[0] : null,
       people,
       fresh,
