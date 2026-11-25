@@ -20,7 +20,8 @@ import {
 import { WfAnswer, approveRun, capWorkflows, monthSpent, planFor, remindersDue, runEvents, wfIn, workflowsOn, type WfEvent } from "./run";
 import { newWfId } from "./steps";
 import { hasKnownSources } from "../notify/knownView";
-import { v2Switch, watchingOf } from "./graph";
+import { watchingOf } from "./graph";
+import { emailsFrom, runnerOf, v2Any, v2Of } from "./v2mode";
 import { callTriggersOn, callsInfo } from "../calls";
 
 export { workflowsOn, runEvents, approveRun, remindersDue, type WfEvent };
@@ -208,13 +209,14 @@ export async function performWorkflow(token: string | null, a: { type: string } 
 /* ---------- from the watch pass ---------- */
 
 /** Members with a workflow on, and the triggers they watch. Empty while RN_WORKFLOWS is off. */
-export function workflowWatchers(s: State): Map<string, Set<WfTrigger>> {
+export function workflowWatchers(s: State, seed?: Seed): Map<string, Set<WfTrigger>> {
   const out = new Map<string, Set<WfTrigger>>();
   if (!workflowsOn()) return out;
+  const isV2 = v2Of(s, emailsFrom(seed, s));
   for (const [id, w] of Object.entries(s.workflows ?? {})) {
     if (s.closures?.[id]) continue;
-    // Workflows v2 on: its live graphs watch too (watchingOf is today's flows exactly while it is off).
-    const t = new Set(watchingOf(w).map((f) => f.trigger).filter((x): x is WfTrigger => x in TRIGGERS));
+    // Workflows v2 for this member: its live graphs watch too (watchingOf is today's flows exactly otherwise).
+    const t = new Set(watchingOf(w, runnerOf(isV2(id), w)).map((f) => f.trigger).filter((x): x is WfTrigger => x in TRIGGERS));
     if (t.size) out.set(id, t);
   }
   return out;
@@ -240,7 +242,8 @@ const listWords = (xs: string[]) => (xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(
  * Californian, and a name from their Google account stays out of email and Slack (lineOut).
  */
 export async function watchEvents(seed: Seed, s: State, found: WatchFound, nowMs: number, nowIso: string): Promise<WfEvent[]> {
-  const who = workflowWatchers(s);
+  const who = workflowWatchers(s, seed);
+  const isV2 = v2Of(s, emailsFrom(seed, s));
   if (!who.size) return [];
   const [{ listCompanies }, { crystalCompanyIds }, kv, { knownMoves, knownLine }, { personKey }, { functionFor }] = await Promise.all([
     import("../hireAlerts"),
@@ -257,7 +260,7 @@ export async function watchEvents(seed: Seed, s: State, found: WatchFound, nowMs
   for (const [memberId, triggers] of who) {
     const m = idx.byId.get(memberId);
     if (!m) continue;
-    const flows = watchingOf(s.workflows![memberId]);
+    const flows = watchingOf(s.workflows![memberId], runnerOf(isV2(memberId), s.workflows![memberId]));
     const named = (companyId: string) => (T.identityHidden(g, s, idx, tracks, m, companyId) ? null : g.companies.get(companyId)?.name || null);
     const coWords = (companyId: string) => named(companyId) ?? kv.lockedWords(g, s, companyId);
     const href = (companyId: string) => `/?c=${encodeURIComponent(T.pubId(companyId))}`;
@@ -340,7 +343,7 @@ export async function workflowTick(nowMs = Date.now()): Promise<number> {
     console.error("workflows: reminders failed", e instanceof Error ? e.message : "error");
   }
   // Workflows v2 (RN_WORKFLOWS_V2): waits that are due, taps given in the outbox, schedules. Nothing while off.
-  if (v2Switch()) n += await (await import("./graphRun")).graphTick(nowMs);
+  if (v2Any()) n += await (await import("./graphRun")).graphTick(nowMs);
   return n;
 }
 

@@ -1,0 +1,31 @@
+/* Community in the new design (RN_UI3): extras on work.css's .cm-* classes. */
+.ui3 .w3 .cm3-body { margin-top: 18px; }
+.ui3 .w3 .cm3-k { display: inline-flex; align-items: center; gap: 6px; }
+.ui3 .w3 .cm3-k svg { width: 15px; height: 15px; }
+.ui3 .w3 .cm3-k.gold { color: var(--m-gold-ink); } .ui3 .w3 .cm3-k.am { color: var(--m-am-ink); } .ui3 .w3 .cm3-k.forest { color: var(--m-forest-ink); }
+.ui3 .w3 .cm3-tools { align-items: center; margin-bottom: 8px; }
+.ui3 .w3 .cm3-views { margin: 0; }
+.ui3 .w3 .cm-ask svg { width: 16px; height: 16px; flex: none; }
+.ui3 .w3 .cm3-chips { margin: 0 0 12px; }
+.ui3 .w3 .cm3-chips .m-chip[aria-pressed="true"] { background: var(--m-forest); border-color: var(--m-forest); color: var(--m-on-action); }
+.ui3 .w3 .cm3-count { margin: 4px 0 12px; }
+.ui3 .w3 .m-seg button { height: 34px; padding: 0 14px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--m-muted); }
+.ui3 .w3 .m-seg button[aria-pressed="true"] { background: var(--m-panel); color: var(--m-ink); box-shadow: var(--m-sh-1); }
+.ui3 .w3 .cm-card:focus-visible, .ui3 .w3 .cm-dir .m-tr:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+.ui3 .w3 .cm3-avail { font-size: 13px; font-weight: 600; color: var(--m-muted); }
+.ui3 .w3 .cm3-avail.on { color: var(--m-forest-ink); }
+.ui3 .w3 .cm3-line { font-size: 14px; color: var(--m-ink-2); line-height: 1.45; }
+.ui3 .w3 .cm-comp svg { width: 16px; height: 16px; flex: none; }
+.ui3 .w3 .cm3-sub { display: block; font-size: 13px; color: var(--m-muted); }
+.ui3 .w3 .cm3-more { margin-top: 14px; }
+.ui3 .w3 .cm3-side { overflow-y: auto; }
+.ui3 .w3 .cm3-side > .fy-panel { position: static; width: 100% !important; min-width: 0 !important; max-width: none !important; flex: 1 1 auto; height: auto; max-height: none; border: 0; box-shadow: none; }
+.ui3 .w3 .cm3-pan .m-panel-h { padding-bottom: 6px; }
+.ui3 .w3 .cm3-pgroup { margin: 8px 0 22px; }
+.ui3 .w3 .cm3-pgroup h2 { margin-bottom: 10px; }
+.ui3 .w3 .cm3-pco { display: block; font-size: 15.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .cm3-msgs { margin-top: -6px; }
+.ui3 .w3.w3-cm-messages .cm3-body { margin-top: 10px; }
+@media (max-width: 760px) {
+  .ui3 .w3 .cm3-tools .cm-ask { flex: 1 1 100%; max-width: none; }
+}

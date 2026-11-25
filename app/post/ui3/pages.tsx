@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { Ui3PageKey } from "./head";
 import { Wait } from "./parts";
 import "./pages.css";
+import { isUi3WorkKey } from "./work/pages";
 export type { Ui3PageKey };
 
 const wait = () => (
@@ -17,6 +18,7 @@ const Targets = dynamic(() => import("./Targets").then((m) => m.Ui3Targets), { s
 const Company = dynamic(() => import("./Company").then((m) => m.Ui3Company), { ssr: false, loading: wait });
 const Network = dynamic(() => import("./Network").then((m) => m.Ui3Network), { ssr: false, loading: wait });
 const Warm = dynamic(() => import("./Warm").then((m) => m.Ui3Warm), { ssr: false, loading: wait });
+const WorkPage = dynamic(() => import("./work/WorkPage").then((m) => m.WorkPage), { ssr: false, loading: wait });
 const Crystal = dynamic(() => import("./Crystal").then((m) => m.Ui3Crystal), { ssr: false, loading: wait });
 
 export function Ui3Page({ k }: { k: Ui3PageKey }) {
@@ -26,5 +28,6 @@ export function Ui3Page({ k }: { k: Ui3PageKey }) {
   if (k === "company") return <Company />;
   if (k === "network") return <Network />;
   if (k === "warm") return <Warm />;
+  if (isUi3WorkKey(k)) return <WorkPage k={k} />;
   return null;
 }

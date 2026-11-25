@@ -463,7 +463,7 @@ async function watchPass(nowMs: number, origin?: string): Promise<{ looked: bool
 
     // Workflows (lib/workflows, Beta): members with one on read what this pass finds too, in the same pass.
     const wf = await import("../workflows");
-    const wfWho = wf.workflowWatchers(s);
+    const wfWho = wf.workflowWatchers(s, seed);
     const wfWants = (ts: WfTrigger[]) => [...wfWho.values()].some((x) => ts.some((t) => x.has(t)));
     // Nobody watches and nothing waits: no read of the table, and nothing written.
     const waiting = Object.values(s.alertWatch?.members ?? {}).some((x) => x.daily?.length || x.weekly?.length || x.slack?.length);

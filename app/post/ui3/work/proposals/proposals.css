@@ -1,0 +1,63 @@
+/* Proposals in the new design (RN_UI3): the home's extras on work.css's .pr-* classes. */
+.ui3 .w3 .pr3 { display: flex; flex-direction: column; }
+.ui3 .w3 .pr-feat-name { font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pr-feat .m-eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--m-am-ink); }
+.ui3 .w3 .pr-feat .m-eyebrow svg { width: 15px; height: 15px; }
+.ui3 .w3 .pr-call { cursor: pointer; }
+.ui3 .w3 .pr-call:disabled { cursor: default; opacity: .7; }
+.ui3 .w3 .pr-call > span:nth-child(2) { min-width: 0; }
+.ui3 .w3 .pr3-cname { display: block; font-size: 15.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pr-call .src { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pr3-wait, .ui3 .w3 .pr3-none { padding: 10px 14px; color: var(--m-muted); font-size: 14px; line-height: 1.5; }
+.ui3 .w3 .pr-links .w-link { cursor: pointer; }
+.ui3 .w3 .pr3-chips { margin: 0 0 12px; }
+.ui3 .w3 .pr3-list .m-tr { grid-template-columns: minmax(0, 1fr) auto; cursor: pointer; min-height: 72px; }
+.ui3 .w3 .pr3-list .m-tr:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
+.ui3 .w3 .pr3-list .m-co small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .pr3-stline { gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.ui3 .w3 .w3-err { padding: 10px 12px; border-radius: 10px; background: var(--w-hot-wash); color: var(--w-hot); font-size: 14px; margin: 4px 0 8px; }
+.ui3 .w3 .m-eyebrow.am { color: var(--m-am-ink); }
+@media (max-width: 760px) {
+  .ui3 .w3 .pr-feat-name { font-size: 23px; }
+  .ui3 .w3 .pr3-list .m-tr > .m-ph-z { grid-column: 1 / -1; grid-row: auto; }
+}
+
+/* ---- the editor (today's, proposalsPage/EditorFrame.tsx and Rail2.tsx) in the new look ---- */
+.ui3 .w3-pr-doc { --pz-paper: #fffefb; --pz-paper-ink: #1d2621; }
+:root[data-theme="dark"] .ui3 .w3-pr-doc { --pz-paper: #1c2420; --pz-paper-ink: #e9ece6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .w3-pr-doc { --pz-paper: #1c2420; --pz-paper-ink: #e9ece6; } }
+.ui3 .w3-pr-doc .pz-ed { background: transparent; font-family: var(--m-f-text); color: var(--m-ink); }
+.ui3 .w3-pr-doc .pz-ed-top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--m-bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 0; padding: 12px 0; }
+.ui3 .w3-pr-doc .pz-title { font: 650 16px/1.3 var(--m-f-text); color: var(--m-ink); background: transparent; }
+.ui3 .w3-pr-doc .pz-back { color: var(--m-co-ink); font-weight: 600; }
+.ui3 .w3-pr-doc .btn { height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--m-line-2); background: var(--m-panel); color: var(--m-ink); font: 600 14px var(--m-f-text); box-shadow: none; }
+.ui3 .w3-pr-doc .btn:hover { border-color: var(--m-faint); }
+.ui3 .w3-pr-doc .btn.btn-pine { background: var(--m-action); border-color: var(--m-action); color: var(--m-on-action); }
+.ui3 .w3-pr-doc .btn.btn-pine:hover { background: var(--m-action-hover); }
+.ui3 .w3-pr-doc .chip { border-radius: 99px; background: var(--m-gold-wash); color: var(--m-gold-ink); border: 0; font-weight: 600; }
+.ui3 .w3-pr-doc .p2-progress { border-radius: 12px; background: var(--m-forest-wash); color: var(--m-forest-ink); border: 0; padding: 10px 16px; margin-bottom: 14px; font-size: 14.5px; }
+.ui3 .w3-pr-doc .p2-viewbar { gap: 4px; }
+.ui3 .w3-pr-doc .p2-filter { height: 34px; border-radius: 9px; border: 1px solid var(--m-line); background: var(--m-panel); color: var(--m-ink-2); font-weight: 600; }
+.ui3 .w3-pr-doc .p2-filter[aria-pressed="true"] { background: var(--m-action); border-color: var(--m-action); color: var(--m-on-action); }
+.ui3 .w3-pr-doc .tp-flink { color: var(--m-co-ink); font-weight: 600; }
+.ui3 .w3-pr-doc .pz-ed-cols { gap: 22px; background: transparent; }
+.ui3 .w3-pr-doc .pz-ed-doc { background: transparent; padding: 0; }
+.ui3 .w3-pr-doc .pz-paper { background: var(--pz-paper); color: var(--pz-paper-ink); border: 0; border-radius: 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 18px 48px -24px rgba(32, 28, 20, .35); padding: 52px 60px 60px; }
+.ui3 .w3-pr-doc .pz-k { font: 600 12px/1 var(--m-f-text); letter-spacing: .1em; text-transform: uppercase; color: var(--m-am-ink); }
+.ui3 .w3-pr-doc .pz-doc-h { font: 500 38px/1.12 var(--m-f-display); letter-spacing: -.02em; color: inherit; margin: 10px 0 8px; }
+.ui3 .w3-pr-doc .pz-paper .pz-note { font-size: 15px; color: var(--m-muted); }
+.ui3 .w3-pr-doc .sg-block-h { font: 600 13px/1 var(--m-f-text) !important; letter-spacing: .1em; text-transform: uppercase; color: var(--m-am-ink) !important; margin-bottom: 10px; }
+.ui3 .w3-pr-doc .sg-text { font-size: 16px; line-height: 1.65; color: inherit; }
+.ui3 .w3-pr-doc .pp-sec { border-radius: 10px; }
+.ui3 .w3-pr-doc .pp-sec:hover, .ui3 .w3-pr-doc .pp-sec-hit:hover { background: color-mix(in srgb, var(--m-am-wash) 55%, transparent); }
+.ui3 .w3-pr-doc .pp-addsec { border-radius: 12px; border-color: var(--m-line-2); color: var(--m-forest-ink); }
+.ui3 .w3-pr-doc .p2-right { background: transparent; border: 0; }
+.ui3 .w3-pr-doc .p2-card { padding: 16px; border-radius: 14px; background: var(--m-panel); border: 1px solid var(--m-line); box-shadow: var(--m-sh-1); }
+.ui3 .w3-pr-doc .p2-card-h { font-size: 15px; font-weight: 650; color: var(--m-ink); }
+.ui3 .w3-pr-doc .p2-big { font: 500 30px/1.1 var(--m-f-display); letter-spacing: -.02em; color: var(--m-ink); }
+.ui3 .w3-pr-doc .p2-pill { border-radius: 99px; background: var(--m-am-wash); color: var(--m-am-ink); }
+.ui3 .w3-pr-doc .p2-fee { border-radius: 99px; border: 1px solid var(--m-line-2); background: var(--m-panel); }
+.ui3 .w3-pr-doc .p2-fee[aria-pressed="true"] { border-color: var(--m-forest-3); background: var(--m-forest-wash); color: var(--m-forest-ink); }
+.ui3 .w3-pr-doc .p2-muted, .ui3 .w3-pr-doc .p2-math { color: var(--m-muted); font-size: 13.5px; }
+.ui3 .w3-pr-doc .input { border-radius: 10px; border-color: var(--m-line-2); background: var(--m-panel); color: var(--m-ink); }
+@media (max-width: 760px) { .ui3 .w3-pr-doc .pz-paper { padding: 28px 20px 32px; border-radius: 12px; } .ui3 .w3-pr-doc .pz-doc-h { font-size: 28px; } }

@@ -215,6 +215,8 @@ export interface GraphWorkflow {
   hook?: string;
   /** Converted from today's linear workflow. */
   from?: "v1";
+  /** Made in Simple mode (the new design, lib/workflows/simple.ts): it always has a monthly credit limit. */
+  mode?: "simple";
   createdAt: string;
   updatedAt: string;
 }
@@ -431,7 +433,8 @@ export function cleanSettings(type: NodeType, raw: unknown): Record<string, unkn
       return { fields, attach: ATTACH.filter((a) => Array.isArray(r.attach) && r.attach.includes(a)) };
     }
     case "act.send":
-      return { to: oneLineWf(r.to, 200), toName: oneLineWf(r.toName, 120), subject: oneLineWf(r.subject, 160), body: txt(r.body, 5000), days: int(r.days, 1, V2_LIMITS.tapDays, V2_LIMITS.tapDefaultDays) };
+      // email: the member is asked by email too, as well as in the bell (Simple mode's "In-app notifications and email").
+      return { to: oneLineWf(r.to, 200), toName: oneLineWf(r.toName, 120), subject: oneLineWf(r.subject, 160), body: txt(r.body, 5000), days: int(r.days, 1, V2_LIMITS.tapDays, V2_LIMITS.tapDefaultDays), ...(r.email === true ? { email: true } : {}) };
     case "act.invite":
       return { to: oneLineWf(r.to, 80), note: txt(r.note, 600) };
     case "act.move":
@@ -716,9 +719,14 @@ export interface Watching {
  * The member's workflows that are on, as the watch passes see them. Switch off: today's workflows,
  * exactly as before. On: the live graphs, and today's workflows not saved as a graph yet.
  */
-export function watchingOf(w: { flows: Workflow[]; graphs?: GraphWorkflow[] } | undefined): Watching[] {
+export function watchingOf(w: { flows: Workflow[]; graphs?: GraphWorkflow[] } | undefined, runner: "v2" | "paused" | "today" = v2Switch() ? "v2" : "today"): Watching[] {
   if (!w) return [];
-  if (!v2Switch()) return w.flows.filter((f) => f.on);
+  if (runner === "today") return w.flows.filter((f) => f.on);
+  // RN_WORKFLOWS_V2=optin, the new design switched off: today's workflows run, the ones saved as v2 graphs are paused.
+  if (runner === "paused") {
+    const held = new Set((w.graphs ?? []).map((g) => g.id));
+    return w.flows.filter((f) => f.on && !held.has(f.id));
+  }
   const ids = new Set((w.graphs ?? []).map((g) => g.id));
   const out: Watching[] = w.flows.filter((f) => f.on && !ids.has(f.id));
   for (const g of w.graphs ?? []) {

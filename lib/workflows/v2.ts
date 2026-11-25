@@ -21,6 +21,8 @@ import { RunAnswer, answerRun, fireOne, graphsOf, monthSpentV2, retryRun, testRu
 import { planFor, wfIn } from "./run";
 import { newWfId } from "./steps";
 import { describe } from "./describe";
+import { emailsFrom, v2Of } from "./v2mode";
+import { TRIAL_OPENS_DAILY } from "../tableFields";
 
 export { v2On };
 export class V2Problem extends Error {
@@ -30,12 +32,16 @@ export class V2Problem extends Error {
 }
 const SIGNED_OUT = "You're signed out. Sign in again to change your workflows.";
 const GONE = "That workflow is gone.";
+/** Simple mode saves only with a monthly credit limit: the runner stops spending at it and asks first (graphRun.ts, the cap). */
+export const SIMPLE_NEEDS_CAP = "Set a monthly credit limit. A Simple workflow stops spending at it and asks you before going past it.";
 
 async function who(token: string | null): Promise<Member> {
   if (!token) throw new V2Problem(SIGNED_OUT, 401);
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberByToken(seed, token, s);
   if (!m) throw new V2Problem(SIGNED_OUT, 401);
+  // RN_WORKFLOWS_V2=optin: v2 is only for members with the new design on. Everyone else: as if it were off.
+  if (!v2Of(s, emailsFrom(seed, s))(m.id)) throw new V2Problem("Not found.", 404);
   return m;
 }
 const gatesOf = (s: Awaited<ReturnType<typeof loadState>>, memberId: string, nowMs: number) => {
@@ -66,6 +72,10 @@ export async function list(token: string | null, nowMs = Date.now()) {
   return {
     on: true as const,
     plan: gates,
+    // What each paid step costs this member now (the new design's Simple mode says it on each step).
+    prices,
+    // How companies open for this member: Pro and Close open every one; the trial, up to its daily count, then the usual price (which counts toward a workflow's limit).
+    opens: { access: T.accessFor(s, m.id, nowMs), trialDaily: TRIAL_OPENS_DAILY, left: T.trialOpensLeft(s, m.id, nowMs) },
     catalog: catalogFor(gates),
     workflows: graphsOf(w).map(({ g, stored }) => {
       const mine = runs.filter((r) => r.wf === g.id && !r.test);
@@ -75,6 +85,7 @@ export async function list(token: string | null, nowMs = Date.now()) {
         on: g.on,
         stored,
         from: g.from ?? null,
+        mode: g.mode ?? null,
         live: g.live?.v ?? null,
         draft: g.draft?.v ?? null,
         notLive: !!g.draft,
@@ -132,6 +143,9 @@ export async function save(token: string | null, raw: Record<string, unknown>, n
   } catch (e) {
     throw new V2Problem(e instanceof Error ? e.message : "That didn't save.");
   }
+  // Simple mode (lib/workflows/simple.ts): the monthly credit limit is not optional. It is the cap the runner enforces.
+  const mode: "simple" | undefined = raw.mode === "simple" ? "simple" : raw.mode === "advanced" ? undefined : cur?.g.mode;
+  if (mode === "simple" && (cw.cap === null || cw.cap < 1)) throw new V2Problem(SIMPLE_NEEDS_CAP);
   const prices = (await import("./index")).pricesFor(s, m.id, nowMs);
   const check = G.checkGraph(version, gates, prices, await switches(), listsOf(s, m.id));
   if (!check.ok) throw new V2Problem(check.problems[0]);
@@ -143,15 +157,17 @@ export async function save(token: string | null, raw: Record<string, unknown>, n
     if (!cur && graphsOf(w).length >= flows) throw new V2Problem(flows === 1 ? "Free keeps one workflow. Change the one you have, or see what Pro includes." : `Your plan keeps ${flows} workflows. Remove one first.`);
     if (had) {
       Object.assign(had, { draft: version, name: name || had.name, ...cw, updatedAt: at, ...(raw.notifyOnFail === undefined ? {} : { notifyOnFail: raw.notifyOnFail !== false }) });
+      if (mode) had.mode = mode;
+      else delete had.mode;
       return { id: had.id, message: had.live ? "Saved. Changes not live yet: Make live when you're ready." : "Saved as a draft. Make it live to turn it on." };
     }
     if (cur) {
       // Today's workflow, saved as a graph for the first time: it keeps its id, switch and live version.
-      const g = { ...cur.g, draft: version, name: name || cur.g.name, ...cw, updatedAt: at };
+      const g = { ...cur.g, draft: version, name: name || cur.g.name, ...cw, ...(mode ? { mode } : {}), updatedAt: at };
       w.graphs.push(g);
       return { id: g.id, message: "Saved. Changes not live yet: Make live when you're ready." };
     }
-    const g: G.GraphWorkflow = { id: newWfId("wf"), name: name || "A new workflow", on: false, live: null, draft: version, versions: [], ...cw, notifyOnFail: raw.notifyOnFail !== false, createdAt: at, updatedAt: at };
+    const g: G.GraphWorkflow = { id: newWfId("wf"), name: name || "A new workflow", on: false, live: null, draft: version, versions: [], ...cw, ...(mode ? { mode } : {}), notifyOnFail: raw.notifyOnFail !== false, createdAt: at, updatedAt: at };
     w.graphs.push(g);
     return { id: g.id, message: "Saved as a draft, and off. Make it live, then turn it on." };
   });
@@ -320,6 +336,7 @@ export async function hookCall(key: string, body: unknown): Promise<{ ok: boolea
     if (!g) continue;
     if (!g.hook || !same(g.hook, secret) || s.closures?.[memberId]) break;
     if (!g.on || !g.live || G.triggerOf(g.live)?.type !== "trig.webhook") return { ok: false, message: "That workflow is off." };
+    if (!v2Of(s, emailsFrom(await loadSeed(), s))(memberId)) return { ok: false, message: "That workflow is paused." };
     const fields: G.Fields = {};
     if (body && typeof body === "object" && !Array.isArray(body))
       for (const [k, v] of Object.entries(body as Record<string, unknown>).slice(0, 20)) {

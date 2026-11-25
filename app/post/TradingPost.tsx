@@ -121,6 +121,7 @@ import nextDynamic from "next/dynamic";
 import { ui3Action } from "@/lib/ui3";
 import { UI3_BUILT, Ui3HeaderCtx, type Ui3Head, type Ui3HeaderApi, type Ui3PageKey } from "./ui3/head";
 import { ui3Current } from "./ui3/current";
+import { ui3WorkKey } from "./ui3/work/pages";
 const Ui3Frame = nextDynamic(() => import("./ui3/Frame").then((m) => m.Ui3Frame), { ssr: false });
 
 export interface TradingPostProps {
@@ -3421,7 +3422,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
               ? "warm"
               : onScreen === "table" && recordType === "companies" && tab !== "hiring" && !!Companies2
                 ? "targets"
-                : null;
+                : ui3WorkKey(onScreen); // wave 2: the Work and Community pages (ui3/work/pages.ts)
   const ui3Page = ui3Key && (UI3_BUILT as readonly string[]).includes(ui3Key) ? ui3Key : null;
   const ui3Nav = ui3 ? ui3Current(onScreen, recordType, tab, !!RecordPage, navOn2?.key ?? null) : null;
   const ui3Menu = ui3 ? (navSide ? menuRef : moreRef) : null;

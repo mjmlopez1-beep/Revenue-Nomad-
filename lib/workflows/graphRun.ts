@@ -40,11 +40,20 @@ import { CALL_STEPS, WF_LIMITS, creditWords, doneWords, monthOf, oneLineWf, type
 import { companyOpen, newWfId, paidPlan, quotePaid, spendPaid, stepDraft, stepEvidence, stepPipe, stepWay } from "./steps";
 import { capWorkflows, matches, monthSpent, planFor, wfIn, type WfEvent } from "./run";
 import * as G from "./graph";
+import { emailsFrom, v2Any, v2Mode, v2Of } from "./v2mode";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 const FAR = "9999-12-31T00:00:00.000Z";
-export const v2On = () => /^(1|on|true|yes)$/i.test(process.env[G.WFV2_ENV] ?? "");
+/** v2 applies to anyone (RN_WORKFLOWS_V2 on or optin): the API answers and the tick runs. Who exactly: v2ForMember. */
+export const v2On = () => v2Any();
+/** v2 applies to this member now (RN_WORKFLOWS_V2=optin: the new design on for them). */
+export async function v2ForMember(memberId: string): Promise<boolean> {
+  const mode = v2Mode();
+  if (mode !== "optin") return mode === "on";
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return v2Of(s, emailsFrom(seed, s), mode)(memberId);
+}
 
 /** An event for v2: today's, or a schedule, Run now or a webhook for one workflow (`wf`), with fields of its own. */
 export type V2Event = Omit<WfEvent, "trigger"> & { trigger: G.V2Trigger; wf?: string; fields?: G.Fields };
@@ -965,7 +974,14 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
   const body = (G.fill(String(s0.body ?? ""), run.item) || String(run.item["Draft body"] ?? "")).trim();
   const days = Number(s0.days ?? G.V2_LIMITS.tapDefaultDays);
   const preview: G.Fields = { To: to || null, Subject: subject || null, "Draft body": body || null };
-  if (!subject || !body) throw new Error("There is no note to send: put Draft a note or Merlin AI: write before it, or write the note in its settings.");
+  if (!subject || !body) {
+    // The draft before it was skipped on this run (a company still locked, the day's opens used): nothing to approve, so nothing goes. Not a failure.
+    if (run.nodes.some((x) => x.type === "ai.draft" && x.status === "skipped")) {
+      put(cx, n, "skipped", "Nothing to approve: the draft before it was skipped on this run. Nothing was sent.", 0, { out: "skipped" });
+      return ["skipped"];
+    }
+    throw new Error("There is no note to send: put Draft a note or Merlin AI: write before it, or write the note in its settings.");
+  }
   if (cx.test) {
     put(cx, n, "waiting", "Test: waits for your tap. Approving a test sends nothing.", 0, { output: preview });
     return pause(cx, { kind: "send", node: n.id, expires: iso(cx.nowMs + days * DAY) });
@@ -982,13 +998,40 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
       });
     }
     put(cx, n, "skipped", "Sending from your Gmail isn't switched on yet. The note is a draft in Messages: nothing was sent.", 0, { out: "skipped", output: preview });
+    // The member is told where their draft is: the bell, and email when the step asks by email too.
+    cx.bells.push({ id: `wf2-draft:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note Merlin drafted waits in Messages", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
+    if (s0.email === true) await askByEmail(cx, "A note Merlin drafted waits in Messages. Nothing was sent.", "/?p=messages");
     return ["skipped"];
   }
   if (!to) throw new Error("Who is it to? Put their email in the step's To, or open who decides first.");
   const outbox = await queueFromWorkflow(m.id, { key: `wf:${run.id}:${n.id}:${run.visits[n.id]}`, to, toName: oneLineWf(s0.toName, 120) || null, subject, body, companyPub: run.event.company }, cx.nowMs);
   put(cx, n, "waiting", "Waits for your tap: Approve and send, in your outbox. Nothing goes without it.", 0, { output: preview });
   cx.bells.push({ id: `wf2-send:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note waits for your tap: Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
+  if (s0.email === true) await askByEmail(cx, `A note waits for your tap: Approve and send. It is skipped if you don't answer in ${days === 1 ? "1 day" : `${days} days`}.`, "/?p=messages");
   return pause(cx, { kind: "send", node: n.id, outbox, expires: iso(cx.nowMs + days * DAY) });
+}
+
+/**
+ * The member asked by email as well as in the bell (an Approve, then send with "email" on): one
+ * short alert email to their own address, never the note's text. Quiet when email isn't set up.
+ */
+async function askByEmail(cx: Cx, line: string, href: string): Promise<void> {
+  const { m, g } = cx;
+  if (cx.test || !emailEnabled() || !/@/.test(m.email ?? "")) return;
+  try {
+    const s = await loadState();
+    const nn = await import("../notify/index");
+    const base = nn.baseOf(s) || (cx.origin ?? "").replace(/\/+$/, "");
+    if (!base) return;
+    const [{ renderAlertEmail }, { emailLinker }, { alertOffUrl }, seed] = await Promise.all([import("../digest"), import("../emailIn"), import("../notify/events"), loadSeed()]);
+    const linker = emailLinker(seed, s, m.id, base, cx.nowMs);
+    const off = alertOffUrl(base, m.id, [`wf:${g.id}`]);
+    const out = oneLineWf(cx.run.lineOut ?? cx.run.line, 160);
+    const mail = renderAlertEmail({ name: m.name, every: "instant", groups: [{ name: g.name, lines: [{ text: line, url: linker(href) }, { text: out, url: linker(cx.run.href) }], offUrl: off }], alertsUrl: linker("/?p=alerts"), appUrl: base, unsubscribeUrl: off, oneRun: true });
+    await sendEmail(m.email, mail.subject, mail.text, mail.html, { unsubscribeUrl: off });
+  } catch (e) {
+    console.error("workflows v2: the ask email failed", e instanceof Error ? e.message : "error");
+  }
 }
 
 function pause(cx: Cx, w: G.RunWait): "pause" {
@@ -1248,15 +1291,17 @@ export async function graphTick(nowMs = Date.now(), origin?: string): Promise<nu
   if (!v2On()) return 0;
   let n = 0;
   try {
-    const s = await loadState();
+    const [seed, s] = await Promise.all([loadSeed(), loadState()]);
     const nowIso = iso(nowMs);
     const due: { member: string; run: string }[] = [];
+    // Optin: only members with the new design on. A member who switched it off has their runs held, paused.
+    const isV2 = v2Of(s, emailsFrom(seed, s));
     for (const [memberId, w] of Object.entries(s.workflows ?? {})) {
-      if (s.closures?.[memberId]) continue;
+      if (s.closures?.[memberId] || !isV2(memberId)) continue;
       for (const r of w.graphRuns ?? []) if (r.status === "waiting" && r.wait && (r.wait.kind === "send" || (r.wait.due ?? r.wait.expires) <= nowIso || r.wait.expires <= nowIso || r.wait.kind === "reply")) due.push({ member: memberId, run: r.id });
     }
     for (const d of due) if (await tickOne(d.member, d.run, origin, nowMs)) n++;
-    n += await schedules(s, origin, nowMs);
+    n += await schedules(s, origin, nowMs, isV2);
   } catch (e) {
     console.error("workflows v2: the tick failed", e instanceof Error ? e.message : "error");
   }
@@ -1319,10 +1364,10 @@ async function repliedSince(cx: Cx, w: G.RunWait): Promise<boolean> {
 }
 
 /** On a schedule: each live workflow with a schedule trigger runs once per slot (day, weekday or week, at its hour UTC). */
-async function schedules(s: State, origin: string | undefined, nowMs: number): Promise<number> {
+async function schedules(s: State, origin: string | undefined, nowMs: number, isV2: (id: string) => boolean): Promise<number> {
   const evs: V2Event[] = [];
   for (const [memberId, w] of Object.entries(s.workflows ?? {})) {
-    if (s.closures?.[memberId]) continue;
+    if (s.closures?.[memberId] || !isV2(memberId)) continue;
     for (const g of w.graphs ?? []) {
       if (!g.on || !g.live) continue;
       const t = G.triggerOf(g.live);

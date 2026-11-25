@@ -22,7 +22,7 @@
  * proposal and My templates' upload open the plans, and their saved templates stay listed, kept
  * for when they upgrade.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import type { View } from "@/lib/tableTypes";
 import type { DiscoveryNote, ProposalBlock, ProposalRec, ProposalsView, SignerInfo, TemplateChoice } from "@/lib/proposals/types";
 import type { DocumentRec } from "@/lib/documents/types";
@@ -58,7 +58,7 @@ import { useAppMaybe } from "./shell/pages";
 import { ProposalsHome, type StartMode } from "./proposalsPage/ProposalsHome";
 import { EditorFrame, type SideTab } from "./proposalsPage/EditorFrame";
 import { openContract } from "./contracts/open";
-import { Home2, type Launch } from "./proposalsPage/Home2";
+import { Home2, type Home2Props, type Launch } from "./proposalsPage/Home2";
 import { Rail2 } from "./proposalsPage/Rail2";
 import { SendSheetHost, noteInVoice, openSend, signersOf } from "./proposalsPage/SendSheet";
 import { useLive } from "./Live";
@@ -127,7 +127,10 @@ const subUrl = (x: Sub): string => {
 
 /* ================= the page ================= */
 
-export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) {
+/** A home drawn in place of Home2 (the new design's, RN_UI3), with the same props and three more. */
+export type HomeSlot = ComponentType<Home2Props & { onOpenTab?: (id: string, tab: SideTab) => void; onGone?: (id: string) => void }>;
+
+export function ProposalsPage({ view, infos, home2, onSub }: { view: View; infos: CoInfo[]; /** The new design's home (RN_UI3); absent, Home2. */ home2?: HomeSlot; /** The new design's breadcrumb: the proposal open, or null on the list. */ onSub?: (title: string | null) => void }) {
   const toast = useToast();
   const [data, setData] = useState<ProposalsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -278,6 +281,8 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
   }, []);
 
 
+  // The new design's breadcrumb follows the screen (RN_UI3 only: onSub is absent otherwise).
+  useEffect(() => onSub?.(open ? open.company.name || open.title : starting && data?.canBuild ? "New proposal" : contract ? "Send a contract" : null), [onSub, open, starting, contract, data?.canBuild]);
   if (open && data)
     return (
       <Editor
@@ -365,10 +370,11 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
         <div className="pp-skel" aria-busy="true" />
       </div>
     );
+  const HomeNow = home2 ?? Home2;
   if (v2 && data)
     return (
       <>
-        <Home2
+        <HomeNow
           data={data}
           view={view}
           infos={infos}
@@ -378,6 +384,7 @@ export function ProposalsPage({ view, infos }: { view: View; infos: CoInfo[] }) 
           onTemplates={() => setTemplates(true)}
           onLearned={(ts) => setData((d) => (d ? { ...d, templates: [...ts.map((t) => ({ id: t.id, title: t.title, about: t.fileName, mine: true, open: true, sections: t.blocks.length })), ...d.templates] } : d))}
           closePrompt={<CloseBuildPrompt />}
+          {...(home2 ? { onOpenTab: (id: string, tab: SideTab) => (setLaunch(null), setOpenTab(tab), setFixFirst([]), setOpenId(id)), onGone: (id: string) => setData((d) => (d ? { ...d, proposals: d.proposals.filter((x) => x.id !== id) } : d)) } : {})}
         />
         {templates && <TemplatesSheet data={data} onClose={() => setTemplates(false)} onChange={(t) => setData((d) => (d ? { ...d, templates: t } : d))} />}
       </>

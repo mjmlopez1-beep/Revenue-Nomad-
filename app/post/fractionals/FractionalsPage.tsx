@@ -789,7 +789,7 @@ function whyLine(r: FractionalRec, p: PeerRec | undefined): string {
 }
 
 /** The one action in a row: Invite (not on Merlin, the member can see a seat's company), See who (a locked name, free), or the Message icon. */
-function RowAction({ r, reload, wide }: { r: FractionalRec; reload: () => Promise<void>; wide?: boolean }) {
+export function RowAction({ r, reload, wide }: { r: FractionalRec; reload: () => Promise<void>; wide?: boolean }) {
   const ui = useUi();
   const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -828,7 +828,7 @@ function RowAction({ r, reload, wide }: { r: FractionalRec; reload: () => Promis
   return null;
 }
 
-function PassButtonFor({ r, className = "btn fy-btn-line" }: { r: FractionalRec; className?: string }) {
+export function PassButtonFor({ r, className = "btn fy-btn-line" }: { r: FractionalRec; className?: string }) {
   const c = useApp();
   const [open, setOpen] = useState(false);
   if (!r.memberId) return null;
@@ -994,7 +994,7 @@ function LeadLine({ id, face, line, sub, focus, children }: { id: string; face: 
 
 /* ---------- a fractional's card ---------- */
 
-function CardPanel({
+export function CardPanel({
   r,
   peer,
   know,
@@ -1210,7 +1210,7 @@ function CardPanel({
 
 /* ---------- your own card ---------- */
 
-function YourCard({ me, mine, first, peers, onClose, onKnow, phone }: { me: Me; mine: FractionalRec | null; first: boolean; peers: ReturnType<typeof usePeers>["view"]; onClose: () => void; onKnow: () => void; phone: boolean }) {
+export function YourCard({ me, mine, first, peers, onClose, onKnow, phone }: { me: Me; mine: FractionalRec | null; first: boolean; peers: ReturnType<typeof usePeers>["view"]; onClose: () => void; onKnow: () => void; phone: boolean }) {
   const c = useApp();
   const ui = useUi();
   const [busy, setBusy] = useState<string | null>(null);
@@ -1379,7 +1379,7 @@ function YourCard({ me, mine, first, peers, onClose, onKnow, phone }: { me: Me; 
 
 /* ---------- teams and muted ---------- */
 
-function Teams({ teams, onOpen }: { teams: TeamRec[]; onOpen: (id: string) => void }) {
+export function Teams({ teams, onOpen }: { teams: TeamRec[]; onOpen: (id: string) => void }) {
   return (
     <div className="fy-extra">
       <h2>Your teams</h2>
@@ -1424,7 +1424,7 @@ function Teams({ teams, onOpen }: { teams: TeamRec[]; onOpen: (id: string) => vo
   );
 }
 
-function MutedList({ list }: { list: { id: string; name: string }[] }) {
+export function MutedList({ list }: { list: { id: string; name: string }[] }) {
   const toast = useToast();
   return (
     <div className="fy-extra">

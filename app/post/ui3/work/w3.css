@@ -1,0 +1,63 @@
+/* =====================================================================
+   The work pages' own additions on top of work.css (RN_UI3), scoped under
+   .ui3 .w3: states the mockup didn't draw (loading, failed, plan gates),
+   and the real app's extra pieces in the same language.
+   ===================================================================== */
+.ui3 .w3 { color: var(--m-ink); font-family: var(--m-f-text); }
+:where(.ui3 .w3) a { color: inherit; text-decoration: none; }
+:where(.ui3 .w3) button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.ui3 .w3 .m-btn-primary { background: var(--m-action); color: var(--m-on-action); }
+.ui3 .w3 .m-h2 { font-family: var(--m-f-display); font-weight: 500; letter-spacing: -.015em; }
+.ui3 .w3 .w-hide { display: none !important; }
+
+/* loading, failed */
+.ui3 .w3 .w3-skel { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.ui3 .w3 .w3-skel i { display: block; height: 68px; border-radius: 14px; background: linear-gradient(90deg, var(--m-bg-2), var(--m-panel-2), var(--m-bg-2)); background-size: 200% 100%; animation: w3-shim 1.4s linear infinite; }
+@keyframes w3-shim { to { background-position: -200% 0; } }
+.ui3 .w3 .w3-failed { border-style: solid; border-color: color-mix(in srgb, var(--w-hot) 35%, var(--m-line)); background: var(--w-hot-wash); }
+
+/* a plan gate: the feature named, never hidden */
+.ui3 .w3 .w3-gate { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 16px 18px; border-radius: 16px; background: var(--m-am-wash); border: 1px solid color-mix(in srgb, var(--m-amethyst) 25%, var(--m-line)); margin: 0 0 16px; }
+.ui3 .w3 .w3-gate-i { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--m-panel); color: var(--m-am-ink); }
+.ui3 .w3 .w3-gate b { font-size: 15.5px; font-weight: 650; }
+.ui3 .w3 .w3-gate p { font-size: 14px; color: var(--m-ink-2); margin-top: 2px; line-height: 1.45; }
+@media (max-width: 760px) { .ui3 .w3 .w3-gate { grid-template-columns: 40px minmax(0, 1fr); } .ui3 .w3 .w3-gate .m-btn { grid-column: 1 / -1; justify-self: start; } }
+
+/* the menu inside a work page */
+.ui3 .w3 .m-menu.w-menu span small { display: block; font-size: 12.5px; color: var(--m-muted); font-weight: 400; }
+.ui3 .w3 .m-menu.w-menu .w-btn-danger, .ui3 .w3 .m-menu.w-menu .w-btn-danger svg { color: var(--w-hot); }
+.ui3 .w3 .m-iconbtn.sm { width: 34px; height: 34px; }
+.ui3 .w3 .m-iconbtn.plain { background: none; border: 0; }
+
+/* today's components drawn inside a new-design page keep their own look, on the new ground */
+.ui3 .w3 .w3-host { margin-top: 4px; }
+
+/* round 9: illustration density (the deeper into productive work, the less decoration) */
+.ui3 .w3 .m-band.w3-band-none { min-height: 0 !important; padding-top: 14px; }
+.ui3 .w3 .m-band.w3-band-none > :not(.m-band-art) { max-width: none; }
+.ui3 .w3 .m-band.w3-band-minimal .m-band-art { width: min(300px, 24%); height: 104px; opacity: .9; }
+@media (max-width: 760px) {
+  .ui3 .w3 .m-band.w3-band-minimal .m-band-art { position: relative; right: auto; width: 100%; height: 64px; margin-bottom: 4px; }
+  .ui3 .w3 .m-band.w3-band-none { padding-top: 6px; }
+}
+.ui3 .w3 .w-empty.w3-noart { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 760px) { .ui3 .w3 .m-menu.w-menu { width: auto !important; right: 0 !important; } }
+
+/* today's components inside a new-design page: the new type and the new ground */
+.ui3 .w3 .w3-host h1, .ui3 .w3 .w3-host h2.c2-h2, .ui3 .w3 .w3-host .c2-h1 { font-family: var(--m-f-display); font-weight: 500; letter-spacing: -.015em; }
+.ui3 .w3 .w3-host .btn { border-radius: 10px; font-family: var(--m-f-text); }
+.ui3 .w3 .w3-host .btn.btn-pine { background: var(--m-action); border-color: var(--m-action); color: var(--m-on-action); }
+.ui3 .w3 .w3-host .input { border-radius: 10px; border-color: var(--m-line-2); background: var(--m-panel); color: var(--m-ink); }
+.ui3 .w3 .w3-ev-up h2, .ui3 .w3 .w3-ev-up h1 { font-family: var(--m-f-display); font-weight: 500; letter-spacing: -.015em; }
+.ui3 .w3 .ex-band.w3-band-moderate { min-height: 148px !important; }
+.ui3 .w3 .w3-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ui3 .w3 .w3-tags .m-chip { display: inline-flex; width: auto; height: 26px; font-size: 13px; padding: 0 10px; }
+/* headings keep the new ink in both themes (today's page CSS colors h1 and h2 with its own tokens) */
+.ui3 .w3 .m-band h1, .ui3 .w3 h1.m-display, .ui3 .w3 h2.m-h2, .ui3 .w3 h2.m-h3, .ui3 .w3 .m-h3 { color: var(--m-ink); }
+.ui3 .w3 .pr3-empty { padding: 22px; border-radius: var(--m-r-lg); background: var(--m-panel-2); border: 1px dashed var(--m-line-2); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+/* a 1280 laptop: dense tables keep their actions in view */
+@media (max-width: 1400px) {
+  .ui3 .w3 .cm-dir { --cols: minmax(190px, 1.2fr) minmax(120px, .8fr) minmax(130px, 1fr) minmax(110px, .8fr) 100px minmax(110px, auto) !important; }
+  .ui3 .w3 .wf-mine { --cols: minmax(220px, 2fr) 150px 90px 130px 50px minmax(140px, auto) !important; }
+  .ui3 .w3 .pl-table { --cols: 28px minmax(190px, 1.2fr) 104px minmax(180px, 1.3fr) minmax(140px, 1fr) minmax(150px, auto) !important; }
+}
