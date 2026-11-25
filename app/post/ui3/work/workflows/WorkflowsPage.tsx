@@ -29,7 +29,8 @@ import { pageDef, useApp } from "../../../shell/pages";
 import { compileSimple, parseSimple, SCOPE_SAY, SIMPLE_DEFAULT, TRIGGER_SAY, type SimpleCfg, type SimpleTrigger } from "@/lib/workflows/simple";
 import type { GraphVersion, GraphWorkflow, GraphCheck, GraphRun, GNode, NodeType } from "@/lib/workflows/graph";
 import type { StepPrices } from "@/lib/workflows/types";
-import { Chips, Sheet, Skel, St, Switch, Tabs, WorkMain, type Tone } from "../parts";
+import { Chips, Gate, Sheet, Skel, St, Switch, Tabs, WorkMain, type Tone } from "../parts";
+import { openPlans } from "../../../Billing";
 import { WIc, type WIconName } from "../icons";
 import { Canvas } from "./Canvas";
 import "./workflows.css";
@@ -239,6 +240,11 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
   return (
     <>
       <p className="w-help wf3-lead">Ready-made business development strategies. Each sets up in under a minute, and nothing runs until you make it live.</p>
+      {!list.plan.paid && (
+        <Gate title="Research and drafting are on Pro" onPlans={() => openPlans("billing")}>
+          These workflows open the company and who decides, and draft your note: steps that are part of Pro. Your approval stays yours on every plan.
+        </Gate>
+      )}
       <Chips items={GOALS.map((g) => ({ k: g, label: g, n: g === "All" ? TEMPLATES.length : TEMPLATES.filter((t) => t.goal === g).length }))} on={goal} set={setGoal} label="Goals" />
       <div className="wf-tgrid">
         {shown.map((t) => (
@@ -249,9 +255,15 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
             <div className="w-row">
               <span className="m-small">{list.plan.paid ? "Stops at 60 credits a month unless you change it" : "Research and drafting are on Pro"}</span>
               <span className="w-sp" />
-              <button type="button" className="m-btn m-btn-sm m-btn-primary" disabled={!!busy} aria-busy={busy === t.k || undefined} onClick={() => void use(t)}>
-                Use template
-              </button>
+              {list.plan.paid ? (
+                <button type="button" className="m-btn m-btn-sm m-btn-primary" disabled={!!busy} aria-busy={busy === t.k || undefined} onClick={() => void use(t)}>
+                  Use template
+                </button>
+              ) : (
+                <button type="button" className="m-btn m-btn-sm m-btn-secondary" onClick={() => openPlans("billing")}>
+                  <WIc n="lock" /> On Pro
+                </button>
+              )}
             </div>
           </article>
         ))}
