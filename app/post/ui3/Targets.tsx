@@ -22,7 +22,7 @@ import { isWarm, setWarmFocus, useCoActs, useTargets, type TRow } from "./data";
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
 import { Av, Band, Chip, CoLogo, FitRing, RowMenu, Wait, ownClick } from "./parts";
-import { FIT_TIP, coLine, coName, numWord, plural } from "./model";
+import { FIT_TIP, coLine, coName, numWord, plural, predicted } from "./model";
 import { oppTitle } from "./Home";
 
 const Workbench = dynamic(() => import("../shell/workbenchPage").then((m) => m.WorkbenchPage), { ssr: false, loading: () => <Wait /> });
@@ -33,9 +33,9 @@ type Tile = "all" | "hiring" | "ideal";
 type QF = "fit" | "hiring" | "warm" | "new";
 const QFS: { k: QF; l: string; ic: IconName; f: (r: TRow) => boolean }[] = [
   { k: "fit", l: "High fit", ic: "diamond", f: (r) => r.fit.n >= 6 },
-  { k: "hiring", l: "Hiring now", ic: "brief", f: (r) => !!r.role },
+  { k: "hiring", l: "Hiring now", ic: "brief", f: (r) => r.hire },
   { k: "warm", l: "Warm intros", ic: "route", f: (r) => isWarm(r.warm) },
-  { k: "new", l: "New this week", ic: "calnew", f: (r) => !!r.role?.fresh },
+  { k: "new", l: "New this week", ic: "calnew", f: (r) => r.hire && !!r.role?.fresh },
 ];
 const PAGE = 40;
 let mode: "list" | "table" | "lookalikes" = "list";
@@ -89,11 +89,11 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
     return m;
   }, [c.legacy.homeProps.data, c.shell.radar.data]);
 
-  const hiringMine = t.all.filter((r) => r.role?.mine);
+  const hiringMine = t.all.filter((r) => r.hire);
   const ideal = t.all.filter((r) => r.fit.n >= 5);
   const base = useMemo(() => {
     let xs = tab === "opps" ? t.opps : tab === "saved" ? t.saved : t.all;
-    if (tile === "hiring") xs = xs.filter((r) => r.role?.mine);
+    if (tile === "hiring") xs = xs.filter((r) => r.hire);
     if (tile === "ideal") xs = xs.filter((r) => r.fit.n >= 5);
     if (q) xs = xs.filter((r) => r.i.hay.toLowerCase().includes(q));
     return xs;
@@ -223,7 +223,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
         </p>
         <h2 className="m-h2 tg-h">{head}</h2>
         {tab === "opps" && !t.opps.length && (
-          <p className="m-sub tg-why">Opportunities are companies hiring in your function, or fitting 4 or more of the 7 traits with an open role or a way in. {c.me.icp ? "Widen your ideal client, or" : "Set your ideal client, or"} bring in who you know on Warm Paths.</p>
+          <p className="m-sub tg-why">Opportunities are companies hiring in your function, or fitting 4 or more of the 7 traits with a way in. {c.me.icp ? "Widen your ideal client, or" : "Set your ideal client, or"} bring in who you know on Warm Paths.</p>
         )}
 
         {t.loading && !t.all.length ? (
@@ -283,11 +283,15 @@ function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols:
   const i = r.i;
   const name = coName(i);
   const open = () => c.openCompany(i.c.id);
-  const sig: { ic: IconName; cls: string; b: string; s: string | null } = r.role
+  // Hiring for the member's function (gold), else Crystal Ball's predicted signal, else an open role in another function, else past hires.
+  const pred = radar ? predicted([radar])[0] ?? null : null;
+  const sig: { ic: IconName; cls: string; b: string; s: string | null } = r.role && r.hire
     ? { ic: "brief", cls: "gold", b: r.role.title, s: [r.role.ago, r.role.rate].filter(Boolean).join(" · ") || null }
-    : radar
-      ? { ic: "trend", cls: "", b: oppTitle(radar, fn), s: radar.lines[0]?.split(" · ")[0] ?? null }
-      : i.c.friendly.fractional
+    : pred
+      ? { ic: "trend", cls: "", b: oppTitle(pred, fn), s: pred.lines[0]?.split(" · ")[0] ?? null }
+      : r.role
+        ? { ic: "brief", cls: "", b: `Open role: ${r.role.title}`, s: [fn ? `Outside ${fn}` : null, r.role.ago].filter(Boolean).join(" · ") || null }
+        : i.c.friendly.fractional
         ? { ic: "loop", cls: "forest", b: `Hired ${plural(i.c.friendly.fractional, "fractional")} before`, s: i.c.friendly.functions.slice(0, 2).join(", ") || null }
         : { ic: "eye", cls: "", b: "No signal yet", s: "Merlin is watching" };
   const warm = isWarm(r.warm) ? r.warm : null;
@@ -331,7 +335,7 @@ function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols:
         <button type="button" className="m-intro" onClick={() => (setWarmFocus(i.c.id), c.openPage("warm"))}>
           {person ? <Av name={person.name} s={36} /> : <Av name="" s={36} hid />}
           <span>
-            <b>{person ? <>1 intro via <em>{person.name.split(" ")[0]}</em></> : warm.via}</b>
+            <b>{person ? warm.direct ? <>Write to <em>{person.name.split(" ")[0]}</em> yourself</> : <>1 intro via <em>{person.name.split(" ")[0]}</em></> : warm.via}</b>
             <small>{person?.sub ?? warm.way ?? "A way in"}</small>
           </span>
         </button>

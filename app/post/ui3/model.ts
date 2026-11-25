@@ -16,6 +16,8 @@ import type { Me } from "@/lib/tableTypes";
 import type { Warmth } from "@/lib/google/types";
 import { icpParts, isOpenSeat, namedFn, openSince, regionOf, repeatHirer, shown, type CoInfo } from "../model";
 import type { EngagementRec } from "@/lib/tableTypes";
+import type { RadarRow } from "@/lib/radar/types";
+import type { WarmRow, WarmView } from "@/lib/paths/types";
 
 export type TraitKey = "industry" | "size" | "revenue" | "country" | "fractional" | "yourFn" | "repeat";
 export interface Trait {
@@ -69,6 +71,50 @@ export function fit7(i: CoInfo, me: Pick<Me, "icp" | "function">): Fit7 {
 
 /** A company's name as the member may see it. */
 export const coName = (i: CoInfo) => (i.c.hidden ? i.c.shownName ?? "Locked company" : i.c.name);
+/**
+ * A company's title where a name would go: its name, or for a locked one its free facts ("A Fintech
+ * company"), never a bare "Locked company" (Free describes a locked company by what it may see).
+ */
+export function coTitle(i: CoInfo): string {
+  if (!i.c.hidden) return i.c.name;
+  if (i.c.shownName) return i.c.shownName;
+  const ind = shown(i.c.cells.industry);
+  return ind ? `${/^[AEIOU]/i.test(ind) ? "An" : "A"} ${ind} company` : "A locked company";
+}
+/** A locked company's other free facts: "11–50 people · $5M–$20M · Austin, TX" (each once). Empty when open. */
+export function coFacts(i: CoInfo): string {
+  if (!i.c.hidden) return "";
+  const size = shown(i.c.cells.employees);
+  const hq = shown(i.c.cells.hq) ?? regionOf(i.c);
+  return [...new Set([size ? `${size} people` : null, shown(i.c.cells.revenue), hq].filter((x): x is string => !!x))].join(" · ");
+}
+
+const ROLE_LINE = /^\s*(new open role|open role|role posted)\b/i;
+/**
+ * Crystal Ball as the purple, predicted feed: its rows without the posted roles. A posted role is
+ * confirmed demand, shown in gold as Hiring now (Target Companies, the company, My Network), never
+ * here; a row left with no other signal is not in the feed at all.
+ */
+export function predicted<R extends Pick<RadarRow, "kinds" | "lines" | "notes" | "sigs" | "h">>(rows: readonly R[]): R[] {
+  const out: R[] = [];
+  for (const r of rows) {
+    if (!r.kinds.includes("role")) {
+      out.push(r);
+      continue;
+    }
+    const kinds = r.kinds.filter((k) => k !== "role");
+    if (!kinds.length) continue;
+    // The role's own lines: by its signals where the row has them (they come strongest first, not in the lines' order), else by their words.
+    const roleLines = new Set((r.sigs ?? []).filter((g) => g.kind === "role").map((g) => g.line));
+    const keep = r.lines.map((l) => !roleLines.has(l) && !ROLE_LINE.test(l));
+    const lines = r.lines.filter((_, n) => keep[n]);
+    if (!lines.length) continue;
+    const { h: _h, ...rest } = r; // eslint-disable-line @typescript-eslint/no-unused-vars
+    out.push({ ...(rest as R), kinds, lines, ...(r.notes ? { notes: r.notes.filter((_, n) => keep[n]) } : {}), ...(r.sigs ? { sigs: r.sigs.filter((g) => g.kind !== "role") } : {}) });
+  }
+  return out;
+}
+
 /** "Industry · City": the strongest line under a name. A locked company says its free facts instead. */
 export function coLine(i: CoInfo): string {
   if (i.c.hidden) return i.teaser || "Details open with the company";
@@ -145,3 +191,36 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocal
 export const NUM_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 /** "Eight", or "14" past twelve. */
 export const numWord = (n: number) => NUM_WORDS[n] ?? n.toLocaleString("en-US");
+
+/* ---------- Warm paths: one list, one count, one ask ---------- */
+
+/** A warm way in: through someone the member knows or a fellow fractional, not a cold note to the company. */
+export const isWarm = (w: WarmRow | null | undefined): w is WarmRow => !!w && !!w.via && w.src !== "direct";
+
+const ODDS_RANK: Record<string, number> = { High: 2, Medium: 1, Low: 0 };
+/**
+ * The warm paths the member can act on, best first: the one list behind the nav's count, Home's
+ * "warm ways in" and Your next move, My Network's next move and Warm Paths' picker. A locked
+ * company's way in is counted apart (lockedWarm), never in this count while the list leaves it out.
+ * Companies that need the member come first: an open role, then Crystal Ball's odds, then fit,
+ * then how warm the way in is (never a route into a company with no sign of needing them ahead of one that has).
+ */
+export function warmList(v: WarmView | null | undefined): WarmRow[] {
+  return (v?.rows ?? [])
+    .filter((r) => isWarm(r) && !r.locked && !!r.name)
+    .sort((a, b) => Number(b.hiringNow) - Number(a.hiringNow) || (ODDS_RANK[b.odds] ?? 0) - (ODDS_RANK[a.odds] ?? 0) || b.fit - a.fit || (b.best ?? 0) - (a.best ?? 0) || a.rank - b.rank);
+}
+/** Ways in at companies still locked for the member: a count, said apart ("open the company to see who"). */
+export const lockedWarm = (v: WarmView | null | undefined) => (v?.rows ?? []).filter((r) => isWarm(r) && (r.locked || !r.name)).length;
+
+/**
+ * The ask on a way in, by who the first person is: someone in between gets "Request an intro"; the
+ * person the member already knows who decides gets "Discuss opportunity" (they are hiring) or
+ * "Reconnect", never an intro to themself; a cold note is "Write to" them.
+ */
+export function askOf(w: Pick<WarmRow, "direct" | "hiringNow" | "src">, first?: string | null): { k: "intro" | "discuss" | "reconnect" | "write"; l: string } {
+  if (!w.direct) return { k: "intro", l: first ? `Request an intro from ${first}` : "Request an intro" };
+  if (w.src === "direct") return { k: "write", l: first ? `Write to ${first}` : "Write to them" };
+  return w.hiringNow ? { k: "discuss", l: "Discuss opportunity" } : { k: "reconnect", l: "Reconnect" };
+}
+

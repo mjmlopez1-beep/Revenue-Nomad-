@@ -31,11 +31,12 @@ import { loadPipeline, pipelineAct } from "../pipelineStore";
 import { defaultSeeds } from "../find/lookalikes";
 import type { CoInfo } from "../model";
 import { useUi3Head } from "./head";
-import { isWarm, setWarmFocus, useTargets, useWarmShared, type TRow } from "./data";
+import { askOf, setWarmFocus, useTargets, useWarmShared, warmList, type TRow } from "./data";
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
 import { Av, Band, Chip, CoLogo, RowMenu, Wait } from "./parts";
-import { agoWords, coName, initialsOf, numWord, plural, relOfWarmth, tintOf, type RelBand } from "./model";
+import { agoWords, coName, initialsOf, numWord, plural, predicted, relOfWarmth, tintOf, type RelBand } from "./model";
+import { latestAt } from "../crystal/crystalModel";
 import { oppTitle } from "./Home";
 
 const NoteSheet = dynamic(() => import("../MoveNote").then((m) => m.NoteSheet), { ssr: false });
@@ -77,9 +78,13 @@ function evidence(x: Person, clientCos: Set<string>, byId: Map<string, CoInfo>):
   return out;
 }
 
+/**
+ * One action a person, by the situation. Someone who decides there is never asked for an intro to
+ * themself: Discuss opportunity where there is demand, else Reconnect (acceptance F19).
+ */
 function actionOf(x: Person): Act {
+  if (x.dm) return x.demand ? { k: "discuss", l: "Discuss opportunity", ic: "cal" } : { k: "reconnect", l: "Reconnect", ic: "cal" };
   if (x.band === "Fading" || x.band === "Cold") return { k: "reconnect", l: "Reconnect", ic: "cal" };
-  if (x.demand && x.dm) return { k: "discuss", l: "Discuss opportunity", ic: "cal" };
   if (x.demand) return { k: "intro", l: "Request an intro", ic: "send" };
   return { k: "reconnect", l: "Reconnect", ic: "cal" };
 }
@@ -131,7 +136,8 @@ export function Ui3Network() {
   const byT = useMemo(() => new Map(t.rows.map((r) => [r.i.c.id, r])), [t.rows]);
   const radarOf = useMemo(() => {
     const m = new Map<string, RadarRow>();
-    for (const r of [...(c.legacy.homeProps.data?.rows ?? []), ...(c.shell.radar.data?.rows ?? [])]) m.set(r.id, r);
+    // Crystal Ball's predicted demand only: a posted role is Hiring now (gold), from the company's own open role.
+    for (const r of predicted([...(c.legacy.homeProps.data?.rows ?? []), ...(c.shell.radar.data?.rows ?? [])])) m.set(r.id, r);
     return m;
   }, [c.legacy.homeProps.data, c.shell.radar.data]);
   const clientCos = useMemo(() => new Set(defaultSeeds(c.infos, me)), [c.infos, me]);
@@ -145,8 +151,9 @@ export function Ui3Network() {
           const i = p.company ? c.byId.get(p.company) ?? null : null;
           const tr = p.company ? byT.get(p.company) ?? null : null;
           const rr = p.company ? radarOf.get(p.company) : undefined;
-          const demand = tr?.role ? { k: "hire" as const, line: tr.role.title } : rr ? { k: "emerge" as const, line: rr.lines[0]?.split(" · ")[0] ?? oppTitle(rr, fn) } : null;
-          return { p, i, band: relOfWarmth(p.warmth), demand, dm: !!p.title && DM_TITLE.test(p.title), client: !!p.company && clientCos.has(p.company), fellow: !!p.member || (!!p.title && FRACTIONAL_TITLE.test(p.title)), t: tr };
+          const demand = tr?.role && tr.hire ? { k: "hire" as const, line: tr.role.title } : rr ? { k: "emerge" as const, line: rr.lines[0]?.split(" · ")[0] ?? oppTitle(rr, fn) } : null;
+          // A fellow fractional is a fellow member on Merlin: the one count on the card, the chip and the line below (acceptance F32).
+          return { p, i, band: relOfWarmth(p.warmth), demand, dm: !!p.title && DM_TITLE.test(p.title) && !FRACTIONAL_TITLE.test(p.title), client: !!p.company && clientCos.has(p.company), fellow: !!p.member, t: tr };
         }),
     [k.known, c.byId, byT, radarOf, clientCos, fn],
   );
@@ -154,7 +161,7 @@ export function Ui3Network() {
     { k: "opps", l: "Business opportunities", s: "Contacts connected to active demand", ic: "bolt", f: (x) => !!x.demand },
     { k: "dm", l: "Decision makers", s: "Titles that decide", ic: "network", f: (x) => x.dm },
     { k: "clients", l: "Former clients", s: "Where you held a seat", ic: "layers", f: (x) => x.client },
-    { k: "fellows", l: "Fellow fractionals", s: "Peers who can open doors", ic: "team", f: (x) => x.fellow },
+    { k: "fellows", l: "Fellow fractionals", s: "Members of Merlin who can open doors", ic: "team", f: (x) => x.fellow },
   ];
   const QFS: { k: QF; l: string; ic: IconName; f: (x: Person) => boolean }[] = [
     { k: "hire", l: "Hiring now", ic: "brief", f: (x) => x.demand?.k === "hire" },
@@ -166,7 +173,7 @@ export function Ui3Network() {
     { k: "google", l: "Mail and calendar", f: (x) => x.p.src.includes("google") },
     { k: "file", l: "Imported contacts", f: (x) => x.p.src.includes("linkedin") || x.p.src.includes("csv") },
     { k: "messages", l: "Messages on Merlin", f: (x) => x.p.src.includes("messages") },
-    { k: "member", l: "Fellow members", f: (x) => !!x.p.member },
+    { k: "member", l: "Fellow fractionals", f: (x) => x.fellow },
   ];
   const due = (x: Person) => (x.demand ? (x.demand.k === "hire" ? 0 : 1) : x.band === "Fading" || x.band === "Cold" ? 2 : 3);
   const lastMs = (x: Person) => (x.p.last ? Date.parse(`${x.p.last}T12:00:00Z`) : 0);
@@ -192,8 +199,9 @@ export function Ui3Network() {
     setDraft({ ...n, intro: a.k === "intro", first: x.p.name.split(" ")[0], strength: x.band });
   };
   const nurture = people.filter((x) => (x.band === "Fading" || x.band === "Cold") && x.i && !x.i.c.hidden && (!!x.demand || (x.t?.fit.n ?? 0) >= 4 || !!x.t?.saved)).sort((a, b) => Number(!!b.demand) - Number(!!a.demand) || lastMs(b) - lastMs(a)).slice(0, 4);
-  const hot = people.filter((x) => !!x.t?.role?.fresh || (!!x.i && !!radarOf.get(x.i.c.id)?.day && Date.now() - Date.parse(`${radarOf.get(x.i.c.id)!.day}T12:00:00Z`) < 7 * 86_400_000)).length;
-  const next = (warm?.rows ?? []).filter((r) => isWarm(r) && !r.locked && r.name).sort((a, b) => Number(b.hiringNow) - Number(a.hiringNow) || (b.best ?? 0) - (a.best ?? 0))[0] ?? null;
+  // New this week: a role posted, or a signal that happened, in the last seven days (its own day, never the day Merlin saw it).
+  const hot = people.filter((x) => (x.demand?.k === "hire" && !!x.t?.role?.fresh) || (x.demand?.k === "emerge" && !!x.i && ((at) => !!at && Date.now() - Date.parse(`${at}T12:00:00Z`) < 7 * 86_400_000)(latestAt(radarOf.get(x.i.c.id)?.sigs ?? [])))).length;
+  const next = warmList(warm)[0] ?? null;
   const popP = pop ? people.find((x) => x.p.key === pop.key) ?? null : null;
 
   if (!k.known && !k.off && !k.failed)
@@ -408,7 +416,7 @@ export function Ui3Network() {
                                 title={x.p.name}
                                 items={[
                                   ...(a.k !== "reconnect" ? [{ icon: "cal" as IconName, label: "Reconnect", sub: "A drafted catch-up note", disabled: !x.i || x.i.c.hidden, onClick: () => act(x, { k: "reconnect", l: "Reconnect", ic: "cal" }) }] : []),
-                                  ...(a.k !== "intro" && x.demand ? [{ icon: "send" as IconName, label: "Request an intro", sub: "A drafted ask in your voice", disabled: !x.i || x.i.c.hidden, onClick: () => act(x, { k: "intro", l: "Request an intro", ic: "send" }) }] : []),
+                                  ...(a.k !== "intro" && x.demand && !x.dm ? [{ icon: "send" as IconName, label: "Request an intro", sub: "A drafted ask in your voice", disabled: !x.i || x.i.c.hidden, onClick: () => act(x, { k: "intro", l: "Request an intro", ic: "send" }) }] : []),
                                   ...(x.i ? [{ icon: "building" as IconName, label: "Open company", sub: "Fit, need, who you know", onClick: () => c.openCompany(x.i!.c.id) }] : []),
                                   ...(x.i && !x.i.c.hidden ? [{ icon: "route" as IconName, label: "Find my warmest introduction", sub: "Every way in there", onClick: () => (setWarmFocus(x.i!.c.id), c.openPage("warm")) }] : []),
                                   {
@@ -496,7 +504,13 @@ export function Ui3Network() {
                   {warm && warm.directory > 0 && (
                     <p className="m-small fellows">
                       <Ic n="info" />
-                      {plural(warm.directory, "fellow fractional")} on Merlin {warm.directory === 1 ? "is" : "are"} in the directory. Only members who opted in are counted, and you see only what each allows.
+                      <span>
+                        More fellow fractionals are in the{" "}
+                        <button type="button" className="u3-link" onClick={() => c.openPage("fractionals")}>
+                          Fractionals directory
+                        </button>
+                        . Only members who opted in are listed, and you see only what each allows.
+                      </span>
                     </p>
                   )}
                 </section>
@@ -586,19 +600,21 @@ function NextMove({ next, me, onAsk }: { next: import("@/lib/paths/types").WarmR
   if (!next) return null;
   const nodes = (r?.nodes ?? []).slice(0, 4);
   const via = nodes.find((n) => n.role === "person");
+  // Someone the member knows who decides: Discuss opportunity or Reconnect, never an intro to themself.
+  const ask = askOf(next, via ? via.label.split(" ")[0] : null);
   const W = 300;
   const xs = nodes.map((_, i) => 22 + (i * (W - 44)) / Math.max(1, nodes.length - 1));
   return (
     <section className="m-panel nw-next">
       <p className="m-eyebrow forest">Your next move</p>
-      <h2 className="m-h2">A warm path to {next.name}.</h2>
+      <h2 className="m-h2">{next.direct ? `Who decides at ${next.name} is in your network.` : `A warm path to ${next.name}.`}</h2>
       <p className="m-sub">
         {next.via}.{next.hiringNow ? " They're hiring for your expertise." : ""}
       </p>
       {nodes.length > 1 && (
         <svg className="nw-mini" viewBox={`0 0 ${W} 104`} role="img" aria-label={r?.chain ?? ""}>
           {nodes.slice(1).map((_, i) => (
-            <line key={i} x1={xs[i] + 18} x2={xs[i + 1] - 18} y1="32" y2="32" className={`nm-e ${r?.links[i]?.band === "Strong" || r?.links[i]?.band === "Good" ? "strong" : "inf"}`} />
+            <line key={i} x1={xs[i] + 18} x2={xs[i + 1] - 18} y1="32" y2="32" className={`nm-e ${r?.links[i]?.rel === "Strong" || r?.links[i]?.rel === "Good" ? "strong" : "inf"}`} />
           ))}
           {via && nodes.length > 2 && (
             <>
@@ -628,8 +644,8 @@ function NextMove({ next, me, onAsk }: { next: import("@/lib/paths/types").WarmR
       )}
       <div className="m-rowact nw-next-a">
         <button type="button" className="m-btn m-btn-primary" onClick={() => onAsk(next.id)}>
-          <Ic n="send" />
-          Request an intro{via ? ` from ${via.label.split(" ")[0]}` : ""}
+          <Ic n={ask.k === "discuss" || ask.k === "reconnect" ? "cal" : "send"} />
+          {ask.l}
         </button>
       </div>
     </section>

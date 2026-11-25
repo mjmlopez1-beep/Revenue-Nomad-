@@ -131,12 +131,27 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
       if (!Number.isFinite(ms) || now - ms > 182 * DAY || ms > now + DAY) return;
       ev.push({ at: iso, t, s, hot: now - ms < 14 * DAY });
     };
-    for (const g of radar?.sigs ?? []) add(g.at, kindLabel(g.kind, fn), `${g.line.split(" · ")[0]} · from Crystal Ball`);
+    // The seats and postings on file first, by the day each happened; Crystal Ball's signal about the same event (a hire
+    // that month, a role posted within the week) is the same dot, never drawn twice (acceptance F5).
+    const near = (a: string, b: string, days: number) => Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) <= days * DAY;
+    const kinds: { at: string; k: "role" | "hire" }[] = [];
     for (const e of i.engs) {
-      if (e.opened || e.posted) add(e.posted ?? e.opened, "Role posted", `${shown(e.cells.role) ?? "An open role"} · from the job posting`);
-      const start = shown(e.cells.start);
       const f = shown(e.cells.function);
-      if (start && !e.opened) add(start, f ? `Fractional ${f} started` : "A fractional seat started", "From seats on file");
+      if (e.opened || e.posted) {
+        const at = (e.posted ?? e.opened)!;
+        add(at, "Role posted", `${shown(e.cells.role) ?? "An open role"} · from the job posting`);
+        kinds.push({ at: at.length === 7 ? `${at}-01` : at.slice(0, 10), k: "role" });
+      }
+      const start = shown(e.cells.start);
+      if (start && !e.opened) {
+        add(start, f ? `Fractional ${f} started` : "A fractional seat started", "From seats on file");
+        kinds.push({ at: start.length === 7 ? `${start}-01` : start.slice(0, 10), k: "hire" });
+      }
+    }
+    for (const g of radar?.sigs ?? []) {
+      const k = g.kind === "role" ? "role" : g.kind === "adjacent" || g.kind === "rehire" ? "hire" : null;
+      if (k && g.at && kinds.some((x) => x.k === k && near(x.at, g.at!, k === "role" ? 10 : 31))) continue;
+      add(g.at, kindLabel(g.kind, fn), `${g.line.split(" · ")[0]} · from Crystal Ball`);
     }
     return ev.sort((a, b) => a.at.localeCompare(b.at)).slice(-6);
   }, [radar, i, fn, now]);
@@ -144,6 +159,8 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
   const need = role?.mine ? "Hiring now" : role ? "Hiring" : radar ? "An early signal" : i.c.friendly.fractional ? "Hired fractionals before" : "Quiet for now";
   const needLine = role ? role.title : radar ? oppTitle(radar, fn) : i.c.friendly.fractional ? plural(i.c.friendly.fractional, "fractional hire") : "No signal on file";
   const via = best?.nodes.find((n) => n.role === "person");
+  /** The route's first person is a fellow fractional on Merlin (not someone the member knows). */
+  const viaFellow = !!via && best?.src === "fellow";
 
   const addPipe = async () => {
     const res = await acts.addPipe(id);
@@ -173,10 +190,16 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
                 <Ic n="lock" />
                 See what opens it
               </button>
-            ) : (best && best.between > 0) || warm ? (
+            ) : (best && best.between > 0) || (!best && warm) ? (
               <button type="button" className="m-btn m-btn-primary" onClick={ask}>
                 <Ic n="send" />
                 Request an intro
+              </button>
+            ) : best && best.src !== "direct" ? (
+              // The person the member knows decides: talk to them, never an intro to themself.
+              <button type="button" className="m-btn m-btn-primary" onClick={ask}>
+                <Ic n="cal" />
+                {role ? "Discuss opportunity" : "Reconnect"}
               </button>
             ) : best ? (
               <button type="button" className="m-btn m-btn-primary" onClick={ask}>
@@ -241,8 +264,8 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
             </span>
             <div>
               <p className="m-eyebrow">Who you know</p>
-              <b>{people.length ? `${people.length} there` : via ? `Through ${via.label.split(" ")[0]}` : "Nobody yet"}</b>
-              <span className="m-small">{people.length ? people[0].title ?? "Someone you know" : via ? "Your network reaches in" : "Bring in who you know"}</span>
+              <b>{people.length ? `${people.length} there` : via && !viaFellow ? `Through ${via.label.split(" ")[0]}` : "Nobody there yet"}</b>
+              <span className="m-small">{people.length ? people[0].title ?? "Someone you know" : viaFellow ? `A fellow fractional, ${via!.locked ? "on Merlin" : via!.label.split(" ")[0]}, can help` : via ? "Someone you know knows them" : "Bring in who you know"}</span>
             </div>
           </div>
           <div className="cv-cell">
@@ -251,7 +274,7 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
             </span>
             <div>
               <p className="m-eyebrow cobalt">How you get in</p>
-              <b>{best ? (best.between === 0 ? "Write to them yourself" : best.between === 1 ? "1 introduction" : `${best.between} introductions`) : "Direct note"}</b>
+              <b>{best ? (best.between === 0 ? (best.src === "direct" ? "Write to them yourself" : "Who decides, in your network") : best.between === 1 ? "1 introduction" : `${best.between} introductions`) : "Direct note"}</b>
               <span className="m-small">{best ? best.short : "No warm path yet"}</span>
             </div>
           </div>
@@ -356,7 +379,7 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
               <div>
                 <p className="m-eyebrow forest">Who you know</p>
                 <h2 className="m-h3" style={{ marginTop: 8 }}>
-                  {people.length ? (people.length === 1 ? "You know someone there." : `You know ${numWord(people.length).toLowerCase()} people there.`) : best && best.between > 0 ? "Nobody yet, but you're connected." : "Nobody yet."}
+                  {people.length ? (people.length === 1 ? "You know someone there." : `You know ${numWord(people.length).toLowerCase()} people there.`) : viaFellow ? "Nobody you know yet. A fellow fractional can help." : best && best.between > 0 ? "Nobody there yet. Someone you know can introduce you." : "Nobody you know there yet."}
                 </h2>
               </div>
             </div>
@@ -389,7 +412,7 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
                       </div>
                     </div>
                     <Chip kind="cobalt" sm>
-                      On your path
+                      {viaFellow && n === via ? "Fellow fractional" : "On your path"}
                     </Chip>
                   </li>
                 ))}
@@ -406,7 +429,7 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
               <div>
                 <p className="m-eyebrow cobalt">How you get in</p>
                 <h2 className="m-h3" style={{ marginTop: 8 }}>
-                  {best ? (best.between === 0 ? "You can write to them yourself." : best.between === 1 ? "One introduction gets you in." : `${numWord(best.between)} introductions get you in.`) : "Start with a direct note."}
+                  {best ? (best.between === 0 ? (best.src === "direct" ? "You can write to them yourself." : "Who decides is in your network.") : best.between === 1 ? "One introduction gets you in." : `${numWord(best.between)} introductions get you in.`) : "Start with a direct note."}
                 </h2>
               </div>
               {best && (

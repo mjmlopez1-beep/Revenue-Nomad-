@@ -210,6 +210,7 @@
 .u3p .gr-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
 .u3p .gr-e { fill: none; stroke: var(--m-co-soft); stroke-linecap: round; transition: opacity .2s, stroke .2s; cursor: help; }
 .u3p .gr-e.inf { stroke-dasharray: 1 9; }
+.u3p .gr-e.how { stroke-dasharray: 7 7; }
 .u3p .gr[data-act-path="0"] .gr-e.p0, .u3p .gr[data-act-path="1"] .gr-e.p1 { stroke: var(--m-cobalt); }
 .u3p .gr[data-act-path="0"] .gr-l.p1, .u3p .gr[data-act-path="1"] .gr-l.p0 { opacity: 0; }
 .u3p .gr[data-hover="0"] .gr-e.p1, .u3p .gr[data-hover="1"] .gr-e.p0 { opacity: .15; }
@@ -231,6 +232,7 @@
 .u3p .gr-leg { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 4px 22px 18px; font-size: 13.5px; color: var(--m-ink-2); }
 .u3p .gr-leg li { display: flex; align-items: center; gap: 8px; }
 .u3p .gr-leg i { width: 26px; border-radius: 99px; background: var(--m-cobalt); display: inline-block; }
+.u3p .gr-leg i.how { height: 3px; background: linear-gradient(90deg, var(--m-cobalt) 0 7px, transparent 7px) 0 0 / 14px 3px repeat-x; }
 .u3p .gr-leg i.inf { height: 4px; background: radial-gradient(circle, var(--m-cobalt) 0 2px, transparent 2.5px) 0 0 / 9px 4px repeat-x; }
 .u3p .wp-steps { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
 .u3p .wp-steps li { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: var(--m-r-lg); background: var(--m-panel); border: 1px solid var(--m-line); }

@@ -20,7 +20,7 @@ import { useApp } from "../shell/pages";
 import { useToast } from "../../ui/shared";
 import { useWayIn, wayPost } from "../network/useWays";
 import { useUi3Head } from "./head";
-import { isWarm, takeWarmFocus, useWarmShared } from "./data";
+import { askOf, lockedWarm, takeWarmFocus, useWarmShared, warmList } from "./data";
 import { Ic } from "./icons";
 import { Av, Band, Chip, CoLogo, Wait } from "./parts";
 import { coLine, coName, initialsOf, numWord } from "./model";
@@ -43,7 +43,9 @@ export function Ui3Warm() {
   const [alt, setAlt] = useState(0);
   const [pick, setPick] = useState(false);
   const [ask, setAsk] = useState(!!focus?.ask);
-  const rows = useMemo(() => (warm.data?.rows ?? []).filter((r) => isWarm(r) && !r.locked && r.name).sort((a, b) => Number(b.hiringNow) - Number(a.hiringNow) || (b.best ?? 0) - (a.best ?? 0)), [warm.data]);
+  // The one list (data.ts warmList) behind the nav's count, Home and My Network: companies that need the member first.
+  const rows = useMemo(() => warmList(warm.data), [warm.data]);
+  const lockedN = lockedWarm(warm.data);
   const id = co ?? rows[0]?.id ?? null;
   const i = id ? c.byId.get(id) ?? null : null;
   const way = useWayIn(id);
@@ -79,18 +81,38 @@ export function Ui3Warm() {
   const target = route?.nodes[route.nodes.length - 1] ?? null;
   const first = route?.nodes.find((n) => n.role === "person") ?? null;
   const between = route?.between ?? 0;
+  // A route with nobody in between that rests on nothing the two share is a cold note, said so.
+  const cold = !!route && between === 0 && (route.src === "direct" || route.links[0]?.words === "You have never met");
+  const targetFirst = target ? (target.locked || target.company ? target.label.charAt(0).toLowerCase() + target.label.slice(1) : target.label.split(" ")[0]) : "them";
+  const rowOf = rows.find((r) => r.id === id) ?? null;
+  const askAct = route ? askOf({ direct: between === 0, hiringNow: !!rowOf?.hiringNow, src: cold ? "direct" : (route.src ?? null) }, between === 0 ? targetFirst : null) : null;
+  const title = !route ? "You're closer than you think." : cold ? "Start with a direct note." : between === 0 ? "One note away." : "You're closer than you think.";
+  const whoAt = target?.company || target?.locked ? name : `${target?.label}${target?.sub && !target.sub.startsWith("Decides") ? `, ${target.sub.replace(/ · decides$/, "").replace(/^decides$/, "")}` : ""}`.replace(/, $/, "");
   const lede = !route ? (
     "Bring in who you know, and Merlin shows who can get you in the room."
   ) : between === 0 ? (
-    <>You can write to {target?.label} directly.</>
+    cold ? (
+      <>Nobody you know is in between yet. You can write to {target?.locked || target?.company ? targetFirst : target?.label} directly.</>
+    ) : (
+      <>
+        {target?.label} at {name} is in your network
+        {route.decides ? ", and decides on fractional hires" : ""}.
+      </>
+    )
   ) : (
     <>
       <b>
         {numWord(between)} {between === 1 ? "introduction" : "introductions"}
       </b>{" "}
-      away from {target?.company ? "the company" : `${target?.label}${target?.sub ? `, ${target.sub.split(" · ")[0]},` : ""}`} at {name}.
+      away from {target?.company || target?.locked ? name : `${whoAt} at ${name}`}.
     </>
   );
+  /** How the first link reads: its band only where Merlin derives one, else how the two are connected. */
+  const l0 = route?.links[0] ?? null;
+  const fromWords = l0?.from ? `${l0.from.charAt(0).toLowerCase()}${l0.from.slice(1)}` : null;
+  // Where it comes from only when the words don't already say it ("From your LinkedIn since 2023, not met").
+  const fromTail = fromWords && !/^from /i.test(l0?.words ?? "") && !(/Merlin/.test(l0?.words ?? "") && /Merlin/.test(fromWords)) ? fromWords : null;
+  const firstLine = l0 ? (l0.rel ? `${l0.rel} relationship: ${l0.words.charAt(0).toLowerCase()}${l0.words.slice(1)}${fromTail ? `, from ${fromTail}` : ""}.` : `${l0.words}${fromTail ? `. From ${fromTail}` : ""}.`) : route?.why;
 
   return (
     <main className="tp-main tp-main-page u3 u3p" id="tp-page">
@@ -105,17 +127,27 @@ export function Ui3Warm() {
             </>
           }
           ec="cobalt"
-          title="You're closer than you think."
+          title={title}
           lede={lede}
         />
 
         {!rows.length && !id ? (
           <section className="m-panel">
             <div className="empty">
-              <b>No warm paths yet.</b>
-              <span className="m-sub">Connect your mail and calendar, or add your contacts, and Merlin finds who can introduce you at the companies you want. Only you see them.</span>
+              <b>{lockedN ? `${lockedN === 1 ? "A warm path waits" : `${numWord(lockedN)} warm paths wait`} at ${lockedN === 1 ? "a locked company" : "locked companies"}.` : "No warm paths yet."}</b>
+              <span className="m-sub">
+                {lockedN
+                  ? "Open the company to see who can introduce you. Target Companies lists them by their industry, size and region, and says what opening one costs before anything is spent."
+                  : "Connect your mail and calendar, or add your contacts, and Merlin finds who can introduce you at the companies you want. Only you see them."}
+              </span>
               <div className="nm-acts">
-                <button type="button" className="m-btn m-btn-primary m-btn-sm" onClick={() => c.openPage("settings")}>
+                {lockedN > 0 && (
+                  <button type="button" className="m-btn m-btn-primary m-btn-sm" onClick={() => c.openPage("table")}>
+                    <Ic n="building" />
+                    Target Companies
+                  </button>
+                )}
+                <button type="button" className={`m-btn ${lockedN ? "m-btn-secondary" : "m-btn-primary"} m-btn-sm`} onClick={() => c.openPage("settings")}>
                   <Ic n="plus" />
                   Import contacts
                 </button>
@@ -163,16 +195,16 @@ export function Ui3Warm() {
                 <div className="wp-start">
                   {first ? <Av name={first.label} s={44} hid={first.locked} /> : <Av name={me.name} s={44} you />}
                   <div>
-                    <b>{first ? `Start with ${first.label.split(" ")[0]}.` : `Write to ${target?.label.split(" ")[0]}.`}</b>
-                    <span className="m-sub">{route.links[0] ? `${route.links[0].band} relationship${route.links[0].from ? `, from ${route.links[0].from.charAt(0).toLowerCase()}${route.links[0].from.slice(1)}` : ""}.` : route.why}</span>
+                    <b>{first ? `Start with ${first.label.split(" ")[0]}.` : `Write to ${targetFirst}.`}</b>
+                    <span className="m-sub">{firstLine}</span>
                   </div>
                 </div>
               )}
               <div className="m-toolbar">
                 {route && (
                   <button type="button" className="m-btn m-btn-primary" onClick={() => setAsk(true)}>
-                    <Ic n="send" />
-                    {between === 0 ? `Write to ${target?.label.split(" ")[0]}` : "Request an intro"}
+                    <Ic n={askAct?.k === "discuss" || askAct?.k === "reconnect" ? "cal" : "send"} />
+                    {askAct?.l ?? "Request an intro"}
                   </button>
                 )}
                 {routes.length > 1 && (
@@ -210,14 +242,15 @@ export function Ui3Warm() {
                         </p>
                         <p className="m-sub">{l.words}</p>
                         <div className="st-ft">
-                          {l.from ? (
+                          {l.rel && (
+                            <Chip kind="soft" sm title="From how recently you were in touch: your mail and calendar, or messages on Merlin">
+                              {l.rel} relationship
+                            </Chip>
+                          )}
+                          {l.from && (
                             <Chip kind="forest" sm>
                               From {l.from.charAt(0).toLowerCase()}
                               {l.from.slice(1)}
-                            </Chip>
-                          ) : (
-                            <Chip kind="soft" sm>
-                              {l.band}
                             </Chip>
                           )}
                         </div>

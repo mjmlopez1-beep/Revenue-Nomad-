@@ -14,6 +14,7 @@ import { usePaths } from "../network/usePaths";
 import { usePipeline, pipelineAct } from "../pipelineStore";
 import type { CoInfo } from "../model";
 import { fit7, openRole, type Fit7, type OpenRole } from "./model";
+import { namedFn } from "../model";
 
 /* ---------- Warm paths' list, fetched once a visit ---------- */
 
@@ -52,8 +53,9 @@ export function useWarmShared(): WarmSnap {
   return s;
 }
 
-/** A warm way in: through someone the member knows or a fellow fractional, not a cold note to the company. */
-export const isWarm = (w: WarmRow | null | undefined): w is WarmRow => !!w && !!w.via && w.src !== "direct";
+// The warm list and the ask live in model.ts (pure, so the checks read them); re-exported here for the pages.
+export { askOf, isWarm, lockedWarm, warmList } from "./model";
+import { isWarm } from "./model";
 
 /* ---------- every company, as the new design reads it ---------- */
 
@@ -61,6 +63,12 @@ export interface TRow {
   i: CoInfo;
   fit: Fit7;
   role: OpenRole | null;
+  /**
+   * Hiring for the member's expertise now: an open role in their function (any open role while they
+   * have no function set). The one test behind "Who's hiring for my expertise?", the Hiring now chip,
+   * My Network's gold Hiring now and the Opportunities list, so every count agrees (acceptance F17).
+   */
+  hire: boolean;
   /** Ways in there through people the member knows (GET /api/paths counts), or null. */
   ways: { n: number; first: number } | null;
   /** Warm paths' row: who the best way in goes through. */
@@ -79,7 +87,15 @@ export function useTargets() {
   const hidden = useMemo(() => new Set(c.me.ui3Hidden ?? []), [c.me.ui3Hidden]);
   const inPipe = useMemo(() => new Set((pipe?.entries ?? []).filter((e) => !["lost", "notnow"].includes(e.stage)).map((e) => e.company)), [pipe]);
   const warmBy = useMemo(() => new Map((warm?.rows ?? []).map((r) => [r.id, r])), [warm]);
-  const base = useMemo(() => c.infos.map((i) => ({ i, fit: fit7(i, c.me), role: openRole(i, c.me.function ?? null) })), [c.infos, c.me]);
+  const myFn = namedFn(c.me.function ?? null);
+  const base = useMemo(
+    () =>
+      c.infos.map((i) => {
+        const role = openRole(i, c.me.function ?? null);
+        return { i, fit: fit7(i, c.me), role, hire: !!role && (role.mine || !myFn) };
+      }),
+    [c.infos, c.me, myFn],
+  );
   const rows: TRow[] = useMemo(
     () =>
       base.map((b) => ({
@@ -102,8 +118,9 @@ export function useTargets() {
   const opps = useMemo(
     () =>
       visible
-        .filter((r) => !!r.role?.mine || (r.fit.n >= 4 && (!!r.role || !!r.ways?.n || isWarm(r.warm))))
-        .sort((a, b) => b.fit.n - a.fit.n || Number(!!b.role) - Number(!!a.role) || (b.ways?.n ?? 0) - (a.ways?.n ?? 0) || a.i.c.name.localeCompare(b.i.c.name)),
+        .filter((r) => r.hire || (r.fit.n >= 4 && (!!r.ways?.n || isWarm(r.warm))))
+        // Hiring in the member's own function first, then fit.
+        .sort((a, b) => Number(b.hire) - Number(a.hire) || b.fit.n - a.fit.n || (b.ways?.n ?? 0) - (a.ways?.n ?? 0) || a.i.c.name.localeCompare(b.i.c.name)),
     [visible],
   );
   const all = useMemo(() => [...visible].sort((a, b) => b.fit.n - a.fit.n || Number(!!b.role) - Number(!!a.role) || a.i.c.name.localeCompare(b.i.c.name)), [visible]);

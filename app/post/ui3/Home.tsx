@@ -20,11 +20,12 @@ import { ProWelcome, TrialSummaryCard } from "../Billing";
 import { kindLabel } from "../crystal/crystalModel";
 import { useCrystalClick } from "../CrystalOpen";
 import { useUi3Head } from "./head";
-import { goTargets, isWarm, useTargets, useWarmShared, setWarmFocus } from "./data";
+import { askOf, goTargets, useTargets, useWarmShared, setWarmFocus, warmList } from "./data";
 import { Art } from "./illustrations";
 import { Ic } from "./icons";
 import { Band, Chip, CoLogo, FitRing, ownClick } from "./parts";
-import { coName, fit7, numWord, plural } from "./model";
+import { coFacts, coTitle, fit7, numWord, plural, predicted } from "./model";
+import { crystalButton } from "../todayModel";
 import type { CoInfo } from "../model";
 
 const firstName = (n: string) => n.trim().split(/\s+/)[0] || "there";
@@ -75,22 +76,33 @@ export function Ui3Home() {
   const hello = useMemo(() => ((h) => (h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"))(new Date().getHours()), []);
   const today = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }), []);
 
-  /* Crystal Ball's newest three, with their fit */
-  const ball = useMemo(() => (data?.rows ?? []).map((row) => ({ row, i: c.byId.get(row.id) })).filter((x): x is { row: RadarRow; i: CoInfo } => !!x.i).slice(0, 3), [data, c.byId]);
+  /* Crystal Ball's newest three, with their fit: predicted demand only (a posted role is Hiring now, in gold, never here) */
+  const ball = useMemo(() => predicted(data?.rows ?? []).map((row) => ({ row, i: c.byId.get(row.id) })).filter((x): x is { row: RadarRow; i: CoInfo } => !!x.i).slice(0, 3), [data, c.byId]);
+  // Free: a click on a locked company spends the one free open of the day, so the row says so.
+  const freeOpen = crystalButton(me);
   // One number with the nav's badge: Crystal Ball's companies new since the last visit (TodayData.newCount, TradingPost radarN).
   const newN = data?.newCount ?? 0;
 
-  /* your next move: the warmest way in Merlin found, to a company the member can see */
-  const next = useMemo(() => (warm?.rows ?? []).filter((r) => isWarm(r) && !r.locked && r.name).sort((a, b) => Number(b.hiringNow) - Number(a.hiringNow) || (b.best ?? 0) - (a.best ?? 0))[0] ?? null, [warm]);
-  const warmN = warm ? warm.rows.filter(isWarm).length : 0;
+  /* your next move: the warm path to a company that needs the member most (data.ts warmList: the nav's and Warm Paths' one list) */
+  const wl = useMemo(() => warmList(warm), [warm]);
+  const next = wl[0] ?? null;
+  const warmN = wl.length;
+  const nextAsk = next ? askOf(next, next.person?.name.split(" ")[0] ?? null) : null;
 
   /* what needs you today: Today's moves, then the follow-ups due */
   const moves = useMemo(() => {
     const out: { id: string; i: CoInfo; title: string; line: string }[] = [];
+    let opens = 0;
     for (const w of data?.moves?.list ?? []) {
       const i = c.byId.get(w.id);
       if (!i) continue;
       const m = buildMove(i.c, w.row, w.know, me);
+      // A locked company is its free facts, never "Locked company"; and on Free only one "open it" move a day (Free opens one free).
+      if (m.hidden) {
+        if (opens++ && me.crystal !== "all") continue;
+        out.push({ id: w.id, i, title: `${m.title}: ${coTitle(i).replace(/^./, (x) => x.toLowerCase())}`, line: [coFacts(i), m.line].filter(Boolean).join(". ") });
+        continue;
+      }
       out.push({ id: w.id, i, title: m.name ? `${m.title} at ${m.name}`.replace(/ at (.+) at \1$/, " at $1") : m.title, line: m.line });
     }
     return out.slice(0, 3);
@@ -152,7 +164,7 @@ export function Ui3Home() {
               <div>
                 <p className="m-eyebrow">
                   <Ic n="sparkle" />
-                  Crystal Ball{newN ? ` · ${newN} new` : ""}
+                  Crystal Ball
                 </p>
                 <h2 className="m-h2" id="h-cb" style={{ marginTop: 8 }}>
                   Companies that
@@ -174,11 +186,16 @@ export function Ui3Home() {
                       <button type="button" className="cbp-row" onClick={() => void crystalClick(row.id, !!i.c.hidden, () => c.openCompany(row.id))}>
                         <CoLogo i={i} s={44} />
                         <span className="cbp-t">
-                          <b>{row.name ?? coName(i)}</b>
-                          <span>{oppTitle(row, fn)}</span>
-                          <Chip kind="gold" sm dot>
+                          <b>{row.name ?? coTitle(i)}</b>
+                          <span>{i.c.hidden && !row.name ? [coFacts(i), oppTitle(row, fn)].filter(Boolean).join(" · ") : oppTitle(row, fn)}</span>
+                          <Chip kind="am" sm dot>
                             {kindLabel(row.kinds[0], fn)}
                           </Chip>
+                          {i.c.hidden && !row.name && freeOpen?.kind === "crystal" && me.crystal === "one" && (
+                            <small className="m-small" style={{ marginLeft: 10 }}>
+                              {freeOpen.label}
+                            </small>
+                          )}
                         </span>
                         <FitRing fit={fit} inside />
                         <span className="m-row-go">
@@ -211,15 +228,15 @@ export function Ui3Home() {
               {next ? (
                 <>
                   <h2 className="m-h2" id="h-nm">
-                    A warm path to {next.name}.
+                    {next.direct ? `Who decides at ${next.name} is in your network.` : `A warm path to ${next.name}.`}
                   </h2>
                   <p className="m-sub">
                     {next.via}.{next.hiringNow ? " They're hiring for your expertise." : ""}
                   </p>
                   <div className="nm-acts">
                     <button type="button" className="m-btn m-btn-primary" onClick={() => (setWarmFocus(next.id, true), c.openPage("warm"))}>
-                      <Ic n="send" />
-                      Request an intro
+                      <Ic n={nextAsk?.k === "discuss" || nextAsk?.k === "reconnect" ? "cal" : "send"} />
+                      {nextAsk?.k === "intro" ? "Request an intro" : nextAsk?.l}
                     </button>
                     <button type="button" className="m-btn m-btn-ghost" onClick={() => (setWarmFocus(next.id), c.openPage("warm"))}>
                       See the path
@@ -336,7 +353,7 @@ export function Ui3Home() {
                   <span className="m-bignum" style={{ color: "var(--m-am-ink)" }}>
                     {warm ? warmN : "·"}
                   </span>
-                  <span>warm ways in</span>
+                  <span>{warmN === 1 ? "company with a warm way in" : "companies with a warm way in"}</span>
                 </button>
               </div>
             </div>

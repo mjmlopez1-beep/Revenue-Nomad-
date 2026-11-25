@@ -18,13 +18,14 @@ import { RADAR_RANGES, type RadarRange, type RadarRow, type RadarSigView } from 
 import { TUNE_GROUPS, tuneGroupOf, type TuneGroup } from "@/lib/radar/tune";
 import { useApp } from "../shell/pages";
 import { useCrystalClick } from "../CrystalOpen";
-import { dateWords, kindLabel, sourcesLine, whenLong } from "../crystal/crystalModel";
+import { dateWords, kindLabel, latestAt, sourcesLine } from "../crystal/crystalModel";
+import { crystalButton } from "../todayModel";
 import type { CoInfo } from "../model";
 import { useUi3Head } from "./head";
-import { useCoActs } from "./data";
+import { goTargets, useCoActs } from "./data";
 import { Ic } from "./icons";
 import { Band, Chip, CoLogo, FitRing, Traits, Wait } from "./parts";
-import { coLine, coName, fit7 } from "./model";
+import { coFacts, coLine, coTitle, fit7, plural, predicted } from "./model";
 import { oppTitle } from "./Home";
 
 const Legacy = dynamic(() => import("../crystal/CrystalBall").then((m) => m.CrystalBallPage), { ssr: false, loading: () => <Wait /> });
@@ -53,13 +54,20 @@ export function Ui3Crystal() {
   const flip = (on: boolean) => ((tableMode = on), setTable(on));
 
   const today = view?.today ?? new Date().toISOString().slice(0, 10);
+  // The predicted feed: a posted role is Hiring now (gold, Target Companies), never here (model.ts predicted).
+  const feed = useMemo(() => predicted(view?.rows ?? []), [view]);
+  const posted = (view?.rows.length ?? 0) - feed.length;
   const rows: CRow[] = useMemo(
     () =>
-      (view?.rows ?? [])
+      feed
         .map((row) => ({ row, i: c.byId.get(row.id) }))
         .filter((x): x is { row: RadarRow; i: CoInfo } => !!x.i)
-        .map(({ row, i }) => ({ row, i, fresh: !!row.day && dayMs(today) - dayMs(row.day) < 7 * DAY, group: tuneGroupOf(row.kinds[0]) })),
-    [view, c.byId, today],
+        // New this week: the signal HAPPENED this week (its own day), not the day Merlin noticed it.
+        .map(({ row, i }) => {
+          const at = latestAt(row.sigs ?? []);
+          return { row, i, fresh: !!at && dayMs(today) - dayMs(at) < 7 * DAY && dayMs(at) <= dayMs(today), group: tuneGroupOf(row.kinds[0]) };
+        }),
+    [feed, c.byId, today],
   );
   const newN = rows.filter((r) => r.fresh).length;
   const [kind, setKind] = useState<"all" | "new" | TuneGroup>("all");
@@ -180,7 +188,7 @@ export function Ui3Crystal() {
               <div className="m-toolbar">
                 {only && (
                   <button type="button" className="m-chip am" onClick={() => setOnly(null)}>
-                    {coName(rows.find((r) => r.row.id === only)!.i)} only <Ic n="x" />
+                    {((x) => x.row.name ?? coTitle(x.i))(rows.find((r) => r.row.id === only)!)} only <Ic n="x" />
                   </button>
                 )}
                 <button type="button" className="m-btn m-btn-secondary m-btn-sm" onClick={() => flip(true)}>
@@ -189,6 +197,15 @@ export function Ui3Crystal() {
                 </button>
               </div>
             </div>
+            {posted > 0 && (
+              <p className="m-small cb-posted">
+                {plural(posted, "company", "companies")} with only a posted role {posted === 1 ? "is" : "are"} confirmed demand, under Hiring now in{" "}
+                <button type="button" className="u3-link" onClick={() => goTargets(c)}>
+                  Target Companies
+                </button>
+                .
+              </p>
+            )}
 
             <div className="m-table opps">
               {list.length ? (
@@ -231,10 +248,12 @@ function OppRow({ r, fn, today, open, onWhy, onExplore, onWatch }: { r: CRow; fn
   const { row, i } = r;
   const sigs: RadarSigView[] = row.sigs?.length ? row.sigs : row.lines.map((line, k) => ({ kind: row.kinds[k] ?? row.kinds[0], line }));
   const fit = fit7(i, c.me);
-  const name = row.name ?? coName(i);
+  const name = row.name ?? coTitle(i);
   const following = i.c.following;
   const first = sigs[0];
-  const hiring = whenLong(row.h);
+  // Free: Explore on a locked company spends the day's one free open, so the button says so (CrystalOpen's words).
+  const cb = i.c.hidden && !row.name ? crystalButton(c.me) : null;
+  const go = cb?.kind === "crystal" && c.me.crystal === "one" ? cb.label : "Explore";
   return (
     <article className={`op${open ? " open" : ""}`}>
       <div className="op-main">
@@ -244,7 +263,7 @@ function OppRow({ r, fn, today, open, onWhy, onExplore, onWatch }: { r: CRow; fn
             <span className="m-name">
               <span>{name}</span>
             </span>
-            <small>{coLine(i)}</small>
+            <small>{i.c.hidden && !row.name ? coFacts(i) || coLine(i) : coLine(i)}</small>
           </div>
         </button>
         <div className="op-opp">
@@ -252,15 +271,15 @@ function OppRow({ r, fn, today, open, onWhy, onExplore, onWatch }: { r: CRow; fn
           <span>{row.lines[0]?.split(" · ")[0]}</span>
         </div>
         <div className="op-sig m-ph-hide">
-          <Chip kind={r.fresh ? "gold" : "soft"} sm dot>
-            {hiring ?? kindLabel(first.kind, fn)}
+          <Chip kind={r.fresh ? "am" : "soft"} sm dot>
+            {kindLabel(first.kind, fn)}
           </Chip>
           <small>{GROUP_WORD[r.group]}</small>
         </div>
         <FitRing fit={fit} />
         <div className="op-acts">
-          <button type="button" className="m-btn m-btn-primary m-btn-sm" onClick={onExplore}>
-            Explore
+          <button type="button" className="m-btn m-btn-primary m-btn-sm" onClick={onExplore} title={go !== "Explore" ? "Opens this company with everything on it, free. One a day on Free." : undefined}>
+            {go}
           </button>
           <button type="button" className="m-iconbtn sm" onClick={onWatch} aria-pressed={following} aria-label={following ? `Watching ${name}` : `Watch ${name}`} title={following ? "Watching. Merlin tells you when it moves." : "Watch: tell me when it moves"}>
             <Ic n={following ? "check" : "eye"} />
@@ -402,7 +421,8 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
           {lanes.map((r, li) => {
             const y = top + li * LH + LH / 2;
             const sigs = (r.row.sigs ?? []).filter((g) => g.at && now - dayMs(g.at) <= span);
-            const name = r.row.name ?? coName(r.i);
+            const name = r.row.name ?? coTitle(r.i);
+            const facts = r.i.c.hidden && !r.row.name ? coFacts(r.i) : "";
             const hot = sigs.some((g) => now - dayMs(g.at!) < 7 * DAY);
             return (
               <g
@@ -446,7 +466,7 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
                       {name.length > 28 ? `${name.slice(0, 27)}…` : name}
                     </text>
                     <text className="rv-s" x="42" y={y + 15}>
-                      {GROUP_WORD[r.group]}
+                      {facts ? `${facts.length > 30 ? `${facts.slice(0, 29)}…` : facts}` : GROUP_WORD[r.group]}
                       {hot ? " · new" : ""}
                     </text>
                   </>
@@ -462,7 +482,7 @@ function River({ rows, today, only, setOnly }: { rows: CRow[]; today: string; on
           </div>
         )}
       </div>
-      {rows.length > LANES && <p className="m-small rv-more">The first {LANES} of {rows.length}, by how likely. Every company is in the list below.</p>}
+      {rows.length > LANES && <p className="m-small rv-more">The first {LANES} of {rows.length} here. Every company is in the list below.</p>}
     </section>
   );
 }

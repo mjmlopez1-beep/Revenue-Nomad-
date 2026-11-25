@@ -3,8 +3,9 @@
 /**
  * The relationship graph (Warm Paths and the company view's "How you get in"): you, each person on
  * the way, and who decides (or the company). Drawn from Merlin's real routes (GET /api/paths?way=):
- * each link's weight is its relationship band (Strong, Good, Fading, Cold: never a score), its words
- * are what it rests on, and its tooltip where Merlin knows it from. The second route, when there is
+ * a link's weight is its relationship band (Strong, Good, Fading, Cold: never a score) only where
+ * Merlin derives one (mail and calendar recency, messages on Merlin: RouteLink.rel); any other link is
+ * drawn dashed, as "how you're connected", with no band. Its words are what it rests on, and its tooltip where Merlin knows it from. The second route, when there is
  * one, branches below; hover a person to see their route, click the other route's person to switch.
  */
 import { useEffect, useRef, useState } from "react";
@@ -77,13 +78,13 @@ export function Graph({ routes, act, onPick, compact, youInitials, youSub }: { r
             return (
               <g key={`${pi}-${li}`}>
                 <path
-                  className={`gr-e p${pi}${l.band === "Cold" ? " inf" : ""}`}
+                  className={`gr-e p${pi}${l.none || l.rel === "Cold" ? " inf" : !l.rel ? " how" : ""}`}
                   d={curve(s, t)}
-                  style={{ strokeWidth: SW[l.band] ?? 2.4 }}
-                  onMouseEnter={(e) => show(e, `${l.band} link`, [l.words, l.from].filter(Boolean).join(" · "))}
+                  style={{ strokeWidth: l.rel ? SW[l.rel] ?? 2.4 : 2.4 }}
+                  onMouseEnter={(e) => show(e, l.rel ? `${l.rel} relationship` : l.none ? "Not connected yet" : "How you're connected", [l.words, l.from].filter(Boolean).join(" · "))}
                   onMouseLeave={() => setTip(null)}
                 >
-                  <title>{`${l.band}. ${l.words}${l.from ? `. From ${l.from}` : ""}`}</title>
+                  <title>{`${l.rel ? `${l.rel} relationship. ` : ""}${l.words}${l.from ? `. From ${l.from}` : ""}`}</title>
                 </path>
                 {!compact && l.words && (
                   <text className={`gr-l p${pi}`} x={(vert ? mx + 18 : mx).toFixed(1)} y={(vert ? my + 4 : my - 14).toFixed(1)} textAnchor={vert ? undefined : "middle"}>
@@ -154,7 +155,7 @@ export function Graph({ routes, act, onPick, compact, youInitials, youSub }: { r
   );
 }
 
-/** The legend: the four bands, as the links draw them. */
+/** The legend: the four bands Merlin derives from mail, calendar and messages, and a connection with no band. */
 export function GraphLegend({ hint }: { hint?: string }) {
   return (
     <ul className="gr-leg">
@@ -172,7 +173,11 @@ export function GraphLegend({ hint }: { hint?: string }) {
       </li>
       <li>
         <i className="inf" />
-        Cold
+        Cold or never met
+      </li>
+      <li title="A fellow fractional, a seat on file or an imported contact: no band without mail, calendar or messages">
+        <i className="how" />
+        Connected
       </li>
       {hint && <li className="m-small">{hint}</li>}
     </ul>

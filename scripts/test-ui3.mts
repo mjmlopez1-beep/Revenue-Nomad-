@@ -216,6 +216,60 @@ async function main() {
   check("the fit ring: a fit caption, its name says traits matched, and its popover lists each trait", /m-fit-cap">fit</.test(parts) && /`Fit: \$\{f\.n\} of \$\{of\} traits match/.test(parts) && /Not matched: /.test(parts) && /not a chance of winning/.test(parts) && /fit\.traits\.map/.test(parts));
   check("an ideal client part the member hasn't set says so", none.traits[0].value === "Not set in your ideal client", none.traits[0]);
 
+  /* ---------- the acceptance test's findings (2026-11-25): one source, every surface agrees ---------- */
+  {
+    const M = await import("../app/post/ui3/model");
+    type WR = import("../lib/paths/types").WarmRow;
+    const wr = (x: Partial<WR>): WR => ({ id: "c1", name: "Open Co", facts: "", locked: false, fit: 2, fitWords: [], odds: "Low", hiringNow: false, ball: false, list: null, best: 40, way: "Good path", band: null, src: "fellow", via: "Through Tess", direct: false, person: null, people: [], fresh: null, zone: "go", x: 60, y: 60, onMap: true, plan: false, rank: 1, ...x }) as WR;
+    // F7: one warm-path list and count; a locked company's way in is counted apart, the same in the count and the list.
+    const wv = { rows: [wr({ id: "a", best: 70, odds: "Low", fit: 2, rank: 1 }), wr({ id: "b", best: 20, odds: "High", hiringNow: true, fit: 4, rank: 2 }), wr({ id: "c", locked: true, name: null, rank: 3 }), wr({ id: "d", src: "direct", via: "A cold note to their CEO", rank: 4 })] } as unknown as import("../lib/paths/types").WarmView;
+    const wl = M.warmList(wv);
+    check("F7: one warm list: locked companies and cold notes are not in it, and the count is its length", wl.map((r) => r.id).join() === "b,a" && M.lockedWarm(wv) === 1, wl.map((r) => r.id));
+    // F4: the next move favours a company that needs the member (hiring, then odds, then fit) over a warmer path to a quiet one.
+    check("F4: the next move is the company hiring for the member, ahead of a warmer path to one with no sign of need", wl[0].id === "b");
+    for (const f of ["app/post/ui3/Home.tsx", "app/post/ui3/Network.tsx", "app/post/ui3/Warm.tsx", "app/post/ui3/Shell.tsx"])
+      check(`F7: ${f} reads the one warm list (warmList), never its own filter`, /warmList\(/.test(read(f)) && !/rows\.filter\(isWarm\)|\.filter\(\(r\) => isWarm\(r\) && !r\.locked/.test(read(f)));
+    // F19: the person the member knows who decides is never asked for an intro to themself.
+    check("F19: someone in between: Request an intro", M.askOf({ direct: false, hiringNow: true, src: "google" }, "Tess").l === "Request an intro from Tess");
+    check("F19: the member knows who decides: Discuss opportunity when hiring, else Reconnect, never an intro", M.askOf({ direct: true, hiringNow: true, src: "linkedin" }).l === "Discuss opportunity" && M.askOf({ direct: true, hiringNow: false, src: "google" }).l === "Reconnect");
+    check("F19: a cold note is Write to them", M.askOf({ direct: true, hiringNow: true, src: "direct" }, "Dana").l === "Write to Dana");
+    const net = read("app/post/ui3/Network.tsx");
+    check("F19: My Network's action for someone who decides is Discuss opportunity or Reconnect, and its menu never offers them an intro", /if \(x\.dm\) return x\.demand \? \{ k: "discuss"/.test(net) && /a\.k !== "intro" && x\.demand && !x\.dm/.test(net) && /const ask = askOf\(next,/.test(net));
+    // F6: Crystal Ball's purple feed has no posted role; a row with only a role is not in it.
+    const rows = [
+      { id: "r1", kinds: ["role"], lines: ["New open role: VP Sales"], sigs: [{ kind: "role", line: "New open role: VP Sales" }], h: [0, 1] },
+      { id: "r2", kinds: ["role", "adjacent"], lines: ["New open role: VP Sales", "Hired a fractional CFO 1 month ago"], notes: ["", "Medium"], sigs: [{ kind: "adjacent", line: "Hired a fractional CFO 1 month ago" }, { kind: "role", line: "New open role: VP Sales" }], h: [0, 1] },
+      { id: "r3", kinds: ["adjacent"], lines: ["Hired a fractional CFO 2 months ago"] },
+    ] as unknown as import("../lib/radar/types").RadarRow[];
+    const pr = M.predicted(rows);
+    check("F6: a row with only a posted role leaves the predicted feed; a mixed row keeps only its predicted signals", pr.map((r) => r.id).join() === "r2,r3" && pr[0].kinds.join() === "adjacent" && pr[0].lines.join() === "Hired a fractional CFO 1 month ago" && pr[0].notes!.join() === "Medium" && pr[0].sigs!.every((g) => g.kind !== "role") && pr[0].h === undefined, pr);
+    for (const f of ["app/post/ui3/Home.tsx", "app/post/ui3/Crystal.tsx", "app/post/ui3/Network.tsx"]) check(`F6: ${f} reads Crystal Ball through predicted()`, /predicted\(/.test(read(f)));
+    // F8: a locked company is described by its free facts.
+    const lockedCo = { c: { hidden: true, shownName: null, name: "", cells: { industry: { s: "value", v: "Fintech" }, employees: { s: "value", v: "11–50" }, revenue: { s: "value", v: "$5M–$20M" }, hq: { s: "value", v: "Austin, TX" } } } } as never;
+    check("F8: a locked company reads as its facts, never a bare Locked company", M.coTitle(lockedCo) === "A Fintech company" && M.coFacts(lockedCo) === "11–50 people · $5M–$20M · Austin, TX", [M.coTitle(lockedCo), M.coFacts(lockedCo)]);
+    const home = read("app/post/ui3/Home.tsx");
+    check("F8: Home lists one open-the-company move a day, with the company's facts", /if \(opens\+\+ && me\.crystal !== "all"\) continue;/.test(home) && /coFacts\(i\)/.test(home) && /coTitle\(i\)/.test(home));
+    const cb = read("app/post/ui3/Crystal.tsx");
+    check("F8: Crystal Ball's lanes and rows say a locked company's facts", /coTitle\(r\.i\)/.test(cb) && /coFacts\(r\.i\)/.test(cb));
+    // F9, F23, F5 on Crystal Ball.
+    check("F9: Explore on Free says it spends the day's free open (Open free · 1 left today)", /crystalButton\(c\.me\)/.test(cb) && /c\.me\.crystal === "one" \? cb\.label : "Explore"/.test(cb));
+    check("F23: no 'by how likely' anywhere in the new design", !/how likely/i.test(["Crystal.tsx", "Home.tsx", "Network.tsx", "Warm.tsx", "Targets.tsx", "Company.tsx"].map((f) => read(`app/post/ui3/${f}`)).join("\n")));
+    check("F5: New this week is when a signal happened (its own day), never the day Merlin listed it", /latestAt\(row\.sigs/.test(cb) && !/fresh: !!row\.day/.test(cb) && !/whenLong/.test(cb));
+    const co = read("app/post/ui3/Company.tsx");
+    check("F5: the company's timeline draws a hire or a posting once (the seat's own date, Crystal Ball's same event skipped)", /kinds\.some\(\(x\) => x\.k === k && near\(/.test(co));
+    // F17: one hiring count: the card, the chip, the tile and Opportunities read TRow.hire (the member's function).
+    const tg = read("app/post/ui3/Targets.tsx");
+    check("F17: Who's hiring for my expertise, the Hiring now chip and the tile all count TRow.hire", /k: "hiring", l: "Hiring now", ic: "brief", f: \(r\) => r\.hire/.test(tg) && /const hiringMine = t\.all\.filter\(\(r\) => r\.hire\)/.test(tg) && /tile === "hiring"\) xs = xs\.filter\(\(r\) => r\.hire\)/.test(tg));
+    check("F17: Opportunities put hiring in the member's function first", /Number\(b\.hire\) - Number\(a\.hire\)/.test(read("app/post/ui3/data.ts")));
+    // F1 in the pages: the band only from RouteLink.rel; F28 headline; F32 one fellow count; F33 who you know.
+    const wp = read("app/post/ui3/Warm.tsx");
+    check("F1: Warm Paths says a band only from rel, else how the two are connected", /l0\.rel \?/.test(wp) && !/\.band\} relationship/.test(wp) && /\{l\.rel && \(/.test(wp));
+    check("F1: the graph weighs a link by rel only; any other link is drawn as connected", /l\.rel \? SW\[l\.rel\]/.test(read("app/post/ui3/Graph.tsx")) && !/SW\[l\.band\]/.test(read("app/post/ui3/Graph.tsx")));
+    check("F28: the headline never reads 'the company at <company>', and a cold route is not 'closer than you think'", !/"the company" :/.test(wp) && /cold \? "Start with a direct note\."/.test(wp));
+    check("F32: My Network's card, chip and line count fellow fractionals one way", /fellow: !!p\.member,/.test(net) && /k: "member", l: "Fellow fractionals", f: \(x\) => x\.fellow/.test(net) && !/plural\(warm\.directory/.test(net));
+    check("F33: the company page never calls a fellow fractional someone the member knows", /viaFellow \? "Nobody you know yet\. A fellow fractional can help\."/.test(co) && !/Nobody yet, but you're connected/.test(co));
+  }
+
   /* ---------- the copy ---------- */
   const files = [...readdirSync(path.join(root, "app/post/ui3")).filter((f) => /\.(tsx|ts)$/.test(f)).map((f) => `app/post/ui3/${f}`), "lib/ui3.ts"];
   for (const f of files) {
