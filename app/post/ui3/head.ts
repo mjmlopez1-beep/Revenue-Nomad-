@@ -38,4 +38,4 @@ export function useUi3Head(crumbs: Crumb[], title: string) {
 
 /** The new design's own pages, by key, and which are built (the rest draw today's page inside the new shell). */
 export type Ui3PageKey = "home" | "crystal" | "targets" | "company" | "network" | "warm";
-export const UI3_BUILT: readonly Ui3PageKey[] = ["home", "crystal", "targets", "company"];
+export const UI3_BUILT: readonly Ui3PageKey[] = ["home", "crystal", "targets", "company", "network"];

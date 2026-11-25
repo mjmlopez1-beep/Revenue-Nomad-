@@ -2,6 +2,7 @@
    The new design's pages (find-design/v5/src/page.css), every rule under
    .u3p, the class on the <main> of a page the new design draws itself.
    ===================================================================== */
+
 /* ---------- flagship page layouts on top of merlin.css ---------- */
 .u3p .ph-only { display: none; }
 .u3p .empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 36px 20px; text-align: center; }
@@ -531,6 +532,26 @@
 }
 @media (max-width: 1380px) and (min-width: 761px) { .u3p .nw-sort > span, .u3p .nw-sort { gap: 6px; } .u3p .nw-main .m-tab { padding: 0 8px; gap: 6px; } .u3p .nw-main .m-tabs { gap: 2px; } }
 
+/* round 8 */
+.u3p button.m-rel { cursor: pointer; padding: 2px 4px; margin-left: -4px; border-radius: 6px; font-family: inherit; }
+.u3p button.m-rel:hover { background: var(--m-bg-2); }
+.u3p .nw-row { cursor: pointer; }
+.u3p .relpop { padding: 4px 6px 6px; }
+.u3p .relpop dl { margin: 8px 0 10px; display: grid; gap: 4px; }
+.u3p .relpop dt { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--m-muted); margin-top: 6px; }
+.u3p .relpop dt svg { width: 14px; height: 14px; }
+.u3p .relpop dd { margin: 0 0 0 21px; font-size: 14px; font-weight: 600; color: var(--m-ink); }
+.u3p .nw-nl { padding: 0 12px 4px; }
+.u3p .nw-nl li { display: flex; flex-direction: column; gap: 8px; padding: 14px 10px; border-top: 1px solid var(--m-line); border-radius: 10px; cursor: pointer; }
+.u3p .nw-nl li:first-child { border-top: 0; }
+.u3p .nw-nl li.hl { background: var(--m-am-wash); }
+.u3p .nw-nl .m-person b { font-size: 15px; }
+.u3p .nw-nl .m-person .m-rel { margin-top: 3px; }
+.u3p .nw-nwhy { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; color: var(--m-ink-2) !important; }
+.u3p .nw-nwhy .m-logo { margin-top: 1px; }
+.u3p .nw-nl .m-btn { align-self: flex-start; }
+.u3p .nw-nurture .nw-call { margin-top: 4px; }
+
 /* ---------- the app's own additions ---------- */
 .u3p { position: relative; }
 .u3p .u3-wait { padding: 60px 0; text-align: center; }
@@ -602,3 +623,22 @@
 .u3p .cv-sec { flex-direction: row; gap: 6px; scroll-margin-top: 0; min-width: 0; }
 .u3p .cv-acts { flex-wrap: nowrap; }
 .u3p .cv-acts > * { flex: none; }
+
+/* My Network: the app's additions */
+.u3p .nw-hacts { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.u3p .nw-rec { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin-bottom: 4px; border-radius: 99px; background: var(--m-forest-wash); color: var(--m-forest-ink); font-size: 11.5px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+.u3p .nw-p > div { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.u3p .nw-p b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.u3p button.m-rel { margin-top: 4px; cursor: pointer; border: 0; }
+.u3p button.m-rel:hover { filter: brightness(.97); text-decoration: underline; text-underline-offset: 3px; }
+.u3p .nw-sort select, .u3p .nw-src select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; font: inherit; font-weight: 600; color: var(--m-ink); padding-right: 4px; cursor: pointer; }
+.u3p .nw-src { position: relative; padding-right: 12px; }
+.u3p .nw-src.on { border-color: var(--m-forest); box-shadow: inset 0 0 0 1px var(--m-forest); }
+.u3p .nw-empty-p { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: center; padding: 22px; margin-top: 10px; }
+.u3p .nw-empty-art { height: 200px; border-radius: 14px; overflow: hidden; }
+.u3p .nw-empty-art > svg { width: 100%; height: 100%; display: block; }
+.u3p .nw-empty-p .m-sub { margin: 8px 0 14px; max-width: 560px; font-size: 15px; }
+.u3p .nw-corow { display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(120px, .8fr) auto; gap: 16px; align-items: center; padding: 12px; }
+.u3p .nw-who { display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--m-muted); }
+.u3p .relpop { width: 300px; }
+@media (max-width: 760px) { .u3p .nw-empty-p { grid-template-columns: minmax(0, 1fr); } .u3p .nw-corow { grid-template-columns: minmax(0, 1fr) auto; } .u3p .nw-corow .nw-who, .u3p .nw-corow .nw-dm { display: none; } }

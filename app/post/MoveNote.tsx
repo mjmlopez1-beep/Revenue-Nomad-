@@ -52,7 +52,7 @@ export function WhoWarmth({ w, strength }: { w: Warmth; strength?: boolean }) {
 }
 
 export function NoteSheet({
-  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro, sendAs,
+  m, row, me, onClose, onSent, onClaude, facts: given, sentLabel = "Mark as sent", onUsed, intro, sendAs, hideWarmth,
 }: {
   m: Move;
   row: RadarRow;
@@ -74,6 +74,8 @@ export function NoteSheet({
    * at Sent, from a record) and what the page does after (default: nothing more).
    */
   sendAs?: { effect?: SendEffect; kind?: SendKind; onGmailSent?: (it: SendItemView) => void };
+  /** No relationship band is derived for this person (a contacts file alone): show none rather than a guess. */
+  hideWarmth?: boolean;
 }) {
   const ui = useUi();
   const toast = useToast();
@@ -249,7 +251,7 @@ export function NoteSheet({
                       : m.name}
                 </span>
               </div>
-              {way.kind === "know" ? <WhoWarmth w={way.person.warmth} strength={!!intro} /> : null}
+              {way.kind === "know" && !hideWarmth ? <WhoWarmth w={way.person.warmth} strength={!!intro} /> : null}
             </div>
           ) : null}
           {intro ? (
