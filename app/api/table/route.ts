@@ -8,7 +8,7 @@ import { stateVersion } from "@/lib/table";
 import type { ActionResult } from "@/lib/tableTypes";
 import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
-import { memberRead } from "@/lib/usageGuard";
+import { OWN_READS, memberRead } from "@/lib/usageGuard";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { packedViewJson } from "@/lib/viewWire";
@@ -295,7 +295,9 @@ export const GET = guarded(async (req: NextRequest) => {
     const who = token ? (await memberForToken(token))?.id : undefined;
     const q = req.nextUrl.searchParams;
     const kind = q.has("about") || q.has("notes") || q.has("find") ? "company" : q.has("fractionals") || q.has("peers") || q.has("paths") ? "people" : "table";
-    const stop = who ? memberRead(who, kind) : null;
+    // The member's own bell, pipeline and workflows open nothing of anyone's: they don't count (lib/usageGuard.ts OWN_READS).
+    const own = OWN_READS.some((k) => q.get(k) !== null);
+    const stop = who && !own ? memberRead(who, kind) : null;
     if (stop) return err(stop, 429);
   }
   // A company's About, loaded when its record opens (the table leaves the text out, lib/table.ts aboutCells).

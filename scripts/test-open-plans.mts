@@ -365,6 +365,12 @@ async function main() {
 
   /* ---------- 8. Rate limits ---------- */
   console.log("\n8. Per-member rate limits: normal use passes, a burst trips");
+  // Acceptance F22: a page load in the new design reads 7 or 8 times; 12 to 14 loads in a minute is a person clicking around.
+  let pager: string | null = null;
+  for (let k = 0; k < 14 * 8; k++) pager = U.memberRead("mem_pager", "table") ?? pager;
+  check(`14 full page loads in a minute (8 counted reads each) pass the limit (${U.READS_PER_MINUTE})`, pager === null && U.READS_PER_MINUTE >= 14 * 8);
+  const tableRoute = readFileSync(path.join(process.cwd(), "app/api/table/route.ts"), "utf8");
+  check("the member's own bell, pipeline and workflows don't count toward the read limit", ["inbox", "pipeline", "workflows"].every((k) => (U.OWN_READS as readonly string[]).includes(k)) && /const stop = who && !own \? memberRead\(who, kind\) : null;/.test(tableRoute));
   U.usageReset();
   let stop: string | null = null;
   for (let k = 0; k < 40; k++) stop = U.memberRead("mem_human", "table") ?? stop;
