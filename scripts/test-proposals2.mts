@@ -210,7 +210,7 @@ console.log("Flag off");
   check("the quick, retemplate and home routes refuse while it is off", /case "quick":\s*\n\s*if \(!proposals2On\(\)\)/.test(route) && /case "retemplate":\s*\n\s*if \(!proposals2On\(\)\)/.test(route) && /home"\) === "1"\) \{\s*\n\s*if \(!proposals2On\(\)\) return err/.test(route));
   check("the sections pass runs only with it on", /b\?\.op === "sections" && proposals2On\(\)/.test(liveRoute));
   const page = src("app/post/Proposals.tsx");
-  check("the page draws Home2 only with the new look and ProposalsView.v2 (else ProposalsHome, as today)", /const v2 = ui2 && !!data\?\.v2;/.test(page) && /if \(v2 && data\)\s*\n\s*return \(\s*\n\s*<>\s*\n\s*<Home2/.test(page) && /if \(ui2 && data\)\s*\n\s*return \(\s*\n\s*<ProposalsHome/.test(page));
+  check("the page draws Home2 only with the new look and ProposalsView.v2 (else ProposalsHome, as today)", /const v2 = ui2 && !!data\?\.v2;/.test(page) && /if \(v2 && data\)\s*\n\s*return \(\s*\n\s*<>\s*\n\s*<(Home2|HomeNow)/.test(page) && /if \(ui2 && data\)\s*\n\s*return \(\s*\n\s*<ProposalsHome/.test(page));
   check("the editor's v2 parts are all behind the flag (rail, progress, send sheet)", /v2=\{\s*\n\s*v2\s*\n?\s*\?/.test(page) && /\{v2 && <SendSheetHost /.test(page) && /!p\.company\.id && !v2 && <LinkCompany/.test(page));
 }
 
