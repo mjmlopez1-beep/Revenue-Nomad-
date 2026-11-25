@@ -689,14 +689,17 @@ async function newNode(cx: Cx, n: G.GNode): Promise<void> {
         }
       }
       if (!body) {
+        // Merlin's rules write the note about a company the member can see. The prompt is an instruction, never the note:
+        // with no company to write about, the step holds and nothing is drafted (an Approve, then send after it skips).
         const now = ev.companyId ? await companyOpen(m, ev.companyId) : null;
-        if (now?.open && now.name && !prompt) {
+        if (now?.open && now.name) {
           const d = await stepDraft(now.s, m, ev.trigger as WfTrigger, now.name, ev.fn ?? null);
           subject = d.subject;
           body = d.body;
+        } else if (cx.test) {
+          return void put(cx, n, "skipped", "Test: a test uses no AI, and Merlin's rules write a note only about a company you can see. Nothing was drafted.");
         } else {
-          subject = oneLineWf(prompt, 80) || "A note";
-          body = prompt || "Write your note here.";
+          return void put(cx, n, "skipped", "Merlin's AI isn't on for you, and Merlin's rules write a note only about a company you can see, so nothing was drafted. Your prompt is never sent as the note.");
         }
       }
       const out: G.Fields = { [outKey]: body, "Draft subject": subject, "Draft body": body };
@@ -976,7 +979,7 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
   const preview: G.Fields = { To: to || null, Subject: subject || null, "Draft body": body || null };
   if (!subject || !body) {
     // The draft before it was skipped on this run (a company still locked, the day's opens used): nothing to approve, so nothing goes. Not a failure.
-    if (run.nodes.some((x) => x.type === "ai.draft" && x.status === "skipped")) {
+    if (run.nodes.some((x) => (x.type === "ai.draft" || x.type === "ai.write" || x.type === "ai.agent") && x.status === "skipped")) {
       put(cx, n, "skipped", "Nothing to approve: the draft before it was skipped on this run. Nothing was sent.", 0, { out: "skipped" });
       return ["skipped"];
     }
@@ -987,28 +990,69 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
     return pause(cx, { kind: "send", node: n.id, expires: iso(cx.nowMs + days * DAY) });
   }
   const { sendOn, queueFromWorkflow } = await import("../send");
+  // One key for this step on this visit: its note, its draft and its notification. A second pass of the same step
+  // (a restart, a retry) finds them and makes none again.
+  const visitKey = `${run.id}:${n.id}:${run.visits[n.id]}`;
   if (!sendOn()) {
-    // Sending isn't on for Merlin: the note is a draft in Messages, and this path takes Skipped.
+    // Sending isn't on for Merlin: the note is a draft in Messages (for a company the member can see), and this path takes Skipped.
+    let drafted = false;
     if (run.event.company && run.item.Company) {
-      const id = newWfId("drf");
-      await T.mutate((d) => {
+      const key = `wf:${visitKey}`;
+      drafted = await T.mutate((d) => {
         const w = wfIn(d, m.id);
-        w.drafts.unshift({ id, wf: cx.g.id, at: iso(cx.nowMs), company: run.event.company!, companyName: String(run.item.Company), subject, body: body.slice(0, WF_LIMITS.body) });
+        if (!w.drafts.some((x) => x.key === key)) w.drafts.unshift({ id: newWfId("drf"), wf: cx.g.id, at: iso(cx.nowMs), company: run.event.company!, companyName: String(run.item.Company), subject, body: body.slice(0, WF_LIMITS.body), key });
         capWorkflows(w, cx.nowMs);
+        return w.drafts.some((x) => x.key === key);
       });
     }
+    if (!drafted) {
+      put(cx, n, "skipped", "Sending from your Gmail isn't switched on yet, so nothing was sent. This note isn't about a company you can see, so it isn't kept in Messages: it is in this run.", 0, { out: "skipped", output: preview });
+      return ["skipped"];
+    }
     put(cx, n, "skipped", "Sending from your Gmail isn't switched on yet. The note is a draft in Messages: nothing was sent.", 0, { out: "skipped", output: preview });
-    // The member is told where their draft is: the bell, and email when the step asks by email too.
-    cx.bells.push({ id: `wf2-draft:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note Merlin drafted waits in Messages", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
-    if (s0.email === true) await askByEmail(cx, "A note Merlin drafted waits in Messages. Nothing was sent.", "/?p=messages");
+    // The draft is there: now the member is told where it is (the bell, and email when the step asks by email too), once.
+    await notifyOnce(
+      cx,
+      `draft:${visitKey}`,
+      { id: `wf2-draft:${visitKey}`, at: iso(cx.nowMs), kind: "workflow", line: "A note Merlin drafted waits in Messages", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` },
+      s0.email === true ? { line: "A note Merlin drafted waits in Messages. Nothing was sent.", href: "/?p=messages" } : null,
+    );
     return ["skipped"];
   }
   if (!to) throw new Error("Who is it to? Put their email in the step's To, or open who decides first.");
-  const outbox = await queueFromWorkflow(m.id, { key: `wf:${run.id}:${n.id}:${run.visits[n.id]}`, to, toName: oneLineWf(s0.toName, 120) || null, subject, body, companyPub: run.event.company }, cx.nowMs);
+  const expires = iso(cx.nowMs + days * DAY);
+  const outbox = await queueFromWorkflow(m.id, { key: `wf:${visitKey}`, to, toName: oneLineWf(s0.toName, 120) || null, subject, body, companyPub: run.event.company, expiresAt: expires }, cx.nowMs);
   put(cx, n, "waiting", "Waits for your tap: Approve and send, in your outbox. Nothing goes without it.", 0, { output: preview });
-  cx.bells.push({ id: `wf2-send:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note waits for your tap: Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
-  if (s0.email === true) await askByEmail(cx, `A note waits for your tap: Approve and send. It is skipped if you don't answer in ${days === 1 ? "1 day" : `${days} days`}.`, "/?p=messages");
-  return pause(cx, { kind: "send", node: n.id, outbox, expires: iso(cx.nowMs + days * DAY) });
+  pause(cx, { kind: "send", node: n.id, outbox, expires });
+  // The approval request is written first (the run waiting on its note), then the member is told, once: a stop between
+  // the two carries on from this wait, and a second pass never sends a second email or bell line.
+  await persist(cx);
+  await notifyOnce(
+    cx,
+    `send:${visitKey}`,
+    { id: `wf2-send:${visitKey}`, at: iso(cx.nowMs), kind: "workflow", line: "A note waits for your tap: Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` },
+    s0.email === true ? { line: `A note waits for your tap: Approve and send. It is skipped if you don't answer in ${days === 1 ? "1 day" : `${days} days`}.`, href: "/?p=messages" } : null,
+  );
+  return "pause";
+}
+
+/**
+ * Tell the member once for this key: the key is claimed and the bell line put in one write, then the
+ * email (when asked for) goes. A second pass finds the key and tells nobody again; a stop after the
+ * claim loses at most the email, never sends it twice.
+ */
+async function notifyOnce(cx: Cx, key: string, bell: Bell, email: { line: string; href: string } | null): Promise<void> {
+  if (cx.test) return;
+  const first = await T.mutate((d) => {
+    const w = wfIn(d, cx.m.id);
+    const seen = (w.notified ??= []);
+    if (seen.includes(key)) return false;
+    seen.push(key);
+    w.notified = seen.slice(-WF_LIMITS.notified);
+    pushInbox(d, cx.m.id, [bell]);
+    return true;
+  });
+  if (first && email) await askByEmail(cx, email.line, email.href);
 }
 
 /**
@@ -1092,17 +1136,25 @@ async function persist(cx: Cx): Promise<void> {
     capWorkflows(w, cx.nowMs);
   });
 }
+/**
+ * The runs kept: every active run (waiting on a tap, a time or a yes, or running), apart from the
+ * history; the limits (V2_LIMITS.runsKept a workflow, runsTotal in all) apply to the finished runs
+ * only, so an approval request is never trimmed away.
+ */
 function trimRuns(w: MemberWorkflows) {
-  const runs = w.graphRuns ?? [];
+  const runs = (w.graphRuns ?? []).sort((a, b) => b.at.localeCompare(a.at));
+  const active = (r: G.GraphRun) => r.status === "waiting" || r.status === "running";
   const per = new Map<string, number>();
-  w.graphRuns = runs
-    .sort((a, b) => b.at.localeCompare(a.at))
+  const past = runs
+    .filter((r) => !active(r))
     .filter((r) => {
       const n = (per.get(r.wf) ?? 0) + 1;
       per.set(r.wf, n);
-      return n <= G.V2_LIMITS.runsKept || r.status === "waiting";
+      return n <= G.V2_LIMITS.runsKept;
     })
     .slice(0, G.V2_LIMITS.runsTotal);
+  const keep = new Set([...runs.filter(active), ...past]);
+  w.graphRuns = runs.filter((r) => keep.has(r));
 }
 
 /** Today's run record for a converted straight line, so Alerts' run log reads it as before. */
@@ -1187,6 +1239,15 @@ export function answerRun(memberId: string, runId: string, yes: boolean, origin?
     }
     const w = cx.run.wait;
     if (w.kind === "wait" || w.kind === "reply") throw new RunAnswer("That run is waiting on time, not on you. It carries on by itself.");
+    // Past its time limit: refused here, whether or not the scheduler has got to it. The run takes what the scheduler would.
+    const approvedAlready = async () => {
+      const st = !cx.test && w.kind === "send" ? (await import("../send")).workflowNoteStatus(await loadState(), memberId, w.outbox ?? "") : null;
+      return !!st && st.status !== "draft" && st.status !== "cancelled";
+    };
+    if ((w.kind === "ask" || w.kind === "send") && w.expires <= iso(nowMs) && !(await approvedAlready())) {
+      await expireTap(cx);
+      throw new RunAnswer(w.kind === "send" ? "That note waited too long for your tap, so it expired. Nothing was sent." : "That question waited too long for your answer, so it expired: the workflow took No.");
+    }
     if (w.kind === "ask") {
       await resumeBy(cx, yes ? "yes" : "no", yes ? "You said yes." : "You said no.");
       await T.mutate((d) => settleAsk(d, memberId, runId, yes ? "yes" : "no"));
@@ -1206,7 +1267,8 @@ export function answerRun(memberId: string, runId: string, yes: boolean, origin?
       }
       if (!st || st.status !== "draft") throw new RunAnswer("That note isn't waiting in your outbox anymore.");
       // The tap: lib/send's own approve (the address, the daily cap, one send per note, the 30 seconds to undo).
-      const a = await send.approve(cx.m.token, { key: `wf:${runId}:${w.node}`, id: w.outbox!, to: st.to, subject: st.subject ?? "", body: st.body ?? "", kind: "workflow", company: cx.run.event.company });
+      // The note's own key (one send per note, and a retried run finds it by that key).
+      const a = await send.approve(cx.m.token, { key: st.key, id: w.outbox!, to: st.to, subject: st.subject ?? "", body: st.body ?? "", kind: "workflow", company: cx.run.event.company });
       if (a.grant) return "Google asks you once for the permission to send. Open your outbox to finish.";
       await resumeBy(cx, "sent", "You approved it: it goes from your Gmail.");
       return "Approved. It goes from your Gmail in 30 seconds: Undo is in your outbox.";
@@ -1320,28 +1382,33 @@ function tickOne(memberId: string, runId: string, origin: string | undefined, no
       if ((w.due ?? "") <= nowIso) return resumeBy(cx, "none", "No reply in time.").then(() => true);
       return false;
     }
-    if (w.kind === "ask" && w.expires <= nowIso) {
-      await resumeBy(cx, "no", "No answer in time: took No.");
-      await T.mutate((d) => settleAsk(d, memberId, runId, "no"));
-      return true;
-    }
+    if (w.kind === "ask" && w.expires <= nowIso) return expireTap(cx).then(() => true);
     if (w.kind === "send" && !cx.test) {
       const send = await import("../send");
       const st = send.workflowNoteStatus(await loadState(), memberId, w.outbox ?? "");
       // Approved in the outbox itself: the run carries on by Sent.
       if (st && ["queued", "scheduled", "sending", "sent", "replied", "grant"].includes(st.status)) return resumeBy(cx, "sent", "You approved it in your outbox: it goes from your Gmail.").then(() => true);
       if (!st || st.status === "cancelled") return resumeBy(cx, "skipped", "You skipped it in your outbox. Nothing was sent.").then(() => true);
-      if (w.expires <= nowIso) {
-        await send.dropWorkflowNote(memberId, w.outbox!);
-        const n = cx.byId.get(w.node)!;
-        const out = G.outEdges(cx.ver, n.id, "expired").length ? "expired" : "skipped";
-        return resumeBy(cx, out, "Nobody tapped it in time. Nothing was sent.").then(() => true);
-      }
+      if (w.expires <= nowIso) return expireTap(cx).then(() => true);
       return false;
     }
-    if (w.kind === "send" && cx.test && w.expires <= nowIso) return resumeBy(cx, "expired", "Test: nobody tapped it in time.").then(() => true);
+    if (w.kind === "send" && cx.test && w.expires <= nowIso) return expireTap(cx).then(() => true);
     return false;
   });
+}
+
+/** A tap that waited past its time limit: Ask me takes No; Approve, then send drops its note unsent and takes Expired (or Skipped). */
+async function expireTap(cx: Cx): Promise<void> {
+  const w = cx.run.wait!;
+  if (w.kind === "ask") {
+    await resumeBy(cx, "no", "No answer in time: took No.");
+    await T.mutate((d) => settleAsk(d, cx.m.id, cx.run.id, "no"));
+    return;
+  }
+  if (cx.test) return resumeBy(cx, "expired", "Test: nobody tapped it in time.");
+  if (w.outbox) await (await import("../send")).dropWorkflowNote(cx.m.id, w.outbox);
+  const out = G.outEdges(cx.ver, w.node, "expired").length ? "expired" : "skipped";
+  await resumeBy(cx, out, "Nobody tapped it in time. Nothing was sent.");
 }
 
 /** A reply since the wait began: Your pipeline saw it (a reply on Merlin, Gmail headers, a meeting), or the outbox marked the note replied. */

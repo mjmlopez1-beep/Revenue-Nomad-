@@ -91,7 +91,10 @@ export const monthSpent = (w: MemberWorkflows | undefined, wfId: string, nowMs: 
 /** Keep a member's workflow state inside its limits: runs 90 days and 200 at most, the rest capped. */
 export function capWorkflows(w: MemberWorkflows, nowMs: number): void {
   const cut = new Date(nowMs - WF_LIMITS.runDays * DAY).toISOString();
-  w.runs = w.runs.filter((r) => r.at >= cut || (r.ask && !r.ask.answer)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, WF_LIMITS.runs);
+  // A run still waiting for the member's yes is kept apart from the history: the history's limits never trim it away.
+  const open = (r: WfRun) => !!r.ask && !r.ask.answer;
+  const past = w.runs.filter((r) => !open(r) && r.at >= cut).sort((a, b) => b.at.localeCompare(a.at)).slice(0, WF_LIMITS.runs);
+  w.runs = [...w.runs.filter(open), ...past].sort((a, b) => b.at.localeCompare(a.at));
   w.reminders = w.reminders.slice(-WF_LIMITS.reminders);
   w.drafts = w.drafts.sort((a, b) => b.at.localeCompare(a.at)).slice(0, WF_LIMITS.drafts);
   w.keys = w.keys.slice(-WF_LIMITS.keys);

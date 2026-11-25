@@ -68,6 +68,8 @@ export interface OutboxItem {
   inReplyTo?: string | null;
   refs?: string[];
   byAgent?: boolean;
+  /** A workflow's note: its tap's time limit (ISO). Past it, a tap is refused: the workflow takes Expired. */
+  expiresAt?: string | null;
   note?: string | null;
   tries?: number;
 }
@@ -392,6 +394,8 @@ export async function approve(token: string | null, raw: ApproveInput, nowMs = D
       const q = b.items.find((x) => x.id === String(a.id));
       if (!q || q.status !== "draft") throw new ActionError(GONE);
     }
+    // A workflow's note past its time limit: refused here, whether or not the scheduler has cancelled it yet.
+    if (b.items.some((x) => x.status === "draft" && (x.id === String(a.id ?? "") || x.key === key) && x.expiresAt && Date.parse(x.expiresAt) <= nowMs)) throw new ActionError(WORDS.expired);
     const waiting = b.items.filter((x) => x.status === "queued" || x.status === "sending" || x.status === "grant").length;
     if (!at && sentToday(b, nowMs) + waiting >= DAILY_CAP) throw new ActionError(WORDS.cap);
     // A note in the thread of one Merlin sent before: the same person, the same subject (with Re:).
@@ -486,7 +490,7 @@ export async function queueFromAgent(member: Member, a: { to?: unknown; to_name?
  * an agent's does. Only the member's tap (approve) sends it. The address is checked now and again
  * on the tap. Returns the draft's id.
  */
-export async function queueFromWorkflow(memberId: string, a: { key: string; to: string; toName?: string | null; subject: string; body: string; companyPub?: string | null }, nowMs = Date.now()): Promise<string> {
+export async function queueFromWorkflow(memberId: string, a: { key: string; to: string; toName?: string | null; subject: string; body: string; companyPub?: string | null; expiresAt?: string | null }, nowMs = Date.now()): Promise<string> {
   if (!sendOn()) throw new ActionError("Sending isn't on.");
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const m = memberOf(seed, s, memberId);
@@ -499,23 +503,28 @@ export async function queueFromWorkflow(memberId: string, a: { key: string; to: 
   const p = addressProblem(seed, s, m, to);
   if (p) throw new ActionError(p);
   const companyId = companyIdOf(seed, s, a.companyPub);
+  const key = flat(a.key, 160);
+  const expiresAt = a.expiresAt && Number.isFinite(Date.parse(a.expiresAt)) ? iso(Date.parse(a.expiresAt)) : null;
   return T.mutate((d) => {
     const b = ensureBox(d, m.id);
     trim(b, nowMs);
-    const had = b.items.find((x) => x.key === a.key && x.status === "draft");
+    // One note per key, whatever became of it: a retried run finds the note it queued (a draft, approved, queued, sent,
+    // skipped), never a second message.
+    const had = b.items.find((x) => x.key === key);
     if (had) return had.id;
     const x: OutboxItem = {
-      id: newId(), key: flat(a.key, 160), status: "draft", to, toName: a.toName ? flat(a.toName, 120) : null, subject, body, kind: "workflow", companyId, pipelineId: null,
+      id: newId(), key, status: "draft", to, toName: a.toName ? flat(a.toName, 120) : null, subject, body, kind: "workflow", companyId, pipelineId: null,
       effect: companyId ? { type: "pipeline.sent", companyId: T.pubId(companyId), channel: "email", from: "record" } : null, createdAt: iso(nowMs), approvedAt: null, sendAt: null, sentAt: null,
+      ...(expiresAt ? { expiresAt } : {}),
     };
     b.items.push(x);
     return x.id;
   });
 }
 /** Where a workflow's note is now: its status, or null when it is gone from the outbox. */
-export function workflowNoteStatus(s: State, memberId: string, id: string): { status: SendStatus; to: string; subject: string | null; body: string | null } | null {
+export function workflowNoteStatus(s: State, memberId: string, id: string): { status: SendStatus; key: string; to: string; subject: string | null; body: string | null } | null {
   const x = boxOf(s, memberId)?.items.find((i) => i.id === id);
-  return x ? { status: x.status, to: x.to, subject: x.subject, body: x.body } : null;
+  return x ? { status: x.status, key: x.key, to: x.to, subject: x.subject, body: x.body } : null;
 }
 /** A workflow's note the member skipped, or that waited too long: it goes, unsent. Never once it was approved. */
 export async function dropWorkflowNote(memberId: string, id: string): Promise<void> {
