@@ -172,6 +172,20 @@ function useDialog(onClose: () => void) {
   useEffect(() => {
     const was = document.activeElement as HTMLElement | null;
     const key = (e: KeyboardEvent) => {
+      // Tab stays inside the dialog: from the last control to the first, and back.
+      if (e.key === "Tab" && ref.current) {
+        // A dialog opened inside this one keeps the keys.
+        const inner = (document.activeElement as HTMLElement | null)?.closest?.("[role='dialog']");
+        if (inner && inner !== ref.current && ref.current.contains(inner)) return;
+        const f = [...ref.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")].filter((x) => x.offsetParent !== null || x === document.activeElement);
+        if (!f.length) return;
+        const first = f[0];
+        const last = f[f.length - 1];
+        const at = document.activeElement;
+        if (e.shiftKey && (at === first || !ref.current.contains(at))) (e.preventDefault(), last.focus());
+        else if (!e.shiftKey && (at === last || !ref.current.contains(at))) (e.preventDefault(), first.focus());
+        return;
+      }
       if (e.key !== "Escape" || e.defaultPrevented) return;
       e.preventDefault();
       onClose();

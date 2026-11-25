@@ -430,6 +430,35 @@ async function main() {
   check("the design switch says one thing: its toast alone on screen (F35)", /if \(opts\?\.only\) \{/.test(shared) && /toast\(r\.message, false, \{ only: true \}\)/.test(tp));
 
   /* ---------- copy ---------- */
+  console.log("\nA template's full preview (owner review M4)");
+  {
+    const P = await import("../app/post/ui3/work/workflows/plan");
+    const S = await import("../lib/workflows/simple");
+    const prices = { company: 2, companyFull: 2, ballFree: false, opensLeft: 0, person: 1, detail: 1 };
+    const cfg = { ...S.SIMPLE_DEFAULT, trigger: "leader" as const, scope: { kind: "follows" as const }, dm: false };
+    const st = P.planStages(cfg, prices, true);
+    const all = st.flatMap((x) => x.steps.map((y) => y.say));
+    check("M4: four stages, in order: When this happens, Merlin does this, I approve, Merlin follows through", st.map((x) => x.kicker).join() === "When this happens,Merlin does this,I approve,Merlin follows through");
+    check("M4: every research and drafting step is listed with its cost", JSON.stringify(st[1].steps) === JSON.stringify([{ say: "Research the company", cost: "2 credits" }, { say: "Find my warmest way in", cost: "No credits" }, { say: "Draft an introduction in my voice", cost: "No credits" }]), st[1].steps);
+    check("M4: every follow-up step is listed, the follow-up waiting for approval too", st[3].steps.map((x) => x.say).join("|") === "Update my pipeline|Watch for a reply for 4 days|Prepare a follow-up, which waits for my approval too", st[3].steps);
+    check("M4: the approval point says nothing goes out without me, how I'm asked, and when it is skipped", st[2].head === "Nothing goes out without me." && st[2].steps.map((x) => x.say).join("|") === "Merlin asks me in in-app notifications and email|I review, edit or skip the draft before anything is sent|Skipped if I don't answer in 7 days", st[2].steps);
+    check("M4: the expected cost and the monthly limit, before Use template", P.planSpendLine(cfg, prices, true) === "Expected cost: up to 2 credits a run. Monthly credit limit 60: Merlin pauses spending at the limit and asks before continuing. You can change it before it goes live.", P.planSpendLine(cfg, prices, true));
+    const dflt = P.planStages(S.SIMPLE_DEFAULT, prices, true)[1].steps;
+    check("M4: the default's steps cost what the engine says (decision maker 1, after research)", dflt.find((x) => x.say === "Find the decision maker")?.cost === "1 credit" && P.simpleCeiling(prices, S.SIMPLE_DEFAULT, true) === 3, dflt);
+    const ball = P.planStages(S.SIMPLE_DEFAULT, { ...prices, ballFree: true }, true)[1].steps;
+    check("M4: a Crystal Ball company that opens free on the plan is said No credits, never a price it won't spend", ball[0].cost === "No credits", ball);
+    const free = P.planStages(cfg, prices, false);
+    check("M4: on Free the paid steps say On Pro, and the line says so", free[1].steps[0].cost === "On Pro" && /^Research and drafting are on Pro\./.test(P.planSpendLine(cfg, prices, false)));
+    check("M4: no step is cut short: no ellipsis in any step", !all.some((x) => /…|\.\.\./.test(x)));
+    const page = readFileSync(path.join(ROOT, "app/post/ui3/work/workflows/WorkflowsPage.tsx"), "utf8");
+    check("M4: each card offers Preview all steps before Use template (a dialog button, keyboard reachable)", /aria-haspopup="dialog" aria-label=\{`Preview every step of \$\{t\.t\}, with its cost and where you approve`\} onClick=\{\(\) => setPrev\(t\)\}>\s*Preview all steps/.test(page) && page.indexOf("Preview all steps") < page.indexOf("Use template", page.indexOf("Preview all steps")));
+    check("M4: the preview draws planStages with each step's cost and the spending line, and its own Use template", /planStages\(t\.cfg, prices, paid\)\.map/.test(page) && /<span className="wf3-prev-cost">\{l\.cost\}<\/span>/.test(page) && /planSpendLine\(t\.cfg, prices, paid\)/.test(page));
+    const parts = readFileSync(path.join(ROOT, "app/post/ui3/work/parts.tsx"), "utf8");
+    check("M4: the preview is a dialog: Tab stays inside it, Esc closes it and focus goes back to the button that opened it", /e\.key === "Tab" && ref\.current/.test(parts) && /e\.key !== "Escape"/.test(parts) && /was\?\.focus\?\.\(/.test(parts) && /role="dialog" aria-modal="true"/.test(parts));
+    const css = readFileSync(path.join(ROOT, "app/post/ui3/work/workflows/workflows.css"), "utf8");
+    check("M4: on a phone the preview scrolls inside the screen and Use template stays at its foot; steps wrap", /\.m-sheet:has\(\.wf3-prev\) \{ max-height: calc\(100vh - 32px\); overflow-y: auto; \}/.test(css) && /\.m-sheet:has\(\.wf3-prev\) \.m-acts \{ position: sticky;/.test(css) && /\.wf3-prev-step \{ display: flex; flex-wrap: wrap;/.test(css) && !/wf3-mini[^}]*text-overflow/.test(css));
+  }
+
   console.log("\nCopy");
   const files = [...walk(path.join(ROOT, "app/post/ui3/work")).filter((f) => /\.tsx?$/.test(f)), path.join(ROOT, "lib/workflows/simple.ts")];
   const AI = /\b(insights?|leverag\w*|seamless\w*|empower\w*|actionable|supercharge\w*|synerg\w*|unlock (your|new|more|the power))\b/i;

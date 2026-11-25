@@ -54,6 +54,15 @@
 :root[data-theme="dark"] .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; } }
 .ui3 .wf3-prev-cap { margin-right: auto; }
+/* every step with its cost (owner review M4): the step wraps, its cost sits at the end of the line */
+.ui3 .wf3-prev .wf3-prev-step { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 3px 0; }
+.ui3 .wf3-prev .wf3-prev-step > span:first-child { flex: 1 1 200px; min-width: 0; }
+.ui3 .wf3-prev .wf3-prev-cost { flex: none; font: 600 12.5px/1.4 var(--m-f-mono); color: var(--m-muted); white-space: nowrap; }
+.ui3 .wf3-prev-spend { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--m-gold-wash); font-size: 14px; line-height: 1.45; color: var(--m-ink); }
+/* the preview scrolls inside the screen, and its Use template stays in reach at the foot */
+.ui3 .w3 .m-sheet:has(.wf3-prev) { max-height: calc(100vh - 32px); overflow-y: auto; }
+.ui3 .w3 .m-sheet:has(.wf3-prev) .m-acts { position: sticky; bottom: -26px; margin: 16px -26px -26px; padding: 12px 26px 18px; background: var(--m-panel); border-top: 1px solid var(--m-line); align-items: center; }
+@media (max-width: 760px) { .ui3 .w3 .m-sheet:has(.wf3-prev) { max-height: 88vh; } .ui3 .w3 .m-sheet:has(.wf3-prev) .m-acts { margin-bottom: calc(-26px - env(safe-area-inset-bottom, 0px)); padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); } }
 .ui3 .w3 .wf3-test { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; }
 .ui3 .w3 .wf3-test > li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
 .ui3 .w3 .wf3-test ul, .ui3 .w3 .wf3-test-list { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; }

@@ -33,6 +33,7 @@ import { Chips, Gate, Sheet, Skel, St, Switch, Tabs, WorkMain, type Tone } from 
 import { openPlans } from "../../../Billing";
 import { WIc, type WIconName } from "../icons";
 import { Canvas } from "./Canvas";
+import { DEFAULT_CAP, capWords, creditWords, planSpendLine, planStages, simpleCeiling, stepPrice } from "./plan";
 import "./workflows.css";
 
 /* ---------------- the API ---------------- */
@@ -115,22 +116,7 @@ const statusOf = (w: { live: unknown; draft: unknown; on: boolean }, running = t
   !w.live ? { words: "Draft", tone: "gold" } : w.draft ? { words: "Unpublished changes", tone: "gold" } : !w.on ? { words: "Paused", tone: "" } : running ? { words: "Live", tone: "forest" } : { words: "Ready, not running yet", tone: "gold" };
 /** Said once on the page while Merlin's runner is off (RN_WORKFLOWS): honest, never Live. */
 const NOT_RUNNING = "Merlin isn't running workflows yet. You can build and test them now; nothing runs or spends until it starts, and the page will say Live then.";
-const creditWords = (n: number) => (n === 1 ? "1 credit" : `${n} credits`);
-const DEFAULT_CAP = 60;
-
-/** What each paid Simple step costs this member now, from the engine's prices. */
-function stepPrice(p: StepPrices | undefined, cfg: SimpleCfg, step: "research" | "dm" | "email"): number {
-  if (!p) return step === "email" ? 1 : 0;
-  const company = cfg.scope.kind === "radar" && p.ballFree ? 0 : p.companyFull;
-  if (step === "research") return company;
-  if (step === "dm") return p.person + (cfg.research ? 0 : company);
-  return (p.detail ?? 1) + (cfg.dm ? 0 : p.person + (cfg.research ? 0 : company));
-}
-/** The most a run of these stages can spend now: 0 means nothing in it costs credits on the plan. */
-const simpleCeiling = (p: StepPrices | undefined, cfg: SimpleCfg, paid: boolean) =>
-  !paid ? 0 : (cfg.research ? stepPrice(p, cfg, "research") : 0) + (cfg.dm ? stepPrice(p, cfg, "dm") : 0) + (cfg.email ? stepPrice(p, cfg, "email") : 0);
-/** The spending line of a template, said only when one of its steps can spend. */
-const capWords = (n: number) => (n ? `Up to ${creditWords(n)} a run, and it stops at ${DEFAULT_CAP} a month unless you change it` : "Nothing in it costs credits on your plan");
+// The prices and the template preview's words (pure, checked in scripts/test-ui3-work.mts).
 
 /* ---------------- the page ---------------- */
 
@@ -255,11 +241,16 @@ function MiniStages({ cfg }: { cfg: SimpleCfg }) {
     </ol>
   );
 }
-/** A template in full: every stage with each step it takes. */
+/**
+ * A template in full, before Use template (owner review M4): every stage with each step it takes and
+ * what each step can cost, where the member approves and how they are asked, and the most a run can
+ * spend with the monthly limit. A dialog: Tab moves through it, Esc closes it, focus goes back to Preview.
+ */
 function TemplatePreview({ t, paid, prices, busy, onUse, onClose }: { t: (typeof TEMPLATES)[number]; paid: boolean; prices?: StepPrices; busy: boolean; onUse: () => void; onClose: () => void }) {
   return (
     <Sheet
       title={t.t}
+      label={`${t.t}: every step`}
       onClose={onClose}
       foot={
         <>
@@ -277,22 +268,31 @@ function TemplatePreview({ t, paid, prices, busy, onUse, onClose }: { t: (typeof
       }
     >
       <p className="w-help">{t.say}</p>
-      <ol className="wf3-prev">
-        {stageRows(t.cfg).map((s) => (
+      <ol className="wf3-prev" aria-label="Every step">
+        {planStages(t.cfg, prices, paid).map((s) => (
           <li key={s.n} className={s.cls}>
-            <span className="wf3-mn">{s.n}</span>
+            <span className="wf3-mn" aria-hidden>
+              {s.n}
+            </span>
             <div>
-              <b>{s.kicker}</b>
+              <b>
+                <span className="sr-only">Stage {s.n}: </span>
+                {s.kicker}
+              </b>
               {s.head && <p>{s.head}</p>}
               <ul>
-                {s.lines.map((l) => (
-                  <li key={l}>{l}</li>
+                {s.steps.map((l) => (
+                  <li key={l.say} className="wf3-prev-step">
+                    <span>{l.say}</span>
+                    {l.cost && <span className="wf3-prev-cost">{l.cost}</span>}
+                  </li>
                 ))}
               </ul>
             </div>
           </li>
         ))}
       </ol>
+      <p className="wf3-prev-spend">{planSpendLine(t.cfg, prices, paid)}</p>
       <p className="m-small">Nothing runs until you make it live, and you can change any step first.</p>
     </Sheet>
   );
@@ -331,8 +331,8 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
             <div className="wf3-tfoot">
               <span className="m-small">{list.plan.paid ? capWords(simpleCeiling(list.prices, t.cfg, true)) : "Research and drafting are on Pro"}</span>
               <div className="w-row">
-                <button type="button" className="m-btn m-btn-sm m-btn-ghost wf3-prevbtn" aria-label={`Preview ${t.t}`} onClick={() => setPrev(t)}>
-                  Preview
+                <button type="button" className="m-btn m-btn-sm m-btn-ghost wf3-prevbtn" aria-haspopup="dialog" aria-label={`Preview every step of ${t.t}, with its cost and where you approve`} onClick={() => setPrev(t)}>
+                  Preview all steps
                 </button>
                 <span className="w-sp" />
                 {list.plan.paid ? (
