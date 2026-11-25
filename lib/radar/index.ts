@@ -235,8 +235,9 @@ const sentRow = (x: MemberSignal & { horizon?: [number, number]; score?: number 
   l: viewLine(x),
   ...(x.band ? { b: x.band } : {}),
   ...(x.whyNow ? { w: x.whyNow } : {}),
-  // When it happened, when a hire is likely and its score: what the page's side panel and the member's tuning read.
-  ...(x.at ? { a: x.at.slice(0, 10) } : {}),
+  // When it happened (the event's own day where Merlin knows it, else when it was seen), when a hire is likely and its
+  // score: what the page's side panel and the member's tuning read.
+  ...(x.happened || x.at ? { a: (x.happened ?? x.at).slice(0, 10) } : {}),
   ...(x.horizon ? { h: x.horizon } : {}),
   ...(typeof x.score === "number" && Number.isFinite(x.score) ? { s: Math.round(x.score * 1000) / 1000 } : {}),
 });
@@ -468,7 +469,7 @@ export async function radarView(token: string | null, dayAsked?: string | null, 
   const outs = s.radar?.members?.[m.id]?.out ?? {};
   const outsOn = !!range || !asked;
   const newest = new Map<string, number>();
-  if (outsOn) for (const [d, rs] of byDay) for (const x of rs) newest.set(x.c, Math.max(newest.get(x.c) ?? 0, Date.parse(`${x.a ?? d}T12:00:00Z`) || 0));
+  if (outsOn) for (const [d, rs] of byDay) for (const x of rs) newest.set(x.c, Math.max(newest.get(x.c) ?? 0, Date.parse(`${d}T12:00:00Z`) || 0));
   const leftOut = (co: string) => outsOn && isOut(outs[co], newest.get(co) ?? null);
   const score = new Map<string, number>();
   for (const x of shown.rows) score.set(x.c, Math.max(score.get(x.c) ?? 0, x.s ?? 0));

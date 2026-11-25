@@ -75,8 +75,16 @@ export interface RawSignal {
   /** Never the same key twice to a member: "role:<seat public id>", "hire:…", "end:…", "fund:<company public id>:<day>", "build:…:<day>", "gone:…:<function>:<day>". */
   key: string;
   kind: RadarKind;
+  /** When Merlin saw it (the day it lists on): a seat added, a posting first seen, an end recorded. */
   at: string;
   atMs: number;
+  /**
+   * When the event itself happened (YYYY-MM-DD), where Merlin knows it and it differs from `at`: a
+   * hire's start month (its first day), an ended seat's end month, a posting's own day. The page
+   * dates the signal by this, so "New this week" means it happened this week, never that Merlin
+   * noticed it this week (acceptance F5).
+   */
+  happened?: string;
   /** Internal ids: never sent. */
   companyId: string;
   engagementId: string | null;
@@ -395,6 +403,13 @@ function gapsAt(r: TableRead, s: State, companyId: string, nowMs: number): { fn:
  * Every signal that happened after `sinceMs` and by `nowMs`. `funding` are the events the funding
  * source returned for the same window. Newest first.
  */
+/** A month ("2026-10") as its first day, never after today. */
+const monthDay = (ym: string, nowMs: number) => {
+  const d = `${ym}-01`;
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  return d > today ? today : d;
+};
+
 export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: number, funding: FundingEvent[] = []): RawSignal[] {
   const r = readTable(seed, s, nowMs);
   const { g, tracks, push, out, addedOf } = r;
@@ -409,7 +424,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
     const ym = hireMonth(T.live(e, s, "start"));
     if (!ym || monthsAgo(ym, nowMs) > HIRE_FRESH_MONTHS) continue;
-    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at });
+    push({ key: `hire:${T.pubId(e.id)}`, kind: "adjacent", at: new Date(at).toISOString(), atMs: at, happened: monthDay(ym, nowMs), companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at });
   }
 
   // 1b. Adjacent hires that came in earlier (a seat that came with the seed came in when it was built), whose timing
@@ -427,7 +442,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
     const key = `hire:${T.pubId(e.id)}`;
     const first = Math.min(...opens);
-    push({ key: `${key}:open`, of: key, kind: "adjacent", at: new Date(first).toISOString(), atMs: first, companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at, reopen: { from: sinceMs, to: nowMs } });
+    push({ key: `${key}:open`, of: key, kind: "adjacent", at: new Date(first).toISOString(), atMs: first, happened: monthDay(ym, nowMs), companyId: e.companyId, engagementId: e.id, fn, title: null, ym, addedMs: at, reopen: { from: sinceMs, to: nowMs } });
   }
 
   // 2. Open roles the scan first saw in the window.
@@ -445,7 +460,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     const raw = T.live(e, s, "role");
     let title = raw ? titleWithout(raw, c?.name ?? "", T.live(c, s, "website") ?? null, fallback).trim() : fallback;
     if (!title || title.length > 90 || /https?:|www\.|@/i.test(title)) title = fallback;
-    push({ key: `role:${T.pubId(e.id)}`, kind: "role", at: t.firstSeen, companyId: e.companyId, engagementId: e.id, fn, title });
+    push({ key: `role:${T.pubId(e.id)}`, kind: "role", at: t.firstSeen, ...(Number.isFinite(posted) && posted <= nowMs ? { happened: new Date(posted).toISOString().slice(0, 10) } : {}), companyId: e.companyId, engagementId: e.id, fn, title });
   }
 
   // 3. Seats that just ended: the end (or the status Ended) was recorded in the window.
@@ -462,7 +477,7 @@ export function detectSignals(seed: Seed, s: State, sinceMs: number, nowMs: numb
     if (ym && monthsAgo(ym, nowMs) > END_FRESH_MONTHS) continue;
     const fn = named(T.fnOf(e, s));
     if (!fn || !isLeaderRaw(e, s, tracks)) continue;
-    push({ key: `end:${T.pubId(e.id)}`, kind: "seat", at: new Date(at).toISOString(), atMs: at, companyId: e.companyId, engagementId: e.id, fn, title: null, endReason: T.live(e, s, "endReason") });
+    push({ key: `end:${T.pubId(e.id)}`, kind: "seat", at: new Date(at).toISOString(), atMs: at, ...(ym ? { happened: monthDay(ym, nowMs) } : {}), companyId: e.companyId, engagementId: e.id, fn, title: null, endReason: T.live(e, s, "endReason") });
   }
 
   // 4. Funding, from the source (SEC filings with RN_FUNDING=1, else nothing).

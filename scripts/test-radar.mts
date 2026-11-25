@@ -255,6 +255,11 @@ async function main() {
   const keys = all.map((x) => x.key);
   const k = (kind: string, id: string) => `${kind}:${pub(id)}`;
   check("an adjacent leadership hire is a signal", keys.includes(k("hire", "e_acme_mkt")) && keys.includes(k("hire", "e_fox_sales")), keys);
+  // F5: dated by when it happened (the start month), never by the day Merlin saw it; the ended seat by its end month.
+  const hireSig = all.find((x) => x.key === k("hire", "e_acme_mkt"));
+  const endSig = all.find((x) => x.key === k("end", "e_beta_sales"));
+  check("a hire is dated by its start month, not the day it came into the table", hireSig?.happened === `${monthAgo(1)}-01` && hireSig.at.slice(0, 10) !== hireSig.happened, [hireSig?.at, hireSig?.happened]);
+  check("an ended seat is dated by its end month, not the day the end was recorded", endSig?.happened === `${monthAgo(1)}-01`, [endSig?.at, endSig?.happened]);
   check("a seat whose title reads below Lead is not", !keys.includes(k("hire", "e_acme_mgr")));
   check("a full-time seat is not", !keys.includes(k("hire", "e_fox_ft")));
   check("a seat that started years ago is not, even found today", !keys.includes(k("hire", "e_beta_old")));
