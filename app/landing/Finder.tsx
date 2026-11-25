@@ -27,6 +27,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CompanyLogo, IconChevron, IconLock, IconSearch, IconX, LockedSite, Num, lockedLook } from "../ui/shared";
 import { FUNCTIONS, GTM_FUNCTIONS } from "@/lib/tableFields";
 import { SparkMark } from "./scenes";
+import { populationLine, seatNoun, viewLabel } from "./explore";
 
 /** Read by app/onboard/Onboarding.tsx. */
 const TRY_FN_KEY = "tp_try_fn";
@@ -113,26 +114,7 @@ export interface Totals {
   functions: number;
 }
 
-/** How a fractional in each function is usually called, for "have hired a fractional CMO". */
-const SEAT_NOUN: Record<string, string> = {
-  Sales: "sales leader",
-  Marketing: "CMO",
-  RevOps: "RevOps lead",
-  "Customer Success": "customer success leader",
-  Partnerships: "partnerships lead",
-  Growth: "growth lead",
-  "Product Marketing": "product marketing lead",
-  Enablement: "enablement lead",
-  "AI GTM": "AI GTM lead",
-  Technology: "CTO",
-  Finance: "CFO",
-  Operations: "COO",
-  People: "people leader",
-  Product: "product leader",
-  Legal: "general counsel",
-  Executive: "executive",
-};
-export const seatNoun = (fn: string) => SEAT_NOUN[fn] ?? `${fn} lead`;
+export { seatNoun };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -169,7 +151,6 @@ function startedOn(month: string | null): string | null {
 }
 
 const VIEWS: View[] = ["all", "hiring", "notyet"];
-const viewLabel = (v: View, fn: string) => (v === "all" ? "All" : v === "hiring" ? "Hiring now" : `No fractional ${seatNoun(fn)} yet`);
 const viewOf = (a: Ask | null): View => (a === "hiring" || a === "notyet" ? a : "all");
 
 /** A question as the box says it: with the visitor's function, or in general words until they pick one. */
@@ -395,10 +376,10 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
   const emptyText = () => {
     if (scoped)
       return view === "hiring"
-        ? `No open ${fnLow} roles on file for that mix right now. Try All, or any industry or country.`
+        ? `No open ${fnLow} roles on file for that mix right now. Try ${viewLabel("all", shownFn)}, or any industry or country.`
         : "Nothing on file for that mix yet. Try any industry or any country.";
     if (view === "hiring")
-      return `No open ${fnLow} roles on file right now. We check every week. Try All to see the companies that hired a fractional ${noun}.`;
+      return `No open ${fnLow} roles on file right now. We check every week. Try ${viewLabel("all", shownFn)} to see the companies that hired a fractional ${noun}.`;
     if (view === "notyet") return `Every company on file that hires fractionals has hired a fractional ${noun} already.`;
     return c && c.notYet > 0
       ? `No fractional ${noun} seats on file yet. ${fmt(c.notYet)} companies hire fractionals in other functions, so they are good places to start. Join, add a seat you held and earn credits.`
@@ -553,13 +534,19 @@ export default function Finder({ onJoin, primary, ctaRef, onExample, onTotals }:
                 {VIEWS.map((v) => {
                   const n = tabCount(v);
                   return (
-                    <button key={v} type="button" role="tab" aria-selected={v === view} className={`lp-tab${v === view ? " is-on" : ""}`} onClick={() => setAsk(v)}>
+                    <button key={v} type="button" role="tab" aria-selected={v === view} aria-describedby={c ? `${id}-pop` : undefined} className={`lp-tab${v === view ? " is-on" : ""}`} onClick={() => setAsk(v)}>
                       {viewLabel(v, shownFn)}
                       {n != null ? <span className="lp-tab-n num">{fmt(n)}</span> : <span className="lp-tab-n lp-skel" aria-label="Loading" />}
                     </button>
                   );
                 })}
               </div>
+              {/* What each tab counts and how they relate (owner review M3): no tab is a total of the others. */}
+              {c ? (
+                <p className="lp-res-pop" id={`${id}-pop`}>
+                  {populationLine(c, shownFn, industry || null, country || null)}
+                </p>
+              ) : null}
               {split ? <p className="lp-res-split num">{split}</p> : null}
               {view === "all" && c && c.holders > 0 ? (
                 <p className={`lp-res-held${ask === "held" ? " is-on" : ""}`}>

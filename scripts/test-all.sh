@@ -119,6 +119,8 @@ serve integrity node scripts/test-integrity.mjs
 serve preview node scripts/test-preview.mjs
 # The same with no open-role company named (lib/preview.ts PREVIEW_OPEN_NAMED at 0, a test-server-only override).
 RN_PREVIEW_OPEN_ROLE_COMPANIES=0 serve preview-lock env PREVIEW_LOCKED=1 node scripts/test-preview.mjs
+# The landing page's Explore tabs (scripts/test-explore.mts, app/landing/explore.ts): each tab's population for one function (a seat or role on file, hiring now inside it, no fractional yet as other companies), no "All" and no sum, the scope and how the counts relate said under the tabs. In process.
+run explore npx tsx scripts/test-explore.mts
 # The Claude connector. RN_MCP_TEST=1: 2-second tokens for one test app, a short refresh grace, and metadata documents over http on localhost.
 RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 # What members read about prices: the connector's words and unlock plans for the bundles (who held a seat with their role, contact details after the name, people after the company) on view data shaped as the server sends it, and the landing page's matrix and Questions.

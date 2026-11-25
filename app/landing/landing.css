@@ -1161,6 +1161,7 @@ button.lp-fake-btn {
   color: var(--pine);
 }
 /* With a country picked: how many of the tab's count are in it, and how many have no country on file yet. */
+.lp-res-pop,
 .lp-res-split,
 .lp-res-held {
   margin-top: 12px;

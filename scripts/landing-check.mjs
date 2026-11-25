@@ -612,8 +612,12 @@ async function flow() {
   await page.locator("#find").scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(OUT, `${TAG}-finder-picked.png`) });
   await page.getByRole("button", { name: "Who held the Finance seat before me" }).click();
-  await page.waitForFunction(() => document.querySelector(".lp-tab.is-on")?.textContent?.startsWith("All") && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
-  check("who held the seat reads the All tab, and its line stands out", (await page.locator(".lp-res-held.is-on").count()) === 1);
+  await page.waitForFunction(() => document.querySelector(".lp-tab.is-on")?.textContent?.startsWith("CFO seat or role") && document.querySelector(".lp-res")?.getAttribute("aria-busy") === "false");
+  check("who held the seat reads the CFO seat or role tab, and its line stands out", (await page.locator(".lp-res-held.is-on").count()) === 1);
+  // Owner review M3: no tab is called All, and the line under the tabs names each population with the scope.
+  const tabsText = await page.locator(".lp-tab").allInnerTexts();
+  check("no tab is called All: the first names its population", !tabsText.some((t) => /^All\b/.test(t)) && /^CFO seat or role/.test(tabsText[0]), tabsText);
+  check("the line under the tabs names the scope and how the counts relate", /^In Finance, any industry, any country: [\d,]+ compan(y has|ies have) a CFO seat or role on file/.test(await page.locator(".lp-res-pop").innerText()));
   await page.getByRole("button", { name: "What a fractional CFO charges" }).click();
   const note = await page.locator(".lp-res").innerText();
   await page.screenshot({ path: path.join(OUT, `${TAG}-finder-rates.png`) });
