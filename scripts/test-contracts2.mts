@@ -307,7 +307,7 @@ async function main() {
   const srow = (await C2.signingList(JOR, BASE, t0 + 5 * HOUR)).rows.find((r) => r.id === pr2.id);
   check("a signed proposal is in the list of everything sent for signature: Completed, Download", srow?.kind === "proposal" && srow.status === "completed" && srow.words === "Completed" && srow.action === "download", srow);
   const ct3 = src("app/post/ui3/work/contracts/ContractsPage.tsx");
-  check("the new design's Contracts says the plan: Pro and Close send, Close places the fields; with RN_CONTRACTS2 off it says where everything is (F13, F34)", /Merlin placing the fields for you and the automatic reminders are on Close/.test(ct3) && /everything you send for signature lives in Proposals/.test(ct3));
+  check("the new design's Contracts says sending is Close, to Free and Pro by name; with RN_CONTRACTS2 off it says where everything is (F13, F34)", (ct3.match(/title="Sending for signature is on Close"/g) ?? []).length === 2 && !/on Pro and Close/.test(ct3) && /everything you send for signature lives in Proposals/.test(ct3));
 
   /* ================= the list and the route ================= */
   console.log("\nthe list");

@@ -56,7 +56,7 @@ export interface Contracts2View {
   on: true;
   rows: SignRow[];
   me: { name: string; email: string; title: string };
-  /** Sending for signature: Trial and Pro and Close (as today). */
+  /** Sending for signature: Close and the trial (store.ts onFree is "not Close"; PRO_SEND says so). */
   canSend: boolean;
   /** Merlin reads and places the fields, and the automatic reminders: Close (the trial included). */
   canClose: boolean;

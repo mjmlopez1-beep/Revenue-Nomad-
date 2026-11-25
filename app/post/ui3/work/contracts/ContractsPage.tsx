@@ -169,12 +169,11 @@ export function Ui3Contracts() {
     return (
       <WorkMain group="Work" title="Contracts">
         <Band density="none" title="Contracts." sub="For now, everything you send for signature lives in Proposals: contracts and signed proposals are under Signed or closed there, with each signer, the audit trail and the signed PDF." />
-        {tier === "free" && (
-          <Gate title="Sending for signature is on Pro and Close" onPlans={() => openPlans("billing")}>
-            You can prepare a contract now and send it after you upgrade. Merlin placing the fields and the automatic reminders are on Close.
+        {!c.me.plan?.canClose && tier !== "close" && (
+          <Gate title="Sending for signature is on Close" onPlans={() => openPlans("billing")}>
+            {tier === "pro" ? "Pro opens every company. Sending contracts and proposals for signature, with the signed copy and its audit trail, is on Close." : "You can prepare a contract now and send it after you upgrade to Close."}
           </Gate>
         )}
-        {tier === "pro" && !c.me.plan?.canClose && <p className="w-help">Sending for signature is on your plan. Merlin placing the fields for you and the automatic reminders are on Close.</p>}
         <button type="button" className="m-btn m-btn-primary" onClick={() => c.openPage("proposals")}>
           Open Proposals
         </button>
@@ -248,11 +247,11 @@ export function Ui3Contracts() {
       <>
         <Band density="none" title="Contracts." sub={sub} extra={send} />
         {!v.canSend && (
-          <Gate title="Sending for signature is on Pro and Close" onPlans={() => openPlans("billing")}>
-            You can prepare a contract now and send it after you upgrade. Merlin placing the fields and the automatic reminders are on Close.
+          // Sending is Close (lib/proposals/store.ts PRO_SEND; onFree is "not Close"): Free and Pro are told so, by name (F34).
+          <Gate title="Sending for signature is on Close" onPlans={() => openPlans("billing")}>
+            {c.me.plan?.tier === "pro" ? "Pro opens every company. Sending contracts and proposals for signature, with the signed copy and its audit trail, is on Close. You can prepare a contract now." : "You can prepare a contract now and send it after you upgrade to Close."}
           </Gate>
         )}
-        {v.canSend && !v.canClose && <p className="w-help ct3-plan">Sending for signature is on your plan. Merlin placing the fields for you and the automatic reminders are on Close.</p>}
         {!v.rows.length ? (
           <Empty
             title="Nothing sent for signature yet"
