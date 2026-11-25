@@ -51,6 +51,9 @@ export function useWarmShared(): WarmSnap {
   return s;
 }
 
+/** A warm way in: through someone the member knows or a fellow fractional, not a cold note to the company. */
+export const isWarm = (w: WarmRow | null | undefined): w is WarmRow => !!w && !!w.via && w.src !== "direct";
+
 /* ---------- every company, as the new design reads it ---------- */
 
 export interface TRow {
@@ -89,11 +92,14 @@ export function useTargets() {
     [base, paths, warmBy, saved, hidden, inPipe],
   );
   const visible = useMemo(() => rows.filter((r) => !r.hidden), [rows]);
-  /** Opportunities: a good fit (4 traits or more) that is hiring now or has a way in, best fit first. */
+  /**
+   * Opportunities: hiring for the member's function now, or a good fit (4 traits or more) that is
+   * hiring or has a warm way in (someone between the member and the company). Best fit first.
+   */
   const opps = useMemo(
     () =>
       visible
-        .filter((r) => r.fit.n >= 4 && (!!r.role || !!r.ways?.n || !!r.warm?.via))
+        .filter((r) => !!r.role?.mine || (r.fit.n >= 4 && (!!r.role || !!r.ways?.n || isWarm(r.warm))))
         .sort((a, b) => b.fit.n - a.fit.n || Number(!!b.role) - Number(!!a.role) || (b.ways?.n ?? 0) - (a.ways?.n ?? 0) || a.i.c.name.localeCompare(b.i.c.name)),
     [visible],
   );
@@ -124,4 +130,22 @@ export function useCoActs() {
     [],
   );
   return { save, hide, follow, addPipe, busy };
+}
+
+/* ---------- where Warm Paths opens, and Target Companies ---------- */
+
+let warmFocus: { id: string; ask: boolean } | null = null;
+/** Warm Paths opens at this company (and with "Request an intro" open when `ask`). Read once. */
+export const setWarmFocus = (id: string, ask = false) => void (warmFocus = { id, ask });
+export const takeWarmFocus = () => {
+  const f = warmFocus;
+  warmFocus = null;
+  return f;
+};
+
+/** Target Companies: the companies list, on its default view. */
+export function goTargets(c: ReturnType<typeof useApp>) {
+  c.table.setRecordType("companies");
+  if (c.table.tab === "hiring") c.table.setTab("all");
+  c.openPage("table");
 }

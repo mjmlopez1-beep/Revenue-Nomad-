@@ -23,7 +23,7 @@ import { useKnown, usePaths } from "../network/usePaths";
 import { store } from "../hooks";
 import { Art, MarkIcon } from "./illustrations";
 import { Ic, type IconName } from "./icons";
-import { useTargets, useWarmShared } from "./data";
+import { isWarm, useTargets, useWarmShared } from "./data";
 import { initialsOf } from "./model";
 import "./fonts";
 import "./shell.css";
@@ -91,7 +91,7 @@ function useCounts() {
   return {
     network: known ? known.people.filter((p) => !p.away).length : null,
     companies: opps.length,
-    warm: warm ? warm.rows.filter((r) => !!r.via).length : paths ? Object.values(paths.counts).filter((c) => c.n > 0).length : null,
+    warm: warm ? warm.rows.filter(isWarm).length : paths ? Object.values(paths.counts).filter((c) => c.n > 0).length : null,
   };
 }
 
