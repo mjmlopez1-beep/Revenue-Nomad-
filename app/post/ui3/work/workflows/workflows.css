@@ -1,0 +1,77 @@
+/* Workflows in the new design (RN_UI3): Simple mode's four stages, the spending panel, the canvas. No illustration (round 9). */
+.ui3 .w3 .wf3-head { padding: 14px 0 6px; }
+.ui3 .w3 .wf3-tabs { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 18px; }
+.ui3 .w3 .wf3-lead { margin: 0 0 6px; }
+.ui3 .w3 .wf3-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-radius: 16px; background: var(--m-panel); border: 1px solid var(--m-line); margin-bottom: 18px; }
+.ui3 .w3 .wf3-name { font: 500 22px/1.15 var(--m-f-display); letter-spacing: -.01em; color: var(--m-ink); margin: 0; max-width: 460px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .wf-modeseg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--m-bg-2); }
+.ui3 .w3 .wf-modeseg button:disabled { opacity: .45; cursor: not-allowed; }
+.ui3 .w3 .wfs { padding: 0; display: grid; grid-template-columns: minmax(0, 760px) 320px; gap: 24px; justify-content: start; overflow: visible; }
+.ui3 .w3 .wfs-side { position: sticky; top: 12px; }
+/* the four stage colors: gold, purple, forest, terracotta */
+.ui3 .w3 .wf3-n01, .ui3 .w3 .wf3-mini .g1 .wf3-mn, .ui3 .w3 .wf3-test .g1 .wf3-mn { background: #c58a2e; }
+.ui3 .w3 .wf3-n02, .ui3 .w3 .wf3-mini .g2 .wf3-mn, .ui3 .w3 .wf3-test .g2 .wf3-mn { background: #7856b5; }
+.ui3 .w3 .wf3-n03, .ui3 .w3 .wf3-mini .g3 .wf3-mn, .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #103e32; }
+.ui3 .w3 .wf3-n04, .ui3 .w3 .wf3-mini .g4 .wf3-mn, .ui3 .w3 .wf3-test .g4 .wf3-mn { background: #b76143; }
+:root[data-theme="dark"] .ui3 .w3 .wf3-n03, :root[data-theme="dark"] .ui3 .w3 .wf3-mini .g3 .wf3-mn, :root[data-theme="dark"] .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #2f7a5f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .w3 .wf3-n03, :root:not([data-theme="light"]) .ui3 .w3 .wf3-mini .g3 .wf3-mn, :root:not([data-theme="light"]) .ui3 .w3 .wf3-test .g3 .wf3-mn { background: #2f7a5f; } }
+.ui3 .w3 .wfs-n b { color: #fff; }
+.ui3 .w3 .wfs-sel { cursor: pointer; }
+.ui3 .w3 .wf3-lockon { width: 34px; flex: none; font-size: 11.5px; font-weight: 700; color: var(--m-forest-ink); text-align: center; }
+.ui3 .w3 .wfs-row .wf-pill { flex: none; }
+.ui3 .w3 .wfs-row > .wfs-chev { flex: none; }
+/* spending */
+.ui3 .w3 .wf3-cap { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; background: var(--m-gold-wash); }
+.ui3 .w3 .wf3-cap b { font-variant-numeric: tabular-nums; color: var(--m-ink); }
+.ui3 .w3 .wf3-bar-track { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--m-gold) 25%, var(--m-panel)); overflow: hidden; }
+.ui3 .w3 .wf3-bar-track i { display: block; height: 100%; border-radius: 99px; background: var(--m-gold); }
+.ui3 .w3 .m-check { width: 22px; height: 22px; border-radius: 99px; display: grid; place-items: center; background: var(--m-forest-wash); color: var(--m-forest-ink); flex: none; }
+.ui3 .w3 .m-check.no { background: var(--w-hot-wash); color: var(--w-hot); }
+.ui3 .w3 .m-check svg { width: 13px; height: 13px; }
+/* the four-stage block on templates and the test */
+.ui3 .w3 .wf3-mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ui3 .w3 .wf3-mini li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }
+.ui3 .w3 .wf3-mini b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--m-muted); }
+.ui3 .w3 .wf3-mini small { display: block; color: var(--m-ink-2); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .wf3-mn { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font: 600 12px/1 var(--m-f-mono); color: #fff; }
+.ui3 .w3 .wf-tgrid { margin-top: 14px; }
+.ui3 .w3 .wf-tcard p { flex: 0 0 auto; }
+.ui3 .w3 .wf3-test { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.ui3 .w3 .wf3-test > li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+.ui3 .w3 .wf3-test ul, .ui3 .w3 .wf3-test-list { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.ui3 .w3 .wf3-ts { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; color: var(--m-ink-2); line-height: 1.45; }
+.ui3 .w3 .wf3-ts svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--m-forest-3); }
+.ui3 .w3 .wf3-ts.waiting svg { color: var(--m-gold); } .ui3 .w3 .wf3-ts.failed svg { color: var(--w-hot); } .ui3 .w3 .wf3-ts.skipped svg, .ui3 .w3 .wf3-ts.stopped svg { color: var(--m-faint); }
+.ui3 .w3 .wf3-ts b { color: var(--m-ink); font-weight: 600; }
+.ui3 .w3 .wf3-draft { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--m-forest-wash); display: flex; flex-direction: column; gap: 6px; }
+.ui3 .w3 .wf3-draft p { white-space: pre-wrap; font-size: 14px; line-height: 1.55; color: var(--m-ink-2); }
+.ui3 .w3 .wf3-testcap { margin-bottom: 4px; }
+/* your workflows */
+.ui3 .w3 .wf-mine { --cols: minmax(260px, 2fr) 170px 110px 150px 60px minmax(150px, auto); }
+.ui3 .w3 .wf-mine .m-tr { cursor: pointer; }
+.ui3 .w3 .wf-mine .wf-gi { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex: none; }
+.ui3 .w3 .wf-runs-t { --cols: minmax(0, 1fr) 190px minmax(180px, auto); }
+.ui3 .w3 .wf-runs-t .m-tr { cursor: pointer; }
+/* advanced */
+.ui3 .w3 .wf3-advbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ui3 .w3 .wf3-advbody { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.ui3 .w3 .wf3-canvas { position: relative; height: calc(100vh - 290px); min-height: 480px; overflow: auto; border-radius: 16px; border: 1px solid var(--m-line); cursor: default; touch-action: auto; }
+.ui3 .w3 .wf3-world { position: relative; }
+.ui3 .w3 .wf3-node { text-align: left; padding: 0; height: 72px; font: inherit; display: flex; align-items: center; }
+.ui3 .w3 .wf3-node .wf-nh { padding: 0 12px; width: 100%; }
+.ui3 .w3 .wf3-advside { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 12px; }
+.ui3 .w3 .wf3-panel { border-radius: 16px; background: var(--m-panel); border: 1px solid var(--m-line); display: flex; flex-direction: column; }
+.ui3 .w3 .wf3-panel .wf-pb { gap: 14px; }
+.ui3 .w3 .wf3-list { display: flex; flex-direction: column; gap: 8px; }
+.ui3 .w3 .wf-li.off { opacity: .6; }
+.ui3 .w3 .wf-li > svg:last-child { width: 16px; height: 16px; color: var(--m-muted); }
+@media (max-width: 1180px) {
+  .ui3 .w3 .wfs { grid-template-columns: minmax(0, 1fr); }
+  .ui3 .w3 .wfs-side { position: static; }
+  .ui3 .w3 .wf3-advbody { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .ui3 .w3 .wf3-bar { padding: 10px 12px; }
+  .ui3 .w3 .wf3-name { font-size: 18px; max-width: 100%; flex: 1 1 100%; }
+  .ui3 .w3 .wf-mine .m-tr > span[role="cell"]:nth-of-type(4) { grid-column: 1; }
+}

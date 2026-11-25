@@ -34,7 +34,8 @@ import { usePlans } from "../../../network/useWays";
 import { COL_NONE, FILTERS, SORTS, colOf, dropStage, nextOf, passes, shownMonthly, sortDeals, toWords, wayOf, closedWords, type ColKey, type FilterKey, type RouteHint, type SortKey } from "../../../pipeline/model";
 import { DealDrawer } from "../../../pipeline/DealDrawer";
 import { AddDeal, AddFromList } from "../../../pipeline/AddDeal";
-import { Band, Chips, CoMark, Failed, More, Skel, St, Tabs, WorkMain, kMoney, money, type MenuItem, type Tone } from "../parts";
+import { Band, Chips, CoMark, Failed, More, Skel, St, Tabs, WorkMain, money, type MenuItem, type Tone } from "../parts";
+import { kMoney, moneyOf } from "./money";
 import { WIc } from "../icons";
 import "../../../workbench/workbench.css";
 import "../../../pipeline/board.css";
@@ -64,23 +65,6 @@ const keep = {
     }
   },
 };
-
-/** The money summary, from the member's own deals only. */
-export function moneyOf(deals: readonly PipelineRec[]) {
-  const open = deals.filter((r) => (OPEN as readonly string[]).includes(r.stage));
-  const props = open.filter((r) => r.stage === "proposal");
-  const won = deals.filter((r) => r.stage === "won");
-  const sum = (xs: readonly PipelineRec[]) => xs.reduce((s, r) => s + shownMonthly(r), 0);
-  return {
-    open: sum(open),
-    openN: open.length,
-    openNoValue: open.filter((r) => !shownMonthly(r)).length,
-    props: sum(props),
-    propsN: props.length,
-    won: sum(won),
-    wonN: won.length,
-  };
-}
 
 export function Ui3Pipeline() {
   const c = useApp();

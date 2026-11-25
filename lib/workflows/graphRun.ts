@@ -982,13 +982,40 @@ async function sendNode(cx: Cx, n: G.GNode): Promise<string[] | "pause"> {
       });
     }
     put(cx, n, "skipped", "Sending from your Gmail isn't switched on yet. The note is a draft in Messages: nothing was sent.", 0, { out: "skipped", output: preview });
+    // The member is told where their draft is: the bell, and email when the step asks by email too.
+    cx.bells.push({ id: `wf2-draft:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note Merlin drafted waits in Messages", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
+    if (s0.email === true) await askByEmail(cx, "A note Merlin drafted waits in Messages. Nothing was sent.", "/?p=messages");
     return ["skipped"];
   }
   if (!to) throw new Error("Who is it to? Put their email in the step's To, or open who decides first.");
   const outbox = await queueFromWorkflow(m.id, { key: `wf:${run.id}:${n.id}:${run.visits[n.id]}`, to, toName: oneLineWf(s0.toName, 120) || null, subject, body, companyPub: run.event.company }, cx.nowMs);
   put(cx, n, "waiting", "Waits for your tap: Approve and send, in your outbox. Nothing goes without it.", 0, { output: preview });
   cx.bells.push({ id: `wf2-send:${run.id}:${n.id}:${run.visits[n.id]}`, at: iso(cx.nowMs), kind: "workflow", line: "A note waits for your tap: Approve and send", sub: `${oneLineWf(run.lineOut ?? run.line, 100)} · ${cx.g.name}`, href: "/?p=messages", alert: `wf:${cx.g.id}` });
+  if (s0.email === true) await askByEmail(cx, `A note waits for your tap: Approve and send. It is skipped if you don't answer in ${days === 1 ? "1 day" : `${days} days`}.`, "/?p=messages");
   return pause(cx, { kind: "send", node: n.id, outbox, expires: iso(cx.nowMs + days * DAY) });
+}
+
+/**
+ * The member asked by email as well as in the bell (an Approve, then send with "email" on): one
+ * short alert email to their own address, never the note's text. Quiet when email isn't set up.
+ */
+async function askByEmail(cx: Cx, line: string, href: string): Promise<void> {
+  const { m, g } = cx;
+  if (cx.test || !emailEnabled() || !/@/.test(m.email ?? "")) return;
+  try {
+    const s = await loadState();
+    const nn = await import("../notify/index");
+    const base = nn.baseOf(s) || (cx.origin ?? "").replace(/\/+$/, "");
+    if (!base) return;
+    const [{ renderAlertEmail }, { emailLinker }, { alertOffUrl }, seed] = await Promise.all([import("../digest"), import("../emailIn"), import("../notify/events"), loadSeed()]);
+    const linker = emailLinker(seed, s, m.id, base, cx.nowMs);
+    const off = alertOffUrl(base, m.id, [`wf:${g.id}`]);
+    const out = oneLineWf(cx.run.lineOut ?? cx.run.line, 160);
+    const mail = renderAlertEmail({ name: m.name, every: "instant", groups: [{ name: g.name, lines: [{ text: line, url: linker(href) }, { text: out, url: linker(cx.run.href) }], offUrl: off }], alertsUrl: linker("/?p=alerts"), appUrl: base, unsubscribeUrl: off, oneRun: true });
+    await sendEmail(m.email, mail.subject, mail.text, mail.html, { unsubscribeUrl: off });
+  } catch (e) {
+    console.error("workflows v2: the ask email failed", e instanceof Error ? e.message : "error");
+  }
 }
 
 function pause(cx: Cx, w: G.RunWait): "pause" {

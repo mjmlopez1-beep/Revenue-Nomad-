@@ -28,8 +28,6 @@ import "./work.css";
 import "./w3.css";
 
 export const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
-/** "$96.5k" for the money summary: one decimal under a hundred thousand, none above. */
-export const kMoney = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n >= 100_000 || n % 1000 === 0 ? 0 : 1)}k` : money(n));
 
 /** The page's <main>, and its crumbs (Work or Community, then the page) in the new top bar. */
 export function WorkMain({ group, title, crumbs, cls, children }: { group: "Work" | "Community"; title: string; crumbs?: Crumb[]; cls?: string; children: ReactNode }) {

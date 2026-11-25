@@ -215,6 +215,8 @@ export interface GraphWorkflow {
   hook?: string;
   /** Converted from today's linear workflow. */
   from?: "v1";
+  /** Made in Simple mode (the new design, lib/workflows/simple.ts): it always has a monthly credit limit. */
+  mode?: "simple";
   createdAt: string;
   updatedAt: string;
 }
@@ -431,7 +433,8 @@ export function cleanSettings(type: NodeType, raw: unknown): Record<string, unkn
       return { fields, attach: ATTACH.filter((a) => Array.isArray(r.attach) && r.attach.includes(a)) };
     }
     case "act.send":
-      return { to: oneLineWf(r.to, 200), toName: oneLineWf(r.toName, 120), subject: oneLineWf(r.subject, 160), body: txt(r.body, 5000), days: int(r.days, 1, V2_LIMITS.tapDays, V2_LIMITS.tapDefaultDays) };
+      // email: the member is asked by email too, as well as in the bell (Simple mode's "In-app notifications and email").
+      return { to: oneLineWf(r.to, 200), toName: oneLineWf(r.toName, 120), subject: oneLineWf(r.subject, 160), body: txt(r.body, 5000), days: int(r.days, 1, V2_LIMITS.tapDays, V2_LIMITS.tapDefaultDays), ...(r.email === true ? { email: true } : {}) };
     case "act.invite":
       return { to: oneLineWf(r.to, 80), note: txt(r.note, 600) };
     case "act.move":
