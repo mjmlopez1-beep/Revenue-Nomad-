@@ -460,7 +460,7 @@
 .ui3 .w3 .wf-tcard:hover { box-shadow: var(--m-sh-2); }
 .ui3 .w3 .wf-tcard .apps { display: flex; }
 .ui3 .w3 .wf-tcard .apps .wf-gi { width: 34px; height: 34px; margin-right: -6px; box-shadow: 0 0 0 2px var(--m-panel); }
-.ui3 .w3 .wf-tcard h3 { font: 500 20px/1.2 var(--m-f-display); letter-spacing: -.01em; }
+.ui3 .w3 .wf-tcard h3 { font: 500 20px/1.2 var(--m-f-display); letter-spacing: -.01em; color: var(--m-ink); }
 .ui3 .w3 .wf-tcard p { font-size: 14px; color: var(--m-ink-2); line-height: 1.45; flex: 1; }
 .ui3 .w3 .wf-mine { --cols: minmax(280px, 2fr) 120px 140px minmax(150px, 1fr) 64px 150px; }
 .ui3 .w3 .wf-list { display: none; }
