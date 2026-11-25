@@ -31,7 +31,7 @@ import { useUi } from "../../../ui";
 import { useApp } from "../../../shell/pages";
 import { loadPipeline, pipelineAct, usePipeline } from "../../../pipelineStore";
 import { usePlans } from "../../../network/useWays";
-import { COL_NONE, FILTERS, SORTS, colOf, dropStage, nextOf, passes, shownMonthly, sortDeals, toWords, wayOf, closedWords, type ColKey, type FilterKey, type RouteHint, type SortKey } from "../../../pipeline/model";
+import { COL_NONE, FILTERS, SORTS, colOf, dropStage, nextOf, passes, sortDeals, toWords, wayOf, closedWords, type ColKey, type FilterKey, type RouteHint, type SortKey } from "../../../pipeline/model";
 import { DealDrawer } from "../../../pipeline/DealDrawer";
 import { AddDeal, AddFromList } from "../../../pipeline/AddDeal";
 import { Band, Chips, CoMark, Failed, More, Skel, St, Tabs, WorkMain, money, type MenuItem, type Tone } from "../parts";
@@ -226,7 +226,7 @@ export function Ui3Pipeline() {
               Open · {c.me.proOpens && c.me.proOpens.left > 0 ? "free" : `${COMPANY_PRICE} credits`}
             </button>
           ) : (
-            <span className="pl-val">{shownMonthly(r) ? <>{money(r.monthly)}<small>/mo</small></> : <small>{r.stage === "won" ? "No terms yet" : "No value yet"}</small>}</span>
+            <span className="pl-val">{r.monthly ? <>{money(r.monthly)}<small>/mo</small></> : <small>{r.stage === "won" ? "No terms yet" : "No value yet"}</small>}</span>
           )}
           <More label={`Move ${nameOf(r)} to another stage`} items={() => moveItems(r)} />
         </div>
@@ -245,7 +245,8 @@ export function Ui3Pipeline() {
     onDragLeave: () => setOver((o) => (o === k ? null : o)),
     onDrop: onDrop(k),
   });
-  const colTot = (k: ColKey) => shown.filter((r) => colOf(r.stage) === k).reduce((s, r) => s + shownMonthly(r), 0);
+  // A Won deal counts its terms, else the value typed (PipelineRec.monthly, the server's dealMonthly), as the summary does.
+  const colTot = (k: ColKey) => shown.filter((r) => colOf(r.stage) === k).reduce((s, r) => s + r.monthly, 0);
 
   const wonCards = shown.filter((r) => r.stage === "won");
   const lostCards = shown.filter((r) => colOf(r.stage) === "closed");
@@ -381,7 +382,7 @@ export function Ui3Pipeline() {
                   <div className="m-name">
                     <span title={r.name ?? undefined}>{r.name ?? "Locked company"}</span>
                   </div>
-                  <small>{[r.pitch, shownMonthly(r) ? `${money(r.monthly)}/mo` : null].filter(Boolean).join(" · ") || "No value yet"}</small>
+                  <small>{[r.pitch, r.monthly ? `${money(r.monthly)}/mo` : null].filter(Boolean).join(" · ") || "No value yet"}</small>
                 </div>
               </div>
               <span className="m-ph-hide" role="cell">
@@ -483,6 +484,11 @@ export function Ui3Pipeline() {
           <small>
             Monthly revenue won · {m.wonN} {m.wonN === 1 ? "engagement" : "engagements"}
           </small>
+          {m.wonNoTerms > 0 && (
+            <button type="button" className="w-link pl3-terms" onClick={() => setWinning(deals.find((r) => r.stage === "won" && !r.won)?.id ?? null)}>
+              {m.wonNoTerms === 1 ? "Add the terms of your win" : `Add the terms of ${m.wonNoTerms} wins`}
+            </button>
+          )}
         </div>
       </div>
       {hot.length > 0 && (

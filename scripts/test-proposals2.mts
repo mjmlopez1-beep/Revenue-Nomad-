@@ -306,6 +306,12 @@ console.log("\nTap a company: one calculation");
   check("no call for this company: nothing for Merlin's AI to write", r.ai.state === "none");
   const blanks = L.blanksOf(p.blocks, L.docFields(p));
   check(`a company start has a handful of blanks, not thirty-six (${blanks.length}: ${blanks.join(", ")})`, blanks.length <= 4, blanks);
+  // The deal's own value (acceptance F12): a proposal started at a company in the pipeline takes the value the member gave it.
+  const { perform } = await import("../lib/table.ts");
+  const cedar = view.companies.find((x) => x.name === "Cedar and Pine")!;
+  await perform(JOR, { type: "pipeline.deal", companyId: cedar.id, stage: "meeting", value: 9000 } as never);
+  const fromDeal = await Q.quickProposal(JOR, { companyId: cedar.id, rate: { fee: r1.fee, allocation: "2 days a week" } });
+  check("a proposal at a company in the pipeline takes the deal's value as its monthly fee, before Merlin's suggestion", fromDeal.proposal.fields["pricing.monthlyFee"] === "$9,000", fromDeal.proposal.fields["pricing.monthlyFee"]);
   const tpl = await Q.quickProposal(JOR, { companyId: halcyon.id, templateId: "sprint-90", rate: { fee: r1.fee, allocation: "2 days a week" } });
   const tb = L.blanksOf(tpl.proposal.blocks, L.docFields(tpl.proposal));
   check(`a template start fills what Merlin knows too (${tb.length} blanks)`, tb.length <= 4 && tpl.proposal.templateId === "sprint-90", tb);

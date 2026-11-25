@@ -252,6 +252,9 @@ export async function quickProposal(token: string | null, a: QuickArgs, origin?:
   set("goals.target", prep?.goal);
   // The price: what the call agreed first, then the app's one calculation (proposalRate).
   for (const [k, v] of Object.entries(prep?.terms ?? {})) set(k, v);
+  // Then the value the member gave the deal in their pipeline: their own number for this client.
+  const dv = deal?.value?.amount ?? 0;
+  if (dv > 0 && dv < 1_000_000) set("pricing.monthlyFee", money(dv));
   const rf = a.rate && typeof a.rate === "object" ? moneyOf(String(a.rate.fee ?? "")) : null;
   if (rf && rf > 0 && rf < 1_000_000) set("pricing.monthlyFee", money(rf));
   if (a.rate && typeof a.rate === "object" && typeof a.rate.allocation === "string" && hoursWeekOf(a.rate.allocation)) set("pricing.allocation", clip(a.rate.allocation, 80));

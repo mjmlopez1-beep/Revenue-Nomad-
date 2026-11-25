@@ -401,8 +401,10 @@ async function main() {
   const m = money.moneyOf([D("reach", 12000), D("sent", 9500), D("replied", 0), D("proposal", 16000), D("proposal", 10500), D("won", 12000, true), D("won", 9000), D("lost", 20000), D("notnow", 5000)]);
   check("open pipeline: every open stage's typed value, a month", m.open === 48000 && m.openN === 5, m);
   check("proposals out: the Proposal stage only, and a part of the open pipeline", m.props === 26500 && m.propsN === 2 && m.props <= m.open, m);
-  check("won: the Won deals' terms; a Won deal without terms counts nothing", m.won === 12000 && m.wonN === 2, m);
-  check("lost and not now count nowhere", m.open + m.won === 60000);
+  check("won: the Won deals' terms, and a Won deal without terms counts the value typed (acceptance F12)", m.won === 21000 && m.wonN === 2, m);
+  check("…and the page asks for the missing terms", m.wonNoTerms === 1 && /Add the terms of your win/.test(readFileSync(path.join(ROOT, "app/post/ui3/work/pipeline/PipelinePage.tsx"), "utf8")), m);
+  check("…a Won deal with no terms and no value counts nothing, never guessed", money.moneyOf([D("won", 0)]).won === 0);
+  check("lost and not now count nowhere", m.open + m.won === 69000);
   check("a deal with no value is counted as such, never guessed", m.openNoValue === 1);
   check("the money words: $96.5k, $26.5k, $12k, $900", money.kMoney(96500) === "$96.5k" && money.kMoney(26500) === "$26.5k" && money.kMoney(12000) === "$12k" && money.kMoney(900) === "$900" && money.kMoney(120000) === "$120k");
 
