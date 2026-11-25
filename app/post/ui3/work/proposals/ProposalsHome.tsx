@@ -133,9 +133,9 @@ export function Ui3ProposalsHome({ data, view, infos, onOpen, onOpenTab, onGone,
   }, [data.canBuild, loadHome]);
 
   /** The price for a start: ONE calculation with What should I charge (as Home2 does). */
-  const rateFor = (companyId: string | null, terms?: HomeCall["terms"]) => {
+  const rateFor = (companyId: string | null, terms?: HomeCall["terms"], dealFee?: number | null) => {
     const allocation = terms?.allocation ?? "";
-    const r = proposalRate(view, { company: { id: companyId }, fields: allocation ? { "pricing.allocation": allocation } : {}, callFee: terms?.fee ?? null });
+    const r = proposalRate(view, { company: { id: companyId }, fields: allocation ? { "pricing.allocation": allocation } : {}, callFee: terms?.fee ?? null, dealFee: dealFee ?? home?.companies.find((k) => k.id === companyId)?.value ?? null });
     return { fee: r.fee, allocation: allocation || undefined };
   };
   const start = async (key: string, body: Record<string, unknown>) => {

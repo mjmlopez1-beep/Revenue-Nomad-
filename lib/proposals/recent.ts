@@ -65,6 +65,8 @@ export interface HomeCompany {
   /** Who the member is talking to there, as they typed it. */
   to: string | null;
   draftId: string | null;
+  /** What the member typed the deal there is worth a month (the pipeline's value), or null: a proposal started from it carries it as its fee. */
+  value?: number | null;
 }
 export interface HomeView {
   calls: HomeCall[];
@@ -281,7 +283,7 @@ export function pipelineCompanies(seed: Seed, s: State, m: Member): HomeCompany[
     const hidden = T.identityHidden(g, s, idx, tracks, m, e.companyId);
     const name = hidden ? null : g.companies.get(e.companyId)?.name || null;
     const draft = [...(s.proposals ?? [])].reverse().find((p) => p.memberId === m.id && p.companyId === e.companyId && !p.sends.length);
-    out.push({ id: T.pubId(e.companyId), name, label: name ?? "A locked company", stage: STAGE_WORDS[e.stage], to: e.to?.name && !e.to.google ? String(e.to.name).slice(0, 80) : null, draftId: draft?.id ?? null });
+    out.push({ id: T.pubId(e.companyId), name, label: name ?? "A locked company", stage: STAGE_WORDS[e.stage], to: e.to?.name && !e.to.google ? String(e.to.name).slice(0, 80) : null, draftId: draft?.id ?? null, value: e.value?.amount ?? null });
     if (out.length >= COMPANIES_SHOWN) break;
   }
   return out;

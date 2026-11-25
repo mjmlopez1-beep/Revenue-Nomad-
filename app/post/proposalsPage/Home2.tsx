@@ -145,9 +145,9 @@ export function Home2({
    * days a week only as the call said them: never carried over from an earlier proposal (a "40 hours a
    * week" from another deal priced a 2.5-day plan as full time). Unsaid, the document asks.
    */
-  const rateFor = (companyId: string | null, terms?: HomeCall["terms"]) => {
+  const rateFor = (companyId: string | null, terms?: HomeCall["terms"], dealFee?: number | null) => {
     const allocation = terms?.allocation ?? "";
-    const r = proposalRate(view, { company: { id: companyId }, fields: allocation ? { "pricing.allocation": allocation } : {}, callFee: terms?.fee ?? null });
+    const r = proposalRate(view, { company: { id: companyId }, fields: allocation ? { "pricing.allocation": allocation } : {}, callFee: terms?.fee ?? null, dealFee: dealFee ?? home?.companies.find((k) => k.id === companyId)?.value ?? null });
     return { fee: r.fee, allocation: allocation || undefined };
   };
 

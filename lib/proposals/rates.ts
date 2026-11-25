@@ -128,7 +128,7 @@ export interface ProposalRate {
   band: string;
   /** The monthly fee to open with, or null when nothing answers (then the proposal keeps a blank). */
   fee: number | null;
-  source: "call" | "yours" | "merlin" | null;
+  source: "call" | "deal" | "yours" | "merlin" | null;
   /** Merlin's ask for this group (the working's amounts), when it answered. */
   ask: { from: number; to: number } | null;
   /** The ask in words ("Ask $9,000 to $11,000 a month"), and the working's steps. */
@@ -158,7 +158,7 @@ export function rateMath(fee: number | null, allocation: string | null | undefin
 
 export function proposalRate(
   view: Pick<View, "benchmarks" | "me" | "companies">,
-  p: { company: { id: string | null }; fields: Record<string, string>; callFee?: number | null },
+  p: { company: { id: string | null }; fields: Record<string, string>; callFee?: number | null; dealFee?: number | null },
 ): ProposalRate {
   const fn = view.me?.function ?? null;
   const rev = revenueOf(view, p);
@@ -169,8 +169,10 @@ export function proposalRate(
   const w = view.benchmarks && fn && FUNCTIONS.includes(fn) ? chargeWorking(view.benchmarks, { fn, band, kind: "monthly", hours: hw, company: null, industry: false }, own) : null;
   const ask = w?.answered ? w.ask : null;
   const callFee = p.callFee ?? null;
-  const fee = callFee ?? own.monthly?.amount ?? ask?.to ?? null;
-  const source: ProposalRate["source"] = callFee ? "call" : own.monthly ? "yours" : ask ? "merlin" : null;
+  // The fee said on a call first, then the value the member gave the deal there (journey D1), then their own rate, then Merlin's ask.
+  const dealFee = p.dealFee && p.dealFee > 0 ? p.dealFee : null;
+  const fee = callFee ?? dealFee ?? own.monthly?.amount ?? ask?.to ?? null;
+  const source: ProposalRate["source"] = callFee ? "call" : dealFee ? "deal" : own.monthly ? "yours" : ask ? "merlin" : null;
   const m = rateMath(fee, allocation);
   return { fn, band, fee, source, ask, big: w?.answered ? w.big : null, steps: w?.steps ?? [], ...m, stepDown: fee ? Math.round((fee * 2) / 3 / 250) * 250 : null };
 }

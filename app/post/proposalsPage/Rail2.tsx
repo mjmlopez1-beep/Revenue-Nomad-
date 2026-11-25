@@ -81,6 +81,7 @@ function RateCard({ p, view, readOnly, onFee, onDays }: { p: ProposalRec; view: 
     const fromCall = !!fee && said === "quick" && p.notes.some((n) => n.key === "call.agreed" && n.text.includes(money(fee)));
     if (fee) add(fee, fromCall ? "from the call" : "in it now");
     if (r.source === "yours") add(r.fee, "your rate");
+    if (r.source === "deal") add(r.fee, "the deal's value");
     if (r.ask) (add(r.ask.from, "Merlin's floor"), add(r.ask.to, "Merlin's ask"));
     if (fee && r.ask && fee <= r.ask.to) add(Math.round((r.ask.to * 1.15) / 250) * 250, "higher");
     return out.sort((a, b) => a.n - b.n);
