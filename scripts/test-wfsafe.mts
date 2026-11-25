@@ -229,6 +229,10 @@ async function main() {
   check("E1: the outbox's own approve refuses an empty To too", !!noTo, noTo);
   const withTo = await S.approve("tok-c-000000001", { key: itNo!.key, id: itNo!.id, to: "cfo@client.example", subject: "Hello", body: "Hi, a short hello.", kind: "workflow" } as never);
   check("E1: with the address the member typed, Approve and send queues that one note, to that address", ["queued", "grant"].includes(withTo.item.status) && withTo.item.to === "cfo@client.example" && (await items()).filter((x) => x.key === itNo!.key).length === 1, withTo.item);
+  await settle();
+  await new Promise((r) => setTimeout(r, 300));
+  const rNo2 = (await runOf(rNo.id))!;
+  check("E1: approved in the outbox, the run carries on at once (not at the next tick)", rNo2.status !== "waiting" && rNo2.nodes.find((x) => x.node === "s")?.status === "done", { status: rNo2.status, s: rNo2.nodes.find((x) => x.node === "s") });
 
   /* ---------- 3. an expired approval is refused where the member taps ---------- */
   console.log("\n3. Expiry at the approve endpoint itself");

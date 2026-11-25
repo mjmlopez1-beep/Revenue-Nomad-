@@ -348,7 +348,7 @@ async function journeyB() {
   page.on("request", (r) => r.method() === "POST" && r.url().endsWith("/api/table") && posts.push(r.postData() ?? ""));
   await page.goto(`${BASE}/?c=${co(K).id}`);
   await settle(page);
-  const unlockBtn = page.getByRole("button", { name: /^Unlock company for 2 credits/ }).filter({ visible: true }).first();
+  const unlockBtn = page.getByRole("button", { name: /^(Unlock|Open) company for 2 credits/ }).filter({ visible: true }).first();
   await page.waitForTimeout(1500);
   await clickFor(page, page.getByRole("button", { name: "See what opens it" }), unlockBtn);
   check("the record names the price on its button before anything is spent", /2 credits/.test(await unlockBtn.innerText()));
@@ -366,7 +366,7 @@ async function journeyB() {
   // Confirm, with a double click on the confirm button: one unlock, 2 credits.
   await unlockBtn.click();
   await dlg.waitFor({ timeout: 5000 });
-  const confirm = dlg.getByRole("button", { name: /Unlock · 2 credits/ });
+  const confirm = dlg.getByRole("button", { name: /(Unlock|Open) · 2 credits/ });
   await confirm.dblclick().catch(() => {});
   await page.waitForTimeout(2500);
   await evidence(page, "unlocked");
@@ -397,7 +397,7 @@ async function journeyB() {
   const pp = await pctx.newPage();
   await pp.goto(`${BASE}/?c=${co(K + 1).id}`);
   await settle(pp);
-  check("Pro: the record shows the company by name with no unlock price", (await pp.getByText(seedCo(K + 1).fields.name).count()) > 0 && (await pp.getByRole("button", { name: /^Unlock company for \d+ credits?/ }).count()) === 0);
+  check("Pro: the record shows the company by name with no unlock price", (await pp.getByText(seedCo(K + 1).fields.name).count()) > 0 && (await pp.getByRole("button", { name: /^(Unlock|Open) company for \d+ credits?/ }).count()) === 0);
   await evidence(pp, "pro record no price");
   await pctx.close();
   await ctx.close();
@@ -779,7 +779,8 @@ async function journeyE() {
   const confirmLive = page.getByRole("dialog").filter({ hasText: "Make it live" });
   await clickFor(page, live, confirmLive);
   const cl = (await confirmLive.innerText().catch(() => "")).replace(/\s+/g, " ");
-  check("Make live first says what it may spend and the monthly limit", /credits a run/.test(cl) && /Stops at \d+ credits this month/.test(cl), cl.slice(0, 300));
+  // What it may spend: the most a run costs and the limit, or, when no step costs anything on the plan, that it costs nothing.
+  check("Make live first says what it may spend and the monthly limit", (/credits a run/.test(cl) && /Stops at \d+ credits this month/.test(cl)) || /Nothing it does costs credits on (Close|Pro|your plan)/.test(cl), cl.slice(0, 300));
   await evidence(page, "make it live confirm");
   await confirmLive.getByRole("button", { name: "Not yet" }).click();
   await page.waitForTimeout(800);
@@ -797,6 +798,10 @@ async function journeyE() {
   let capWf = null;
   if (saved0?.version?.nodes) {
     const v = structuredClone(saved0.version);
+    // On companies the member follows (two of them, followed here), so its two events are its own.
+    const trig = v.nodes.find((n) => n.id === "s_trigger");
+    if (trig) trig.settings = { ...trig.settings, scope: { kind: "follows" } };
+    for (const k of [70, 71]) await act(who, { type: "follow", companyId: co(k).id, on: true });
     if (!v.nodes.some((n) => n.type === "find.email")) {
       v.nodes.push({ id: "s_email", type: "find.email", name: "Find their email", on: true, settings: {}, pos: { x: 0, y: 350 } });
       v.edges = v.edges.filter((e) => !(e.from === "s_dm" && e.to === "s_way"));
@@ -813,7 +818,7 @@ async function journeyE() {
   }
   // The event: a new role in the member's function at a company in their Crystal Ball (two of them, for the limit check).
   const runs0 = (await wfRuns(who, wf.id)).filter((r) => !r.test).length;
-  await scan([scanRole("e1", 48, "Sales", "Fractional Head of Sales"), scanRole("e1b", 48, "Sales", "Fractional VP Sales")]);
+  await scan([scanRole("e1", 48, "Sales", "Fractional Head of Sales"), scanRole("e1c", 70, "Sales", "Fractional VP Sales"), scanRole("e1d", 71, "Sales", "Fractional Sales Leader")]);
   for (let i = 0; i < 4; i++) {
     await req("GET", "/api/table", { as: who });
     await sleep(1500);
@@ -1290,7 +1295,7 @@ async function journeyK() {
   const fp = await fctx.newPage();
   await fp.goto(`${BASE}/?c=${co(20).id}`);
   await settle(fp);
-  const ub = fp.getByRole("button", { name: /^Unlock company for 2 credits/ }).filter({ visible: true }).first();
+  const ub = fp.getByRole("button", { name: /^(Unlock|Open) company for 2 credits/ }).filter({ visible: true }).first();
   await fp.waitForTimeout(1500);
   await clickFor(fp, fp.getByRole("button", { name: "See what opens it" }), ub);
   if (await ub.count()) {
@@ -1304,7 +1309,7 @@ async function journeyK() {
     await fp.keyboard.press("Escape");
     await fp.waitForTimeout(500);
     const r4 = await focusInfo(fp);
-    check("Escape is Not now: nothing spent, focus back on the unlock button", (await balanceOf("free")) === bal && /Unlock company/.test(r4.name), r4);
+    check("Escape is Not now: nothing spent, focus back on the unlock button", (await balanceOf("free")) === bal && /(Unlock|Open) company/.test(r4.name), r4);
   } else check("the unlock button is reachable", false);
   await fctx.close();
   await ctx.close();

@@ -1381,6 +1381,20 @@ export async function graphTick(nowMs = Date.now(), origin?: string): Promise<nu
   return n;
 }
 
+/**
+ * A workflow's note approved (or cancelled) in the outbox itself: the member's runs waiting on a note carry on now,
+ * as a tap from the run does, not at the scheduler's next tick. Never throws.
+ */
+export async function afterOutboxTap(memberId: string, nowMs = Date.now()): Promise<void> {
+  if (!v2On()) return;
+  try {
+    const s = await loadState();
+    for (const r of s.workflows?.[memberId]?.graphRuns ?? []) if (r.status === "waiting" && r.wait?.kind === "send" && !r.test) await tickOne(memberId, r.id, undefined, nowMs);
+  } catch (e) {
+    console.error("workflows v2: carrying on after an outbox tap failed", e instanceof Error ? e.message : "error");
+  }
+}
+
 function tickOne(memberId: string, runId: string, origin: string | undefined, nowMs: number): Promise<boolean> {
   return serial(async () => {
     const cx = await contextOf(memberId, runId, origin, nowMs);

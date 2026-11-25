@@ -416,6 +416,9 @@ export async function approve(token: string | null, raw: ApproveInput, nowMs = D
     return { it, again: false };
   });
   if (out.it.status === "queued" || out.it.status === "scheduled") arm(m.id, out.it.id, Date.parse(out.it.sendAt!));
+  // A workflow's note approved here: its run carries on now (lib/workflows/graphRun.ts afterOutboxTap), not at the next tick.
+  // Not awaited: a tap from the run itself approves through here inside the run's own queue, and carries the run on itself.
+  if (out.it.kind === "workflow" && !out.again) void import("../workflows/graphRun").then((g) => g.afterOutboxTap(m.id)).catch(() => {});
   const view = await sendViewFor(m.id);
   const item = view.items.find((x) => x.id === out.it.id) ?? viewOf(await loadSeed(), await loadState(), m, out.it);
   return { item, grant: out.it.status === "grant" ? `/api/send/connect?d=${encodeURIComponent(out.it.id)}` : null, again: out.again, view };
