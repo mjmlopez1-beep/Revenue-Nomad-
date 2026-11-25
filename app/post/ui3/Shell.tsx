@@ -169,13 +169,13 @@ export function Ui3Nav({
       </>
     ) : null;
   const sub = me.title || (me.function ? `Fractional ${me.function}` : "Member");
-  // The sidebar folds to a 72px icon rail. The member's choice is kept in this browser; with none yet, Pipeline under 1366px opens folded.
+  // The sidebar folds to a 72px icon rail. The member's choice is kept in this browser; with none yet, Pipeline under 1440px opens folded (so its company names fit).
   const onPipe = [...groups.work].some((x) => x.key === "pipeline" && x.current);
   const [pref, setPref] = useState<string | null>(null);
   const [wide, setWide] = useState(true);
   useEffect(() => {
     setPref(store.get(RAIL_KEY));
-    const on = () => setWide(window.innerWidth >= 1366);
+    const on = () => setWide(window.innerWidth >= 1440);
     on();
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);

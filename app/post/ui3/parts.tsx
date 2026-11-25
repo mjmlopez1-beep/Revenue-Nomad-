@@ -1,12 +1,13 @@
 "use client";
 
 /** The new design's small parts, shared by its pages: the title band, a company's logo, the fit ring, chips, the row menu. */
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CompanyLogo } from "../../ui/shared";
 import type { CoInfo } from "../model";
 import { Art, type ArtName } from "./illustrations";
 import { Ic, type IconName } from "./icons";
-import { fitCls, initialsOf, relCls, tintOf, type Fit7, type RelBand } from "./model";
+import { fitCls, initialsOf, relCls, tintOf, type RelBand } from "./model";
 
 export const ownClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
@@ -32,26 +33,136 @@ export function CoLogo({ i, s = 40 }: { i: CoInfo; s?: number }) {
   );
 }
 
-/** Traits matched out of 7: forest at 6 or 7, gold at 4 or 5, quiet below. */
-export function FitRing({ fit, lg, onClick }: { fit: Fit7; lg?: boolean; onClick?: () => void }) {
-  const label = `${fit.n} of 7 traits: ${fit.band}`;
-  const body = lg ? (
-    <>
-      {fit.n}
-      <small>/7</small>
-    </>
-  ) : (
-    `${fit.n}/7`
+/** What a fit ring counts: traits matched out of a set (7 for the fit, fewer for a lookalike), each named. */
+export interface FitLike {
+  n: number;
+  of?: number;
+  traits: { label: string; on: boolean; value?: string }[];
+  band?: string;
+}
+const fitWords = (f: FitLike) => {
+  const of = f.of ?? 7;
+  const on = f.traits.filter((t) => t.on).map((t) => t.label);
+  const off = f.traits.filter((t) => !t.on).map((t) => t.label);
+  const head = `Fit: ${f.n} of ${of} traits match${f.band ? `, ${f.band.toLowerCase()}` : ""}.`;
+  const list = [on.length ? `Matched: ${on.join(", ")}.` : "", off.length ? `Not matched: ${off.join(", ")}.` : ""].filter(Boolean).join(" ");
+  return { of, head, list };
+};
+
+/**
+ * Traits matched out of 7 (never a chance of winning): forest at 6 or 7, gold at 4 or 5, quiet
+ * below. A small "fit" caption sits under the ring, and hover, focus or a tap shows which traits
+ * match and which don't. `inside`: the ring sits in another control (a row that is a button), so it
+ * is not a button itself; the row's name carries the whole count and list.
+ */
+export function FitRing({ fit, lg, am, inside, cap = !lg }: { fit: FitLike; lg?: boolean; am?: boolean; inside?: boolean; cap?: boolean }) {
+  const { of, head, list } = fitWords(fit);
+  const [show, setShow] = useState<"hover" | "pin" | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  const descId = useId();
+  useEffect(() => {
+    if (!show) return setPos(null);
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const w = 280;
+    const vw = document.documentElement.clientWidth;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - w - 12));
+    const up = window.innerHeight - r.bottom < 330 && r.top > 330;
+    setPos(up ? { bottom: window.innerHeight - r.top + 8, left } : { top: r.bottom + 8, left });
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setShow(null);
+    const away = () => setShow(null);
+    const out = (e: MouseEvent) => !el.contains(e.target as Node) && setShow(null);
+    document.addEventListener("keydown", key);
+    document.addEventListener("mousedown", out);
+    window.addEventListener("resize", away);
+    window.addEventListener("scroll", away, true);
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.removeEventListener("mousedown", out);
+      window.removeEventListener("resize", away);
+      window.removeEventListener("scroll", away, true);
+    };
+  }, [show]);
+  const ringCls = `m-fit${lg ? " lg" : ""}${am ? " am" : fitCls(Math.round((fit.n / of) * 7))}`;
+  const style = { "--n": (fit.n / Math.max(1, of)) * 7 } as CSSProperties;
+  const ring = (
+    <span className={ringCls} style={style} aria-hidden="true">
+      {lg ? (
+        <>
+          {fit.n}
+          <small>/{of}</small>
+        </>
+      ) : (
+        `${fit.n}/${of}`
+      )}
+    </span>
   );
-  const cls = `m-fit${lg ? " lg" : ""}${fitCls(fit.n)}`;
-  const style = { "--n": fit.n } as CSSProperties;
-  return onClick ? (
-    <button type="button" className={cls} style={style} aria-label={label} title={label} onClick={onClick}>
-      {body}
-    </button>
-  ) : (
-    <span className={cls} style={style} role="img" aria-label={label} title={label}>
-      {body}
+  const body = (
+    <>
+      {ring}
+      {cap && <small className="m-fit-cap">fit</small>}
+    </>
+  );
+  const hover = {
+    onMouseEnter: () => setShow((x) => x ?? "hover"),
+    onMouseLeave: () => setShow((x) => (x === "hover" ? null : x)),
+  };
+  const root = typeof document !== "undefined" ? (ref.current?.closest(".ui3") ?? document.body) : null;
+  const pop =
+    show && pos && root
+      ? createPortal(
+          <div className="m-fitpop" style={pos} aria-hidden="true">
+            <p className="m-fitpop-h">
+              <b>
+                {fit.n} of {of} traits match
+              </b>
+              {fit.band && <small>{fit.band}</small>}
+            </p>
+            <ul>
+              {fit.traits.map((t) => (
+                <li key={t.label} className={t.on ? "on" : undefined}>
+                  <Ic n={t.on ? "check" : "x"} />
+                  <span>
+                    <b>{t.label}</b>
+                    {t.value && <small>{t.value}</small>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="m-fitpop-f">Fit counts traits matched from facts on file. It is not a chance of winning.</p>
+          </div>,
+          root,
+        )
+      : null;
+  if (inside)
+    return (
+      <span ref={ref} className={`m-fitw${lg ? " lg" : ""}`} role="img" aria-label={`${head} ${list}`} {...hover}>
+        {body}
+        {pop}
+      </span>
+    );
+  return (
+    <span ref={ref} className={`m-fitw${lg ? " lg" : ""}`} {...hover}>
+      <button
+        type="button"
+        className="m-fitb"
+        aria-label={head}
+        aria-describedby={descId}
+        onFocus={() => setShow((x) => x ?? "hover")}
+        onBlur={() => setShow((x) => (x === "hover" ? null : x))}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShow((x) => (x === "pin" ? null : "pin"));
+        }}
+      >
+        {body}
+      </button>
+      <span id={descId} className="m-sr">
+        {list}
+      </span>
+      {pop}
     </span>
   );
 }

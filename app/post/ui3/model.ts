@@ -22,7 +22,7 @@ export interface Trait {
   key: TraitKey;
   label: string;
   on: boolean;
-  /** The company's value, or why it doesn't count ("Not in your ideal client", "Not on file"). */
+  /** The company's value, or why it doesn't count ("Not set in your ideal client", "Not on file"). */
   value: string;
 }
 export type FitBand = "Strong opportunity" | "Good opportunity" | "Worth watching";
@@ -41,8 +41,8 @@ export const TRAIT_WORDS: Record<TraitKey, string> = {
   yourFn: "Hired your function",
   repeat: "Repeat hirer",
 };
-/** The Fit score header's tooltip: what the seven traits are. */
-export const FIT_TIP = "Seven traits from facts on file: industry, size, revenue and country against your ideal client, past fractional hires, a fractional hire in your function, and repeat hiring.";
+/** The Fit header's tooltip: what the seven traits are, and what the count is not. */
+export const FIT_TIP = "Traits matched out of 7, from facts on file: industry, size, revenue and country against your ideal client, past fractional hires, a fractional hire in your function, and repeat hiring. It is not a chance of winning.";
 
 export const bandOf = (n: number): FitBand => (n >= 6 ? "Strong opportunity" : n >= 4 ? "Good opportunity" : "Worth watching");
 /** The fit ring's class: forest at 6 or 7, gold at 4 or 5, quiet below. */
@@ -53,7 +53,7 @@ export function fit7(i: CoInfo, me: Pick<Me, "icp" | "function">): Fit7 {
   const p = me.icp ? icpParts(me.icp, c) : { industry: undefined, employees: undefined, revenue: undefined, country: undefined };
   const fn = namedFn(me.function ?? null);
   const f = c.friendly;
-  const val = (v: boolean | null | undefined, fact: string | null) => (v === undefined ? "Not in your ideal client" : v === null ? "Not on file" : fact ?? "On file");
+  const val = (v: boolean | null | undefined, fact: string | null) => (v === undefined ? "Not set in your ideal client" : v === null ? "Not on file" : fact ?? "On file");
   const traits: Trait[] = [
     { key: "industry", label: TRAIT_WORDS.industry, on: p.industry === true, value: val(p.industry, shown(c.cells.industry)) },
     { key: "size", label: TRAIT_WORDS.size, on: p.employees === true, value: val(p.employees, shown(c.cells.employees)) },

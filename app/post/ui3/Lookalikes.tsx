@@ -21,7 +21,7 @@ import { useUi3Head } from "./head";
 import { isWarm, setWarmFocus, useCoActs, useTargets } from "./data";
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
-import { Band, Chip, CoLogo, RowMenu, Traits, Wait } from "./parts";
+import { Band, Chip, CoLogo, FitRing, RowMenu, Traits, Wait } from "./parts";
 import { coLine, coName, plural } from "./model";
 import { oppTitle } from "./Home";
 
@@ -356,10 +356,7 @@ function TopMatch({ r, seed, of, off, cmp, setCmp, radar, fn, t }: { r: LikeRow;
           </div>
         </button>
         <div className="tm-fit">
-          <span className="m-fit lg am" style={{ "--n": (same / Math.max(1, of)) * 7 } as React.CSSProperties} role="img" aria-label={`${same} of ${of} traits`}>
-            {same}
-            <small>/{of}</small>
-          </span>
+          <FitRing lg am fit={{ n: same, of, band, traits: LIKE_TRAITS.filter((k) => !off.has(k) && likeParts(profileOf([seed])).traits.includes(k)).map((k) => ({ label: TRAIT[k].l, on: r.shared.includes(k), value: valOf(i, k) })) }} />
           <div>
             <b className="m-h3">
               {same} of {of} traits match

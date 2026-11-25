@@ -318,7 +318,7 @@
   .u3p .cb-tabs .m-tabs { margin: 0 -16px; padding: 0 8px; }
   .u3p .op-main { grid-template-columns: minmax(0, 1fr) 50px; gap: 12px; padding: 16px; }
   .u3p .op-main > .m-co { grid-column: 1; }
-  .u3p .op-main > .m-fit { grid-column: 2; grid-row: 1; }
+  .u3p .op-main > .m-fitw { grid-column: 2; grid-row: 1; }
   .u3p .op-opp, .u3p .op-acts { grid-column: 1 / -1; }
   .u3p .op-acts .m-btn-primary { flex: 1; }
   .u3p .op-why { grid-template-columns: minmax(0, 1fr); padding: 0 16px 18px; gap: 16px; }

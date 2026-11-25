@@ -32,10 +32,27 @@
 .ui3 .w3 .wf3-mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ui3 .w3 .wf3-mini li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }
 .ui3 .w3 .wf3-mini b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--m-muted); }
-.ui3 .w3 .wf3-mini small { display: block; color: var(--m-ink-2); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui3 .w3 .wf3-mini small { display: block; font-size: 13px; color: var(--m-ink-2); line-height: 1.35; }
 .ui3 .w3 .wf3-mn { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font: 600 12px/1 var(--m-f-mono); color: #fff; }
 .ui3 .w3 .wf-tgrid { margin-top: 14px; }
 .ui3 .w3 .wf-tcard p { flex: 0 0 auto; }
+/* a template card: the footer (cap line, Preview, Use template) sits at the bottom of every card in a row */
+.ui3 .w3 .wf3-tfoot { margin-top: auto; padding-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+.ui3 .w3 .wf3-prevbtn { margin-left: -12px; }
+/* a template's preview: every stage in full */
+.ui3 .w3 .wf3-prev, .ui3 .wf3-prev { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.ui3 .wf3-prev > li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+.ui3 .wf3-prev > li > div > b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--m-muted); margin: 2px 0 4px; }
+.ui3 .wf3-prev p { margin: 0 0 4px; font-weight: 600; color: var(--m-ink); font-size: 14.5px; }
+.ui3 .wf3-prev ul { margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--m-ink-2); line-height: 1.45; }
+.ui3 .wf3-prev .wf3-mn { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font: 600 12px/1 var(--m-f-mono); color: #fff; }
+.ui3 .wf3-prev .g1 .wf3-mn { background: #c58a2e; }
+.ui3 .wf3-prev .g2 .wf3-mn { background: #7856b5; }
+.ui3 .wf3-prev .g3 .wf3-mn { background: #103e32; }
+.ui3 .wf3-prev .g4 .wf3-mn { background: #b76143; }
+:root[data-theme="dark"] .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ui3 .wf3-prev .g3 .wf3-mn { background: #2f7a5f; } }
+.ui3 .wf3-prev-cap { margin-right: auto; }
 .ui3 .w3 .wf3-test { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; }
 .ui3 .w3 .wf3-test > li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
 .ui3 .w3 .wf3-test ul, .ui3 .w3 .wf3-test-list { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; }

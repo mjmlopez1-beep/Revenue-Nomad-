@@ -209,6 +209,22 @@ function stageRows(cfg: SimpleCfg): { n: string; cls: string; kicker: string; he
     { n: "04", cls: "g4", kicker: "Merlin follows through", lines: [cfg.follow.pipe && "Update my pipeline", cfg.follow.reply && "Watch for a reply", cfg.follow.followup && "Prepare a follow-up for approval"].filter(Boolean) as string[] },
   ];
 }
+/** One short phrase a stage, for a template card. The whole stage is in the template's preview. */
+const TRIGGER_SHORT: Record<SimpleTrigger, string> = {
+  seat: "A fractional seat ends",
+  role: "A role opens in my function",
+  hire: "A fractional is hired",
+  funding: "A funding round is filed",
+  leader: "A new leader shows up",
+  known: "A contact starts somewhere new",
+  fact: "A fact changes",
+};
+function shortOf(n: string, cfg: SimpleCfg): string {
+  if (n === "01") return TRIGGER_SHORT[cfg.trigger];
+  if (n === "02") return cfg.research ? "Researches, then drafts my note" : cfg.dm ? "Finds who decides, drafts my note" : cfg.way ? "Finds a way in, drafts my note" : "Drafts my note";
+  if (n === "03") return "Nothing goes out without me";
+  return cfg.follow.reply ? "Watches for a reply" : cfg.follow.pipe ? "Updates my pipeline" : cfg.follow.followup ? "Prepares a follow-up" : "Nothing more";
+}
 function MiniStages({ cfg }: { cfg: SimpleCfg }) {
   return (
     <ol className="wf3-mini">
@@ -217,11 +233,53 @@ function MiniStages({ cfg }: { cfg: SimpleCfg }) {
           <span className="wf3-mn">{s.n}</span>
           <span>
             <b>{s.kicker}</b>
-            <small>{s.head && s.n !== "01" ? s.head : s.lines.join(" · ")}</small>
+            <small>{shortOf(s.n, cfg)}</small>
           </span>
         </li>
       ))}
     </ol>
+  );
+}
+/** A template in full: every stage with each step it takes. */
+function TemplatePreview({ t, paid, busy, onUse, onClose }: { t: (typeof TEMPLATES)[number]; paid: boolean; busy: boolean; onUse: () => void; onClose: () => void }) {
+  return (
+    <Sheet
+      title={t.t}
+      onClose={onClose}
+      foot={
+        <>
+          <span className="m-small wf3-prev-cap">{paid ? `Stops at ${DEFAULT_CAP} credits a month unless you change it.` : "Research and drafting are on Pro."}</span>
+          {paid ? (
+            <button type="button" className="m-btn m-btn-primary" disabled={busy} aria-busy={busy || undefined} onClick={onUse}>
+              Use template
+            </button>
+          ) : (
+            <button type="button" className="m-btn m-btn-secondary" onClick={() => openPlans("billing")}>
+              <WIc n="lock" /> On Pro
+            </button>
+          )}
+        </>
+      }
+    >
+      <p className="w-help">{t.say}</p>
+      <ol className="wf3-prev">
+        {stageRows(t.cfg).map((s) => (
+          <li key={s.n} className={s.cls}>
+            <span className="wf3-mn">{s.n}</span>
+            <div>
+              <b>{s.kicker}</b>
+              {s.head && <p>{s.head}</p>}
+              <ul>
+                {s.lines.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="m-small">Nothing runs until you make it live, and you can change any step first.</p>
+    </Sheet>
   );
 }
 
@@ -229,11 +287,13 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
   const toast = useToast();
   const [goal, setGoal] = useState<(typeof GOALS)[number]>("All");
   const [busy, setBusy] = useState<string | null>(null);
+  const [prev, setPrev] = useState<(typeof TEMPLATES)[number] | null>(null);
   const use = async (t: (typeof TEMPLATES)[number]) => {
     setBusy(t.k);
     const r = await wf<{ id: string; message: string }>("POST", "", { op: "save", name: t.t, mode: "simple", cap: DEFAULT_CAP, warn: null, version: compileSimple(t.cfg) });
     setBusy(null);
     if (r.error) return toast(r.error, true);
+    setPrev(null);
     toast(`${t.t} is ready. It's off until you make it live.`);
     onMade(r.id);
   };
@@ -253,22 +313,28 @@ function Templates({ list, onMade }: { list: ListView; onMade: (id: string) => v
             <h3>{t.t}</h3>
             <p>{t.say}</p>
             <MiniStages cfg={t.cfg} />
-            <div className="w-row">
-              <span className="m-small">{list.plan.paid ? "Stops at 60 credits a month unless you change it" : "Research and drafting are on Pro"}</span>
-              <span className="w-sp" />
-              {list.plan.paid ? (
-                <button type="button" className="m-btn m-btn-sm m-btn-primary" disabled={!!busy} aria-busy={busy === t.k || undefined} onClick={() => void use(t)}>
-                  Use template
+            <div className="wf3-tfoot">
+              <span className="m-small">{list.plan.paid ? `Stops at ${DEFAULT_CAP} credits a month unless you change it` : "Research and drafting are on Pro"}</span>
+              <div className="w-row">
+                <button type="button" className="m-btn m-btn-sm m-btn-ghost wf3-prevbtn" aria-label={`Preview ${t.t}`} onClick={() => setPrev(t)}>
+                  Preview
                 </button>
-              ) : (
-                <button type="button" className="m-btn m-btn-sm m-btn-secondary" onClick={() => openPlans("billing")}>
-                  <WIc n="lock" /> On Pro
-                </button>
-              )}
+                <span className="w-sp" />
+                {list.plan.paid ? (
+                  <button type="button" className="m-btn m-btn-sm m-btn-primary" disabled={!!busy} aria-busy={busy === t.k || undefined} onClick={() => void use(t)}>
+                    Use template
+                  </button>
+                ) : (
+                  <button type="button" className="m-btn m-btn-sm m-btn-secondary" onClick={() => openPlans("billing")}>
+                    <WIc n="lock" /> On Pro
+                  </button>
+                )}
+              </div>
             </div>
           </article>
         ))}
       </div>
+      {prev && <TemplatePreview t={prev} paid={list.plan.paid} busy={!!busy} onUse={() => void use(prev)} onClose={() => setPrev(null)} />}
     </>
   );
 }

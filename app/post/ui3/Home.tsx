@@ -180,7 +180,7 @@ export function Ui3Home() {
                             {kindLabel(row.kinds[0], fn)}
                           </Chip>
                         </span>
-                        <FitRing fit={fit} />
+                        <FitRing fit={fit} inside />
                         <span className="m-row-go">
                           <Ic n="right" />
                         </span>

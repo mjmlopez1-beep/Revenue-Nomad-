@@ -233,7 +233,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
             <div className="m-thead" style={{ "--cols": cols } as CSSProperties}>
               <span>Company</span>
               <span title={FIT_TIP}>
-                Fit score
+                Fit
                 <Ic n="info" />
               </span>
               <span title="The strongest sign this company needs your expertise now: an open role, else Crystal Ball's signal, else its past fractional hires.">

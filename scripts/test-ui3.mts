@@ -211,6 +211,10 @@ async function main() {
   const full = fit7(i0, { icp: { industries: ["SaaS"], employees: ["51–200"], revenue: ["$1M–$5M"], countries: ["United States"] }, function: "Sales" });
   check("a matching ideal client and a past Sales hire: the traits that match are on", full.traits.find((x) => x.key === "industry")!.on && full.traits.find((x) => x.key === "size")!.on && full.traits.find((x) => x.key === "yourFn")!.on, full.traits);
   check("bands come from the count only", bandOf(7) === "Strong opportunity" && bandOf(6) === "Strong opportunity" && bandOf(5) === "Good opportunity" && bandOf(4) === "Good opportunity" && bandOf(3) === "Worth watching");
+  // The ring reads as traits matched, never a chance of winning: a "fit" caption, "x of 7 traits" in its name, and which traits match.
+  const parts = read("app/post/ui3/parts.tsx");
+  check("the fit ring: a fit caption, its name says traits matched, and its popover lists each trait", /m-fit-cap">fit</.test(parts) && /`Fit: \$\{f\.n\} of \$\{of\} traits match/.test(parts) && /Not matched: /.test(parts) && /not a chance of winning/.test(parts) && /fit\.traits\.map/.test(parts));
+  check("an ideal client part the member hasn't set says so", none.traits[0].value === "Not set in your ideal client", none.traits[0]);
 
   /* ---------- the copy ---------- */
   const files = [...readdirSync(path.join(root, "app/post/ui3")).filter((f) => /\.(tsx|ts)$/.test(f)).map((f) => `app/post/ui3/${f}`), "lib/ui3.ts"];

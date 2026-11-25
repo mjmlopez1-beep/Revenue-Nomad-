@@ -193,6 +193,7 @@ export function Ui3Pipeline() {
         data-deal={r.id}
         tabIndex={0}
         aria-label={`Open the deal with ${nameOf(r)}`}
+        title={r.name ?? undefined}
         onClick={() => setPanel({ kind: "deal", id: r.id })}
         onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && setPanel({ kind: "deal", id: r.id })}
       >
@@ -378,7 +379,7 @@ export function Ui3Pipeline() {
                 <CoMark i={c.byId.get(r.company) ?? null} name={r.name ?? "Locked company"} s={36} />
                 <div style={{ minWidth: 0 }}>
                   <div className="m-name">
-                    <span>{r.name ?? "Locked company"}</span>
+                    <span title={r.name ?? undefined}>{r.name ?? "Locked company"}</span>
                   </div>
                   <small>{[r.pitch, shownMonthly(r) ? `${money(r.monthly)}/mo` : null].filter(Boolean).join(" · ") || "No value yet"}</small>
                 </div>
@@ -489,7 +490,7 @@ export function Ui3Pipeline() {
           {hot.slice(0, 3).map((r) => {
             const n = nextOf(r, today);
             return (
-              <button key={r.id} type="button" className="pl-tmove" onClick={() => setPanel({ kind: "deal", id: r.id })}>
+              <button key={r.id} type="button" className="pl-tmove" title={`${n.title}: ${r.name ?? "Locked company"}`} aria-label={`${n.title}: ${r.name ?? "the locked company"}${n.due ? `, ${n.due}` : ""}`} onClick={() => setPanel({ kind: "deal", id: r.id })}>
                 <CoMark i={c.byId.get(r.company) ?? null} name={r.name ?? "Locked company"} s={34} />
                 <span style={{ minWidth: 0 }}>
                   <b>{n.title}</b>

@@ -23,3 +23,7 @@
   .ui3 .w3 .pl-intros li > .w-row:last-child { justify-content: flex-start; }
 }
 .ui3 .w3 .pl-metric { text-align: left; align-items: flex-start; }
+/* polish: a company's name shows whole where it fits, else two lines before it is cut; the full name rides on the card's title and label */
+.ui3 .w3 .pl-card .pl-cohead { align-items: flex-start; }
+.ui3 .w3 .pl-card .pl-cohead .m-logo { margin-top: 1px; }
+.ui3 .w3 .pl-card .pl-coname { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
