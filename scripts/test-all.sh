@@ -8,31 +8,69 @@
 # data folders are removed when everything passed. On a failure the logs stay and the path is
 # printed. The private seed (data/intel-seed.json) is used when it is there. Without it the
 # checks that sign in as a seed member are skipped.
+#
+# Optional (scripts/test-ci.sh sets them; unset, nothing changes):
+#   SERVE_SEED=<file>    the serve suites' servers run on this seed (RN_INTEL_SEED) and their checks
+#                        read it (SEED_FILE), instead of data/intel-seed.json
+#   SKIP_SUITES=<list>   suites not to run, one "name|reason" a line: each is listed as skipped with its reason
+#   SUITE_TIMEOUT=<secs> stop a suite that runs longer (it fails)
+#   LOG_DIR=<dir>        keep every suite's output there (else a temporary folder, removed when all passed)
+#   SUMMARY_JSON=<file>  also write the run's JSON summary there
+# At the end it prints the JSON summary (scripts/test-summary.mjs) on one line after "SUMMARY_JSON ":
+# suites and checks passed, failed and skipped, every failure and skip, and the seconds each suite took.
 set -u
 cd "$(dirname "$0")/.."
 PORT="${PORT:-4600}"
 # The servers are started with these as RN_SUPPORT_EMAIL and RN_INTRO_EMAIL, and the checks expect them in View.contact.
 SUPPORT_EMAIL="support-qa@example.com"
 INTRO_EMAIL="intro-qa@example.com"
-TMP="$(mktemp -d)"
+if [ -n "${LOG_DIR:-}" ]; then
+  TMP="$LOG_DIR"
+  mkdir -p "$TMP"
+else
+  TMP="$(mktemp -d)"
+fi
+: > "$TMP/results.tsv"
 fails=0
+T0=$(date +%s%N)
 
 if [ ! -f .next/BUILD_ID ]; then
   echo "Build first: npm run build"
   exit 1
 fi
 
+# skipped <name>: the reason SKIP_SUITES gives for not running this suite, or nothing.
+skipped() {
+  printf '%s\n' "${SKIP_SUITES:-}" | awk -F'|' -v n="$1" '$1 == n { sub(/^[^|]*\|/, ""); print; exit }'
+}
+
 # run <name> <command...>: run one suite, print its last line and any failed checks.
 run() {
-  local name=$1
+  local name=$1 kind=${KIND:-run} why t s rc=0 status=ok note=""
   shift
-  if "$@" > "$TMP/$name.out" 2>&1; then
+  why=$(skipped "$name")
+  if [ -n "$why" ]; then
+    printf 'skip    %-12s %s\n' "$name" "$why"
+    printf '%s\t%s\tskipped\t0\t%s\n' "$name" "$kind" "$why" >> "$TMP/results.tsv"
+    return
+  fi
+  t=$(date +%s%N)
+  if [ -n "${SUITE_TIMEOUT:-}" ]; then
+    timeout --kill-after=10 "$SUITE_TIMEOUT" "$@" > "$TMP/$name.out" 2>&1 || rc=$?
+  else
+    "$@" > "$TMP/$name.out" 2>&1 || rc=$?
+  fi
+  s=$((($(date +%s%N) - t) / 1000000))
+  if [ "$rc" -eq 0 ]; then
     printf 'ok      %-12s %s\n' "$name" "$(tail -n 1 "$TMP/$name.out")"
   else
     fails=$((fails + 1))
-    printf 'FAILED  %-12s %s\n' "$name" "$(tail -n 1 "$TMP/$name.out")"
+    status=failed
+    if [ -n "${SUITE_TIMEOUT:-}" ] && [ "$rc" -eq 124 ]; then note="timed out after ${SUITE_TIMEOUT}s"; fi
+    printf 'FAILED  %-12s %s\n' "$name" "$(tail -n 1 "$TMP/$name.out")${note:+ ($note)}"
     grep -E '^FAIL' "$TMP/$name.out" | cut -c1-300
   fi
+  printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$kind" "$status" "$s" "$note" >> "$TMP/results.tsv"
 }
 
 # serve <name> <command...>: the same, against a server started for this suite alone.
@@ -43,8 +81,18 @@ run() {
 serve() {
   local name=$1
   shift
+  if [ -n "$(skipped "$name")" ]; then
+    KIND=serve run "$name"
+    return
+  fi
+  # SERVE_SEED: the server runs on that seed and the checks read the same file.
+  local seed_env=() check_env=()
+  if [ -n "${SERVE_SEED:-}" ]; then
+    seed_env=(RN_INTEL_SEED="$SERVE_SEED")
+    check_env=(SEED_FILE="$SERVE_SEED")
+  fi
   mkdir -p "$TMP/data-$name"
-  RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off RN_FREE_COMPANY="${FREE_COMPANY:-off}" \
+  env ${seed_env[@]+"${seed_env[@]}"} RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off RN_FREE_COMPANY="${FREE_COMPANY:-off}" \
     RN_SUPPORT_EMAIL="$SUPPORT_EMAIL" RN_INTRO_EMAIL="$INTRO_EMAIL" \
     node node_modules/next/dist/bin/next start -p "$PORT" > "$TMP/$name.server.log" 2>&1 &
   local pid=$!
@@ -52,7 +100,7 @@ serve() {
     curl -s -o /dev/null "http://localhost:$PORT/api/health" && break
     sleep 0.5
   done
-  run "$name" env BASE="http://localhost:$PORT" STARTER=25 SUPPORT_EMAIL="$SUPPORT_EMAIL" INTRO_EMAIL="$INTRO_EMAIL" FREE_COMPANY="${FREE_COMPANY:-off}" "$@"
+  KIND=serve run "$name" env ${check_env[@]+"${check_env[@]}"} BASE="http://localhost:$PORT" STARTER=25 SUPPORT_EMAIL="$SUPPORT_EMAIL" INTRO_EMAIL="$INTRO_EMAIL" FREE_COMPANY="${FREE_COMPANY:-off}" "$@"
   kill "$pid" 2> /dev/null
   wait "$pid" 2> /dev/null
   rm -rf "$TMP/data-$name"
@@ -266,10 +314,14 @@ run qa6u env QA6U_PORT="$PORT" npx tsx scripts/test-qa6u.mts
 run load env LOAD_PORT="$PORT" LOAD_MEMBERS=20 LOAD_SECONDS=20 LOAD_BUDGET=1 node scripts/test-load.mjs
 
 echo
+SECS=$((($(date +%s%N) - T0) / 1000000000))
+SUMMARY="$(node scripts/test-summary.mjs "$TMP" "$SECS" 2> /dev/null || echo '{"error":"scripts/test-summary.mjs failed"}')"
+if [ -n "${SUMMARY_JSON:-}" ]; then printf '%s\n' "$SUMMARY" > "$SUMMARY_JSON"; fi
 if [ "$fails" -eq 0 ]; then
-  rm -rf "$TMP"
+  [ -z "${LOG_DIR:-}" ] && rm -rf "$TMP"
   echo "Every suite passed."
 else
   echo "$fails failed. Logs are in $TMP"
 fi
+echo "SUMMARY_JSON $SUMMARY"
 exit "$fails"

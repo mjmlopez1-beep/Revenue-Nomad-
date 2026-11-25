@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:all": "bash scripts/test-all.sh"
+    "test:all": "bash scripts/test-all.sh",
+    "test:ci": "bash scripts/test-ci.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.5.0",

@@ -5,9 +5,17 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
+# The repository is public: no secret is used here, and none is needed. The private seed and its
+# key are never in CI; the suites that talk to a server run on a made-up seed (scripts/test-ci.sh).
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,4 +23,27 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit -p .
+      - name: Build
+        run: npm run build
+      # The browser checks in the qafix, qafixb and qa6u suites (they skip them without it).
+      - name: Playwright and Chromium
+        run: |
+          npm i -g --no-audit --no-fund playwright@1.63.0
+          playwright install --with-deps chromium
+      # Every suite of scripts/test-all.sh, on a made-up seed. The job summary lists suites and
+      # checks passed, failed and skipped (with why), and each suite's time.
+      - name: Suites
+        env:
+          TYPES_CHECKED: "1"
+          CI_OUT: ${{ runner.temp }}/ci-out
+        run: bash scripts/test-ci.sh
+      - name: Upload the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: ${{ runner.temp }}/ci-out
+          if-no-files-found: warn
+          retention-days: 14
