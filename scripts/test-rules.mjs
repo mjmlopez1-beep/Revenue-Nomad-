@@ -631,6 +631,11 @@ section("seat", async () => {
     const uFix = await U.act({ type: "fill", entity: "engagement", id: own.id, field: "function", value: "RevOps" });
     check("another member can't change it", uFix.status === 400, uFix.json);
   }
+  // A fellow fractional's name and role are free once the company is open (PEERS_FREE), except for one
+  // who keeps out of the Fractionals directory (peerPrivate): their name keeps its price. The seat holder
+  // keeps out here, whatever the seed says, so Una has a credit to spend and the refund checks below run.
+  const outDir = await S.act({ type: "settings", fractionals: false });
+  check("the seed seat holder can keep out of the Fractionals directory", outDir.status === 200 && /^You're out of the Fractionals directory\./.test(outDir.json?.message ?? ""), outDir.json?.message ?? outDir.json);
   // Una paid to see the name before the seat holder said it isn't them (the company first: it is locked for her).
   const uSeen0 = engOf(await U.view(), own.id);
   if (uSeen0?.company.hidden) await unlockCo(U, uSeen0.company.id);
@@ -638,6 +643,7 @@ section("seat", async () => {
   const uSeen = engOf(await U.view(), own.id);
   const uBuy = !uSeen || uSeen.company.hidden ? null : await U.act({ type: "unlock", entity: "engagement", id: own.id, field: "operator" });
   const uPaid = uBuy?.status === 200;
+  if (uBuy) check("the name of a seat holder who keeps out of the directory costs a credit at a company she sees", uPaid && (await U.view()).me.credits === uBefore - 1, { status: uBuy.status, error: uBuy.json?.error, uBefore, now: (await U.view()).me.credits });
   if (uPaid) check("unlocking a seat holder counts in Me.holdersUnlocked (Get started step 1)", uBuy.json?.me?.holdersUnlocked >= 1 && (await U.view()).me.holdersUnlocked >= 1, uBuy.json?.me);
   const sNot = await S.act({ type: "notMine", engagementId: own.id });
   check("this isn't me on a name from our records says so", sNot.status === 200 && sNot.json?.message === "Got it. Your name is off that seat. We'll check our records.", { status: sNot.status, msg: sNot.json?.message });
