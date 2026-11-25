@@ -96,6 +96,8 @@ export function useTargets() {
   /**
    * Opportunities: hiring for the member's function now, or a good fit (4 traits or more) that is
    * hiring or has a warm way in (someone between the member and the company). Best fit first.
+   * Kept as built for the owner's review (coordinator, 2026-11-25): a thin ideal client gives few
+   * traits, so hiring in the member's own function always counts.
    */
   const opps = useMemo(
     () =>

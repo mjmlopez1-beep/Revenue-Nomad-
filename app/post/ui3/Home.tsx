@@ -77,6 +77,7 @@ export function Ui3Home() {
 
   /* Crystal Ball's newest three, with their fit */
   const ball = useMemo(() => (data?.rows ?? []).map((row) => ({ row, i: c.byId.get(row.id) })).filter((x): x is { row: RadarRow; i: CoInfo } => !!x.i).slice(0, 3), [data, c.byId]);
+  // One number with the nav's badge: Crystal Ball's companies new since the last visit (TodayData.newCount, TradingPost radarN).
   const newN = data?.newCount ?? 0;
 
   /* your next move: the warmest way in Merlin found, to a company the member can see */
@@ -151,7 +152,7 @@ export function Ui3Home() {
               <div>
                 <p className="m-eyebrow">
                   <Ic n="sparkle" />
-                  Crystal Ball{newN ? ` · ${newN} new this week` : ""}
+                  Crystal Ball{newN ? ` · ${newN} new` : ""}
                 </p>
                 <h2 className="m-h2" id="h-cb" style={{ marginTop: 8 }}>
                   Companies that

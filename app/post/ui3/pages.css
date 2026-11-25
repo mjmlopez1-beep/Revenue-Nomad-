@@ -678,3 +678,6 @@
 .u3p .nw-co:focus-visible { outline-offset: 2px; }
 .u3p .wp-bar { flex-wrap: nowrap; padding: 0; border-bottom: 0; }
 @media (max-width: 760px) { .u3p .nw-main .tg-bar { flex-direction: column; align-items: stretch; } .u3p .nw-main .m-tabs { overflow-x: auto; } }
+/* My Network's chip row wraps on wider screens (never clipped at the column's edge); phones scroll it sideways */
+@media (min-width: 761px) { .u3p .nw-main .m-fchips { flex-wrap: wrap; overflow: visible; } }
+.u3p .nw-src { flex: none; }
