@@ -8,6 +8,8 @@
  */
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import type { Crumb } from "../shell/Header";
+// Wave 2: the Work and Community pages (data only: ui3/work/pages.ts).
+import { UI3_WORK_BUILT, type Ui3WorkKey } from "./work/pages";
 
 export interface Ui3Head {
   crumbs: Crumb[];
@@ -37,5 +39,5 @@ export function useUi3Head(crumbs: Crumb[], title: string) {
 }
 
 /** The new design's own pages, by key, and which are built (the rest draw today's page inside the new shell). */
-export type Ui3PageKey = "home" | "crystal" | "targets" | "company" | "network" | "warm";
-export const UI3_BUILT: readonly Ui3PageKey[] = [];
+export type Ui3PageKey = "home" | "crystal" | "targets" | "company" | "network" | "warm" | Ui3WorkKey;
+export const UI3_BUILT: readonly Ui3PageKey[] = [...UI3_WORK_BUILT];

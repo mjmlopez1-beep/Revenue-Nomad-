@@ -1,0 +1,11 @@
+/* Contracts in the new design (RN_UI3): the list's extras on work.css's .ct-list. */
+.ui3 .w3 .ct-ph-st { display: none; }
+.ui3 .w3 .ct-list .m-tr { cursor: pointer; }
+.ui3 .w3 .ct-list .m-tr:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
+.ui3 .w3 .ct-list .m-co small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.ui3 .w3 .ct-list .m-co > div { min-width: 0; }
+.ui3 .w3 .ct-sent { margin-top: 24px; }
+.ui3 .w3 .ct-sent .m-sub { max-width: 560px; }
+@media (max-width: 760px) {
+  .ui3 .w3 .ct-ph-st { display: block; margin-top: 8px; }
+}
