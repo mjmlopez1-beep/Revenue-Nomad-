@@ -22,7 +22,7 @@
  *   Phone      the list as cards; a company opens Your way in (the full page).
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { WayBand, Zone } from "@/lib/paths/rank";
+import type { RouteType, WayBand, Zone } from "@/lib/paths/rank";
 import { WAY_AXIS, WAY_BANDS, ZONES, betweenWords, wayBandIdx } from "@/lib/paths/rank";
 import { EXPORT_STEPS, lockedWaysWords, namesOnlyShort, warmCounts, type RouteView, type SuggestRow, type WarmRow, type WarmView, type WaySource } from "@/lib/paths/types";
 import { gmailLink } from "@/lib/moveNote";
@@ -93,8 +93,8 @@ const initials = (name: string) =>
     .toUpperCase();
 const label = (r: WarmRow) => r.name ?? "Locked company";
 const kindOf = (r: WarmRow) => r.facts.split(" · ")[0] || "A company";
-/** How warm the best way in is, in words (Warm intro, Good path, Long shot): never a percentage. */
-const estText = (r: Pick<WarmRow, "way">) => r.way ?? "None";
+/** The best way in, in words (Direct connection, Direct outreach, Warm intro, Good path, Long shot): never a percentage. */
+const estText = (r: Pick<WarmRow, "way" | "wayType">) => r.wayType ?? r.way ?? "None";
 /** The bands on one side of the line across, coldest to warmest: "Long shot", "Good path to Warm intro". */
 const sideBands = (rows: readonly WarmRow[], right: boolean, fallback: string) => {
   const ix = [...new Set(rows.filter((r) => r.way && r.x >= 50 === right).map((r) => wayBandIdx(r.way!)))].sort((a, b) => a - b);
@@ -106,7 +106,7 @@ const listWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(
 
 type Filt = { ball?: boolean; list?: string | null; hiring?: boolean; fellow?: boolean; warm?: boolean };
 const passes = (r: WarmRow, zone: Zone | "all", f: Filt, who: string | null) =>
-  (zone === "all" || r.zone === zone) && (!f.ball || r.ball) && (!f.list || r.list === f.list) && (!f.hiring || r.hiringNow) && (!f.fellow || r.src === "fellow") && (!f.warm || r.way === "Warm intro") && (!who || r.people.some((p) => p.key === who));
+  (zone === "all" || r.zone === zone) && (!f.ball || r.ball) && (!f.list || r.list === f.list) && (!f.hiring || r.hiringNow) && (!f.fellow || r.src === "fellow") && (!f.warm || (r.wayType ?? r.way) === "Warm intro") && (!who || r.people.some((p) => p.key === who));
 
 /* ---------- the page ---------- */
 
@@ -489,7 +489,7 @@ function MapCard({
     spots.push([r.x, r.y]);
   }
   const lines = ex ? { fit: { words: "Fit 3 of 5 or more" }, way: { words: "Warm intro" } } : v.lines;
-  const warmest: WayBand | null = ex ? "Warm intro" : v.warmestWay ?? null;
+  const warmest: RouteType | null = ex ? "Warm intro" : v.warmestType ?? v.warmestWay ?? null;
   return (
     <section className="wp-map" aria-label="Map">
       <div className="wp-map-head">
@@ -566,7 +566,7 @@ function MapCard({
                   className={cx("wp-mark", on && "on", r.plan && "plan", dim && "dim", ex && "ex")}
                   style={{ left: `${r.x}%`, bottom: `${r.y}%`, zIndex: on ? 4 : named.has(r.id) ? 2 : 1 } as CSSProperties}
                   aria-pressed={on}
-                  aria-label={`${r.locked ? `Locked company, ${r.facts}` : `${label(r)}, ${r.facts}`}. ${QUADRANTS[r.zone].title}. ${r.way === null ? "No way in yet" : r.way}. Fit ${r.fit} of 5${r.hiringNow ? ". Hiring now" : ""}${ex ? ". Example" : ""}`}
+                  aria-label={`${r.locked ? `Locked company, ${r.facts}` : `${label(r)}, ${r.facts}`}. ${QUADRANTS[r.zone].title}. ${r.way === null ? "No way in yet" : estText(r)}. Fit ${r.fit} of 5${r.hiringNow ? ". Hiring now" : ""}${ex ? ". Example" : ""}`}
                   onClick={() => onPick(r.id)}
                   data-mark={r.id}
                 >
@@ -575,7 +575,7 @@ function MapCard({
                   {named.has(r.id) && (
                     <span className={cx("wp-mlab", left && "left", on && "on")} aria-hidden>
                       {r.locked ? `${kindOf(r)}, locked` : label(r)}
-                      {on && r.way !== null ? ` · ${r.way}` : ""}
+                      {on && r.way !== null ? ` · ${estText(r)}` : ""}
                     </span>
                   )}
                 </button>
@@ -588,7 +588,7 @@ function MapCard({
             <span style={{ left: "73%" }}>{sideBands(rows, true, "Warmer")}</span>
             {cur && cur.onMap && (
               <span className="wp-cross-pill" style={{ left: `${Math.max(10, Math.min(90, cur.x))}%` }}>
-                {cur.way === null ? "No way in yet" : cur.way}
+                {cur.way === null ? "No way in yet" : estText(cur)}
               </span>
             )}
           </div>
@@ -599,9 +599,11 @@ function MapCard({
         The lines sit in the middle of {ex ? "these" : `your ${n(v.total)}`} companies, so each quadrant holds some. Above the line across: {lines.fit.words}. Right of the line down: {lines.way.words}. They move as your companies and ways in change.{" "}
         {warmest === null
           ? "No way in yet at any of them."
-          : warmest !== "Warm intro"
-            ? `Your warmest way in today is a ${warmest.toLowerCase()}, so even Go now is a cold start. Bring in who you know to warm them up.`
-            : "Your warmest way in today is a warm intro."}
+          : warmest === "Direct connection"
+            ? "Your warmest way in today is a direct connection: someone you know yourself, with nobody in between."
+            : warmest !== "Warm intro"
+              ? `Your warmest way in today is ${warmest === "Direct outreach" ? "direct outreach" : `a ${warmest.toLowerCase()}`}, so even Go now is a cold start. Bring in who you know to warm them up.`
+              : "Your warmest way in today is a warm intro."}
         {!ex && rows.length < v.rows.length ? ` The map shows the best ${rows.length} across the four quadrants. The list has ${v.rows.length < v.total ? `your best ${n(v.rows.length)} of ${n(v.total)}` : `all ${n(v.total)}`}.` : ""}
       </p>
     </section>
@@ -675,7 +677,7 @@ function WarmTable({ rows, ex, cur, onPick }: { rows: WarmRow[]; ex: boolean; cu
       case "wpEst":
         return (
           <span className="wp-td2">
-            <strong className={cx("wp-est", w.way === "Warm intro" && "on")}>{estText(w)}</strong>
+            <strong className={cx("wp-est", (w.wayType === "Warm intro" || w.wayType === "Direct connection") && "on")}>{estText(w)}</strong>
             <span className="wp-bar-t" aria-hidden>
               <span style={{ width: `${w.way ? Math.round(((wayBandIdx(w.way) + 1) / WAY_BANDS.length) * 100) : 0}%` }} />
             </span>
@@ -931,7 +933,7 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
           <dl className="wp-stats">
             <div>
               <dt>Way in</dt>
-              <dd>{rt.way}</dd>
+              <dd>{rt.type}</dd>
             </div>
             <div>
               <dt>In between</dt>
@@ -1024,7 +1026,7 @@ function Aside({ r, noteOpen, setNote, onSources }: { r: WarmRow; noteOpen: bool
               {routes.map((x, k) => (
                 <button key={x.id} type="button" className="wp-alt" aria-pressed={x.id === rt.id} onClick={() => (setRouteIdx(k), setNote(false))}>
                   <span className="wp-ell">{routeWords(k === 0, x.between, x.nodes[1]?.label ?? "")}</span>
-                  <strong>{x.way}</strong>
+                  <strong>{x.type}</strong>
                 </button>
               ))}
             </div>
@@ -1061,7 +1063,7 @@ function ExampleAside({ r }: { r: WarmRow }) {
           <dl className="wp-stats">
             <div>
               <dt>Way in</dt>
-              <dd>{rt.way}</dd>
+              <dd>{rt.type}</dd>
             </div>
             <div>
               <dt>In between</dt>

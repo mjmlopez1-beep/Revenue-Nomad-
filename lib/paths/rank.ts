@@ -286,6 +286,26 @@ export const WAY_BAND_HINT: Record<WayBand, string> = {
   "Good path": "A real way in, with a hand-off or a weaker link.",
   "Long shot": "Worth a try, but nobody close vouches for you yet.",
 };
+/**
+ * What kind of route it is, the one label every surface shows for it (the graph, the summary, the
+ * comparison badge, the connector): a route with nobody in between is a Direct connection (someone
+ * the member knows) or Direct outreach (a note to someone they have never met), whatever its
+ * warmth; a Warm intro needs an introducer. Routes with people in between keep their band (Warm
+ * intro, Good path, Long shot). The band (WayBand) still orders and places; this is what is said.
+ */
+export type RouteType = "Direct connection" | "Direct outreach" | WayBand;
+export const ROUTE_TYPES: readonly RouteType[] = ["Direct outreach", "Long shot", "Good path", "Warm intro", "Direct connection"];
+export function routeTypeOf(r: { est: number; between: number; knows: boolean }): RouteType {
+  if (r.between <= 0) return r.knows ? "Direct connection" : "Direct outreach";
+  return wayBandOf(r.est);
+}
+export const isRouteType = (x: unknown): x is RouteType => typeof x === "string" && (ROUTE_TYPES as readonly string[]).includes(x);
+/** What a route type means, in a line. */
+export const ROUTE_TYPE_HINT: Record<RouteType, string> = {
+  ...WAY_BAND_HINT,
+  "Direct connection": "You know them yourself. Nobody in between, so you write to them directly.",
+  "Direct outreach": "Nobody in between and you haven't met, so it is a direct note that leans on timing.",
+};
 /** The map's axis across. */
 export const WAY_AXIS = "How warm your way in is";
 

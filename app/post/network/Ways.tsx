@@ -116,7 +116,7 @@ function Hero({ r, label, phone, busy, onGo }: { r: RouteView; label: string; ph
         <dl className="wy-facts">
           <div>
             <dt>Way in</dt>
-            <dd className="wy-est-n">{r.way}</dd>
+            <dd className="wy-est-n">{r.type}</dd>
           </div>
           <div>
             <dt>In between</dt>
@@ -163,7 +163,7 @@ function Cards({ routes, picked, onPick }: { routes: RouteView[]; picked: string
       {routes.map((r, k) => (
         <button key={r.id} type="button" className="wy-card" aria-pressed={r.id === picked} onClick={() => onPick(r.id)} data-card={r.id}>
           <span className="wy-card-top">
-            <span className="wy-badge">{r.way}</span>
+            <span className="wy-badge">{r.type}</span>
             {k === 0 ? <span className="wy-tag">Recommended</span> : null}
           </span>
           <span className="wy-card-short">{r.short}</span>
@@ -188,7 +188,7 @@ function OtherRows({ routes, onPick }: { routes: RouteView[]; onPick: (id: strin
       {routes.map((r) => (
         <button key={r.id} type="button" className="wy-other" onClick={() => onPick(r.id)} data-card={r.id}>
           <span className="wy-other-main">
-            <span className="wy-badge">{r.way}</span>
+            <span className="wy-badge">{r.type}</span>
             <span className="wy-card-short">{r.short}</span>
             <span className="wy-small">
               {betweenWords(r.between)} in between
@@ -837,7 +837,7 @@ function ListRow({ r, info, open }: { r: GetInRow; info: CoInfo | undefined; ope
       </span>
       <span className="gi-row-meta">
         <span>
-          Way in: <strong>{r.way ?? "None yet"}</strong>
+          Way in: <strong>{r.wayType ?? "None yet"}</strong>
           <Segs n={r.way === null ? 0 : wayBandIdx(r.way) + 1} of={3} />
         </span>
         <span>
@@ -894,7 +894,7 @@ function Panel({ r, info, open, openCompany }: { r: GetInRow; info: CoInfo | und
         </div>
       ) : null}
       <div className="wx-route">
-        <span className="wy-badge">{r.way ?? "No route yet"}</span>
+        <span className="wy-badge">{r.wayType ?? "No route yet"}</span>
         <span className="wy-card-chain">{r.locked ? "Open this company to see your routes." : r.via ?? "Nobody you know leads there yet."}</span>
       </div>
       <div className="wy-step-acts">
@@ -1168,7 +1168,7 @@ export function RecordWaysBody({ v }: { v: WayInView }) {
       ) : (
         <article className="wx-route">
           <span className="wy-card-top">
-            <span className="wy-badge">{lead.way}</span>
+            <span className="wy-badge">{lead.type}</span>
             <span className="wy-tag">Merlin recommends</span>
           </span>
           <span className="wy-card-short">{lead.short}</span>
@@ -1189,7 +1189,7 @@ export function RecordWaysBody({ v }: { v: WayInView }) {
             others.map((r) => (
               <button key={r.id} type="button" className="wy-other" onClick={() => openWay(v.id)}>
                 <span className="wy-other-main">
-                  <span className="wy-badge">{r.way}</span>
+                  <span className="wy-badge">{r.type}</span>
                   <span className="wy-card-short">{r.short}</span>
                   <span className="wy-small">{r.chain}</span>
                 </span>

@@ -33,7 +33,7 @@ import { PATH_RAW, personOfContact, type Contact, type WLeader, type WSeat, type
 import { factsOf, foundFor, pathsOn, shownName, who, type Found } from "./index";
 import { worldOf } from "./world";
 import {
-  EST, HOW_ESTIMATED, WAY_BANDS, betweenWords, compareRoutes, estRaw, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, relBandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, wayBandOf, wayCoarse, companyScore,
+  EST, HOW_ESTIMATED, WAY_BANDS, betweenWords, compareRoutes, estRaw, evidenceWords, fitLevel, freshOf, initialsOf, isHigh, linkStrength, bandOf, relBandOf, mapPoint, monthDay, oddsFallback, oddsIdx, placeAxis, roundEst, splitLine, spreadBox, strongestOf, wayBandOf, wayCoarse, companyScore, routeTypeOf,
   type Evidence, type OddsBand, type PathBand, type Split, type Zone,
 } from "./rank";
 import { networkOn } from "../google/types";
@@ -684,8 +684,9 @@ function stepsOfDraft(cx: Cx, d: Draft, companyName: string | null, sig: Signals
       n: 1, kind: "ask", who: "Your move", title: `Send ${t} a short note`, detail: direct ? "Built around why now. Sent from your own email." : "You know each other. Keep it short and specific.",
       note, nudge: null, act: d.act.kind === "message" ? d.act : { kind: "note", first: T0 }, primary: d.act.kind === "message" ? `Send to ${T0} on Merlin` : "Open in Gmail with the note", alt: "Edit the note", cant: null,
     });
-    out.push({ n: 2, kind: "wait", who: `Waiting on ${T0}`, title: `${T0} replies`, detail: `Sent today. Merlin suggests one follow-up on ${nudgeDay(cx.nowMs)}.`, note: null, nudge: nudge(T0), act: null, primary: `${T0} replied`, alt: "No reply yet", cant: "No reply after the follow-up" });
-    out.push({ n: 3, kind: "meet", who: "Your move", title: `Meet ${t}`, detail: "Pick a time that works.", note: null, nudge: null, act: null, primary: "Meeting booked", alt: "Open in Gmail", cant: null });
+    // A reply and a meeting are possible next steps, never promised (owner review, simulated operators 1).
+    out.push({ n: 2, kind: "wait", who: `Waiting on ${T0}`, title: `See if ${t} replies`, detail: `Sent today. A reply isn't certain: Merlin suggests one follow-up on ${nudgeDay(cx.nowMs)}.`, note: null, nudge: nudge(T0), act: null, primary: `${T0} replied`, alt: "No reply yet", cant: "No reply after the follow-up" });
+    out.push({ n: 3, kind: "meet", who: "Your move", title: `If ${t} replies, meet`, detail: `Only if ${t} replies and wants to talk. Then pick a time that works.`, note: null, nudge: null, act: null, primary: "Meeting booked", alt: "Open in Gmail", cant: null });
     return out;
   }
   const A = d.firsts[0];
@@ -699,22 +700,23 @@ function stepsOfDraft(cx: Cx, d: Draft, companyName: string | null, sig: Signals
     const who = d.firsts[k];
     const next = d.firsts[k + 1] ?? t;
     out.push({
-      n: k + 2, kind: "wait", who: `Waiting on ${cap(who)}`, title: k === 0 ? `${cap(who)} introduces you to ${next}` : `${cap(who)} brings you to ${next}`,
-      detail: k === 0 ? `Sent today. Merlin checks back with you on ${nudgeDay(cx.nowMs)}.` : `${cap(d.firsts[k - 1])} introduced you. ${cap(who)} can raise you with ${next}.`,
+      n: k + 2, kind: "wait", who: `Waiting on ${cap(who)}`, title: k === 0 ? `${cap(who)} may introduce you to ${next}` : `${cap(who)} may bring you to ${next}`,
+      detail: k === 0 ? `Sent today. An intro isn't certain: Merlin checks back with you on ${nudgeDay(cx.nowMs)}.` : `If ${cap(d.firsts[k - 1])} introduced you, ${cap(who)} can raise you with ${next}.`,
       note: null, nudge: nudge(cap(who)), act: null, primary: `${cap(who)} made the intro`, alt: "No reply yet", cant: k === 0 ? `${cap(who)} can't help` : `${cap(who)} can't help`,
     });
   }
-  out.push({ n: between + 2, kind: "meet", who: "Your move", title: `Meet ${t}`, detail: `${T0} replied to the intro. Pick a time that works.`, note: null, nudge: null, act: null, primary: "Meeting booked", alt: "Open in Gmail", cant: null });
+  out.push({ n: between + 2, kind: "meet", who: "Your move", title: `If ${t} replies, meet`, detail: `Only if ${t} replies to the intro and wants to talk. Then pick a time that works.`, note: null, nudge: null, act: null, primary: "Meeting booked", alt: "Open in Gmail", cant: null });
   return out;
 }
 
 function howOf(d: Draft): string[] {
   const between = d.nodes.length - 2;
   const t = d.targetFirst;
-  if (between === 0) return [`You send ${t} a short note`, `${cap(t)} replies`, `You meet ${t}`];
+  // What could happen, numbered: the member's own step is certain, every reply and meeting after it is a possibility.
+  if (between === 0) return [`You send ${t} a short note`, `${cap(t)} may reply`, `If ${t} replies, you can meet`];
   const out = [`You ask ${d.firsts[0]} for an intro${between >= 2 ? ` to ${d.firsts[1]}` : ""}`];
-  for (let k = 0; k < between; k++) out.push(k === 0 ? `${cap(d.firsts[k])} introduces you to ${d.firsts[k + 1] ?? t}` : `${cap(d.firsts[k])} brings you to ${d.firsts[k + 1] ?? t}`);
-  out.push(`You meet ${t}`);
+  for (let k = 0; k < between; k++) out.push(k === 0 ? `${cap(d.firsts[k])} may introduce you to ${d.firsts[k + 1] ?? t}` : `${cap(d.firsts[k])} may bring you to ${d.firsts[k + 1] ?? t}`);
+  out.push(`If ${t} replies, you can meet`);
   return out;
 }
 
@@ -749,6 +751,8 @@ function build(cx: Cx, companyId: string, d: Draft, sig: Signals): Built {
     decides: d.decides,
     est,
     way: wayBandOf(est),
+    // One route type for every surface: nobody in between is never a Warm intro.
+    type: routeTypeOf({ est, between, knows: !(d.src === "direct" || d.links[0]?.words === "You have never met") }),
     why: whyOf(d, sig, cx.nowMs),
     how: howOf(d),
     steps: stepsOfDraft(cx, d, name, sig),
@@ -785,7 +789,7 @@ function becauseOf(list: Built[]): void {
           ? "The most direct way to try: no one in between."
           : weakest >= 0.8
             ? "Every link is strong, so the intro arrives with a real recommendation."
-            : `${v.way}, with ${betweenWords(v.between).toLowerCase()} in between.`;
+            : `${v.type}, with ${betweenWords(v.between).toLowerCase()} in between.`;
   });
 }
 
@@ -1124,6 +1128,7 @@ export function getInOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): Ge
       zone,
       best,
       way: c.top ? c.top.view.way : null,
+      wayType: c.top ? c.top.view.type : null,
       via: c.name ? viaWords(c.top?.view) : null,
       band: c.top ? c.top.view.links[0].rel : null,
       x: xs[i],
@@ -1292,6 +1297,7 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
       list: c.fit.view,
       best: top ? top.view.est : null,
       way: top ? top.view.way : null,
+      wayType: top ? top.view.type : null,
       band: top ? top.view.links[0].rel : null,
       src: top ? top.src : null,
       via,
@@ -1335,6 +1341,8 @@ export function warmOf(seed: Seed, s: State, m: Member, nowMs = Date.now()): War
     lines: { fit: fitLineWords(spFit), way: wayLineWords(spWay) },
     warmest: ways.length ? Math.max(...ways) : null,
     warmestWay: ways.length ? wayBandOf(Math.max(...ways)) : null,
+    // The type of that warmest route (the first with the top score): a direct one is never called a warm intro.
+    warmestType: ways.length ? tops.find((t) => t?.view.est === Math.max(...ways))?.view.type ?? null : null,
     bySource,
     own: { google: networkOn() && !!s.network?.[m.id]?.google, linkedin: !!paths?.linkedin, csv: !!paths?.csv },
     conversations: cx.convWith.size,

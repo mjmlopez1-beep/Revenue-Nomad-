@@ -23,7 +23,7 @@
  */
 import type { Warmth } from "../google/types";
 import type { IntroPlanView } from "./intro";
-import type { OddsBand, PathBand, WayBand, Zone } from "./rank";
+import type { OddsBand, PathBand, RouteType, WayBand, Zone } from "./rank";
 import type { ExportStore } from "../linkedin/types";
 
 /* ---------- what is kept ---------- */
@@ -131,20 +131,20 @@ export const lockedKnowWords = (n: number) => (n > 0 ? `You know someone at ${n}
  * and each filter counts what picking it lists. `capped`: more companies fit than the list holds,
  * and the page says how many.
  */
-export function warmCounts(rows: readonly (Pick<WarmRow, "zone" | "ball" | "list" | "hiringNow" | "src"> & { way?: WayBand | null })[], total: number) {
+export function warmCounts(rows: readonly (Pick<WarmRow, "zone" | "ball" | "list" | "hiringNow" | "src"> & { way?: WayBand | null; wayType?: RouteType | null })[], total: number) {
   const zones: Record<Zone, number> = { go: 0, find: 0, warm: 0, watch: 0 };
   const lists = new Map<string, number>();
   let ball = 0;
   let hiring = 0;
   let fellow = 0;
-  /** Companies whose best way in is a Warm intro: the band filter (never a percentage). */
+  /** Companies whose best way in is a Warm intro (someone in between to introduce them): the band filter, never a percentage. */
   let warmIntro = 0;
   for (const r of rows) {
     zones[r.zone]++;
     if (r.ball) ball++;
     if (r.hiringNow) hiring++;
     if (r.src === "fellow") fellow++;
-    if (r.way === "Warm intro") warmIntro++;
+    if ((r.wayType ?? r.way) === "Warm intro") warmIntro++;
     if (r.list) lists.set(r.list, (lists.get(r.list) ?? 0) + 1);
   }
   return { all: rows.length, zones, total: Math.max(total, rows.length), capped: total > rows.length, ball, hiring, fellow, warmIntro, lists };
@@ -442,8 +442,10 @@ export interface RouteView {
   decides: boolean;
   /** The internal score, 5 to 85 in steps of 5: orders routes, never shown. */
   est: number;
-  /** How warm this way in is, in words: what the member sees (never a percentage). */
+  /** How warm this way in is, in words (never a percentage): orders and places. */
   way: WayBand;
+  /** What kind of route it is (routeTypeOf): the label every surface shows. Direct connection or Direct outreach with nobody in between; Warm intro only with an introducer. */
+  type: RouteType;
   /** The short why line. */
   why: string;
   /** What happens, numbered. */
@@ -519,6 +521,8 @@ export interface GetInRow {
   best: number | null;
   /** The best route's band in words, null with no route. */
   way: WayBand | null;
+  /** The best route's type (RouteType), the label shown for it; null with no route. */
+  wayType: RouteType | null;
   /** The best route in a few words: "Through Casey Morgan, then Rita Vance". Null while the company is locked. */
   via: string | null;
   /** The best route's first link's relationship band (RouteLink.rel), for the phone's line: null where Merlin derives none. */
@@ -569,6 +573,8 @@ export interface WarmRow {
   best: number | null;
   /** The best route's band in words, null with no route. */
   way: WayBand | null;
+  /** The best route's type (RouteType), the label shown for it; null with no route. */
+  wayType: RouteType | null;
   /** The best route's first link's relationship band (RouteLink.rel: null where Merlin derives none), and where it comes from. */
   band: PathBand | null;
   src: WaySource | null;
@@ -615,6 +621,8 @@ export interface WarmView {
   warmest: number | null;
   /** Its band in words, or null with no route at all. */
   warmestWay: WayBand | null;
+  /** The warmest best route's type (RouteType), what the page says about it. Older servers leave it out. */
+  warmestType?: RouteType | null;
   /** Ways in by where the best route comes from (a company counts once). */
   bySource: Partial<Record<WaySource, number>>;
   /** The member's own sources that are in: Google, the LinkedIn file, a CSV. */

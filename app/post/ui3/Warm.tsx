@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import type { RouteStepView, RouteView } from "@/lib/paths/types";
+import { ROUTE_TYPE_HINT, type RouteType } from "@/lib/paths/rank";
 import { gmailLink, mailtoLink } from "@/lib/moveNote";
 import { useApp } from "../shell/pages";
 import { useToast } from "../../ui/shared";
@@ -81,16 +82,19 @@ export function Ui3Warm() {
   const target = route?.nodes[route.nodes.length - 1] ?? null;
   const first = route?.nodes.find((n) => n.role === "person") ?? null;
   const between = route?.between ?? 0;
-  // A route with nobody in between that rests on nothing the two share is a cold note, said so.
-  const cold = !!route && between === 0 && (route.src === "direct" || route.links[0]?.words === "You have never met");
+  // One route type (lib/paths routeTypeOf) for the summary, the graph and the badge: nobody in between is a
+  // Direct connection (someone the member knows) or Direct outreach (a cold note), never a Warm intro.
+  const type: RouteType | null = route ? route.type ?? (between === 0 ? (route.src === "direct" || route.links[0]?.words === "You have never met" ? "Direct outreach" : "Direct connection") : route.way) : null;
+  const cold = type === "Direct outreach";
+  const direct = type === "Direct connection" || cold;
   const targetFirst = target ? (target.locked || target.company ? target.label.charAt(0).toLowerCase() + target.label.slice(1) : target.label.split(" ")[0]) : "them";
   const rowOf = rows.find((r) => r.id === id) ?? null;
-  const askAct = route ? askOf({ direct: between === 0, hiringNow: !!rowOf?.hiringNow, src: cold ? "direct" : (route.src ?? null) }, between === 0 ? targetFirst : null) : null;
-  const title = !route ? "You're closer than you think." : cold ? "Start with a direct note." : between === 0 ? "One note away." : "You're closer than you think.";
+  const askAct = route ? askOf({ direct, hiringNow: !!rowOf?.hiringNow, src: cold ? "direct" : (route.src ?? null) }, direct ? targetFirst : null) : null;
+  const title = !route ? "You're closer than you think." : cold ? "Start with a direct note." : direct ? "One note away." : "You're closer than you think.";
   const whoAt = target?.company || target?.locked ? name : `${target?.label}${target?.sub && !target.sub.startsWith("Decides") ? `, ${target.sub.replace(/ · decides$/, "").replace(/^decides$/, "")}` : ""}`.replace(/, $/, "");
   const lede = !route ? (
     "Bring in who you know, and Merlin shows who can get you in the room."
-  ) : between === 0 ? (
+  ) : direct ? (
     cold ? (
       <>Nobody you know is in between yet. You can write to {target?.locked || target?.company ? targetFirst : target?.label} directly.</>
     ) : (
@@ -201,6 +205,13 @@ export function Ui3Warm() {
                 </div>
               )}
               <div className="m-toolbar">
+                {route && type && (
+                  <Chip kind={direct ? "forest" : "cobalt"} sm title={ROUTE_TYPE_HINT[type]}>
+                    <span className="wp-type" data-route-type={type}>
+                      {type}
+                    </span>
+                  </Chip>
+                )}
                 {route && (
                   <button type="button" className="m-btn m-btn-primary" onClick={() => setAsk(true)}>
                     <Ic n={askAct?.k === "discuss" || askAct?.k === "reconnect" ? "cal" : "send"} />
@@ -232,7 +243,7 @@ export function Ui3Warm() {
                     return (
                       <li key={k}>
                         <span className="m-bignum">{k + 1}</span>
-                        <p className="m-eyebrow muted">{k === 0 ? (from.role === "you" ? "You reach out" : step?.who ?? "First") : `${fromName} introduces you`}</p>
+                        <p className="m-eyebrow muted">{k === 0 ? (from.role === "you" ? "You reach out" : step?.who ?? "First") : `${fromName} may introduce you`}</p>
                         <p className="pair">
                           {from.role === "you" ? <Av name={me.name} s={28} you /> : <Av name={from.label} s={28} hid={from.locked} />}
                           {fromName}

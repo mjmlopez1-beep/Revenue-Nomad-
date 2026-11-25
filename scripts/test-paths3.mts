@@ -306,7 +306,23 @@ async function main() {
   check("the cold note says so", r3.links.length === 1 && r3.links[0].band === "Cold" && r3.links[0].words === "You have never met" && r3.est <= 20);
   check("cards: people in between and how warm, never a time to a meeting", r1.between === 1 && h.routes.every((r) => r.way === R.wayBandOf(r.est) && !("time" in r)), h.routes.map((r) => [r.est, r.way]));
   check("the why line: what you share, who decides", /Casey/.test(r1.why) && /Rita decides on fractional hires, and has hired 3 before/.test(r1.why) && /leans on timing/.test(r3.why), [r1.why, r3.why]);
-  check("what happens, numbered: ask, the intro, meet", r1.how.join(" / ") === "You ask Casey for an intro / Casey introduces you to Rita / You meet Rita" && r2.how.length === 4 && r3.how[0] === "You send Rita a short note", [r1.how, r2.how]);
+  check("what happens, numbered: ask, a possible intro, a possible meeting (never promised)", r1.how.join(" / ") === "You ask Casey for an intro / Casey may introduce you to Rita / If Rita replies, you can meet" && r2.how.length === 4 && r3.how.join(" / ") === "You send Rita a short note / Rita may reply / If Rita replies, you can meet", [r1.how, r2.how, r3.how]);
+  // Owner review, simulated operators 1: one route type for every surface. Nobody in between is never a Warm intro.
+  check("route types: Casey's route (1 in between) keeps its band, writing to Rita (0 in between, never met) is Direct outreach", r1.type === r1.way && r3.between === 0 && r3.type === "Direct outreach" && h.routes.every((r) => r.type === R.routeTypeOf({ est: r.est, between: r.between, knows: !(r.links[0]?.words === "You have never met" || r.src === "direct") })), h.routes.map((r) => [r.short, r.between, r.way, r.type]));
+  {
+    const zero = R.routeTypeOf({ est: 85, between: 0, knows: true });
+    const zeroCold = R.routeTypeOf({ est: 15, between: 0, knows: false });
+    const one = R.routeTypeOf({ est: 85, between: 1, knows: true });
+    check("fixtures: 0 intermediaries, known: Direct connection even at the warmest score; never met: Direct outreach; 1 intermediary at the same score: Warm intro", zero === "Direct connection" && zeroCold === "Direct outreach" && one === "Warm intro" && R.wayBandOf(85) === "Warm intro", [zero, zeroCold, one]);
+    const rd = (f: string) => readFileSync(path.join(path.resolve(import.meta.dirname, ".."), f), "utf8");
+    const ways = rd("app/post/network/Ways.tsx");
+    const wp = rd("app/post/network/WarmPaths.tsx");
+    const w3 = rd("app/post/ui3/Warm.tsx");
+    const gr = rd("app/post/ui3/Graph.tsx");
+    check("every surface reads the one route type: Ways' badges and summary, Warm Paths' summary and comparison, the new design's summary, badge and graph", !/\{r\.way\}|\{lead\.way\}/.test(ways) && /<span className="wy-badge">\{r\.type\}<\/span>/.test(ways) && /<dd className="wy-est-n">\{r\.type\}<\/dd>/.test(ways) && /<strong>\{x\.type\}<\/strong>/.test(wp) && /<dd>\{rt\.type\}<\/dd>/.test(wp) && /const cold = type === "Direct outreach";/.test(w3) && /data-route-type=\{type\}/.test(w3) && /data-route-type=\{paths\[a\]\.type \?\? paths\[a\]\.way\}/.test(gr));
+  }
+  check("no route with nobody in between is ever typed Warm intro, and every Warm intro has someone in between", h.routes.every((r) => (r.between === 0 ? r.type !== "Warm intro" : true)) && h.routes.filter((r) => r.type === "Warm intro").every((r) => r.between > 0));
+  check("the plan's steps say a reply and a meeting are possible, never certain", r1.steps.at(-1)!.title === "If Rita replies, meet" && /^Only if Rita replies/.test(r1.steps.at(-1)!.detail) && r3.steps[1].title === "See if Rita replies" && /A reply isn't certain/.test(r3.steps[1].detail) && !h.routes.some((r) => r.how.some((x) => /^Rita replies$|^You meet /.test(x))), r1.steps.map((x) => x.title));
   check("the steps: Casey is a peer on Merlin, so the ask is Message on Merlin with the drafted note", r1.steps[0].act?.kind === "message" && r1.steps[0].primary === "Send to Casey on Merlin" && !!r1.steps[0].note?.body && r1.steps[1].alt === "No reply yet" && r1.steps[1].cant === "Casey can't help" && r1.steps[2].primary === "Meeting booked", r1.steps.map((x) => [x.title, x.primary, x.alt, x.cant]));
   check("Ana is the member's own contact: the drafted note, opened in Gmail by the member", r2.steps[0].act?.kind === "note" && r2.steps[0].primary === "Open in Gmail with the note" && r2.steps[0].title === "Ask Ana for an intro to Mark");
   check("the explainer is on the page", h.explain === R.HOW_ESTIMATED);
@@ -329,7 +345,7 @@ async function main() {
   check("the first step's message went out: To reach out moves to Sent, its first send (no follow-up counted), a follow-up due", deal1.stage === "sent" && !!deal1.dates.sent && !!deal1.dates.reach && deal1.follow === 0 && !!deal1.due && deal1.route === true && deal1.next !== "Take the first step of your route", deal1);
   check("still one deal at the company", (await pipe0.pipelineViewFor(SAM))!.entries.filter((x) => x.company === pub("c_halcyon")).length === 1);
   const hl = ((await W.planLines(SAM)) as { plans: import("../lib/paths/types.ts").PlanLine[] }).plans.find((x) => x.company === pub("c_halcyon"));
-  check("the route line's next step keeps a name's capital: Next: Casey introduces you to Rita", hl?.next === "Next: Casey introduces you to Rita", hl?.next);
+  check("the route line's next step keeps a name's capital: Next: Casey may introduce you to Rita", hl?.next === "Next: Casey may introduce you to Rita", hl?.next);
   const stale = await act("c_halcyon", { do: "step", step: 1, answer: "sent" }).catch((e: Error) => e.message);
   check("the same answer again (a second tab) is refused", typeof stale === "string" && /moved on/.test(stale), stale);
   const s2 = await act("c_halcyon", { do: "step", step: 2, answer: "noreply" });

@@ -22,7 +22,7 @@ import { isWarm, setWarmFocus, useCoActs, useTargets } from "./data";
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
 import { Band, Chip, CoLogo, FitRing, RowMenu, Traits, Wait } from "./parts";
-import { coLine, coName, plural } from "./model";
+import { coLine, coName, plural, routeTypeWord } from "./model";
 import { oppTitle } from "./Home";
 
 const TRAIT: Record<LikeTrait, { l: string; ic: IconName }> = {
@@ -75,7 +75,7 @@ export function Ui3Lookalikes({ onBack }: { onBack: () => void }) {
   const others = ranked.filter((r) => r !== top);
   const LQ = [
     { k: "hire" as const, l: "Hiring now", ic: "brief" as IconName, f: (r: LikeRow) => !!byT.get(r.row.i.c.id)?.role },
-    { k: "warm" as const, l: "Warm intros", ic: "route" as IconName, f: (r: LikeRow) => isWarm(byT.get(r.row.i.c.id)?.warm) },
+    { k: "warm" as const, l: "Warm ways in", ic: "route" as IconName, f: (r: LikeRow) => isWarm(byT.get(r.row.i.c.id)?.warm) },
     { k: "most" as const, l: `${Math.max(1, of - 1)}+ traits`, ic: "diamond" as IconName, f: (r: LikeRow) => r.shared.length >= Math.max(1, of - 1) },
   ];
   const lqf = LQ.find((x) => x.k === lq);
@@ -264,7 +264,7 @@ export function Ui3Lookalikes({ onBack }: { onBack: () => void }) {
                                 </Chip>
                               ) : warm ? (
                                 <Chip kind="cobalt" sm icon="network">
-                                  Warm intro
+                                  {routeTypeWord(tr!.warm!)}
                                 </Chip>
                               ) : radarOf.get(i.c.id) ? (
                                 <Chip kind="am" sm icon="trend">
@@ -330,7 +330,7 @@ function TopMatch({ r, seed, of, off, cmp, setCmp, radar, fn, t }: { r: LikeRow;
   const band = bandOf(same, of);
   const facts: { ic: IconName; b: string; s: string }[] = [
     { ic: "brief", b: role ? "Hiring now" : "Demand", s: role ? role.title : radar ? oppTitle(radar, fn) : "No signal on file" },
-    { ic: "team", b: "Warm intro", s: warm ? warm.via ?? "A way in" : t?.ways?.n ? plural(t.ways.n, "way") + " in" : "No path yet" },
+    { ic: "team", b: warm ? routeTypeWord(warm) : "Way in", s: warm ? warm.via ?? "A way in" : t?.ways?.n ? plural(t.ways.n, "way") + " in" : "No path yet" },
     { ic: "trend", b: "Growth signal", s: grow ? grow.line.split(" · ")[0] : "None on file" },
     { ic: "layers", b: "Why it's a fit", s: r.why || "Shares the profile" },
   ];

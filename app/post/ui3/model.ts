@@ -196,6 +196,8 @@ export const numWord = (n: number) => NUM_WORDS[n] ?? n.toLocaleString("en-US");
 
 /** A warm way in: through someone the member knows or a fellow fractional, not a cold note to the company. */
 export const isWarm = (w: WarmRow | null | undefined): w is WarmRow => !!w && !!w.via && w.src !== "direct";
+/** The one word for a warm way in, from its route type (lib/paths routeTypeOf): Direct connection with nobody in between, Warm intro only through someone. */
+export const routeTypeWord = (w: Pick<WarmRow, "direct" | "wayType">): "Direct connection" | "Warm intro" => (w.wayType === "Direct connection" || (w.wayType == null && w.direct) ? "Direct connection" : "Warm intro");
 
 const ODDS_RANK: Record<string, number> = { High: 2, Medium: 1, Low: 0 };
 /**

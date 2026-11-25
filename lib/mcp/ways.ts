@@ -50,7 +50,7 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
     return {
       route_id: r.id,
       ...(k === 0 ? { recommended: true } : {}),
-      way_in: r.way,
+      way_in: r.type,
       people_in_between: betweenWords(r.between),
       through: ["You", ...named].join(" → "),
       // Each link as Merlin may say it: a relationship band only where it derives one (mail and calendar, messages on
@@ -65,7 +65,7 @@ export async function waysIn(ctx: Ctx, a: { company_id?: string }): Promise<Tool
     routes: out,
     ...(v.plan?.current ? { your_plan: { route_id: v.plan.route, step: `${Math.min(v.plan.step, v.plan.steps)} of ${v.plan.steps}`, done: v.plan.done } } : {}),
     how_merlin_estimates: HOW_ESTIMATED,
-    how_to_use: `way_in is Merlin's read in words (${[...WAY_BANDS].reverse().join(", ")}), not a prediction: never turn it into a percentage or a time to a meeting. The member goes with a route on Merlin, in Your way into ${v.name}, where the people they know are named and the notes are drafted. Nothing is sent without them.`,
+    how_to_use: `way_in is the route's type in words (Direct connection or Direct outreach when nobody is in between; else ${[...WAY_BANDS].reverse().join(", ")}: a Warm intro always has someone to introduce the member), Merlin's read, not a prediction: never turn it into a percentage or a time to a meeting. The member goes with a route on Merlin, in Your way into ${v.name}, where the people they know are named and the notes are drafted. Nothing is sent without them.`,
   };
 }
 
@@ -75,7 +75,7 @@ export function registerWayTools(server: McpServer, ctx: Ctx, run: Run): void {
     {
       title: "My ways into a company",
       description:
-        "The member's routes into one company, best first: each with way_in, how warm it is in words (Warm intro, Good path or Long shot, from how well each person knows the next, how many hand-offs it takes and whether the last person decides; a guide, never a percentage or a promise), the people in between, each link (a relationship band only where Merlin derives one from mail, calendar or messages on Merlin, else how the two are connected) and its steps. Merlin gives no time to a meeting. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
+        "The member's routes into one company, best first: each with way_in, the route's type in words (Direct connection or Direct outreach with nobody in between; with someone in between Warm intro, Good path or Long shot, from how well each person knows the next, how many hand-offs it takes and whether the last person decides; a guide, never a percentage or a promise), the people in between, each link (a relationship band only where Merlin derives one from mail, calendar or messages on Merlin, else how the two are connected) and its steps. Merlin gives no time to a meeting. People the member knows from their own Google or LinkedIn are never named here. A locked company stays locked. Read only; costs nothing.",
       inputSchema: { company_id: z.string().describe("The company's id, from search_companies or get_company.") },
       annotations: { title: "My ways into a company", readOnlyHint: true, openWorldHint: false },
     },

@@ -67,7 +67,7 @@ export function Graph({ routes, act, onPick, compact, youInitials, youSub }: { r
   const hov = hover === null ? undefined : String(hover);
   return (
     <div className="gr-wrap" ref={box} style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="gr" data-act-path={a} data-hover={hov} role="img" aria-label={`Ways in: ${paths.map((p) => p.chain).join("; or ")}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="gr" data-act-path={a} data-hover={hov} role="img" aria-label={`Ways in: ${paths.map((p) => `${p.type ?? p.way}, ${p.chain}`).join("; or ")}`} data-route-type={paths[a].type ?? paths[a].way}>
         {paths.map((p, pi) =>
           p.links.map((l, li) => {
             const s = pos.get(key(p.nodes[li]));

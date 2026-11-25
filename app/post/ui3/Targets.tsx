@@ -37,7 +37,7 @@ type QF = "fit" | "hiring" | "warm" | "new";
 const QFS: { k: QF; l: string; ic: IconName; f: (r: TRow) => boolean }[] = [
   { k: "fit", l: "High fit", ic: "diamond", f: (r) => r.fit.n >= 6 },
   { k: "hiring", l: "Hiring now", ic: "brief", f: (r) => r.hire },
-  { k: "warm", l: "Warm intros", ic: "route", f: (r) => isWarm(r.warm) },
+  { k: "warm", l: "Warm ways in", ic: "route", f: (r) => isWarm(r.warm) },
   { k: "new", l: "New this week", ic: "calnew", f: (r) => r.hire && !!r.role?.fresh },
 ];
 const PAGE = 40;
@@ -243,7 +243,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
                 Hiring signal
                 <Ic n="info" />
               </span>
-              <span>Warm introduction</span>
+              <span>Your way in</span>
               <span className="tg-exp">Hired fractionals for</span>
               <span />
             </div>
@@ -336,7 +336,7 @@ function TRowView({ r, cols, radar, fn, onPipe, onHide, busy }: { r: TRow; cols:
           {person ? <Av name={person.name} s={36} /> : <Av name="" s={36} hid />}
           <span>
             <b>{person ? warm.direct ? <>Write to <em>{person.name.split(" ")[0]}</em> yourself</> : <>1 intro via <em>{person.name.split(" ")[0]}</em></> : warm.via}</b>
-            <small>{person?.sub ?? warm.way ?? "A way in"}</small>
+            <small>{person?.sub ?? warm.wayType ?? warm.way ?? "A way in"}</small>
           </span>
         </button>
       ) : r.ways?.n ? (

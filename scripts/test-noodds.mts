@@ -71,7 +71,7 @@ async function main() {
     check(`${f}: no predicted months window`, !monthsAhead.test(c), c.match(monthsAhead)?.[0]);
   }
   const wp = src("app/post/network/WarmPaths.tsx");
-  check("Warm paths filters by band (Warm intros), not by a percentage", /label: "Warm intros", n: wc\.warmIntro/.test(wp) && /r\.way === "Warm intro"/.test(wp));
+  check("Warm paths filters by band (Warm intros), not by a percentage", /label: "Warm intros", n: wc\.warmIntro/.test(wp) && /\(r\.wayType \?\? r\.way\) === "Warm intro"/.test(wp));
   check("Warm paths' axis is in words, from rank.ts", /\{WAY_AXIS\}/.test(wp) && /sideBands\(rows, false/.test(wp));
   check("Ways' map axis names the bands", /\{WAY_AXIS\}/.test(src("app/post/network/Ways.tsx")) && /WAY_BANDS\[0\]/.test(src("app/post/network/Ways.tsx")));
   const types = src("lib/paths/types.ts");
@@ -93,7 +93,7 @@ async function main() {
   const d = tools.find((t) => t.name === "ways_in")?.description ?? "";
   check("ways_in says it returns way_in in words, never a percentage", /way_in/.test(d) && /Warm intro, Good path or Long shot/.test(d) && !/\d\s?%/.test(d) && !/Est\. success/.test(d), d);
   const mc = code("lib/mcp/ways.ts");
-  check("ways_in returns way_in, not est_success or a time to a meeting", /way_in: r\.way/.test(mc) && !/est_success|time_to_a_meeting|r\.time/.test(mc));
+  check("ways_in returns way_in, not est_success or a time to a meeting", /way_in: r\.type/.test(mc) && !/est_success|time_to_a_meeting|r\.time/.test(mc));
   check("the server's instructions and the other tools never promise a percentage of success", !/Est\. success|est_success|success \d+%/.test(code("lib/mcp/server.ts")) && !/Est\. success|est_success/.test(code("lib/mcp/tools.ts")));
 
   console.log(`\n${fail ? "FAILED" : "ok"}: ${pass} passed, ${fail} failed`);
