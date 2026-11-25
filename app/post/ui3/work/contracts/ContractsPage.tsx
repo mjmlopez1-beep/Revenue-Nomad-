@@ -164,10 +164,17 @@ export function Ui3Contracts() {
   const title = screen.k === "flow" ? "Send for signature" : screen.k === "detail" ? "Contract" : screen.k === "sent" ? "Sent" : "Contracts";
 
   if (off) {
-    // RN_CONTRACTS2 off: today's Contracts lives in Proposals' send flow. Say where it is.
+    // RN_CONTRACTS2 off: today's Contracts lives in Proposals' send flow. Say where everything is, and what the plan allows.
+    const tier = c.me.plan?.tier ?? "free";
     return (
       <WorkMain group="Work" title="Contracts">
-        <Band density="none" title="Contracts." sub="Send a contract for signature from Proposals." />
+        <Band density="none" title="Contracts." sub="For now, everything you send for signature lives in Proposals: contracts and signed proposals are under Signed or closed there, with each signer, the audit trail and the signed PDF." />
+        {tier === "free" && (
+          <Gate title="Sending for signature is on Pro and Close" onPlans={() => openPlans("billing")}>
+            You can prepare a contract now and send it after you upgrade. Merlin placing the fields and the automatic reminders are on Close.
+          </Gate>
+        )}
+        {tier === "pro" && !c.me.plan?.canClose && <p className="w-help">Sending for signature is on your plan. Merlin placing the fields for you and the automatic reminders are on Close.</p>}
         <button type="button" className="m-btn m-btn-primary" onClick={() => c.openPage("proposals")}>
           Open Proposals
         </button>
@@ -242,9 +249,10 @@ export function Ui3Contracts() {
         <Band density="none" title="Contracts." sub={sub} extra={send} />
         {!v.canSend && (
           <Gate title="Sending for signature is on Pro and Close" onPlans={() => openPlans("billing")}>
-            You can prepare a contract now and send it after you upgrade.
+            You can prepare a contract now and send it after you upgrade. Merlin placing the fields and the automatic reminders are on Close.
           </Gate>
         )}
+        {v.canSend && !v.canClose && <p className="w-help ct3-plan">Sending for signature is on your plan. Merlin placing the fields for you and the automatic reminders are on Close.</p>}
         {!v.rows.length ? (
           <Empty
             title="Nothing sent for signature yet"

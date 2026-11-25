@@ -297,6 +297,18 @@ async function main() {
   await C2.cancelItem(JOR, pr.id, BASE, t0 + 3 * HOUR);
   check("  Cancel tells the client in one short email", mails.slice(m0).length === 1 && /canceled/.test(mails[m0].subject) && (await C2.signingList(JOR, BASE, t0 + 3 * HOUR)).rows.find((r) => r.id === pr.id)?.words === "Canceled");
 
+  // A signed proposal (acceptance F13): the one list carries it as Completed, with its download, next to the contracts.
+  let pr2 = await PS.createProposal(JOR, { title: "Proposal for Halcyon Freight, phase two", blocks, fields: { "pricing.monthlyFee": "$9,000", "term.initialMonths": "3" } } as never, BASE);
+  pr2 = (await PS.sendProposal(JOR, pr2.id, { signer: { name: "Sam Ortiz", email: "sam@halcyonfreight.example" }, memberSign: "none" } as never, BASE, t0)).proposal;
+  await (await import("../lib/table")).tableInternals.mutate((d) => {
+    const x = (d.proposals ?? []).find((p) => p.id === pr2.id)!.sends.at(-1)! as { signed?: unknown; memberMode?: string };
+    x.signed = { at: new Date(t0 + 4 * HOUR).toISOString(), name: "Sam Ortiz" };
+  });
+  const srow = (await C2.signingList(JOR, BASE, t0 + 5 * HOUR)).rows.find((r) => r.id === pr2.id);
+  check("a signed proposal is in the list of everything sent for signature: Completed, Download", srow?.kind === "proposal" && srow.status === "completed" && srow.words === "Completed" && srow.action === "download", srow);
+  const ct3 = src("app/post/ui3/work/contracts/ContractsPage.tsx");
+  check("the new design's Contracts says the plan: Pro and Close send, Close places the fields; with RN_CONTRACTS2 off it says where everything is (F13, F34)", /Merlin placing the fields for you and the automatic reminders are on Close/.test(ct3) && /everything you send for signature lives in Proposals/.test(ct3));
+
   /* ================= the list and the route ================= */
   console.log("\nthe list");
   const g1 = await call("GET");
