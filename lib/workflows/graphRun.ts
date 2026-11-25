@@ -305,6 +305,10 @@ function segmentFrom(cx: Cx, n: G.GNode): G.GNode[] {
     if (es.length !== 1) break;
     const next = cx.byId.get(es[0].to);
     if (!next || isBoundary(next) || seen.has(next.id) || cx.ver.edges.filter((e) => e.to === next.id).length !== 1 || (cx.run.visits[next.id] ?? 0) >= cx.maxVisits) break;
+    // Steps run in drawn order: a paid step after a new kind of step (Match to a company, Read into
+    // fields...) starts its own stretch, so what that step finds is there before anything is bought.
+    // A stretch of today's steps only (a converted line, Simple mode) runs exactly as before.
+    if (G.info(next.type).paid && out.some((x) => !stepOf(x))) break;
     out.push(next);
     seen.add(next.id);
     cur = next;
