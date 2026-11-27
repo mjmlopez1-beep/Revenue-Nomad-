@@ -46,6 +46,7 @@ export default function BrandLibrary() {
             <a href="#light">Light theme</a>
             <a href="#assets">Assets</a>
             <a href="#usage">Usage</a>
+            <Link href="/brand/mockups">Product mockups</Link>
           </nav>
         </header>
 
