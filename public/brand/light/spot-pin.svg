@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="A waypoint marker on a round plinth">
+<title>A waypoint marker on a round plinth</title>
+<defs><clipPath id="spot-pin-light-a0"><path d="M291.4 408.5L291.4 336.7L292.1 331.5L294.1 326.9L297.4 323L301.9 320L307.3 317.8L313.5 316.5L320 316.1L326.5 316.5L332.7 317.8L338.1 320L342.6 323L345.9 326.9L347.9 331.5L348.6 336.7L348.6 408.5Z"/></clipPath></defs>
+<rect width="640" height="640" fill="#F4F1E8"/>
+<g stroke-linejoin="round" stroke-linecap="round">
+<path d="M56 369.5L56 399.5A264 152.4 0 0 0 584 399.5L584 369.5Z" fill="#F4F1E8" stroke="#0A1F1A" stroke-width="2"/>
+<ellipse cx="320" cy="369.5" rx="264" ry="152.4" fill="#FBFAF5" stroke="#0A1F1A" stroke-width="2"/>
+<ellipse cx="320" cy="369.5" rx="102.7" ry="59.3" fill="none" stroke="#3F8F2F" stroke-width="2" stroke-linecap="round" stroke-dasharray="none" opacity="1"/>
+<ellipse cx="320" cy="369.5" rx="161.3" ry="93.1" fill="none" stroke="#3F8F2F" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 7" opacity="0.8"/>
+<ellipse cx="320" cy="369.5" rx="220" ry="127" fill="none" stroke="#3F8F2F" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 7" opacity="0.6"/>
+<path d="M257.8 261.8V249.8" stroke="#3F8F2F" stroke-width="2"/>
+<path d="M257.8 249.8C232.6 249.8 232.6 189.9 257.8 142C282.9 189.9 282.9 249.8 257.8 249.8Z" fill="#F4F1E8" stroke="#3F8F2F" stroke-width="2" stroke-linejoin="round"/>
+<path d="M246.7 225.8L246.7 369.5A73.3 42.3 0 0 0 393.3 369.5L393.3 225.8Z" fill="#F4F1E8" stroke="#0A1F1A" stroke-width="2"/>
+<ellipse cx="320" cy="225.8" rx="73.3" ry="42.3" fill="#FBFAF5" stroke="#0A1F1A" stroke-width="2"/>
+<path d="M291.4 408.5L291.4 336.7L292.1 331.5L294.1 326.9L297.4 323L301.9 320L307.3 317.8L313.5 316.5L320 316.1L326.5 316.5L332.7 317.8L338.1 320L342.6 323L345.9 326.9L347.9 331.5L348.6 336.7L348.6 408.5Z" fill="#E3DFD0"/>
+<path d="M300 396.8L300 325L300.5 319.8L301.9 315L304.2 310.9L307.3 307.7L311.1 305.3L315.4 303.8L320 303.4L324.6 303.8L328.9 305.3L332.7 307.7L335.8 310.9L338.1 315L339.5 319.8L340 325L340 396.8" fill="none" stroke="#3F8F2F" stroke-width="2" clip-path="url(#spot-pin-light-a0)"/>
+<path d="M291.4 408.5L291.4 336.7L292.1 331.5L294.1 326.9L297.4 323L301.9 320L307.3 317.8L313.5 316.5L320 316.1L326.5 316.5L332.7 317.8L338.1 320L342.6 323L345.9 326.9L347.9 331.5L348.6 336.7L348.6 408.5Z" fill="none" stroke="#0A1F1A" stroke-width="2"/>
+<path d="M224.7 207.9L224.7 225.8A95.3 55 0 0 0 415.3 225.8L415.3 207.9Z" fill="#F4F1E8" stroke="#0A1F1A" stroke-width="2"/>
+<ellipse cx="320" cy="207.9" rx="95.3" ry="55" fill="#FBFAF5" stroke="#0A1F1A" stroke-width="2"/>
+<path d="M485.9 429.4V419.2" stroke="#3F8F2F" stroke-width="2"/>
+<path d="M485.9 419.2C460.8 419.2 460.8 368.3 485.9 327.6C511.1 368.3 511.1 419.2 485.9 419.2Z" fill="#F4F1E8" stroke="#3F8F2F" stroke-width="2" stroke-linejoin="round"/>
+<path d="M320 207.9L320 88.1" fill="none" stroke="#3F8F2F" stroke-width="2"/>
+<circle cx="320" cy="88.1" r="17" fill="#F4F1E8"/><circle cx="320" cy="88.1" r="11" fill="#F4F1E8" stroke="#3F8F2F" stroke-width="3.5"/>
+</g></svg>
