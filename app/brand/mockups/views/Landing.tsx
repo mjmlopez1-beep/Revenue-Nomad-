@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
 import Illustration from "../../Illustration";
-import "../../brand.css";
-import "../mock.css";
-import { Switcher } from "../Shell";
-
-export const metadata: Metadata = { title: "Merlin mockup: Landing" };
+import { Switcher, artOf, type MockTheme } from "../Shell";
 
 const FUNCTIONS = ["Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM", "Technology", "Finance", "Operations", "People", "Product", "Legal", "Executive"];
 
@@ -21,9 +16,10 @@ const PLANS = [
   { name: "Close", price: "$79", per: "a month, or $790 a year", line: "Adds the proposal they sign.", items: ["Everything in Pro", "Proposals and e-signature", "Evidence Bank and Agent access"] },
 ];
 
-export default function LandingMock() {
+export default function Landing({ theme }: { theme: MockTheme }) {
+  const art = artOf(theme);
   return (
-    <div className="ml mk">
+    <div className={`ml mk mk-${theme}`}>
       <div className="mk-land">
         <header className="mk-land-nav">
           <a href="#" className="mk-wordmark">
@@ -52,7 +48,7 @@ export default function LandingMock() {
             </div>
             <p className="mk-fine">Built by Revenue Nomad, the network of 500+ fractionals.</p>
           </div>
-          <Illustration name="scene-terraces" labeled priority />
+          <Illustration theme={art} name="scene-terraces" labeled priority />
         </section>
 
         <div className="mk-works">
@@ -81,7 +77,7 @@ export default function LandingMock() {
           <div className="mk-grid c4" style={{ marginTop: 32 }}>
             {FEATURES.map((f) => (
               <article className="mk-card mk-feature" key={f.pill}>
-                <Illustration name={f.art} alt="" />
+                <Illustration theme={art} name={f.art} alt="" />
                 <div>
                   <span className="mk-pill lime">{f.pill}</span>
                   <h3>{f.title}</h3>
@@ -96,7 +92,7 @@ export default function LandingMock() {
           <span className="mk-eyebrow">How it works</span>
           <h2 className="mk-h2">Share what you know, see what others know</h2>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/dark/divider-path.svg" alt="" style={{ width: "100%", height: "auto", display: "block", margin: "28px 0 4px" }} />
+          <img src={`/brand/${art}/divider-path.svg`} alt="" style={{ width: "100%", height: "auto", display: "block", margin: "28px 0 4px" }} />
           <div className="mk-steps">
             <div>
               <b>Add what you know</b>
@@ -119,7 +115,7 @@ export default function LandingMock() {
           <p className="lead">Find the company before it posts and get in through the person who held the seat. Close adds the proposal they sign.</p>
           <div className="mk-grid c3" style={{ marginTop: 32 }}>
             {PLANS.map((p) => (
-              <article className={`mk-card mk-plan${p.pick ? " pick" : ""}`} key={p.name}>
+              <article className={`mk-card mk-plan${p.pick ? " pick forest" : ""}`} key={p.name}>
                 <h3>{p.name}</h3>
                 <div className="price">
                   {p.price} <small>{p.per}</small>
@@ -138,7 +134,7 @@ export default function LandingMock() {
         </section>
 
         <section className="mk-cta">
-          <Illustration name="scene-arcade" alt="" />
+          <Illustration theme={art} name="scene-arcade" alt="" />
           <div>
             <h2>
               Find the companies that hire <em style={{ fontFamily: "var(--ml-serif)", fontWeight: 500, color: "var(--ml-lime)" }}>your function</em>
@@ -148,7 +144,7 @@ export default function LandingMock() {
           </div>
         </section>
       </div>
-      <Switcher active="landing" />
+      <Switcher theme={theme} active="landing" />
     </div>
   );
 }

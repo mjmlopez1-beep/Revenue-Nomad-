@@ -1,9 +1,4 @@
-import type { Metadata } from "next";
-import "../../brand.css";
-import "../mock.css";
-import { Logo, Shell } from "../Shell";
-
-export const metadata: Metadata = { title: "Merlin mockup: Pipeline" };
+import { Logo, Shell, artOf, type MockTheme } from "../Shell";
 
 interface Deal { name: string; pitch: string; value: string; way: string; next: string; due: string; hot?: boolean }
 const COLS: { stage: string; total: string; deals: Deal[]; won?: boolean }[] = [
@@ -26,9 +21,10 @@ const COLS: { stage: string; total: string; deals: Deal[]; won?: boolean }[] = [
   ] },
 ];
 
-export default function PipelineMock() {
+export default function Pipeline({ theme }: { theme: MockTheme }) {
+  const art = artOf(theme);
   return (
-    <Shell active="pipeline" crumb="Close / Pipeline">
+    <Shell theme={theme} active="pipeline" crumb="Close / Pipeline">
       <div className="mk-page">
         <div className="mk-page-head">
           <div>
@@ -76,7 +72,7 @@ export default function PipelineMock() {
                     <div><dt>Next move</dt><dd style={{ color: "var(--ml-cream)" }}>{d.next}</dd></div>
                   </dl>
                   <div style={{ marginTop: 10 }}>
-                    <span className={`mk-pill${d.hot ? " gold" : c.won ? " lime" : ""}`}>{d.hot ? "Due today" : d.due}</span>
+                    <span className={`mk-pill${d.hot ? " terra" : c.won ? " lime" : ""}`}>{d.hot ? "Due today" : d.due}</span>
                   </div>
                 </article>
               ))}

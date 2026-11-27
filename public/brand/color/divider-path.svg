@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 96" width="1200" height="96" role="img" aria-label="A winding path with three waypoints">
+
+<path d="M0 62C150 62 190 30 330 30S520 68 660 66S860 28 1000 30S1140 52 1200 50" fill="none" stroke="#D29B43" stroke-width="16" stroke-linecap="round"/>
+<circle cx="120" cy="59" r="13" fill="#F4F1E9"/><circle cx="120" cy="59" r="7" fill="#F4F1E9" stroke="#7955B5" stroke-width="3.5"/><circle cx="600" cy="67" r="13" fill="#F4F1E9"/><circle cx="600" cy="67" r="7" fill="#F4F1E9" stroke="#D29B43" stroke-width="3.5"/><circle cx="1060" cy="33" r="13" fill="#F4F1E9"/><circle cx="1060" cy="33" r="7" fill="#F4F1E9" stroke="#D29B43" stroke-width="3.5"/>
+</svg>

@@ -30,6 +30,26 @@ export const THEMES = {
     text: "#0A1F1A",
     muted: "#9AA79F",
   },
+  // Full palette: ivory and lilac buildings, mint ground, forest doorways.
+  // Written without a background so it sits on any light surface.
+  color: {
+    bg: "#F4F1E9",
+    face: "#FBF8F1",
+    sideR: "#DDD0F0",
+    top: "#E9DFF5",
+    ground: "#CFE3D6",
+    void: "#10392F",
+    line: "#17241E",
+    accent: "#7955B5",
+    tree: "#2B5B4B",
+    treeFill: "#BFD9C9",
+    path: "#D29B43",
+    pathShade: "#B65E40",
+    glow: "#F3D48E",
+    text: "#17241E",
+    muted: "#A79FB5",
+    transparent: true,
+  },
 };
 
 const C = Math.cos(Math.PI / 6);
@@ -94,10 +114,13 @@ export class Scene {
   }
 
   // ---- solids ----------------------------------------------------------
-  box(x, y, z, w, d, h, { top = this.t.top, side = this.t.face, stroke = this.t.line } = {}) {
+  box(x, y, z, w, d, h, { top, side = this.t.face, stroke = this.t.line } = {}) {
     const o = { stroke };
+    const t = this.t;
+    if (!top) top = h <= 0.6 && t.ground ? t.ground : t.top;
+    const sideR = t.sideR || side;
     this.poly([[x, y + d, z], [x + w, y + d, z], [x + w, y + d, z + h], [x, y + d, z + h]], { ...o, fill: side });
-    this.poly([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]], { ...o, fill: side });
+    this.poly([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]], { ...o, fill: sideR });
     this.poly([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], { ...o, fill: top });
   }
 
@@ -172,8 +195,9 @@ export class Scene {
     }
   }
 
-  cylinder(cx, cy, z, r, h, { top = this.t.top, side = this.t.face } = {}) {
+  cylinder(cx, cy, z, r, h, { top, side = this.t.face } = {}) {
     const t = this.t;
+    if (!top) top = h <= 0.6 && t.ground ? t.ground : t.top;
     const [bx, by] = this.P([cx, cy, z]);
     const [, ty] = this.P([cx, cy, z + h]);
     const rx = r * this.s * SPHERE;
@@ -256,8 +280,8 @@ export class Scene {
     this.grow(bx - W, by - H);
     this.grow(bx + W, by);
     this.out.push(
-      `<path d="M${f(bx)} ${f(by)}V${f(y0)}" stroke="${t.accent}" stroke-width="${this.sw}"/>`,
-      `<path d="M${f(bx)} ${f(y0)}C${f(bx - W)} ${f(y0)} ${f(bx - W)} ${f(y0 - H * 0.5)} ${f(bx)} ${f(by - H)}C${f(bx + W)} ${f(y0 - H * 0.5)} ${f(bx + W)} ${f(y0)} ${f(bx)} ${f(y0)}Z" fill="${t.face}" stroke="${t.accent}" stroke-width="${this.sw}" stroke-linejoin="round"/>`
+      `<path d="M${f(bx)} ${f(by)}V${f(y0)}" stroke="${t.tree || t.accent}" stroke-width="${this.sw}"/>`,
+      `<path d="M${f(bx)} ${f(y0)}C${f(bx - W)} ${f(y0)} ${f(bx - W)} ${f(y0 - H * 0.5)} ${f(bx)} ${f(by - H)}C${f(bx + W)} ${f(y0 - H * 0.5)} ${f(bx + W)} ${f(y0)} ${f(bx)} ${f(y0)}Z" fill="${t.treeFill || t.face}" stroke="${t.tree || t.accent}" stroke-width="${this.sw}" stroke-linejoin="round"/>`
     );
   }
   shrub(x, y, z, { r = 0.5 } = {}) {
@@ -265,7 +289,7 @@ export class Scene {
     const [bx, by] = this.P([x, y, z]);
     const R = r * this.s;
     this.out.push(
-      `<path d="M${f(bx - 1.7 * R)} ${f(by)}A${f(0.75 * R)} ${f(0.75 * R)} 0 0 1 ${f(bx - 0.7 * R)} ${f(by - 0.62 * R)}A${f(R)} ${f(R)} 0 0 1 ${f(bx + 0.85 * R)} ${f(by - 0.5 * R)}A${f(0.7 * R)} ${f(0.7 * R)} 0 0 1 ${f(bx + 1.7 * R)} ${f(by)}Z" fill="${t.face}" stroke="${t.accent}" stroke-width="${this.sw}" stroke-linejoin="round"/>`
+      `<path d="M${f(bx - 1.7 * R)} ${f(by)}A${f(0.75 * R)} ${f(0.75 * R)} 0 0 1 ${f(bx - 0.7 * R)} ${f(by - 0.62 * R)}A${f(R)} ${f(R)} 0 0 1 ${f(bx + 0.85 * R)} ${f(by - 0.5 * R)}A${f(0.7 * R)} ${f(0.7 * R)} 0 0 1 ${f(bx + 1.7 * R)} ${f(by)}Z" fill="${t.treeFill || t.face}" stroke="${t.tree || t.accent}" stroke-width="${this.sw}" stroke-linejoin="round"/>`
     );
   }
   // Railing from a to b (3D points on the same level).
@@ -339,7 +363,7 @@ export class Scene {
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.w} ${this.h}" width="${this.w}" height="${this.h}" role="img" aria-label="${title}">`,
       title ? `<title>${title}</title>` : "",
       this.defs.length ? `<defs>${this.defs.join("")}</defs>` : "",
-      background ? `<rect width="${this.w}" height="${this.h}" fill="${t.bg}"/>` : "",
+      background && !t.transparent ? `<rect width="${this.w}" height="${this.h}" fill="${t.bg}"/>` : "",
       `<g stroke-linejoin="round" stroke-linecap="round">`,
       ...this.out,
       ...this.over,

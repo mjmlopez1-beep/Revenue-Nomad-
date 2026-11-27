@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
 import Illustration from "../../Illustration";
-import "../../brand.css";
-import "../mock.css";
-import { Icon, Logo, Route, Shell } from "../Shell";
-
-export const metadata: Metadata = { title: "Merlin mockup: Home" };
+import { Icon, Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
 
 const MOVES = [
   {
@@ -18,7 +13,7 @@ const MOVES = [
     via: "Priya", viaNote: "Fellow fractional · On Merlin", to: "COO", toNote: "Hiring for the seat", move: "Reply to the open role", second: "Ask for an intro",
   },
   {
-    band: "Likely to hire · Medium", tone: "", name: "Kestrel Analytics", facts: "SaaS · $10M-$20M · 51-200 people",
+    band: "Likely to hire · Medium", tone: "ame", name: "Kestrel Analytics", facts: "SaaS · $10M-$20M · 51-200 people",
     why: "Raised money in September and has hired fractionals before.",
     via: "Nobody named yet", viaNote: "Not on Merlin yet", to: "CRO", toNote: "Decides", move: "Bring in who you know", second: "Open free · 1 left today",
   },
@@ -30,21 +25,23 @@ const LISTS = [
   ["Past clients, lookalikes", "Companies", "41", "0", "64%", "Off", "Nov 21"],
 ];
 
-export default function HomeMock() {
+export default function Home({ theme }: { theme: MockTheme }) {
+  const art = artOf(theme);
   return (
-    <Shell active="home" crumb="Home">
+    <Shell theme={theme} active="home" crumb="Home">
       <div className="mk-page">
         <div className="mk-page-head">
           <div>
             <h1>Good morning, Jane</h1>
             <p>Three moves for today. About 6 minutes.</p>
           </div>
+          <Illustration theme={art} name="spot-garden" alt="" className="mk-headart" />
         </div>
         <div className="mk-since">
           <span className="mk-pill">This week</span>
           <span className="mk-pill lime"><span className="mk-dot" />4 new in Crystal Ball</span>
           <span className="mk-pill gold"><span className="mk-dot" />2 Sales roles opened</span>
-          <span className="mk-pill">1 unread message</span>
+          <span className="mk-pill ame">1 unread message</span>
         </div>
 
         <div className="mk-stack">
@@ -95,8 +92,8 @@ export default function HomeMock() {
             </section>
 
             <div className="mk-stack">
-              <section className="mk-card mk-started">
-                <Illustration name="spot-stairs" alt="" />
+              <section className="mk-card mk-started tint-lilac">
+                <Illustration theme={art} name="spot-stairs" alt="" />
                 <div>
                   <div className="mk-row between">
                     <h3 style={{ fontSize: 16 }}>Getting started</h3>

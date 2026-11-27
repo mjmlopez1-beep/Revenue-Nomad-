@@ -1,5 +1,13 @@
 import Link from "next/link";
+import type React from "react";
 import type { ReactNode } from "react";
+
+export const THEMES = ["color", "night"] as const;
+export type MockTheme = (typeof THEMES)[number];
+/** Which illustration set goes with a mockup theme. */
+export const artOf = (theme: MockTheme) => (theme === "color" ? "color" : "dark") as "color" | "dark";
+
+const LOGO_HUES = ["#B65E40", "#7955B5", "#2B5B4B", "#D29B43", "#3E6FD1", "#2A8C8C", "#C8506F", "#10392F"];
 
 export const MOCKUPS = [
   { slug: "landing", label: "Landing", note: "Signed-out home page with the join form, features and pricing." },
@@ -61,7 +69,13 @@ export function Logo({ name, size }: { name: string; size?: "sm" | "lg" }) {
     .map((w) => w[0])
     .join("")
     .toUpperCase();
-  return <span className={`mk-logo${size ? ` ${size}` : ""}`}>{initials}</span>;
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span className={`mk-logo${size ? ` ${size}` : ""}`} style={{ "--lg": LOGO_HUES[h % LOGO_HUES.length] } as React.CSSProperties}>
+      {initials}
+    </span>
+  );
 }
 
 /** You, the person in between, and who decides, joined by the gold path. */
@@ -87,15 +101,19 @@ export function Route({ from = "You", via, viaNote, to, toNote }: { from?: strin
   );
 }
 
-export function Switcher({ active }: { active: string }) {
+export function Switcher({ active, theme }: { active: string; theme: MockTheme }) {
+  const other = theme === "color" ? "night" : "color";
   return (
     <nav className="mk-switch" aria-label="Mockups">
       <Link href="/brand/mockups">All</Link>
       {MOCKUPS.map((m) => (
-        <Link key={m.slug} href={`/brand/mockups/${m.slug}`} className={m.slug === active ? "on" : undefined}>
+        <Link key={m.slug} href={`/brand/mockups/${theme}/${m.slug}`} className={m.slug === active ? "on" : undefined}>
           {m.label}
         </Link>
       ))}
+      <Link href={`/brand/mockups/${other}/${active}`} className="alt">
+        {other === "night" ? "Night version" : "Color version"}
+      </Link>
     </nav>
   );
 }
@@ -144,9 +162,9 @@ const NAV: { heading?: string; items: { label: string; icon: string; count?: str
   },
 ];
 
-export function Shell({ active, crumb, children }: { active: string; crumb: ReactNode; children: ReactNode }) {
+export function Shell({ active, theme, crumb, children }: { active: string; theme: MockTheme; crumb: ReactNode; children: ReactNode }) {
   return (
-    <div className="ml mk">
+    <div className={`ml mk mk-${theme}`}>
       <div className="mk-shell">
         <aside className="mk-side">
           <Link href="/brand/mockups" className="mk-wordmark">
@@ -157,7 +175,7 @@ export function Shell({ active, crumb, children }: { active: string; crumb: Reac
               <div className="mk-nav" key={i}>
                 {g.heading && <h4>{g.heading}</h4>}
                 {g.items.map((it) => (
-                  <Link key={it.label} href={it.slug ? `/brand/mockups/${it.slug}` : "#"} className={it.slug === active ? "on" : undefined}>
+                  <Link key={it.label} href={it.slug ? `/brand/mockups/${theme}/${it.slug}` : "#"} className={it.slug === active ? "on" : undefined}>
                     <Icon name={it.icon} />
                     {it.label}
                     {it.count && (it.hot ? <span className="mk-pill solid" style={{ marginLeft: "auto", padding: "0 8px" }}>{it.count}</span> : <em>{it.count}</em>)}
@@ -196,7 +214,7 @@ export function Shell({ active, crumb, children }: { active: string; crumb: Reac
           {children}
         </div>
       </div>
-      <Switcher active={active} />
+      <Switcher active={active} theme={theme} />
     </div>
   );
 }

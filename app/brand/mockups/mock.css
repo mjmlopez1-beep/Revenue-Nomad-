@@ -1120,3 +1120,283 @@
 .mk-grid.main-aside > * {
   min-width: 0;
 }
+.mk-switch a.alt {
+  border-left: 1px solid var(--mk-rule-strong);
+  border-radius: 0 999px 999px 0;
+  margin-left: 4px;
+  padding-left: 14px;
+}
+
+/* =====================================================================
+   Color theme: ivory pages, forest rail, and the full palette.
+   Forest #10392F, Ivory #F4F1E9, Ink #17241E, Moss #2B5B4B,
+   Amethyst #7955B5, Lilac #E9DFF5, Gold #D29B43, Terracotta #B65E40.
+   ===================================================================== */
+.ml.mk-color {
+  --c-forest: #10392f;
+  --c-ivory: #f4f1e9;
+  --c-ink: #17241e;
+  --c-moss: #2b5b4b;
+  --c-ame: #7955b5;
+  --c-lilac: #e9dff5;
+  --c-gold: #d29b43;
+  --c-terra: #b65e40;
+  --c-mint: #dcebe2;
+  --c-peach: #f8e3d8;
+  --c-sand: #f7e8c9;
+
+  --ml-bg: var(--c-ivory);
+  --ml-cream: var(--c-ink);
+  --ml-lime: var(--c-forest);
+  --ml-gold: var(--c-gold);
+  --ml-void: #fffdf9;
+  --mk-dim: #55635c;
+  --mk-faint: #7c8882;
+  --mk-rule: rgba(23, 36, 30, 0.11);
+  --mk-rule-strong: rgba(23, 36, 30, 0.22);
+  --mk-card: #fffdf9;
+  --mk-raise: #efeadf;
+  background: var(--c-ivory);
+  color: var(--c-ink);
+}
+.mk-color h1,
+.mk-color .mk-h2,
+.mk-color .mk-cta h2,
+.mk-color .mk-stat b,
+.mk-color .mk-funnel b,
+.mk-color .mk-bands b,
+.mk-color .mk-band b,
+.mk-color .mk-plan .price {
+  font-family: var(--ml-serif);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.mk-color .mk-page-head h1 {
+  font-size: 44px;
+}
+.mk-color .mk-page-head h1::after,
+.mk-color .mk-cohead h1::after {
+  content: ".";
+}
+.mk-color .mk-eyebrow {
+  color: var(--c-moss);
+}
+.mk-color .mk-card {
+  box-shadow: 0 1px 2px rgba(23, 36, 30, 0.04);
+}
+
+/* pills take a tone */
+.mk-color .mk-pill {
+  background: #fffdf9;
+}
+.mk-color .mk-pill.lime {
+  background: var(--c-mint);
+  border-color: transparent;
+  color: var(--c-forest);
+}
+.mk-color .mk-pill.gold {
+  background: var(--c-sand);
+  border-color: transparent;
+  color: #7a5310;
+}
+.mk-color .mk-pill.terra {
+  background: var(--c-peach);
+  border-color: transparent;
+  color: #8f3f24;
+}
+.mk-color .mk-pill.ame {
+  background: var(--c-lilac);
+  border-color: transparent;
+  color: #54368c;
+}
+.mk-color .mk-pill.solid {
+  background: var(--c-ame);
+  border-color: var(--c-ame);
+  color: #fff;
+}
+.mk-color .mk-lock {
+  background: var(--c-lilac);
+  border: 0;
+  color: #54368c;
+}
+.mk-color .mk-logo {
+  background: var(--lg);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* forest surfaces: the rail, and any card marked .forest */
+.mk-color .mk-side,
+.mk-color .mk-card.forest {
+  --ml-cream: #f4f1e9;
+  --mk-dim: #b9ccc2;
+  --mk-faint: #86a295;
+  --mk-rule: rgba(244, 241, 233, 0.14);
+  --mk-rule-strong: rgba(244, 241, 233, 0.3);
+  --mk-raise: #2b5b4b;
+  --mk-card: #10392f;
+  background: var(--c-forest);
+  color: #f4f1e9;
+  border-color: transparent;
+}
+.mk-color .mk-side .mk-wordmark i {
+  color: var(--c-gold);
+}
+.mk-color .mk-nav a.on {
+  box-shadow: none;
+}
+.mk-color .mk-nav a em {
+  color: #b9ccc2;
+}
+.mk-color .mk-nav a.on em {
+  color: #fff;
+}
+.mk-color .mk-side .mk-pill {
+  background: transparent;
+  color: #d9c9f2;
+  border-color: rgba(233, 223, 245, 0.4);
+}
+.mk-color .mk-side .mk-pill.solid {
+  background: var(--c-ame);
+  border-color: var(--c-ame);
+  color: #fff;
+}
+.mk-color .mk-side .mk-bar i {
+  background: var(--c-gold);
+}
+.mk-color .mk-me span {
+  background: var(--c-gold);
+  color: var(--c-ink);
+}
+.mk-color .mk-card.forest .mk-eyebrow {
+  color: var(--c-gold);
+}
+.mk-color .mk-card.forest .mk-btn {
+  background: #f4f1e9;
+  color: var(--c-forest) !important;
+}
+.mk-color .mk-card.forest .mk-btn.ghost {
+  background: transparent;
+  color: #f4f1e9 !important;
+}
+.mk-color .mk-plan.pick li::before {
+  border-color: var(--c-gold);
+}
+
+/* tinted cards */
+.mk-color .tint-lilac {
+  background: var(--c-lilac);
+  border-color: transparent;
+  --mk-card: var(--c-lilac);
+}
+.mk-color .mk-route > div:first-child i {
+  border-color: var(--c-ame);
+}
+
+/* topbar */
+.mk-color .mk-topbar {
+  border-bottom-color: transparent;
+}
+
+/* home */
+.mk-color .mk-askbig {
+  background: #fffdf9;
+}
+.mk-color .mk-askbig svg {
+  color: var(--c-ame);
+}
+.mk-color .mk-funnel > div:nth-child(1) i { background: var(--c-moss); }
+.mk-color .mk-funnel > div:nth-child(2) i { background: var(--c-ame); }
+.mk-color .mk-funnel > div:nth-child(3) i { background: var(--c-gold); }
+.mk-color .mk-funnel > div:nth-child(4) i { background: var(--c-terra); }
+.mk-color .mk-funnel > div:nth-child(5) i { background: var(--c-forest); }
+.mk-color .mk-move:nth-child(1) .acts .mk-btn:first-child { background: var(--c-forest); }
+.mk-color .mk-list .mk-row > span:first-child svg { color: var(--c-ame); }
+
+/* crystal ball */
+.mk-color .mk-bands > div {
+  border-color: transparent;
+}
+.mk-color .mk-bands > div.t-mint { background: var(--c-mint); }
+.mk-color .mk-bands > div.t-gold { background: var(--c-sand); }
+.mk-color .mk-bands > div.t-lilac { background: var(--c-lilac); }
+.mk-color .mk-bands > div.on {
+  box-shadow: inset 0 0 0 2px var(--c-forest);
+}
+.mk-color .mk-likely i.f {
+  background: var(--c-moss);
+}
+.mk-color .mk-table tr.sel td {
+  background: var(--c-lilac);
+}
+.mk-color .mk-table tr.sel td:first-child {
+  box-shadow: inset 3px 0 0 var(--c-ame);
+}
+.mk-color .mk-timeline > div::before {
+  border-color: var(--c-ame);
+}
+.mk-color .mk-tabs a.on {
+  border-bottom-color: var(--c-forest);
+}
+
+/* pipeline: each stage has its own color */
+.mk-color .mk-col {
+  border: 0;
+  border-top: 4px solid var(--st);
+  background: color-mix(in srgb, var(--st) 9%, var(--c-ivory));
+}
+.mk-color .mk-col:nth-child(1) { --st: #b9a77e; }
+.mk-color .mk-col:nth-child(2) { --st: #3e6fd1; }
+.mk-color .mk-col:nth-child(3) { --st: #2a8c8c; }
+.mk-color .mk-col:nth-child(4) { --st: var(--c-ame); }
+.mk-color .mk-col:nth-child(5) { --st: var(--c-gold); }
+.mk-color .mk-col:nth-child(6) { --st: var(--c-moss); }
+.mk-color .mk-col > header span::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--st);
+  margin-right: 7px;
+}
+.mk-color .mk-deal {
+  box-shadow: 0 1px 2px rgba(23, 36, 30, 0.05);
+  border-color: transparent;
+}
+
+/* landing */
+.mk-color .mk-hero h1 em,
+.mk-color .mk-h2 em,
+.mk-color .mk-cta h2 em {
+  color: var(--c-ame) !important;
+}
+.mk-color .mk-hero h1 {
+  font-size: clamp(46px, 5.6vw, 82px);
+}
+.mk-color .mk-feature img {
+  border-bottom: 0;
+}
+.mk-color .mk-feature:nth-child(1) img { background: var(--c-lilac); }
+.mk-color .mk-feature:nth-child(2) img { background: var(--c-mint); }
+.mk-color .mk-feature:nth-child(3) img { background: var(--c-sand); }
+.mk-color .mk-feature:nth-child(4) img { background: var(--c-peach); }
+.mk-color .mk-band > div:nth-child(1) b { color: var(--c-forest); }
+.mk-color .mk-band > div:nth-child(2) b { color: var(--c-ame); }
+.mk-color .mk-band > div:nth-child(3) b { color: var(--c-terra); }
+.mk-color .mk-band > div:nth-child(4) b { color: #9a6a16; }
+.mk-color .mk-cta {
+  background: var(--c-lilac);
+  border-color: transparent;
+}
+.mk-color .mk-index a,
+.mk-color .mk-index .cap {
+  color: var(--c-ink);
+}
+.mk-col > header {
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.mk-nowrap {
+  white-space: nowrap;
+}

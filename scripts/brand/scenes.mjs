@@ -237,7 +237,7 @@ function arcade(s) {
     const sp = vy - 110 * q(k);
     const half = (R) => `M${r1(vx - R)} ${r1(fl)}V${r1(sp)}A${r1(R)} ${r1(R)} 0 0 1 ${r1(vx + R)} ${r1(sp)}V${r1(fl)}`;
     s.raw(
-      `<path d="${half(A)}H${r1(vx + B)}V${r1(sp)}A${r1(B)} ${r1(B)} 0 0 0 ${r1(vx - B)} ${r1(sp)}V${r1(fl)}Z" fill="${t.face}" stroke="${t.line}" stroke-width="${Math.max(1, 2.4 * Math.min(1, q(k) * 1.6)).toFixed(2)}"/>`,
+      `<path d="${half(A)}H${r1(vx + B)}V${r1(sp)}A${r1(B)} ${r1(B)} 0 0 0 ${r1(vx - B)} ${r1(sp)}V${r1(fl)}Z" fill="${t.sideR && Math.round(k) % 2 ? t.top : t.face}" stroke="${t.line}" stroke-width="${Math.max(1, 2.4 * Math.min(1, q(k) * 1.6)).toFixed(2)}"/>`,
       `<path d="M${r1(vx - B)} ${r1(sp)}H${r1(vx - A)}M${r1(vx + B)} ${r1(sp)}H${r1(vx + A)}" stroke="${t.line}" stroke-width="1.2" fill="none"/>`
     );
   };
@@ -251,7 +251,7 @@ function arcade(s) {
     const W = 30 * z;
     const y0 = fl - ph;
     s.raw(
-      `<path d="M${r1(x)} ${r1(y0)}C${r1(x - W)} ${r1(y0)} ${r1(x - W)} ${r1(y0 - H * 0.55)} ${r1(x)} ${r1(y0 - H)}C${r1(x + W)} ${r1(y0 - H * 0.55)} ${r1(x + W)} ${r1(y0)} ${r1(x)} ${r1(y0)}Z" fill="${t.face}" stroke="${t.accent}" stroke-width="2"/>`,
+      `<path d="M${r1(x)} ${r1(y0)}C${r1(x - W)} ${r1(y0)} ${r1(x - W)} ${r1(y0 - H * 0.55)} ${r1(x)} ${r1(y0 - H)}C${r1(x + W)} ${r1(y0 - H * 0.55)} ${r1(x + W)} ${r1(y0)} ${r1(x)} ${r1(y0)}Z" fill="${t.treeFill || t.face}" stroke="${t.tree || t.accent}" stroke-width="2"/>`,
       `<rect x="${r1(x - pw)}" y="${r1(y0)}" width="${r1(2 * pw)}" height="${r1(ph)}" fill="${t.face}" stroke="${t.line}" stroke-width="2"/>`
     );
   };

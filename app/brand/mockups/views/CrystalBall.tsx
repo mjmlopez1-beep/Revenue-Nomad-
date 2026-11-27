@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
 import Illustration from "../../Illustration";
-import "../../brand.css";
-import "../mock.css";
-import { Logo, Route, Shell } from "../Shell";
-
-export const metadata: Metadata = { title: "Merlin mockup: Crystal Ball" };
+import { Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
 
 const ROWS: { name: string; facts: string; band: "High" | "Medium" | "Low"; why: string[]; when: string; move: string; way: string; sel?: boolean }[] = [
   { name: "Larkspur Learning", facts: "EdTech · $10M-$20M", band: "High", why: ["Fractional seat ended", "No leader on their team page"], when: "Today", move: "Message Dana", way: "Dana held the seat", sel: true },
@@ -16,6 +11,18 @@ const ROWS: { name: string; facts: string; band: "High" | "Medium" | "Low"; why:
   { name: "Osprey Legal", facts: "Legal services · $10M-$20M", band: "Low", why: ["Growing"], when: "Last week", move: "Open free · 1 left today", way: "Nobody named yet" },
   { name: "Tallgrass Foods", facts: "Food · $20M-$50M", band: "Low", why: ["Hired a fractional"], when: "Nov 14", move: "Unlock · 2 credits", way: "Opens after the company" },
 ];
+
+const TONE: Record<string, string> = {
+  "Open role": "gold",
+  "Fractional seat ended": "terra",
+  "Leader left": "terra",
+  "No leader on their team page": "terra",
+  "Raised money": "ame",
+  "New leader": "ame",
+  "Hired fractionals before": "lime",
+  "Hired a fractional": "lime",
+  "Seat at 12 months": "lime",
+};
 
 function Likely({ band }: { band: "High" | "Medium" | "Low" }) {
   const n = band === "High" ? 3 : band === "Medium" ? 2 : 1;
@@ -31,22 +38,23 @@ function Likely({ band }: { band: "High" | "Medium" | "Low" }) {
   );
 }
 
-export default function CrystalMock() {
+export default function CrystalBall({ theme }: { theme: MockTheme }) {
+  const art = artOf(theme);
   return (
-    <Shell active="crystal-ball" crumb="Signals / Crystal Ball">
+    <Shell theme={theme} active="crystal-ball" crumb="Signals / Crystal Ball">
       <div className="mk-page">
         <div className="mk-page-head">
           <div>
             <h1>Your Crystal Ball</h1>
             <p>14 companies likely to hire a fractional Sales leader next.</p>
           </div>
-          <Illustration name="spot-beacon" alt="" className="mk-headart" />
+          <Illustration theme={art} name="spot-beacon" alt="" className="mk-headart" />
         </div>
 
         <div className="mk-bands">
-          <div className="on"><span className="mk-dim">High</span><b>5</b></div>
-          <div><span className="mk-dim">Medium</span><b>6</b></div>
-          <div><span className="mk-dim">Low</span><b>3</b></div>
+          <div className="on t-mint"><span className="mk-dim">High</span><b>5</b></div>
+          <div className="t-gold"><span className="mk-dim">Medium</span><b>6</b></div>
+          <div className="t-lilac"><span className="mk-dim">Low</span><b>3</b></div>
           <div style={{ flex: 2, display: "flex", alignItems: "center" }} className="mk-dim">High and Medium come by email. Low shows only here.</div>
         </div>
 
@@ -80,10 +88,10 @@ export default function CrystalMock() {
                     <td><Likely band={r.band} /></td>
                     <td>
                       <div className="mk-sigs">
-                        {r.why.map((w) => <span className="mk-pill" key={w}>{w}</span>)}
+                        {r.why.map((w) => <span className={`mk-pill ${TONE[w] || ""}`} key={w}>{w}</span>)}
                       </div>
                     </td>
-                    <td className="mk-dim">{r.when}</td>
+                    <td className="mk-dim mk-nowrap">{r.when}</td>
                     <td>
                       <b>{r.move}</b>
                       <div className="mk-dim" style={{ fontSize: 12.5 }}>{r.way}</div>

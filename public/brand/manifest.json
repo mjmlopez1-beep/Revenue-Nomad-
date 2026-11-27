@@ -25,6 +25,24 @@
       "glow": "#FFDC7A",
       "text": "#0A1F1A",
       "muted": "#9AA79F"
+    },
+    "color": {
+      "bg": "#F4F1E9",
+      "face": "#FBF8F1",
+      "sideR": "#DDD0F0",
+      "top": "#E9DFF5",
+      "ground": "#CFE3D6",
+      "void": "#10392F",
+      "line": "#17241E",
+      "accent": "#7955B5",
+      "tree": "#2B5B4B",
+      "treeFill": "#BFD9C9",
+      "path": "#D29B43",
+      "pathShade": "#B65E40",
+      "glow": "#F3D48E",
+      "text": "#17241E",
+      "muted": "#A79FB5",
+      "transparent": true
     }
   },
   "illustrations": [

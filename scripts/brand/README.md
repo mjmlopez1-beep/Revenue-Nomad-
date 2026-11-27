@@ -14,7 +14,7 @@ The SVGs in `public/brand` are generated. Edit the sources here and run `npm run
 | Divider | 1 | 1200 x 96 | `divider-path.svg` |
 | App icon | 1 | 64 x 64 | `mark.svg` |
 
-Everything except the app icon comes in two themes, `public/brand/dark` and `public/brand/light`. Browse them all at `/brand` in the running app.
+Everything except the app icon comes in three themes: `public/brand/dark`, `public/brand/light` and `public/brand/color`. The color theme uses the full palette (lilac and ivory buildings, mint ground, forest doorways) and has no background, so it sits on any light surface. Browse them all at `/brand` in the running app.
 
 ## When to use which scene
 

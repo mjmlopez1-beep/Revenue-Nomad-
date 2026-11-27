@@ -1,10 +1,5 @@
-import type { Metadata } from "next";
 import Illustration from "../../Illustration";
-import "../../brand.css";
-import "../mock.css";
-import { Lock, Logo, Route, Shell } from "../Shell";
-
-export const metadata: Metadata = { title: "Merlin mockup: Company" };
+import { Lock, Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
 
 const SEATS = [
   { seat: "Fractional VP Sales", by: "Dana R.", member: true, start: "Oct 2025", end: <Lock>1 credit</Lock>, hours: "20 a week", rate: <Lock>1 credit</Lock>, why: "First sales leader", via: <Lock>1 credit</Lock> },
@@ -18,9 +13,10 @@ const PEOPLE = [
   { name: <Lock>Name and title · 1 credit</Lock>, title: "", rel: "Reported to", email: <span className="mk-dim">After the name</span>, phone: <span className="mk-dim">After the name</span>, know: "Lena works with them" },
 ];
 
-export default function CompanyMock() {
+export default function Company({ theme }: { theme: MockTheme }) {
+  const art = artOf(theme);
   return (
-    <Shell active="company" crumb={<>Companies / Larkspur Learning <span style={{ marginLeft: 12, fontWeight: 400 }}>3 of 64</span></>}>
+    <Shell theme={theme} active="company" crumb={<>Companies / Larkspur Learning <span style={{ marginLeft: 12, fontWeight: 400 }}>3 of 64</span></>}>
       <div className="mk-page">
         <div className="mk-cohead">
           <Logo name="Larkspur Learning" size="lg" />
@@ -41,7 +37,7 @@ export default function CompanyMock() {
 
         <div className="mk-grid main-aside">
           <div className="mk-stack">
-            <section className="mk-card">
+            <section className="mk-card tint-lilac">
               <div className="mk-card-head">
                 <h3>Your way in</h3>
                 <span className="mk-pill lime">Strong</span>
@@ -124,7 +120,7 @@ export default function CompanyMock() {
             <section className="mk-card">
               <div className="mk-card-head"><h3>What opens, and what stays locked</h3></div>
               <div className="mk-gate">
-                <Illustration name="spot-door" alt="" />
+                <Illustration theme={art} name="spot-door" alt="" />
                 <div>
                   <h4>Free, showing now</h4>
                   <ul>
@@ -156,7 +152,7 @@ export default function CompanyMock() {
           </div>
 
           <aside className="mk-stack">
-            <section className="mk-card">
+            <section className="mk-card forest">
               <span className="mk-eyebrow">Your next move</span>
               <h3 style={{ fontSize: 19, margin: "8px 0" }}>Message Dana</h3>
               <p className="mk-dim">She held the seat until last month and is on Merlin. Ask what the team needs next.</p>
@@ -172,7 +168,7 @@ export default function CompanyMock() {
               <a className="mk-btn ghost small" href="#">Job posting</a>
             </section>
             <section className="mk-card">
-              <div className="mk-card-head"><h3>Add what you know</h3><span className="mk-pill lime">Earns credits</span></div>
+              <div className="mk-card-head"><h3>Add what you know</h3><span className="mk-pill ame">Earns credits</span></div>
               <div className="mk-list mk-dim">
                 <div className="mk-row between">Average deal size <a className="mk-pill" href="#">+1</a></div>
                 <div className="mk-row between">Sales motion <a className="mk-pill" href="#">+1</a></div>
