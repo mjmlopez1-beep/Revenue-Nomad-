@@ -59,6 +59,7 @@ export default function BrandLibrary() {
             merlin<i>.</i>
           </Link>
           <nav>
+            <Link href="/brand/guide">Brand guide</Link>
             <a href="#blend">The guide</a>
             <a href="#journey">The journey</a>
             <a href="#scenes">Scenes</a>

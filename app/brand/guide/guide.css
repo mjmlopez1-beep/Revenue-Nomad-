@@ -1,0 +1,284 @@
+/* Visual brand guide. Builds on the .hp tokens in mockups/homepage/home.css. */
+.bg-cover {
+  background: var(--pine);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  min-height: 520px;
+  display: flex;
+  align-items: center;
+}
+.bg-cover img.art {
+  position: absolute;
+  right: -90px;
+  top: -70px;
+  width: 820px;
+  height: auto;
+}
+.bg-cover .in {
+  position: relative;
+  max-width: 520px;
+}
+.bg-cover img.logo {
+  height: 46px;
+  width: auto;
+  margin-bottom: 44px;
+}
+.bg-cover h1 {
+  color: #fff;
+  font-size: 72px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+.bg-cover h1 em {
+  font-style: normal;
+  color: var(--saffron);
+}
+.bg-cover p {
+  color: #d4e6de;
+  font-size: 19px;
+  line-height: 28px;
+  margin-top: 20px;
+}
+.bg-sec {
+  padding: 64px 0 8px;
+}
+.bg-sec > small {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.bg-sec > h2 {
+  font-size: 40px;
+  line-height: 1.05;
+  margin: 6px 0 10px;
+}
+.bg-sec > p {
+  font-size: 17px;
+  color: var(--muted);
+  max-width: 42em;
+  margin-bottom: 28px;
+}
+.bg-grid {
+  display: grid;
+  gap: 16px;
+}
+.bg-grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bg-grid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bg-grid.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.bg-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+}
+.bg-box h4 {
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.bg-box p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 21px;
+}
+/* meaning table */
+.bg-mean {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.bg-mean .bg-box {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.bg-mean .hp-ring {
+  width: 26px;
+  height: 26px;
+  border-width: 6px;
+  margin-top: 2px;
+}
+/* swatches */
+.bg-sw {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.bg-sw i {
+  display: flex;
+  align-items: flex-end;
+  height: 120px;
+  padding: 12px 14px;
+  font-style: normal;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.bg-sw div {
+  padding: 12px 14px 14px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.bg-sw code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  display: block;
+}
+.bg-shades {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.bg-shades span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px 5px 6px;
+  background: var(--surface);
+}
+.bg-shades i {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+/* route specimen */
+.bg-route {
+  background: var(--pine);
+  color: #fff;
+  border-radius: 20px;
+  padding: 44px 56px;
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto;
+  align-items: center;
+}
+.bg-route .seg {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--saffron);
+}
+.bg-route .stop {
+  text-align: center;
+  width: 190px;
+}
+.bg-route .hp-ring {
+  width: 40px;
+  height: 40px;
+  border-width: 9px;
+  background: var(--pine);
+}
+.bg-route b {
+  display: block;
+  font-size: 20px;
+  margin-top: 10px;
+}
+.bg-route span.d {
+  color: #a9c6ba;
+  font-size: 14px;
+}
+/* type */
+.bg-type .row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 20px;
+  align-items: baseline;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.bg-type .row small {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+/* illustration tiles */
+.bg-tile {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--pine);
+}
+.bg-tile img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.bg-tile div {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  padding: 12px 16px 14px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.bg-tile b {
+  color: var(--ink);
+  display: block;
+}
+/* do and don't */
+.bg-dd figure {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.bg-dd .stage {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.bg-dd .stage img {
+  width: 86%;
+  height: auto;
+}
+.bg-dd figcaption {
+  padding: 12px 16px 14px;
+  font-size: 14px;
+  line-height: 21px;
+  border-top: 4px solid var(--k);
+}
+.bg-dd figcaption b {
+  color: var(--k);
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bg-ui {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.bg-foot {
+  padding: 56px 0 64px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.bg-cover > img {
+  position: absolute;
+  right: -90px;
+  top: -70px;
+  width: 820px;
+  height: auto;
+}
+.bg-tile img {
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  padding: 10px;
+  box-sizing: border-box;
+}
+.bg-dd .stage img {
+  height: 180px;
+  width: auto;
+}
