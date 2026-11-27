@@ -40,6 +40,15 @@ export default function MockupIndex() {
                 <p>The companies table in the current design system, adapted.</p>
               </div>
             </Link>
+            <Link href="/brand/mockups/reimagined/companies">
+              <div className="thumb">
+                <iframe src="/brand/mockups/reimagined/companies" title="Companies, reimagined" tabIndex={-1} loading="lazy" />
+              </div>
+              <div className="cap">
+                <b>Companies, reimagined</b>
+                <p>The list as the architecture: every company is a door, and the path runs to the ones you can reach.</p>
+              </div>
+            </Link>
           </div>
         </section>
         {THEMES.map((theme) => (
