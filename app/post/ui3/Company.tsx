@@ -10,7 +10,7 @@
  * Everything the record does today (unlocking with its quote, seats, people, ways in, open roles,
  * notes and activity, the deal) is the "Full record" tab: today's record page, unchanged.
  */
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import type { RadarRow } from "@/lib/radar/types";
 import type { RouteView } from "@/lib/paths/types";
@@ -26,6 +26,8 @@ import { isWarm, setWarmFocus, useCoActs, useTargets } from "./data";
 import { Art } from "./illustrations";
 import { Ic } from "./icons";
 import { Av, Chip, CoLogo, FitRing, RelChip, Traits, Wait } from "./parts";
+import { loadAbout } from "../About";
+import { SUGGESTED_FROM, suggestFromAbout, suggestionFor } from "@/lib/about/suggest";
 import { ADD_WHAT_YOU_KNOW, FIT_FOOT, NOT_ON_FILE, agoWords, coLine, coName, fitCount, fitSentence, initialsOf, numWord, plural, relOfWarmth } from "./model";
 import { Graph, GraphLegend } from "./Graph";
 import { oppTitle } from "./Home";
@@ -104,6 +106,28 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
   const people = useMemo(() => (known?.people ?? []).filter((p) => p.company === id && !p.away), [known, id]);
   const fn = me.function && me.function !== "Other" ? me.function : null;
   const radar: RadarRow | null = useMemo(() => [...(c.shell.radar.data?.rows ?? []), ...(c.legacy.homeProps.data?.rows ?? [])].find((r) => r.id === id) ?? null, [c.shell.radar.data, c.legacy.homeProps.data, id]);
+
+  // Suggestions for how it sells, from the About text its own website gave (nothing new is fetched). Shown beside an empty fact until a member confirms.
+  const aboutCell = i.c.cells.about;
+  const fromSite = !i.c.hidden && aboutCell?.s === "value" && aboutCell.from === "website";
+  const [aboutText, setAboutText] = useState<string | null>(null);
+  useEffect(() => {
+    setAboutText(null);
+    if (!fromSite) return;
+    let live = true;
+    void loadAbout(id).then((cell) => live && setAboutText(cell?.s === "value" ? cell.v || null : null));
+    return () => {
+      live = false;
+    };
+  }, [id, fromSite]);
+  const suggested = useMemo(() => (aboutText ? suggestFromAbout(aboutText) : null), [aboutText]);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirm = async (field: string, value: string) => {
+    setConfirming(field);
+    const res = await c.act({ type: "fill", entity: "company", id, field, value }, { quiet: true });
+    setConfirming(null);
+    toast(res.message || (res.ok ? "Saved." : "That didn't go through. Try again."), !res.ok);
+  };
 
   // The closest past client: the member's own seats' companies, by traits shared.
   const like = useMemo(() => {
@@ -373,6 +397,14 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
                                   <button type="button" className="m-link" onClick={onRecord}>
                                     {ADD_WHAT_YOU_KNOW}
                                   </button>
+                                  {tr.fact && suggestionFor(suggested, tr.fact) && (
+                                    <span className="fitsug">
+                                      {SUGGESTED_FROM}: <b>{suggestionFor(suggested, tr.fact)!.replace(/; /g, ", ")}</b>{" "}
+                                      <button type="button" className="m-link" disabled={confirming === tr.fact} onClick={() => void confirm(tr.fact!, suggestionFor(suggested, tr.fact!)!)}>
+                                        {confirming === tr.fact ? "Saving" : "Confirm"}
+                                      </button>
+                                    </span>
+                                  )}
                                 </>
                               ) : (
                                 tr.value

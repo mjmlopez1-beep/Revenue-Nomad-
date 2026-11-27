@@ -79,6 +79,8 @@ export interface Ui {
   holdsSeat: (engagementId: string) => boolean;
   /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
   addable: (id: string) => FactRef[];
+  /** Which of these company facts are still empty at a company the member can see (the quick picks about a client ask only those). */
+  emptyAt?: (companyId: string, fields: readonly string[]) => string[];
   /** The member's own seats: how many, and the facts still missing on them. */
   seats: { n: number; missing: number };
   /** Open the Your seats page, at one seat when given. */

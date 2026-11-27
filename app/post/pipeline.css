@@ -455,3 +455,10 @@
   gap: 8px;
   justify-content: flex-end;
 }
+
+/* a few quick picks about a client just won (ClientPicks): optional, each a normal company fact */
+.cp-picks { display: flex; flex-direction: column; gap: 12px; }
+.cp-note { margin: 0; font-size: 13px; color: var(--muted); }
+.cp-q { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.cp-ql { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cp-done { font-size: 13.5px; color: var(--pine); font-weight: 600; }

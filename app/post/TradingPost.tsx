@@ -1145,6 +1145,10 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
     for (const e of i.engs) if (e.yours) for (const f of ["function", "type", "start"]) if (e.cells[f]?.s === "empty") out.push({ entity: "engagement", id: e.id, field: f });
     return out.slice(0, 3);
   });
+  const emptyAt = useStable((companyId: string, fields: readonly string[]): string[] => {
+    const i = ownerOf.get(companyId);
+    return !i || i.c.hidden ? [] : fields.filter((f) => i.c.cells[f]?.s === "empty");
+  });
   const openCompany = useStable((id: string, focus?: string) => {
     const row = sorted.find((r) => r.i.c.id === id && (!focus || r.key === focus)) ?? sorted.find((r) => r.i.c.id === id);
     // Opened from a page (the review queue, Your seats): closing the record goes back to it.
@@ -1806,6 +1810,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
       openCompany,
       openAdd,
       addable,
+      emptyAt,
       isHidden,
       holdsSeat,
       seats: seatStats,

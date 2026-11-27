@@ -14,6 +14,7 @@ import { monthWords, monthlyValue, wonSeatFields } from "@/lib/pipeline";
 import { useToast } from "../ui/shared";
 import { Sheet, useUi } from "./ui";
 import { pipelineAct } from "./pipelineStore";
+import { ClientPicks } from "./ClientPicks";
 import "./pipeline.css";
 
 export function WonSheet({ rec, onClose }: { rec: PipelineRec; onClose: () => void }) {
@@ -111,6 +112,7 @@ export function WonSheet({ rec, onClose }: { rec: PipelineRec; onClose: () => vo
             {err}
           </p>
         )}
+        <ClientPicks companyId={rec.company} name={rec.name ?? null} />
         {rec.seat && <p className="pl-won-seat">Your seat here is confirmed by this win.</p>}
       </div>
     </Sheet>

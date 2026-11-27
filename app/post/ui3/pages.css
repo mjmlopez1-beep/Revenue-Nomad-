@@ -740,3 +740,5 @@
 @media (max-width: 640px) { .u3p .fitsig { grid-template-columns: minmax(0, 1fr); } }
 .u3p .fitlist-h { display: block; margin-top: 12px; }
 .u3p .fitlist li.none { color: var(--m-muted); }
+.u3p .fitsug { display: block; margin-top: 4px; font-size: 13px; color: var(--m-muted); }
+.u3p .fitsug b { color: var(--m-ink-2); font-weight: 600; }
