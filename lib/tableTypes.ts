@@ -416,8 +416,16 @@ export interface Me {
   radarEmail?: "daily" | "twice" | "weekly" | "off";
   /** Crystal Ball posts to Slack (Notifications), when Slack is connected. */
   radarSlack?: boolean;
-  /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
+  /**
+   * Who they hunt: what they chose (onboarding, Settings) together with what their own clients have
+   * in common (lib/idealClient.ts). Null until either says something. Settings and onboarding edit
+   * `ideal.stated`, never this.
+   */
   icp?: Icp | null;
+  /** The ideal client's two parts and the learned values they dropped. */
+  ideal?: IdealView;
+  /** Their own clients, by company: shown as "Your client since Feb 2025" where a fit would be. */
+  clients?: ClientMark[];
   /**
    * Their saved views and saved searches, newest last. One list with the Claude connector's
    * alerts (lib/mcp/alerts.ts): a view saved in the app shows there, and one saved there shows here.
@@ -614,6 +622,49 @@ export interface Icp {
   employees: string[];
   revenue: string[];
   countries: string[];
+  /**
+   * The criteria added with the richer fit (lib/idealClient.ts), each optional so an ideal client
+   * saved before them loads as it was: who the client sells to (RN_INDUSTRIES), how big its own
+   * customers are (CUSTOMER_SIZES), its business model (BUSINESS_MODELS), sales motion (RN_MOTIONS,
+   * or "Sales-led" for Inside or Enterprise sales), deal size and sales cycle.
+   */
+  sellsTo?: string[];
+  customerSize?: string[];
+  businessModel?: string[];
+  motion?: string[];
+  dealSize?: string[];
+  salesCycle?: string[];
+}
+
+/** The criteria of an ideal client, in the order the pages list them. */
+export type IcpKey = "industries" | "sellsTo" | "customerSize" | "businessModel" | "motion" | "revenue" | "employees" | "dealSize" | "salesCycle" | "countries";
+/** One value the ideal client learned from the member's own clients, and which clients it came from (their names, to the member alone). */
+export interface LearnedValue {
+  v: string;
+  from: string[];
+}
+export type IcpLearned = Partial<Record<IcpKey, LearnedValue[]>>;
+/** Learned values the member dropped: remembered, so the next recompute doesn't bring them back. */
+export type IcpDropped = Partial<Record<IcpKey, string[]>>;
+/**
+ * The member's ideal client in its two parts (Me.ideal): what they chose (`stated`, never changed
+ * by learning), what their clients have in common (`learned`, without the dropped values), and
+ * the values they dropped. Me.icp is the two together.
+ */
+export interface IdealView {
+  stated: Icp | null;
+  learned: IcpLearned;
+  dropped: IcpDropped;
+}
+/**
+ * A company that is the member's own client (a seat held now or before, a won deal, or an Evidence
+ * Bank case there): never fit-scored. `words`: "Your client since Feb 2025", "Past client, 2022".
+ */
+export interface ClientMark {
+  /** The company's public id. */
+  id: string;
+  current: boolean;
+  words: string;
 }
 
 /** What a saved view matches in the weekly email: open roles by their free facts only, or new hires for a view that follows them. */
@@ -1154,6 +1205,7 @@ export type Action =
    * sure" (left out: unchanged). `firstView`: the id of the saved view onboarding made (null takes
    * it off). It marks the member onboarded and drops their onboarding draft.
    */
+  | { type: "idealDrop"; key: IcpKey; value: string; on?: boolean }
   | { type: "profile"; function?: string; goal?: string; title?: string; icp?: Icp | null; before?: string[]; firstView?: string | null; clientCount?: string | null; looking?: boolean | null }
   /** Onboarding's answers so far, after each step (null drops them). Nothing changes once the member is onboarded. */
   | { type: "onboardDraft"; draft: OnboardDraft | null }

@@ -23,7 +23,8 @@ import { PRIVATE_ASK, SEAT_ASK, SEAT_CO_ASK, cellKey, shown, type CoInfo, type F
 import { atTime, plural, store } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
-import { RateWho, shortLabel, splitPicks, useUi, type RateChoice } from "./ui";
+import { PickChips, RateWho, shortLabel, useUi, type RateChoice } from "./ui";
+import { picksJoin, picksOf } from "@/lib/tableFields";
 import { FindSeats, seatsFound } from "../onboard/FindSeats";
 import { SEAT_YIELD } from "./earnBack";
 import "./seats.css";
@@ -87,7 +88,9 @@ const SEAT_Q: Record<string, { q: string; hint?: string }> = {
 };
 const companyQ = (name: string): Record<string, { q: string; hint?: string }> => ({
   ownership: { q: `Who owns ${name}?` },
-  businessModel: { q: `Who does ${name} sell to?` },
+  sellsTo: { q: `Which industries are ${name}'s customers in?`, hint: "Pick up to 3. A software company that sells to hospitals sells to health care." },
+  customerSize: { q: `How big are ${name}'s customers?` },
+  businessModel: { q: `Does ${name} sell to businesses or to consumers?`, hint: "D2C is a brand selling its own product straight to consumers." },
   motion: { q: `How does ${name} sell?` },
   dealSize: { q: `How big is a typical deal at ${name}?` },
   salesCycle: { q: `How long does a deal take to close at ${name}?` },
@@ -126,25 +129,11 @@ const Err = ({ text }: { text: string | null }) =>
 /** Several picks (Why now): chips that toggle, and Save. */
 function MultiAsk({ t, f, initial, onSaved }: { t: FactRef; f: FieldDef; initial?: string; onSaved: OnSaved }) {
   const { busy, err, save } = useFill(t, onSaved);
-  const [picked, setPicked] = useState<string[]>(() => splitPicks(initial));
-  const list = f.options ?? [];
-  const value = list.filter((o) => picked.includes(o)).join(", ");
+  const [picked, setPicked] = useState<string[]>(() => picksOf(f, initial));
+  const value = picksJoin(f, picked);
   return (
     <>
-      <div className="ys-chips" role="group" aria-label={f.label}>
-        {list.map((o) => (
-          <button
-            key={o}
-            type="button"
-            aria-pressed={picked.includes(o)}
-            className={`chip tp-chipbtn ys-chip${picked.includes(o) ? " chip-on" : ""}`}
-            disabled={!!busy}
-            onClick={() => setPicked((p) => (p.includes(o) ? p.filter((x) => x !== o) : [...p, o]))}
-          >
-            {o}
-          </button>
-        ))}
-      </div>
+      <PickChips f={f} picked={picked} onChange={setPicked} cls="chip tp-chipbtn ys-chip" wrap="ys-chips" disabled={!!busy} />
       <div className="ys-inputrow">
         <button type="button" className="btn btn-volt ys-save" disabled={!picked.length || !!busy || value === (initial ?? "")} onClick={() => save(value)}>
           {busy ? "Saving" : "Save"}

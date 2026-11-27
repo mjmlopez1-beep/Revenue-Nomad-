@@ -838,8 +838,8 @@ function listsOf(cx: Cx): Lists {
     /* no Crystal Ball yet */
   }
   const views = (cx.s.connector?.alerts?.[cx.m.id] ?? []) as SavedSearch[];
-  const prof = cx.s.profiles[cx.m.id] ?? {};
-  const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
+  const ideal = T.idealIcpOf(cx.seed, cx.s, cx.m.id);
+  const icp = ideal && !icpIsEmpty(ideal) ? ideal : null;
   return { rows, views, icp };
 }
 

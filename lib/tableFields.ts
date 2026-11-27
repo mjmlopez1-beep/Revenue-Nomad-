@@ -220,7 +220,16 @@ export const standardList = (field: "employees" | "revenue", list: readonly unkn
 export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150K+"];
 export const RN_SALES_CYCLES = ["Under 5 days", "5–30 days", "30–90 days", "3–6 months", "6–12 months", "12+ months"];
 export const RN_MOTIONS = ["PLG", "PLG to sales", "Inside sales", "Enterprise sales", "Channel"];
-export const BUSINESS_MODELS = ["B2B", "B2C", "B2B2C"];
+/**
+ * Who the company sells to. D2C is a brand selling its own product straight to consumers (its own
+ * site, subscriptions, ecommerce): a kind of B2C recorded on its own, because its growth playbook
+ * differs. An ideal client of B2C matches a D2C company (lib/idealClient.ts).
+ */
+export const BUSINESS_MODELS = ["B2B", "B2C", "D2C", "B2B2C", "Marketplace"];
+/** How big the company's own customers are. */
+export const CUSTOMER_SIZES = ["SMB", "Mid-market", "Enterprise"];
+/** The most industries a company's "Sells to" holds. */
+export const SELLS_TO_MAX = 3;
 /**
  * Who owns the company. A free company fact (Crystal Ball reads it: lib/radar/predict.ts). Nothing
  * on file reads as Unknown, which is not a value a member adds.
@@ -365,8 +374,12 @@ export interface FieldDef {
   /** Set by the system (e.g. where a record came from); shown, never filled. */
   system?: boolean;
   options?: string[];
-  /** A choice where several can be picked: stored as the picks in the list's order, joined by ", ". */
+  /** A choice where several can be picked: stored as the picks in the list's order, joined by ", " (or `sep`). */
   multi?: boolean;
+  /** What joins several picks when an option's own name holds a comma (Sells to: "; "). */
+  sep?: string;
+  /** The most picks a multi choice takes. */
+  max?: number;
   placeholder?: string;
   /** One line shown in tooltips and the add form. */
   hint?: string;
@@ -376,6 +389,34 @@ export interface FieldDef {
    */
   say?: string;
 }
+
+/** A multi choice's stored value as its picks. A field with its own `sep` splits on that alone (its options may hold commas). */
+export function picksOf(f: Pick<FieldDef, "sep" | "options">, v: string | null | undefined): string[] {
+  const raw = (v ?? "").trim();
+  if (!raw) return [];
+  if (f.sep) {
+    const list = f.options ?? [];
+    const out: string[] = [];
+    for (const part of list.includes(raw) ? [raw] : raw.split(/\s*;\s*/).map((x) => x.trim()).filter(Boolean)) {
+      if (list.includes(part) || !part.includes(",")) {
+        out.push(part);
+        continue;
+      }
+      // Typed with commas between picks ("SaaS, Fintech"): the longest run of words that is an option, each time.
+      const words = part.split(/\s*,\s*/).filter(Boolean);
+      for (let i = 0; i < words.length; ) {
+        let n = words.length - i;
+        while (n > 1 && !list.includes(words.slice(i, i + n).join(", "))) n--;
+        out.push(words.slice(i, i + n).join(", "));
+        i += n;
+      }
+    }
+    return out;
+  }
+  return raw.split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+}
+/** Picks as the value stored: once each, in the list's order. */
+export const picksJoin = (f: Pick<FieldDef, "sep" | "options">, picks: readonly string[]) => (f.options ?? [...picks]).filter((o) => picks.includes(o)).join(f.sep ?? ", ");
 
 export interface GroupDef {
   entity: Entity;
@@ -396,7 +437,9 @@ export const GROUPS: GroupDef[] = [
       { key: "hq", label: "HQ", kind: "text", gated: false, placeholder: "Chicago, IL", say: "the HQ" },
       { key: "linkedin", label: "LinkedIn", kind: "url", gated: false, placeholder: "linkedin.com/company/…", say: "the LinkedIn page" },
       { key: "about", label: "About", kind: "text", gated: false, system: true, say: "the About text" },
-      { key: "businessModel", label: "Business model", kind: "choice", gated: false, options: BUSINESS_MODELS, say: "the business model" },
+      { key: "sellsTo", label: "Sells to", kind: "choice", multi: true, sep: "; ", max: SELLS_TO_MAX, gated: false, options: RN_INDUSTRIES, hint: `The industries of its customers, up to ${SELLS_TO_MAX}. A software company that sells to hospitals is SaaS, and sells to health care.`, say: "who it sells to" },
+      { key: "customerSize", label: "Customer size", kind: "choice", gated: false, options: CUSTOMER_SIZES, hint: "How big its own customers are.", say: "the customer size" },
+      { key: "businessModel", label: "Business model", kind: "choice", gated: false, options: BUSINESS_MODELS, hint: "D2C is a brand selling its own product straight to consumers.", say: "the business model" },
       { key: "motion", label: "Sales motion", kind: "choice", gated: false, options: RN_MOTIONS, hint: "How the company sells most of its deals.", say: "the sales motion" },
       { key: "dealSize", label: "Average deal size", short: "Deal size", kind: "choice", gated: false, options: RN_DEAL_SIZES, say: "the average deal size" },
       { key: "salesCycle", label: "Average sales cycle", short: "Sales cycle", kind: "choice", gated: false, options: RN_SALES_CYCLES, say: "the average sales cycle" },
@@ -758,10 +801,12 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "choice": {
       // Several picks: each one on the list, kept in the list's order.
       if (f.multi) {
-        const picks = v.split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean);
         const list = f.options ?? [];
+        // One pick whose own name holds a comma ("Print, Signage & Promotional Products") is one pick.
+        const picks = picksOf(f, v);
         if (!picks.length || picks.some((x) => !list.includes(x))) return { error: "Pick from the list." };
-        return { value: list.filter((o) => picks.includes(o)).join(", ") };
+        if (f.max && new Set(picks).size > f.max) return { error: `Pick up to ${f.max}.` };
+        return { value: picksJoin(f, picks) };
       }
       // Industry, employees and revenue take the closest standard value ("< $1M", "51-200", "Software Development").
       const now = STANDARD_FIELDS.has(f.key) ? toStandard(f.key, v) ?? v : v;

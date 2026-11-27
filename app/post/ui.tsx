@@ -15,7 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Action, Cell, Me } from "@/lib/tableTypes";
-import { COMPANY_PRICE, COMPANY_PRICE_SAY, INVITE_EARN, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
+import { COMPANY_PRICE, COMPANY_PRICE_SAY, INVITE_EARN, cleanValue, fieldDef, picksJoin, picksOf, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, monoTint, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { benchRead } from "@/lib/rates";
@@ -211,7 +211,7 @@ export const FROM_SAY: Record<string, string> = { records: "From Revenue Nomad r
  * Company pick lists that earn a credit for only 5 answers a day (Me.sellEarnLeft): industry,
  * size, revenue and the four under How they sell.
  */
-const PICK_LIMITED = ["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership"];
+const PICK_LIMITED = ["sellsTo", "customerSize", "industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "ownership"];
 const pickLimited = (t: FactRef) => t.entity === "company" && PICK_LIMITED.includes(t.field);
 
 /** Whether adding this fact earns a credit right now, as far as the screen can tell. */
@@ -1454,6 +1454,38 @@ export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f
 /** A multi-pick value ("Fundraise, PE deal") as its picks. */
 export const splitPicks = (v: string | null | undefined) => (v ?? "").split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
 
+/**
+ * Several picks as chips that toggle. A long list (Sells to: every industry) gets a search box and
+ * shows the picked ones and the closest matches; a field with a most (`max`) stops taking picks there.
+ */
+export function PickChips({ f, picked, onChange, cls, wrap, disabled, autoFocus, aria }: { f: FieldDef; picked: string[]; onChange: (picks: string[]) => void; cls: string; wrap: string; disabled?: boolean; autoFocus?: boolean; aria?: FieldAria }) {
+  const [q, setQ] = useState("");
+  const list = f.options ?? [];
+  const long = list.length > 12;
+  const full = !!f.max && picked.length >= f.max;
+  const words = q.trim().toLowerCase();
+  const shownList = long ? [...picked.filter((o) => list.includes(o)), ...list.filter((o) => !picked.includes(o) && (!words || o.toLowerCase().includes(words))).slice(0, words ? 14 : 10)] : list;
+  const flip = (o: string) => onChange(picked.includes(o) ? picked.filter((x) => x !== o) : [...picked, o]);
+  return (
+    <>
+      {long && (
+        <label className="tp-inline-search">
+          <IconSearch size={14} />
+          <input className="tp-bare" autoFocus={autoFocus} placeholder={`Search ${f.label.toLowerCase()}`} value={q} aria-label={`Search ${f.label.toLowerCase()}`} onChange={(e) => setQ(e.target.value)} />
+        </label>
+      )}
+      <div className={wrap} role="group" aria-label={aria?.["aria-labelledby"] ? undefined : f.label} aria-labelledby={aria?.["aria-labelledby"]}>
+        {shownList.map((o, idx) => (
+          <button key={o} type="button" aria-pressed={picked.includes(o)} autoFocus={!long && autoFocus && idx === 0} className={`${cls}${picked.includes(o) ? " chip-on" : ""}`} disabled={disabled || (full && !picked.includes(o))} onClick={() => flip(o)}>
+            {o}
+          </button>
+        ))}
+      </div>
+      {f.max ? <p className="tp-pick-max">{full ? `That's ${f.max}, the most it takes.` : `Pick up to ${f.max}.`}</p> : null}
+    </>
+  );
+}
+
 /** ARIA for the field inside an editor: its name (the editor's title), and the error when there is one. */
 export type FieldAria = { "aria-labelledby"?: string; "aria-invalid"?: boolean; "aria-describedby"?: string };
 
@@ -1487,24 +1519,7 @@ export function FieldInput({
   };
   if (f.kind === "choice" && f.options && f.multi) {
     // Several picks: each chip toggles, and Save keeps them (stored in the list's order).
-    const picked = splitPicks(value);
-    const flip = (o: string) => onChange(f.options!.filter((x) => (x === o ? !picked.includes(o) : picked.includes(x))).join(", "));
-    return (
-      <div className="tp-chips" role="group" aria-label={aria?.["aria-labelledby"] ? undefined : f.label} aria-labelledby={aria?.["aria-labelledby"]}>
-        {f.options.map((o, idx) => (
-          <button
-            key={o}
-            type="button"
-            aria-pressed={picked.includes(o)}
-            autoFocus={autoFocus && idx === 0}
-            className={`chip tp-chipbtn${big ? " tp-chip-big" : ""}${picked.includes(o) ? " chip-on" : ""}`}
-            onClick={() => flip(o)}
-          >
-            {o}
-          </button>
-        ))}
-      </div>
-    );
+    return <PickChips f={f} picked={picksOf(f, value)} onChange={(p) => onChange(picksJoin(f, p))} cls={`chip tp-chipbtn${big ? " tp-chip-big" : ""}`} wrap="tp-chips" autoFocus={autoFocus} aria={aria} />;
   }
   if (f.kind === "choice" && f.options) {
     if (f.options.length > 10) {

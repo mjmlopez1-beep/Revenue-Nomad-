@@ -6,6 +6,7 @@
  * (State.connector.alerts, lib/mcp/alerts.ts), so the app and the connector list the same views
  * and the weekly email (lib/table.ts digestList) matches both the same way.
  */
+import { cleanNewCriteria } from "./idealClient";
 import { RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, standardIndustries, stripInvisible } from "./tableFields";
 import type { Icp, SavedViewCriteria, SavedViewRec } from "./tableTypes";
 import { ALERT_EVERY, ALERT_MAX, alertOf, cleanCriteria, cleanListFields, cleanTriggers, countryKey, describeAlert, pickFrom, type AlertEvery, type ListAlert, type ListKind, type SavedSearch } from "./mcp/alerts";
@@ -33,6 +34,8 @@ export function cleanIcp(raw: unknown): Icp | null {
     employees: pick(r.employees, RN_EMPLOYEES),
     revenue: pick(r.revenue, RN_REVENUE),
     countries: textList(r.countries, 12, 60),
+    // The criteria added with the richer fit: each cleaned to its pick list, left out when empty (an older ideal client has none).
+    ...cleanNewCriteria(r),
   };
 }
 

@@ -69,6 +69,8 @@ export interface CompanyFacts {
   region: string | null;
   /** B2B, B2C or B2B2C, when on file (a rule reads it). */
   model?: string | null;
+  /** The facts the ideal client's newer criteria read (sells to, customer size, model, motion, deal size, sales cycle), when on file. */
+  fit?: import("../idealClient").FitFacts;
 }
 
 export interface RawSignal {
@@ -192,6 +194,7 @@ export function companyFacts(g: G, s: State, companyId: string): CompanyFacts | 
     country: geo.country,
     region: geo.region,
     model: T.live(c, s, "businessModel"),
+    fit: T.fitFactsOf(c, s),
   };
 }
 

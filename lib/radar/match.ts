@@ -44,7 +44,8 @@ import { tableInternals as T, type Seed, type State } from "../table";
 import { countryKey } from "../mcp/alerts";
 import { beforeOrder } from "@/app/onboard/firstView";
 import type { CoInfo } from "@/app/post/model";
-import type { CompanyRec, EngagementRec, Icp } from "../tableTypes";
+import type { CompanyRec, EngagementRec, Icp, IcpKey } from "../tableTypes";
+import { ICP_KEYS, ICP_WORDS, fitParts, icpIsBlank, type FitFacts } from "../idealClient";
 import type { CompanyFacts, RawSignal } from "./signals";
 import { isCalendar, isLeaderRaw } from "./signals";
 import { RADAR_COMPANY_QUIET_DAYS, RADAR_DAY_MAX, RADAR_DAY_MIN, RADAR_STILL, type RadarBand } from "./types";
@@ -92,18 +93,27 @@ export const FIT_BASE = 0.7;
 /** A pair the member named themselves: the chance it misses is cut by this share. */
 export const BEFORE_BOOST = 0.15;
 
-export const icpIsEmpty = (icp: Icp | null | undefined) => !icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+export const icpIsEmpty = (icp: Icp | null | undefined) => icpIsBlank(icp);
 
-/** Each part the profile asks about: true (on file, matches), false (on file, doesn't), null (not on file). */
+/** The company's facts as the ideal client's criteria read them (lib/idealClient.ts): the fuller set when the signal carries it. */
+const factsOf = (co: CompanyFacts): FitFacts => ({
+  ...(co.fit ?? {}),
+  industries: co.industry ? [co.industry] : [],
+  employees: co.employees ? [co.employees] : [],
+  revenue: co.revenue ? [co.revenue] : [],
+  countries: co.country ? [co.country] : [],
+  ...(co.model && !co.fit?.businessModel?.length ? { businessModel: [co.model] } : {}),
+});
+const FIRST_FOUR: readonly IcpKey[] = ["industries", "employees", "revenue", "countries"];
+/**
+ * Each part the profile asks about: true (on file, matches), false (on file, doesn't), null (not on
+ * file). The four free facts always count; a newer criterion (sells to, customer size, model,
+ * motion, deal size, sales cycle) counts only once the company's record answers it, so a fact
+ * nobody added yet never lowers a company.
+ */
 function icpParts(icp: Icp, co: CompanyFacts): (boolean | null)[] {
-  const key = (v: string) => v.trim().toLowerCase();
-  const parts = [
-    icp.industries.length ? (co.industry ? icp.industries.map(key).includes(key(co.industry)) : null) : undefined,
-    icp.employees.length ? (co.employees ? icp.employees.includes(co.employees) : null) : undefined,
-    icp.revenue.length ? (co.revenue ? icp.revenue.includes(co.revenue) : null) : undefined,
-    icp.countries.length ? (co.country ? icp.countries.some((x) => countryKey(x) === countryKey(co.country!)) : null) : undefined,
-  ];
-  return parts.filter((x): x is boolean | null => x !== undefined);
+  const p = fitParts(icp, factsOf(co));
+  return ICP_KEYS.filter((k) => p[k] !== undefined && (FIRST_FOUR.includes(k) || p[k] !== null)).map((k) => p[k] as boolean | null);
 }
 
 /** The company against the profile: icpTest's rule on the company's free facts. */
@@ -116,12 +126,9 @@ export function inIcp(icp: Icp | null | undefined, co: CompanyFacts): boolean {
 
 /** The parts of the profile the company's facts say no to, in words: "Size: 501–1,000 people", "Industry: Retail". Free facts only. */
 export function icpMisses(icp: Icp, co: CompanyFacts): string[] {
-  const key = (v: string) => v.trim().toLowerCase();
-  const out: string[] = [];
-  if (icp.industries.length && co.industry && !icp.industries.map(key).includes(key(co.industry))) out.push(`Industry: ${co.industry}`);
-  if (icp.employees.length && co.employees && !icp.employees.includes(co.employees)) out.push(`Size: ${co.employees} people`);
-  if (icp.revenue.length && co.revenue && !icp.revenue.includes(co.revenue)) out.push(`Revenue: ${co.revenue}`);
-  if (icp.countries.length && co.country && !icp.countries.some((x) => countryKey(x) === countryKey(co.country!))) out.push(`Country: ${co.country}`);
+  const facts = factsOf(co);
+  const p = fitParts(icp, facts);
+  const out = ICP_KEYS.filter((k) => p[k] === false).map((k) => `${ICP_WORDS[k].label}: ${(facts[k] ?? []).join(", ")}${k === "employees" ? " people" : ""}`);
   return out.length ? out : ["Not enough on file to match your ideal client"];
 }
 
@@ -561,7 +568,8 @@ export function profileOf(seed: Seed, s: State, memberId: string, fn: string | n
   return {
     memberId,
     fn: fn && fn !== "Other" ? fn : null,
-    icp: prof.icp ?? null,
+    // What they chose and what their own clients have in common, together (lib/idealClient.ts).
+    icp: T.idealIcpOf(seed, s, memberId),
     before: own.length ? own : fn && fn !== "Other" ? beforeSuggested(seed, s, fn) : [],
     beforeFromMember: own.length > 0,
     ...((t) => (Object.keys(t).length ? { tune: t } : {}))(cleanTune((prof as { radarTune?: unknown }).radarTune)),

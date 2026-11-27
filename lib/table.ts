@@ -76,7 +76,7 @@ import { checkPostings, fetchPosting, type PostingFetch } from "./scan/posting";
 import { atsSources, discover, fetchFeed, type AtsCache, type AtsCompany, type FeedFetch, type SiteFetch } from "./scan/sources/ats";
 import {
   ALL_FIELDS, EARN_CAP, INTRO_FIELD, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
+  stripInvisible, tidy, picksOf, HIDDEN_COMPANY, FIND_MIN, FIND_HINT, FIND_NONE, RN_REVENUE, currentValue, standardIndustries, standardList, siteKey, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE,
   SEAT_SCAN_ROLE_FREE, COMPANY_PRICE, COMPANY_PRICE_SAY, TRIAL_OPENS_DAILY, TRIAL_OPENS_USED, PAID_DETAILS, PEERS_FREE, NAME_HIDDEN, OPENS_RULE, type Entity,
 } from "./tableFields";
 import { normalizeHq, type Geo } from "./geo";
@@ -99,7 +99,8 @@ import { NAME_CHANGES_MAX, NAME_CHANGES_USED, displayNameProblem, nameAsSeenBy, 
 import { neverAName } from "./nameWords";
 import { claimToken, seatForToken } from "./claimToken";
 import { cleanNote, connectText, notePitch } from "./partners";
-import type { Icp } from "./tableTypes";
+import type { ClientMark, Icp, IcpDropped, IcpKey, IcpLearned } from "./tableTypes";
+import { ICP_KEYS, ICP_NEW_KEYS, SALES_LED, clientWords, dropValue, idealIcp, learnIcp, type ClientFacts, type FitFacts } from "./idealClient";
 import { integrationStats, type IntegrationsState } from "./notify/types";
 import { billingLive, gated, hasPro, planOf, trialDaysLeft, type PlanRecord } from "./plan";
 import { usageStats } from "./usageGuard";
@@ -351,8 +352,10 @@ interface Profile {
   proInterest?: boolean;
   /** A seed member's discount code from the address (?code=), for checkout. Joined members keep theirs on their member record. */
   promo?: string;
-  /** Who they hunt: their ideal client (lib/hunt.ts). */
+  /** Who they hunt: their ideal client as they chose it (lib/hunt.ts). What their clients add is read from the state (idealFor), never written here. */
   icp?: Icp | null;
+  /** Learned values of the ideal client the member dropped (lib/idealClient.ts): they stay dropped. */
+  icpDropped?: IcpDropped;
   /** Turned off "Show me in Referral partners" (Your profile): other members don't see them listed there. Fractionals reads it as hidden too. */
   partnersOff?: boolean;
   /** "Hide my name on my seats": who held their seats reads NAME_HIDDEN to everyone else, the connector included (State.namesHidden lists them). */
@@ -2460,7 +2463,7 @@ function connectedNote(c: Connected | null): string {
  * click each and easy to guess, so they share their own limits. On a company the member added,
  * or where they hold a seat, they are not limited (see pickExempt).
  */
-const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle", "industry", "employees", "revenue", "ownership"]);
+const SELL_FIELDS = new Set(["sellsTo", "customerSize", "businessModel", "motion", "dealSize", "salesCycle", "industry", "employees", "revenue", "ownership"]);
 /** A ledger ref for a company pick-list answer (engagements have a revenue and employees "at the time" too; those are not counted). */
 const isPickRef = (ref: string) => ref.startsWith("c_") && SELL_FIELDS.has(refField(ref));
 /** Pick-list answers that earn a credit, per member per rolling 24 hours. More still save, for no credit. */
@@ -4907,7 +4910,8 @@ async function fullView(
       radarSlack: radarPrefs(prof).slack,
       proInterest: !!prof.proInterest,
       // Who they hunt, and their saved views (one list with the connector's saved searches).
-      icp: prof.icp ?? null,
+      // Who they hunt: what they chose and what their own clients have in common, together; the two parts apart; and their clients.
+      ...((x) => ({ icp: x.icp, ideal: { stated: x.stated, learned: x.learned, dropped: x.dropped }, clients: clientMarks(x.clients) }))(idealFor(seed, s, me.id)),
       savedViews: savedViewsOut(s.connector?.alerts?.[me.id]),
       // Who usually gets hired before them (left out when never asked), their first view while it is
       // saved, and onboarding's answers so far while they are still in it. Only ever their own.
@@ -5257,7 +5261,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
       idx.all.filter((m) => {
         const p = s.profiles[m.id];
         const fn = p?.function ?? functionOf(p?.title || m.title);
-        const icp = p?.icp;
+        const icp = idealIcpOf(seed, s, m.id);
         return signedIn(s, idx, m.id) && ((x) => x.email !== "off" || (x.slack && [s.integrations?.members[m.id]?.slack, s.integrations?.members[m.id]?.webhook].some((d) => !!d && !d.broken)))(radarPrefs(p)) && !!fn && fn !== "Other" && !!icp && !!(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
       }).length,
       nowMs,
@@ -7127,6 +7131,18 @@ export async function perform(
           s.follows[me.id] = [...list];
           return { message: a.on ? `Following ${label}.` : `Stopped following ${label}.` };
         }
+        case "idealDrop": {
+          // Drop a value the ideal client learned (or bring it back): what the member chose is never touched here.
+          const key = ICP_KEYS.find((k) => k === a.key);
+          const value = typeof a.value === "string" ? stripInvisible(a.value).trim().slice(0, 80) : "";
+          if (!key || !value) throw new ActionError("Pick a value to remove.");
+          const p = { ...(s.profiles[me.id] ?? {}) };
+          const next = dropValue(p.icpDropped, key as IcpKey, value, a.on !== false);
+          if (Object.keys(next).length) p.icpDropped = next;
+          else delete p.icpDropped;
+          s.profiles[me.id] = p;
+          return { message: a.on !== false ? `Removed ${value} from your ideal client.` : `${value} is back in your ideal client.` };
+        }
         case "profile": {
           const p = { ...(s.profiles[me.id] ?? {}) };
           if (a.function !== undefined) {
@@ -7137,7 +7153,12 @@ export async function perform(
           if (a.title !== undefined) p.title = stripInvisible(a.title).trim().slice(0, 80) || undefined;
           if (a.icp !== undefined) {
             try {
-              p.icp = cleanIcp(a.icp);
+              const had = p.icp;
+              const next = cleanIcp(a.icp);
+              // A form that only knows the first four lists (an older page) leaves the newer criteria as they were.
+              if (next && had && a.icp && typeof a.icp === "object")
+                for (const k of ICP_NEW_KEYS) if (!(k in (a.icp as object)) && had[k]?.length) next[k] = [...had[k]!];
+              p.icp = next;
             } catch (e) {
               throw e instanceof HuntError ? new ActionError(e.message) : e;
             }
@@ -8630,6 +8651,110 @@ function giftCompany(g: Graph, s: State, tracks: Tracks, memberId: string, compa
   }
 }
 
+/* ---------- the ideal client that learns (lib/idealClient.ts) ---------- */
+
+/** A company's facts as the ideal client's criteria read them: what is on file today. */
+function fitFactsOf(c: Node | undefined, s: State): FitFacts {
+  if (!c) return {};
+  const one = (f: string) => ((v) => (v ? [v] : []))(live(c, s, f));
+  const country = geoOf(c, s).country;
+  return {
+    industries: one("industry"), sellsTo: picksOf(fieldDef("company", "sellsTo") ?? { sep: "; " }, live(c, s, "sellsTo")), customerSize: one("customerSize"), businessModel: one("businessModel"),
+    motion: one("motion"), revenue: one("revenue"), employees: one("employees"), dealSize: one("dealSize"), salesCycle: one("salesCycle"), countries: country ? [country] : [],
+  };
+}
+const memberSeatIdx = new WeakMap<PersonIdx, Map<string, string[]>>();
+/** The seats a member holds or held (personIndex: fractional seats only, never an open role). */
+function memberSeatIds(g: Graph, s: State, memberId: string): string[] {
+  if (!graphSeeds.has(g)) return [];
+  const p = personIndex(g, s);
+  let by = memberSeatIdx.get(p);
+  if (!by) {
+    by = new Map();
+    for (const gr of p.groups) if (gr.member) by.set(gr.member, [...(by.get(gr.member) ?? []), ...gr.seats]);
+    memberSeatIdx.set(p, by);
+  }
+  return by.get(memberId) ?? [];
+}
+/** An Evidence Bank case's motion (CASE_MOTIONS) as the ideal client spells it. Founder-led is not a motion on the company's list. */
+const CASE_MOTION: Record<string, string> = { "Product-led": "PLG", "Sales-led": SALES_LED, Channel: "Channel" };
+/**
+ * A member's own clients: every company they hold or held a seat at, a deal they won there
+ * (Pipeline), or an Evidence Bank case of theirs that is ready. Each with its facts as of when the
+ * member worked there: the seat's "revenue then" and "employees then", else what is on file today.
+ */
+function memberClients(seed: Seed, s: State, memberId: string): ClientFacts[] {
+  const g = viewGraph(seed, s);
+  const by = new Map<string, ClientFacts>();
+  const loose: ClientFacts[] = [];
+  const early = (a: string | null, b: string | null) => (!a ? b : !b ? a : a < b ? a : b);
+  const late = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
+  const month = (v: string | null | undefined) => (v && /^\d{4}(-\d{2})?/.test(v) ? v.slice(0, 7) : null);
+  for (const id of memberSeatIds(g, s, memberId)) {
+    const e = g.engagements.get(id);
+    const c = e ? g.companies.get(e.companyId) : undefined;
+    if (!e || !c) continue;
+    const status = live(e, s, "status");
+    const end = live(e, s, "end");
+    const current = status !== "Ended" && (status === "Active" || !end || end === "Ongoing");
+    const facts = fitFactsOf(c, s);
+    // As of when they worked there: the seat's own revenue and headcount win over today's.
+    const revThen = live(e, s, "revenue");
+    const empThen = live(e, s, "employees");
+    if (revThen) facts.revenue = [revThen];
+    if (empThen) facts.employees = [empThen];
+    const had = by.get(c.id);
+    if (!had) by.set(c.id, { companyId: c.id, name: c.name, current, start: month(live(e, s, "start")), end: current ? null : month(end), facts });
+    else {
+      had.current = had.current || current;
+      had.start = early(had.start, month(live(e, s, "start")));
+      had.end = had.current ? null : late(had.end, month(end));
+      for (const k of ["revenue", "employees"] as const) had.facts[k] = [...new Set([...(had.facts[k] ?? []), ...(facts[k] ?? [])])];
+    }
+  }
+  for (const e of s.pipeline?.[memberId]?.entries ?? []) {
+    if (e.stage !== "won" || by.has(e.companyId)) continue;
+    const c = g.companies.get(e.companyId);
+    if (!c) continue;
+    by.set(c.id, { companyId: c.id, name: c.name, current: true, start: month(e.won?.start) ?? month(e.dates.won), end: null, facts: fitFactsOf(c, s) });
+  }
+  for (const k of s.evidence?.[memberId] ?? []) {
+    if (k.status !== "ready" || k.review) continue;
+    const c = k.companyId ? g.companies.get(k.companyId) : undefined;
+    if (c && by.has(c.id)) continue;
+    const facts = fitFactsOf(c, s);
+    // The case's own facts are as of the work: they win over today's.
+    if (k.revenue) facts.revenue = [k.revenue];
+    if (k.size) facts.employees = [k.size];
+    if (k.industry && !facts.industries?.length) facts.industries = [k.industry];
+    if (CASE_MOTION[k.motion] && !facts.motion?.length) facts.motion = [CASE_MOTION[k.motion]];
+    const current = k.end === "Ongoing";
+    const row: ClientFacts = { companyId: c?.id ?? null, name: c?.name ?? k.clientName ?? "", current, start: month(k.start), end: current ? null : month(k.end), facts };
+    if (c) by.set(c.id, row);
+    else loose.push(row);
+  }
+  return [...by.values(), ...loose];
+}
+/**
+ * A member's ideal client: what they chose (Profile.icp, never changed here), what their clients
+ * have in common (read from the state each time, so a seat claimed, edited or removed, a deal won
+ * or a case saved or removed changes it at once), the learned values they dropped, and the two
+ * together as fit reads them.
+ */
+function idealFor(seed: Seed, s: State, memberId: string): { stated: Icp | null; learned: IcpLearned; dropped: IcpDropped; icp: Icp | null; clients: ClientFacts[] } {
+  const prof = s.profiles[memberId] ?? {};
+  const clients = memberClients(seed, s, memberId);
+  const dropped = prof.icpDropped ?? {};
+  const learned = learnIcp(clients, dropped);
+  return { stated: prof.icp ?? null, learned, dropped, icp: idealIcp(prof.icp, learned), clients };
+}
+/** The ideal client fit reads for a member (chosen and learned together). */
+export const idealIcpOf = (seed: Seed, s: State, memberId: string): Icp | null => idealFor(seed, s, memberId).icp;
+/** The member's own clients as the pages mark them, by the company's public id. */
+function clientMarks(clients: readonly ClientFacts[]): ClientMark[] {
+  return clients.filter((c) => c.companyId).map((c) => ({ id: pubId(c.companyId!), current: c.current, words: clientWords(c) }));
+}
+
 /**
  * The parts of this file that lib/messages.ts and lib/signin.ts build on. They change the state
  * only through `mutate` (one writer, in order), and read it through the same helpers the view uses.
@@ -8664,6 +8789,8 @@ export const tableInternals = {
   memberNameFor, memberNameById, foundMemberOf,
   // Suggested additions (lib/paths/suggest.ts): Remove my name's mark at a company, and what the member earned today.
   leaderOff: (s: State, companyId: string, name: string) => leaderOff(s, companyId, name), earning,
+  // The ideal client that learns (lib/idealClient.ts): what fit reads for a member, their own clients, a company's facts as the criteria read them.
+  idealFor, idealIcpOf, memberClients, fitFactsOf,
 };
 
 /** What Fractionals (lib/fractionals.ts) reads: the fractionals on file, and who bought or shows which. */

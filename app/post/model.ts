@@ -6,10 +6,11 @@
  * locked (someone added it) or visible.
  */
 import type { Cell, CompanyRec, EngagementRec, Friendly, Icp, Me, PersonRec } from "@/lib/tableTypes";
+import { fitParts, icpIsBlank, type FitFacts } from "@/lib/idealClient";
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, OWNERSHIP_TYPES, SOURCE_LABEL, type Entity,
-  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList, COMPANY_PRICE, COMPANY_PRICE_SAY,
+  REFERRAL_BONUS, INDUSTRY_GROUPS, industryWords, fieldDef, picksOf, PERSON_BUNDLE, PERSON_DETAILS, SEAT_BUNDLE, standardIndustries, standardList, COMPANY_PRICE, COMPANY_PRICE_SAY,
 } from "@/lib/tableFields";
 import { normalizeHq } from "@/lib/geo";
 import { HIRED_DEFAULT_WINDOW, HIRED_WINDOWS, cleanWindow, fnLeader, hireMonth, hireWhat, monthsAgo, startMs, startWords, windowPhrase, windowWords } from "@/lib/hired";
@@ -1605,36 +1606,40 @@ export const regionOf = (c: CompanyRec): string | null => placeFor(c).region;
 // Industries match by name, case aside (the standard list names each one once).
 const industryKey = (v: string) => v.trim().toLowerCase();
 
-export const icpEmpty = (icp: Icp | null | undefined) => !icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length);
+export const icpEmpty = (icp: Icp | null | undefined) => icpIsBlank(icp);
 
-/** Which parts of the ideal client a company matches: true, false, or null when its record doesn't say. */
-export function icpParts(icp: Icp, c: CompanyRec) {
-  const ind = shown(c.cells.industry);
-  const emp = shown(c.cells.employees);
-  const rev = shown(c.cells.revenue);
+/** A company's facts as the ideal client's criteria read them (lib/idealClient.ts): only what the viewer sees on its record. */
+export function coFitFacts(c: CompanyRec): FitFacts {
+  const one = (f: string) => ((v) => (v ? [v] : []))(shown(c.cells[f]));
   const ctry = countryOf(c);
-  const inds = new Set(icp.industries.map(industryKey));
   return {
-    industry: icp.industries.length ? (ind ? inds.has(industryKey(ind)) : null) : undefined,
-    employees: icp.employees.length ? (emp ? icp.employees.includes(emp) : null) : undefined,
-    revenue: icp.revenue.length ? (rev ? icp.revenue.includes(rev) : null) : undefined,
-    country: icp.countries.length ? (ctry ? icp.countries.some((x) => countryKey(x) === countryKey(ctry)) : null) : undefined,
+    industries: one("industry"), sellsTo: picksOf(fieldDef("company", "sellsTo") ?? { sep: "; " }, shown(c.cells.sellsTo)), customerSize: one("customerSize"), businessModel: one("businessModel"),
+    motion: one("motion"), revenue: one("revenue"), employees: one("employees"), dealSize: one("dealSize"), salesCycle: one("salesCycle"), countries: ctry ? [ctry] : [],
   };
 }
 
 /**
+ * Which criteria of the ideal client a company matches: true, false, null when its record doesn't
+ * say, undefined when the ideal client doesn't have that criterion. `industry`, `employees` and
+ * `country` are the first lists under the names the older pages read.
+ */
+export function icpParts(icp: Icp, c: CompanyRec) {
+  const p = fitParts(icp, coFitFacts(c));
+  return { industry: p.industries, employees: p.employees, revenue: p.revenue, country: p.countries, sellsTo: p.sellsTo, customerSize: p.customerSize, businessModel: p.businessModel, motion: p.motion, dealSize: p.dealSize, salesCycle: p.salesCycle };
+}
+
+/**
  * The ideal client as a filter (the owner's call): a known value that conflicts leaves a company
- * out, and at least one part the profile asks for (industry, size, revenue or country) has to be
- * on file and match. A company we know nothing the profile asks about is never a match, so a
- * profile of "US only" doesn't let in every company whose country isn't on file. One with some
- * part not on file is a maybe and stays, after the confirmed matches in "Best fit for you"
- * (icpMatch), with a line on what isn't on file.
+ * out, and at least one criterion the ideal client has (industry, size, revenue, country, or how
+ * it sells) has to be on file and match. A company we know nothing the profile asks about is never
+ * a match, so a profile of "US only" doesn't let in every company whose country isn't on file. One
+ * with some part not on file is a maybe and stays, after the confirmed matches in "Best fit for
+ * you" (icpMatch), with a line on what isn't on file.
  */
 export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
   return (c) => {
-    const p = icpParts(icp, c);
-    if (p.industry === false || p.employees === false || p.revenue === false || p.country === false) return false;
-    return [p.industry, p.employees, p.revenue, p.country].includes(true);
+    const v = Object.values(icpParts(icp, c));
+    return !v.includes(false) && v.includes(true);
   };
 }
 
@@ -1646,7 +1651,7 @@ export function icpMatch(icp: Icp | null | undefined, c: CompanyRec): IcpMatch |
   return v.includes(false) ? "no" : v.includes(null) ? "maybe" : "match";
 }
 
-const UNKNOWN_WORD = { industry: "industry", employees: "size", revenue: "revenue", country: "country" } as const;
+const UNKNOWN_WORD = { industry: "industry", employees: "size", revenue: "revenue", country: "country", sellsTo: "who it sells to", customerSize: "customer size", businessModel: "business model", motion: "sales motion", dealSize: "deal size", salesCycle: "sales cycle" } as const;
 /** What a maybe is missing, as one line: "Size not on file", "Size and revenue not on file". Null when nothing the ideal client asks for is missing. */
 export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string | null {
   if (icpEmpty(icp)) return null;
@@ -1654,7 +1659,9 @@ export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string |
   if (Object.values(p).includes(false)) return null;
   const miss = (Object.keys(UNKNOWN_WORD) as (keyof typeof UNKNOWN_WORD)[]).filter((k) => p[k] === null).map((k) => UNKNOWN_WORD[k]);
   if (!miss.length) return null;
-  const words = miss.length === 1 ? miss[0] : `${miss.slice(0, -1).join(", ")} and ${miss[miss.length - 1]}`;
+  // The four free facts by name; past them a count, so the line under a name stays one line.
+  const shownWords = miss.length > 3 ? [...miss.slice(0, 2), `${miss.length - 2} more`] : miss;
+  const words = shownWords.length === 1 ? shownWords[0] : `${shownWords.slice(0, -1).join(", ")} and ${shownWords[shownWords.length - 1]}`;
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} not on file`;
 }
 
@@ -1695,6 +1702,11 @@ export function icpLabel(icp: Icp | null | undefined): string {
     bandRange(RN_EMPLOYEES, icp.employees),
     bandRange(RN_REVENUE, icp.revenue),
     icp.countries.map(countryShort).join(", "),
+    // How the client sells, when the ideal client says: "sells to Health Care", "Mid-market", "B2B", "PLG".
+    icp.sellsTo?.length ? `sells to ${icp.sellsTo.slice(0, 2).join(", ")}${icp.sellsTo.length > 2 ? ` +${icp.sellsTo.length - 2}` : ""}` : "",
+    (icp.customerSize ?? []).join(", "),
+    (icp.businessModel ?? []).join(", "),
+    (icp.motion ?? []).join(", "),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1885,7 +1897,7 @@ export function bestFit(i: CoInfo, me: Pick<Me, "icp" | "function">): { score: n
 export const COMPANY_FILL = ["website", "industry", "employees", "revenue", "ownership", "hq", "linkedin"];
 export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "endReason", "reason", "whyNow", "sourced", "pricing", "rate", "hours", "posting", "revenue", "employees"];
 /** How the company sells (Revenue Nomad's standard lists), shown as its own block. */
-export const COMPANY_GTM = ["businessModel", "motion", "dealSize", "salesCycle"];
+export const COMPANY_GTM = ["sellsTo", "customerSize", "businessModel", "motion", "dealSize", "salesCycle"];
 /** What Your seats asks about a company under the member's first seat there: who owns it, then how it sells. */
 export const SEAT_CO_ASK = ["ownership", ...COMPANY_GTM];
 

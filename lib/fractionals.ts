@@ -144,7 +144,7 @@ function recordsFor(seed: Seed, s: State, me: Member, nowMs = Date.now()): Fract
   const g = F.viewGraph(seed, s);
   const idx = T.memberIndex(seed, s);
   const base = baseOf(seed, s);
-  const icp = s.profiles[me.id]?.icp ?? null;
+  const icp = T.idealIcpOf(seed, s, me.id);
   const known = F.knownCompanies(g, s, idx, me);
   const ball = ballOf(seed, s, me, nowMs);
   const code = inviteCode(me.id);
@@ -312,7 +312,7 @@ export async function fractionalsHome(token: string | null, nowMs = Date.now()):
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) return null;
-  const icp = s.profiles[me.id]?.icp;
+  const icp = T.idealIcpOf(seed, s, me.id);
   if (!icp || !(icp.industries.length || icp.employees.length || icp.revenue.length || icp.countries.length)) return { n: 0, initials: [] };
   const fresh = recordsFor(seed, s, me).filter((r) => r.onMerlin && !r.you && r.fits && r.since && nowMs - Date.parse(r.since) < WEEK);
   return { n: fresh.length, initials: fresh.filter((r) => r.initials).slice(0, 3).map((r) => r.initials!) };
