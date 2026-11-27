@@ -47,6 +47,8 @@ export const THEMES = {
     text: "#FFFFFF",
     muted: "#6FA08E",
     via: "#C08CF5",
+    cloak: "#FF5A1F",
+    cloakShade: "#D94410",
     transparent: true,
   },
   // Line architecture for dark panels on the ivory and forest app design.
@@ -191,6 +193,23 @@ export class Scene {
     const t = this.t;
     this.poly([[x + w, y, z], [x + w, y + d, z], [x + w / 2, y + d, z + h], [x + w / 2, y, z + h]], { fill: t.sideR || t.face });
     this.poly([[x, y + d, z], [x + w, y + d, z], [x + w / 2, y + d, z + h]], { fill: t.top });
+  }
+  // The crystal ball: the one filled circle, on whatever it stands on.
+  ball(at, r) {
+    const t = this.t;
+    const [x, y] = this.P(at);
+    const R = r * this.s;
+    this.grow(x - R, y - 2 * R);
+    this.grow(x + R, y);
+    this.out.push(
+      `<circle cx="${f(x)}" cy="${f(y - R)}" r="${f(R)}" fill="${t.path}" stroke="${t.line}" stroke-width="${this.sw}"/>`,
+      `<path d="M${f(x - R * 0.62)} ${f(y - R * 1.1)}A${f(R * 0.64)} ${f(R * 0.64)} 0 0 1 ${f(x - R * 0.1)} ${f(y - R * 1.62)}" fill="none" stroke="${t.glow}" stroke-width="${f(this.sw * 2.2)}"/>`
+    );
+  }
+  // The seat: a chair with a tall back.
+  seat(x, y, z, u = 1) {
+    this.box(x, y, z, 1.3 * u, 0.35 * u, 2.6 * u);
+    this.box(x, y + 0.35 * u, z, 1.3 * u, 1.1 * u, 1.1 * u);
   }
   // Soft filled hill in screen space. It bleeds off the canvas and is not
   // counted when the scene is framed.

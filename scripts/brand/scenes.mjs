@@ -624,6 +624,92 @@ function aDoor(s) {
   s.marker([3.5, 5.6, 0], { color: s.t.via });
   s.marker([3.1, 7.1, 0], { color: s.t.accent });
 }
+// The current homepage's pictures, redrawn as line architecture: the Nomad,
+// the crystal ball, the tent, the door, the seat and the steps.
+function fxBall(s) {
+  s.box(-1, -1, -0.4, 13, 8, 0.4);
+  s.box(0.6, 0.6, 0, 2.4, 2.4, 2.2);
+  s.arch({ face: "y", at: 3, c: 1.8, z: 0, w: 1.1, h: 1.7, depth: 0.3 });
+  s.tree(4.4, 0.6, 0, { h: 2.4 });
+  s.cylinder(6.2, 2.6, 0, 1.5, 0.5);
+  s.cylinder(6.2, 2.6, 0.5, 0.7, 1.5);
+  s.cylinder(6.2, 2.6, 2, 1, 0.3);
+  s.rings([6.2, 2.6, 3.3], [2, 3, 4]);
+  s.ball([6.2, 2.6, 2.3], 1.35);
+  s.ribbon([[0.2, 5.6], [2.6, 5.4], [4.4, 4.8], [5.4, 4]], { z: 0, width: 0.8 });
+  s.tree(10.6, 1.4, 0, { h: 2 });
+  s.shrub(10.4, 5.4, 0, { r: 0.5 });
+  s.figure([8.6, 4.6, 0], { u: 1.25, flip: true });
+}
+function fxWay(s) {
+  s.box(-1, -1, -0.4, 14, 8, 0.4);
+  s.box(8.4, 0.2, 0, 3.4, 2, 4.6);
+  s.arch({ face: "x", at: 11.8, c: 1.2, z: 0.8, w: 0.8, h: 2.4, depth: 0.3 });
+  s.arch({ face: "y", at: 2.2, c: 10.1, z: 0, w: 1.8, h: 3.4, lit: true });
+  s.pyramid(0.6, 0.8, 0, 2.6, 2.4);
+  s.line([[2.2, 3.6, 0], [3.4, 4.6, 0], [5, 4.8, 0]], { stroke: s.t.muted, dash: "3 8", sw: 3 });
+  s.ribbon([[5, 4.9], [6.6, 4.6], [8.4, 4.4], [9.8, 3.6], [10.1, 2.2]], { z: 0, width: 0.8 });
+  s.tree(7, 0.8, 0, { h: 2.4 });
+  s.shrub(12, 5.4, 0, { r: 0.5 });
+  s.marker([7.4, 4.5, 0], { color: s.t.via });
+  s.figure([4.6, 5.2, 0], { u: 1.25 });
+}
+function fxRates(s) {
+  s.box(-1, -1, -0.4, 14, 7.6, 0.4);
+  [[0.6, 3.2], [3.4, 5.2], [6.2, 4]].forEach(([x, h]) => {
+    s.box(x, 0.6, 0, 2, 2, h);
+    s.arch({ face: "y", at: 2.6, c: x + 1, z: 0, w: 1, h: Math.min(2, h - 0.8), depth: 0.3 });
+    s.arch({ face: "x", at: x + 2, c: 1.6, z: h - 1.8, w: 0.6, h: 1.2, depth: 0.25 });
+    s.box(x - 0.15, 0.45, h, 2.3, 2.3, 0.3);
+  });
+  s.tree(9.2, 0.8, 0, { h: 2.2 });
+  s.seat(10.4, 2.6, 0);
+  s.ribbon([[0.4, 5], [3, 4.6], [6, 4.8], [9, 4.4], [10.6, 4.2]], { z: 0, width: 0.8 });
+  s.shrub(1, 5.6, 0, { r: 0.45 });
+}
+function fxWon(s) {
+  s.box(-1, -1, -0.4, 13, 8, 0.4);
+  s.box(3, 0.2, 0, 5.4, 2.4, 5.6);
+  s.rail([3, 2.6, 5.6], [8.4, 2.6, 5.6], { h: 0.4 });
+  s.arch({ face: "x", at: 8.4, c: 1.4, z: 1, w: 0.9, h: 2.8, depth: 0.3 });
+  s.arch({ face: "y", at: 2.6, c: 5.7, z: 0, w: 3, h: 4.6, lit: true });
+  s.seat(5.05, 2.9, 0, 0.95);
+  s.ribbon([[5.7, 4.4], [5.6, 5.4], [3.8, 6], [1.6, 6]], { z: 0, width: 0.8 });
+  s.tree(1.2, 1.6, 0, { h: 2.6 });
+  s.tree(10.4, 2, 0, { h: 2.2 });
+  s.figure([9.6, 5, 0], { u: 1.25, flip: true });
+}
+function fxFlow(s) {
+  s.box(-1, -1, -0.4, 14, 8.6, 0.4);
+  s.box(5.6, 0.2, 0, 6.4, 3.4, 2);
+  s.arcade({ face: "x", at: 12, from: 0.2, to: 3.6, n: 2, z: 0.3, w: 0.9, h: 1.3, depth: 0.3 });
+  s.box(7.4, 0.6, 2, 2.4, 2.2, 3.6);
+  s.arch({ face: "y", at: 2.8, c: 8.6, z: 2, w: 1.3, h: 2.4, lit: true });
+  s.rings([8.6, 1.7, 5.9], [1.8, 2.8, 3.8]);
+  s.stairs({ x: 6.2, y: 5.6, z: 0, steps: 4, runner: RUN });
+  s.ribbon([[7.2, 5.6], [7, 6.4], [5, 6.8], [2.6, 6.6]], { z: 0, width: 0.9 });
+  s.tree(11, 2.4, 2, { h: 1.8 });
+  s.tree(0.6, 1.4, 0, { h: 2.4 });
+  s.figure([2.4, 5.8, 0], { u: 1.25 });
+}
+function fxHero(s) {
+  s.box(-1, -1, -0.4, 16, 8, 0.4);
+  s.pyramid(0.8, 1, 0, 3.2, 3);
+  s.tree(5, 0.6, 0, { h: 2.6 });
+  s.line([[2.6, 4.4, 0], [4.4, 5.6, 0], [7, 5.4, 0], [8.6, 4.2, 0], [10.4, 3.6, 0], [12.6, 3.6, 0], [14.6, 2.6, 0]], { stroke: s.t.accent, dash: "3 10", sw: 4 });
+  s.shrub(8, 1.4, 0, { r: 0.6 });
+  s.tree(12.4, 1, 0, { h: 2.2 });
+  s.figure([2.2, 5.2, 0], { u: 1.3 });
+}
+export const FX = {
+  "fx-ball": { w: 840, h: 420, pad: 16, draw: fxBall, title: "The Nomad beside a crystal ball on a plinth" },
+  "fx-way": { w: 840, h: 420, pad: 16, draw: fxWay, title: "The Nomad on a trail from a tent to a lit door" },
+  "fx-rates": { w: 840, h: 420, pad: 16, draw: fxRates, title: "Three towers of different heights and a seat" },
+  "fx-won": { w: 840, h: 420, pad: 16, draw: fxWon, title: "A seat in a lit doorway, with the Nomad beside it" },
+  "fx-flow": { w: 840, h: 420, pad: 16, draw: fxFlow, title: "Steps up to a signalling tower" },
+  "fx-hero": { w: 900, h: 420, pad: 16, draw: fxHero, title: "The Nomad by a tent, with a dotted trail leading off" },
+};
+
 export const ADAPT = {
   "band-companies": { w: 1100, h: 400, pad: 12, draw: aCompanies, title: "A long wall of doors with one lit and a path leading to it" },
   "card-door": { w: 360, h: 420, pad: 10, draw: aDoor, title: "A path to a lit doorway" },

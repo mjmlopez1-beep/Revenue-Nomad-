@@ -52,6 +52,8 @@ export const THEMES = {
     "text": "#FFFFFF",
     "muted": "#6FA08E",
     "via": "#C08CF5",
+    "cloak": "#FF5A1F",
+    "cloakShade": "#D94410",
     "transparent": true
   },
   "forest": {

@@ -49,6 +49,15 @@ export default function MockupIndex() {
                 <p>The current design system with the line architecture hero and the path as the page&apos;s spine.</p>
               </div>
             </Link>
+            <Link href="/brand/mockups/homepage-lines">
+              <div className="thumb">
+                <iframe src="/brand/mockups/homepage-lines" title="Homepage, drawn in line" tabIndex={-1} loading="lazy" />
+              </div>
+              <div className="cap">
+                <b>Homepage, drawn in line</b>
+                <p>The current homepage as it is, with its pictures redrawn as dark line architecture.</p>
+              </div>
+            </Link>
             <Link href="/brand/mockups/network">
               <div className="thumb">
                 <iframe src="/brand/mockups/network/6" title="My Network" tabIndex={-1} loading="lazy" />

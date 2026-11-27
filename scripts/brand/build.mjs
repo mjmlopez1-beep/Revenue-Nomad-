@@ -3,7 +3,7 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SCENES, SPOTS, BLEND, ADAPT, THEMES, render } from "./scenes.mjs";
+import { SCENES, SPOTS, BLEND, ADAPT, FX, THEMES, render } from "./scenes.mjs";
 import { cpSync } from "node:fs";
 import { kit, wrap, NIGHT } from "./landscape.mjs";
 import { JOURNEY, DESTINATIONS, SPOTS as LAND_SPOTS, rail, W as LW, H as LH, S as LS } from "./journey.mjs";
@@ -80,6 +80,8 @@ for (const [name, def] of Object.entries(ADAPT)) {
 
 for (const [name, def] of Object.entries(SCENES)) write(`adapt/scene-${name}.svg`, render(def, `adapt-s-${name}`, "pine").svg({ labels: false, title: def.title }));
 for (const [name, def] of Object.entries(SPOTS)) write(`adapt/spot-${name}.svg`, render(def, `adapt-p-${name}`, "pine").svg({ labels: false, title: def.title }));
+
+for (const [name, def] of Object.entries(FX)) write(`adapt/${name}.svg`, render(def, `adapt-${name}`, "pine").svg({ labels: false, title: def.title }));
 
 // ---- net: every line-art piece on forest, for dark panels in the app ---
 for (const [name, def] of Object.entries(SCENES)) write(`net/scene-${name}.svg`, render(def, `net-s-${name}`, "forest").svg({ labels: false, title: def.title }));

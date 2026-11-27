@@ -1,0 +1,129 @@
+/* The current homepage, kept as it is, with its pictures redrawn as dark
+   line architecture. Builds on ../homepage/home.css (.hp). */
+.hl-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 560px;
+  gap: 48px;
+  min-height: 640px;
+}
+.hl-left {
+  padding: 56px 0 0;
+  display: flex;
+  flex-direction: column;
+}
+.hl-left .art {
+  margin: auto -40px -8px -60px;
+  width: 640px;
+  max-width: none;
+  height: auto;
+}
+.hl-right {
+  background: var(--volt);
+  padding: 56px 40px 40px;
+  align-self: stretch;
+  color: var(--pine);
+}
+.hl-right .hp-record {
+  position: static;
+  width: auto;
+  box-shadow: none;
+  padding: 20px 22px;
+  font-size: 14px;
+}
+.hl-right > p {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 21px;
+}
+.hl-sec {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.hl-sec h5 {
+  font-size: 13.5px;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.hl-sec h5 span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* feature panels: the current colors and layout */
+.hl-panels {
+  padding: 64px 0 24px;
+}
+.hl-panels > h2 {
+  font-size: 40px;
+  text-align: center;
+}
+.hl-panels > p {
+  text-align: center;
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 34em;
+  margin: 10px auto 34px;
+}
+.hl-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 56px;
+  align-items: center;
+  border-radius: 24px;
+  padding: 48px 56px;
+  margin-bottom: 20px;
+  background: var(--t);
+}
+.hl-panel.flip {
+  grid-template-columns: 440px minmax(0, 1fr);
+}
+.hl-panel.flip > .hl-text {
+  order: 2;
+}
+.hl-panel h3 {
+  font-size: 32px;
+  line-height: 1.08;
+  margin: 14px 0 12px;
+}
+.hl-panel h3 em {
+  font-style: normal;
+  color: var(--hi, var(--pine));
+}
+.hl-panel .try {
+  display: inline-block;
+  margin-top: 16px;
+  font-weight: 700;
+  color: var(--hi, var(--pine));
+}
+.hl-panel.dark {
+  color: #d4e6de;
+}
+.hl-panel.dark h3 {
+  color: #fff;
+}
+/* the picture: a dark window over the product card */
+.hl-pic {
+  background: var(--pine);
+  border-radius: 20px 20px 0 0;
+  height: 196px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin: 0 18px;
+}
+.hl-pic img {
+  width: 100%;
+  height: auto;
+  margin-bottom: -22px;
+}
+.hl-panel.dark .hl-pic {
+  background: none;
+  margin: 0;
+}
+.hl-stack .hp-card {
+  border-radius: 14px;
+}

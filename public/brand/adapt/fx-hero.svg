@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" width="900" height="420" role="img" aria-label="The Nomad by a tent, with a dotted trail leading off">
+<title>The Nomad by a tent, with a dotted trail leading off</title>
+<g stroke-linejoin="round" stroke-linecap="round">
+<path d="M124.8 153.7L558.4 404L558.4 391.5L124.8 141.2Z" fill="#073F2F" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M775.2 278.8L558.4 404L558.4 391.5L775.2 266.3Z" fill="#06382A" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M341.6 16L775.2 266.3L558.4 391.5L124.8 141.2Z" fill="#0B4A38" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M249.5 125.5L336.2 175.6L336.2 31.6Z" fill="#073F2F" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M422.9 125.5L336.2 175.6L336.2 31.6Z" fill="#06382A" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M460.8 134.9V126.8" stroke="#2EE59D" stroke-width="2"/>
+<path d="M460.8 126.8C447.7 126.8 447.7 86.1 460.8 53.5C474 86.1 474 126.8 460.8 126.8Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M292.8 156.8L309.1 203.7L385 241.3L460.8 247.5L525.9 266.3L585.5 300.7L666.8 316.4" fill="none" stroke="#2EE59D" stroke-width="4" stroke-dasharray="3 10"/>
+<path d="M488.5 194.4A14.1 14.1 0 0 1 507.3 182.7A18.8 18.8 0 0 1 536.4 185A13.1 13.1 0 0 1 552.4 194.4Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M650.5 256.9V250.1" stroke="#2EE59D" stroke-width="2"/>
+<path d="M650.5 250.1C637.4 250.1 637.4 215.6 650.5 188.1C663.7 215.6 663.7 250.1 650.5 250.1Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M213.5 163.1Q242.1 155.3 244.7 118.9Q247.3 82.5 255.1 53.9Q265.5 72.1 281.1 79.9Q292.8 85.1 292.8 111.1L295.4 163.1Q252.5 170.9 213.5 163.1Z" fill="#FF5A1F"/><path d="M213.5 163.1Q242.1 155.3 244.7 118.9Q255.1 144.9 265.5 167Q239.5 169.6 213.5 163.1Z" fill="#D94410"/><rect x="264.2" y="85.1" width="23.4" height="33.8" rx="10.4" fill="#F4EBDD"/><path d="M264.2 113.7H287.6V124.1H264.2Z" fill="#FF5A1F"/><ellipse cx="272.7" cy="102" rx="2.5" ry="4.3" fill="#17241E"/><ellipse cx="281.1" cy="102" rx="2.5" ry="4.3" fill="#17241E"/><path d="M301.9 38.3V163.1" stroke="#EADFC8" stroke-width="4.2"/><rect x="292.8" y="116.3" width="13" height="7.8" rx="2.6" fill="#FF5A1F"/><circle cx="301.9" cy="29.2" r="11.1" fill="#FFC12E"/>
+</g></svg>
