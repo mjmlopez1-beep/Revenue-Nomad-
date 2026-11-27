@@ -30,6 +30,26 @@ export const THEMES = {
     text: "#0A1F1A",
     muted: "#9AA79F",
   },
+  // The blend: the dark line-art world with felt-green hills and the guide.
+  blend: {
+    bg: "#0C3128",
+    face: "#0C3128",
+    sideR: "#0A2921",
+    top: "#124035",
+    void: "#061C16",
+    line: "#F4F1E8",
+    accent: "#C9F03D",
+    path: "#F2B632",
+    pathShade: "#D29A1E",
+    glow: "#FBEFC2",
+    text: "#F4F1E8",
+    muted: "#7FA091",
+    hills: ["#0F3A2F", "#14463A", "#1F5644", "#6C7A33", "#8A9440"],
+    cloak: "#D9582B",
+    cloakShade: "#B4441E",
+    cloak2: "#A88BD6",
+    cloak2Shade: "#7955B5",
+  },
   // Full palette: ivory and lilac buildings, mint ground, forest doorways.
   // Written without a background so it sits on any light surface.
   color: {
@@ -122,6 +142,48 @@ export class Scene {
     this.poly([[x, y + d, z], [x + w, y + d, z], [x + w, y + d, z + h], [x, y + d, z + h]], { ...o, fill: side });
     this.poly([[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]], { ...o, fill: sideR });
     this.poly([[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], { ...o, fill: top });
+  }
+
+  // Square pyramid standing on (x, y) with side w.
+  pyramid(x, y, z, w, h, { left = this.t.face, right = this.t.sideR || this.t.face } = {}) {
+    const a = [x + w / 2, y + w / 2, z + h];
+    this.poly([[x, y + w, z], [x + w, y + w, z], a], { fill: left });
+    this.poly([[x + w, y, z], [x + w, y + w, z], a], { fill: right });
+  }
+  // Gabled roof over a footprint, pediment facing the viewer's left.
+  gable(x, y, z, w, d, h) {
+    const t = this.t;
+    this.poly([[x + w, y, z], [x + w, y + d, z], [x + w / 2, y + d, z + h], [x + w / 2, y, z + h]], { fill: t.sideR || t.face });
+    this.poly([[x, y + d, z], [x + w, y + d, z], [x + w / 2, y + d, z + h]], { fill: t.top });
+  }
+  // Soft filled hill in screen space. It bleeds off the canvas and is not
+  // counted when the scene is framed.
+  hill(at, rx, ry, fill) {
+    const keep = [...this.bb];
+    const [px, py] = this.P(at);
+    this.bb = keep;
+    this.out.push(`<ellipse cx="${f(px)}" cy="${f(py + ry * 2.4)}" rx="${f(rx * 1.7)}" ry="${f(ry * 2.4)}" fill="${fill}"/>`);
+  }
+  // The guide: a hooded traveller with a staff. u scales the figure.
+  figure(at, { u = 1, second = false, flip = false } = {}) {
+    const t = this.t;
+    const [x, y] = this.P(at);
+    const c = second ? t.cloak2 || "#A88BD6" : t.cloak || "#D9582B";
+    const cs = second ? t.cloak2Shade || "#7955B5" : t.cloakShade || "#B4441E";
+    const X = (d) => f(x + d * u);
+    const Y = (d) => f(y + d * u);
+    this.grow(x - 40 * u, y - 112 * u);
+    this.grow(x + 40 * u, y + 4 * u);
+    const g =
+      `<path d="M${X(-36)} ${Y(0)}Q${X(-14)} ${Y(-6)} ${X(-12)} ${Y(-34)}Q${X(-10)} ${Y(-62)} ${X(-4)} ${Y(-84)}Q${X(4)} ${Y(-70)} ${X(16)} ${Y(-64)}Q${X(25)} ${Y(-60)} ${X(25)} ${Y(-40)}L${X(27)} ${Y(0)}Q${X(-6)} ${Y(6)} ${X(-36)} ${Y(0)}Z" fill="${c}"/>` +
+      `<path d="M${X(-36)} ${Y(0)}Q${X(-14)} ${Y(-6)} ${X(-12)} ${Y(-34)}Q${X(-4)} ${Y(-14)} ${X(4)} ${Y(3)}Q${X(-16)} ${Y(5)} ${X(-36)} ${Y(0)}Z" fill="${cs}"/>` +
+      `<rect x="${X(3)}" y="${Y(-60)}" width="${f(18 * u)}" height="${f(26 * u)}" rx="${f(8 * u)}" fill="#F4EBDD"/>` +
+      `<path d="M${X(3)} ${Y(-38)}H${X(21)}V${Y(-30)}H${X(3)}Z" fill="${c}"/>` +
+      `<ellipse cx="${X(9.5)}" cy="${Y(-47)}" rx="${f(1.9 * u)}" ry="${f(3.3 * u)}" fill="#17241E"/><ellipse cx="${X(16)}" cy="${Y(-47)}" rx="${f(1.9 * u)}" ry="${f(3.3 * u)}" fill="#17241E"/>` +
+      `<path d="M${X(32)} ${Y(-96)}V${Y(0)}" stroke="#EADFC8" stroke-width="${f(3.2 * u)}"/>` +
+      `<rect x="${X(25)}" y="${Y(-36)}" width="${f(10 * u)}" height="${f(6 * u)}" rx="${f(2 * u)}" fill="${c}"/>` +
+      `<circle cx="${X(32)}" cy="${Y(-103)}" r="${f(8.5 * u)}" fill="${t.path}"/>`;
+    this.out.push(flip ? `<g transform="translate(${f(2 * x)} 0) scale(-1 1)">${g}</g>` : g);
   }
 
   // Arch on a visible face. face "x" = right-hand face at x=at (c runs along y),

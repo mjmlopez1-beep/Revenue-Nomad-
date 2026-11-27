@@ -436,4 +436,161 @@ export const SPOTS = {
   pin: { ...SPOT, draw: sPin, title: "A waypoint marker on a round plinth", use: "Operator profile and ICP setup." },
 };
 
+// ----------------------------------------------------------------- blend
+// The journey told in the line-art world: the guide walks the gold path,
+// soft hills sit behind, and the destinations are places people built.
+const hills = (s, list) => list.forEach(([at, rx, ry, i]) => s.hill(at, rx, ry, s.t.hills[i]));
+
+function bSettingOut(s) {
+  hills(s, [[[2, -22, 0], 520, 300, 1], [[-14, 2, 0], 420, 230, 2], [[16, -8, 0], 460, 200, 0]]);
+  terraces(s);
+  hills(s, [[[-6, 16, 0], 360, 110, 3]]);
+  s.figure([-2.2, 5, 1], { u: 1.5 });
+}
+
+function bFork(s) {
+  hills(s, [[[4, -16, 0], 560, 330, 1], [[18, -2, 0], 420, 220, 2]]);
+  s.box(-1, -1, -0.6, 19, 13, 0.6);
+  // the cold way: a blank wall
+  s.box(0, 0, 0, 7, 1.6, 5.5);
+  const pts = [[2.4, 1.6, 0], [2.4, 1.6, 2.6]];
+  for (let i = 1; i < 12; i++) {
+    const a = Math.PI - (i * Math.PI) / 12;
+    pts.push([3.6 + 1.2 * Math.cos(a), 1.6, 2.6 + 1.2 * Math.sin(a)]);
+  }
+  pts.push([4.8, 1.6, 2.6], [4.8, 1.6, 0]);
+  s.line(pts, { stroke: s.t.muted, dash: "4 8" });
+  s.line([[8.6, 9.4, 0], [6.4, 7.4, 0], [5.2, 5, 0], [3.6, 3.6, 0], [3.6, 1.9, 0]], { stroke: s.t.muted, dash: "3 9", sw: 3 });
+  // the warm way: a lit gate up a short stair
+  s.box(10, 0, 0, 7, 4, 1.5);
+  s.box(11, 0, 1.5, 5, 2.4, 5);
+  s.arcade({ face: "x", at: 16, from: 0, to: 2.4, n: 2, z: 2.3, w: 0.7, h: 2.6 });
+  s.arch({ face: "y", at: 2.4, c: 13.5, z: 1.5, w: 2.2, h: 3.8, lit: true });
+  s.ribbon([[13.5, 2.4], [13.5, 4]], { z: 1.5, smooth: false });
+  s.tree(10.6, 3.2, 1.5, { h: 2.2 });
+  s.tree(16.4, 3.2, 1.5, { h: 2.2 });
+  s.stairs({ x: 12.5, y: 5.5, z: 0, steps: 3, runner: RUN });
+  s.ribbon([[13.5, 5.5], [13.4, 6.6], [11.6, 7.6], [10.2, 8.8], [9, 10]], { z: 0 });
+  s.tree(0.4, 2.6, 0, { h: 2.4 });
+  s.shrub(15.6, 9.4, 0, { r: 0.6 });
+  s.tree(1.4, 10, 0, { h: 2 });
+  s.figure([8.6, 10.4, 0], { u: 1.5 });
+}
+
+function bFellow(s) {
+  hills(s, [[[0, -18, 0], 520, 300, 1], [[22, -6, 0], 420, 230, 2], [[-10, 6, 0], 380, 150, 0]]);
+  bridge(s);
+  s.figure([3.4, 4.6, 6], { u: 1.3 });
+  s.figure([9.6, 3, 6], { u: 1.3, second: true, flip: true });
+}
+
+function bFirstStone(s) {
+  hills(s, [[[2, -14, 0], 560, 300, 1], [[14, 2, 0], 420, 200, 2], [[-8, 10, 0], 380, 130, 3]]);
+  s.box(-1, -1, -0.6, 13, 11, 0.6);
+  // the temple that is not there yet
+  const g = { stroke: s.t.muted, dash: "3 9" };
+  s.line([[1, 1, 0], [1, 1, 5], [9, 1, 5], [9, 1, 0]], g);
+  s.line([[1, 7, 0], [1, 7, 5], [9, 7, 5], [9, 7, 0]], g);
+  s.line([[1, 1, 5], [1, 7, 5]], g);
+  s.line([[9, 1, 5], [9, 7, 5]], g);
+  s.line([[1, 7, 5], [5, 7, 7], [9, 7, 5]], g);
+  s.line([[5, 7, 7], [5, 1, 7], [9, 1, 5]], g);
+  [3, 5, 7].forEach((x) => s.line([[x, 7, 0], [x, 7, 5]], g));
+  // what is there: three blocks and a tent
+  s.box(1, 5.6, 0, 1.6, 1.4, 1);
+  s.box(2.8, 5.6, 0, 1.6, 1.4, 1);
+  s.box(1.9, 5.6, 1, 1.6, 1.4, 1);
+  s.pyramid(7.2, 2.4, 0, 2.6, 2.4, { left: s.t.cloakShade, right: "#8F3618" });
+  s.tree(10.6, 1, 0, { h: 2.4 });
+  s.ribbon([[5.4, 8.2], [6.4, 8.8], [8.4, 9], [10, 9.6]], { z: 0 });
+  s.box(5.2, 7.6, 0, 1.6, 1.4, 1);
+  s.shrub(0.6, 9, 0, { r: 0.6 });
+  s.figure([4.4, 8.6, 0], { u: 1.5 });
+}
+
+function bPyramids(s) {
+  hills(s, [[[-2, -20, 0], 600, 320, 1], [[20, -4, 0], 460, 220, 2], [[-12, 8, 0], 400, 140, 3]]);
+  s.box(-1, -1, -0.6, 20, 17, 0.6);
+  s.pyramid(0.5, 0.5, 0, 5.5, 4.4);
+  s.pyramid(4, 1, 0, 11, 9);
+  s.pyramid(13.5, 5.5, 0, 4.5, 3.6);
+  // gate at the foot of the great one
+  s.box(8, 12, 0, 3, 1.6, 3);
+  s.arch({ face: "y", at: 13.6, c: 9.5, z: 0, w: 1.6, h: 2.5, lit: true });
+  [[5.6, 13], [12.6, 13]].forEach(([x, y]) => {
+    s.box(x, y, 0, 0.7, 0.7, 4.2);
+    s.pyramid(x, y, 4.2, 0.7, 0.8);
+  });
+  s.ribbon([[9.5, 13.6], [9.6, 14.4], [11.4, 14.8], [13.6, 14.6], [15.6, 15.2]], { z: 0 });
+  s.tree(1.4, 8, 0, { h: 2.4 });
+  s.tree(17.4, 12, 0, { h: 2.2 });
+  s.shrub(3, 14.6, 0, { r: 0.6 });
+  s.figure([15.2, 15.5, 0], { u: 1.5, flip: true });
+}
+
+function bTemple(s) {
+  hills(s, [[[0, -18, 0], 560, 300, 1], [[18, -4, 0], 440, 220, 2], [[-10, 8, 0], 380, 130, 3]]);
+  s.box(-2, -2, -0.6, 16, 16, 0.6);
+  s.box(0, 0, 0, 10.4, 7.4, 0.6);
+  s.box(0.5, 0.5, 0.6, 9.4, 6.4, 0.5);
+  s.box(2.4, 2, 1.1, 5.6, 2.8, 4);
+  s.arch({ face: "y", at: 4.8, c: 5.2, z: 1.1, w: 1.5, h: 3, lit: true });
+  const col = (x, y) => s.cylinder(x, y, 1.1, 0.36, 4);
+  [1.2, 2.8, 4.4].forEach((y) => col(9.2, y));
+  [1.2, 2.8, 4.4, 6, 7.6, 9.2].forEach((x) => col(x, 6.2));
+  s.box(0.6, 0.6, 5.1, 9.2, 6.2, 0.6);
+  s.gable(0.6, 0.6, 5.7, 9.2, 6.2, 1.9);
+  s.stairs({ x: 4.2, y: 8.6, z: 0, steps: 2, rise: 0.55, run: 0.6, runner: RUN });
+  s.ribbon([[5.2, 8.6], [5.3, 9.6], [7, 10.4], [9.4, 10.6], [11.4, 11.4]], { z: 0 });
+  s.tree(0.2, 9, 0, { h: 2.6 });
+  s.tree(12.4, 2, 0, { h: 2.6 });
+  s.shrub(2, 11.6, 0, { r: 0.6 });
+  s.figure([11, 11.8, 0], { u: 1.5, flip: true });
+}
+
+function bZiggurat(s) {
+  hills(s, [[[0, -16, 0], 600, 320, 1], [[22, 0, 0], 440, 220, 2], [[-10, 16, 0], 400, 130, 3]]);
+  summit(s);
+  s.figure([10.6, 15.6, 0], { u: 1.45, flip: true });
+}
+
+function bRotunda(s) {
+  hills(s, [[[-6, -14, 0], 560, 300, 1], [[14, -6, 0], 460, 240, 2]]);
+  rotunda(s);
+  s.figure([-6, 4.8, 0], { u: 1.45 });
+}
+
+function bGuide(s) {
+  hills(s, [[[6, -6, 0], 300, 190, 1], [[-6, 4, 0], 280, 150, 2]]);
+  s.hill([0, 0, -1.2], 330, 170, s.t.hills[3]);
+  s.box(-1.4, -1.4, 0, 2.8, 2.8, 0.5);
+  s.figure([0, 0, 0.5], { u: 2.1 });
+}
+
+function bGuideDoor(s) {
+  hills(s, [[[4, -8, 0], 320, 200, 1]]);
+  sDoor(s);
+  s.figure([3.2, 7.4, 0], { u: 1.55 });
+}
+
+function bBeacon(s) {
+  hills(s, [[[4, -6, 0], 320, 200, 1], [[-8, 4, 0], 280, 130, 3]]);
+  sBeacon(s);
+  s.figure([3.6, 4.2, 0], { u: 1.1 });
+}
+
+export const BLEND = {
+  "setting-out": { w: 1200, h: 900, draw: bSettingOut, kind: "scene", stage: "Starting out", title: "The guide at the foot of a terraced climb", use: "Hero. One traveller, a gold path and a lit door at the top." },
+  fork: { w: 1200, h: 900, draw: bFork, kind: "scene", stage: "Choosing the road", title: "The guide between a blank wall and a lit gate", use: "The pitch. The cold way ends at a wall with no door. The warm way has steps and a light on." },
+  fellow: { w: 1200, h: 900, draw: bFellow, kind: "scene", stage: "Not alone", title: "Two cloaked travellers meeting on a bridge", use: "Warm paths, fellow fractionals and introductions." },
+  "first-stone": { w: 1200, h: 900, draw: bFirstStone, kind: "scene", stage: "Where it began", title: "The guide beside a tent and three blocks, with a temple outlined in dots", use: "The pairing piece for every destination." },
+  pyramids: { w: 1200, h: 900, draw: bPyramids, kind: "destination", stage: "The pyramids", title: "Three pyramids with obelisks and a lit gate", use: "Destination. Scale built one block at a time." },
+  temple: { w: 1200, h: 900, draw: bTemple, kind: "destination", stage: "The temple", title: "A columned temple with a lit doorway", use: "Destination. Craft and reputation that lasts." },
+  ziggurat: { w: 1200, h: 900, draw: bZiggurat, kind: "destination", stage: "The stepped city", title: "A stepped tower with one stair to the top", use: "Destination and pipeline. One level, then the next." },
+  rotunda: { w: 1200, h: 900, draw: bRotunda, kind: "destination", stage: "The rotunda", title: "A domed rotunda on a round plaza", use: "Destination. Something built to be visited." },
+  guide: { ...SPOT, draw: bGuide, kind: "spot", stage: "", title: "The guide on a hill", use: "The character on its own: avatars, empty states, sign-in." },
+  "guide-door": { ...SPOT, draw: bGuideDoor, kind: "spot", stage: "", title: "The guide on the path to a lit door", use: "Get started and unlock." },
+  "guide-beacon": { ...SPOT, draw: bBeacon, kind: "spot", stage: "", title: "The guide below a signalling tower", use: "Signals and Crystal Ball." },
+};
+
 export { THEMES };

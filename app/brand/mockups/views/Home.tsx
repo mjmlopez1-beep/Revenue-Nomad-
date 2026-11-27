@@ -33,7 +33,7 @@ export default function Home({ theme }: { theme: MockTheme }) {
             <h1>Good morning, Jane</h1>
             <p>Three moves for today. About 6 minutes.</p>
           </div>
-          <Art theme={theme} land="banner-trailhead" arch="spot-garden" className="mk-headart" />
+          <Art theme={theme} land="banner-trailhead" blend="spot-guide" className="mk-headart" />
         </div>
         <div className="mk-since">
           <span className="mk-pill">This week</span>
@@ -91,7 +91,7 @@ export default function Home({ theme }: { theme: MockTheme }) {
 
             <div className="mk-stack">
               <section className="mk-card mk-started tint-lilac">
-                <Art theme={theme} land="spot-walker" arch="spot-stairs" />
+                <Art theme={theme} land="spot-walker" blend="spot-guide-door" />
                 <div>
                   <div className="mk-row between">
                     <h3 style={{ fontSize: 16 }}>Getting started</h3>

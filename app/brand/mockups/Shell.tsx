@@ -52,10 +52,14 @@ export function Icon({ name }: { name: keyof typeof ICONS | string }) {
 }
 
 /** Landscape art in the color theme, architecture line art in the night theme. */
-export function Art({ theme, land, arch, labeled, className, priority }: { theme: MockTheme; land: string; arch?: IllustrationId; labeled?: boolean; className?: string; priority?: boolean }) {
+export function Art({ theme, land, blend, arch, labeled, className, priority }: { theme: MockTheme; land: string; blend?: string; arch?: IllustrationId; labeled?: boolean; className?: string; priority?: boolean }) {
   if (theme === "color") {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={`/brand/landscape/${land}.svg`} alt="" className={className} loading={priority ? "eager" : "lazy"} />;
+  }
+  if (blend) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={`/brand/blend/${blend}.svg`} alt="" className={`mk-blend ${className || ""}`} loading={priority ? "eager" : "lazy"} />;
   }
   return arch ? <Illustration theme="dark" name={arch} labeled={labeled} alt="" className={className} priority={priority} /> : null;
 }

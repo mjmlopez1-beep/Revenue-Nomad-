@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ILLUSTRATIONS, LANDSCAPES } from "@/lib/brand/manifest";
+import { BLEND, ILLUSTRATIONS, LANDSCAPES } from "@/lib/brand/manifest";
 import Illustration from "./Illustration";
 import "./brand.css";
 
@@ -32,17 +32,17 @@ function Files({ id, labeled }: { id: string; labeled: boolean }) {
   );
 }
 
-function LandCard({ l }: { l: (typeof LANDSCAPES)[number] }) {
+function LandCard({ l, dir = "landscape" }: { l: (typeof LANDSCAPES)[number]; dir?: string }) {
   return (
     <figure className="ml-card">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/brand/landscape/${l.id}.svg`} alt={l.title} width={l.width} height={l.height} loading="lazy" />
+      <img src={`/brand/${dir}/${l.id}.svg`} alt={l.title} width={l.width} height={l.height} loading="lazy" />
       <figcaption>
         <code>{l.id}</code>
         {l.stage && <b style={{ marginLeft: 10 }}>{l.stage}</b>}
         <p>{l.use}</p>
         <div className="ml-files">
-          <a href={`/brand/landscape/${l.id}.svg`} download>SVG</a>
+          <a href={`/brand/${dir}/${l.id}.svg`} download>SVG</a>
           {l.banner && <a href={`/brand/landscape/${l.id.replace("scene-", "banner-")}.svg`} download>Banner crop</a>}
         </div>
       </figcaption>
@@ -59,6 +59,7 @@ export default function BrandLibrary() {
             merlin<i>.</i>
           </Link>
           <nav>
+            <a href="#blend">The guide</a>
             <a href="#journey">The journey</a>
             <a href="#scenes">Scenes</a>
             <a href="#spots">Spots</a>
@@ -78,6 +79,25 @@ export default function BrandLibrary() {
             </a>
           </div>
           <Illustration name="scene-terraces" labeled priority />
+        </section>
+
+        <section className="ml-section" id="blend">
+          <h2>The guide</h2>
+          <p>
+            The two ideas together. A hooded traveller with a staff walks the gold path through
+            the line-art world, with soft green hills behind. The story runs from setting out, to
+            choosing the warm way, to the places people built, none of which started that way.
+          </p>
+          <div className="ml-grid scenes">
+            {BLEND.filter((l) => l.kind !== "spot").map((l) => (
+              <LandCard key={l.id} l={l} dir="blend" />
+            ))}
+          </div>
+          <div className="ml-grid spots">
+            {BLEND.filter((l) => l.kind === "spot").map((l) => (
+              <LandCard key={l.id} l={l} dir="blend" />
+            ))}
+          </div>
         </section>
 
         <section className="ml-section">

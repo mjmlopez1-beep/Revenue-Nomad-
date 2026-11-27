@@ -26,6 +26,31 @@
       "text": "#0A1F1A",
       "muted": "#9AA79F"
     },
+    "blend": {
+      "bg": "#0C3128",
+      "face": "#0C3128",
+      "sideR": "#0A2921",
+      "top": "#124035",
+      "void": "#061C16",
+      "line": "#F4F1E8",
+      "accent": "#C9F03D",
+      "path": "#F2B632",
+      "pathShade": "#D29A1E",
+      "glow": "#FBEFC2",
+      "text": "#F4F1E8",
+      "muted": "#7FA091",
+      "hills": [
+        "#0F3A2F",
+        "#14463A",
+        "#1F5644",
+        "#6C7A33",
+        "#8A9440"
+      ],
+      "cloak": "#D9582B",
+      "cloakShade": "#B4441E",
+      "cloak2": "#A88BD6",
+      "cloak2Shade": "#7955B5"
+    },
     "color": {
       "bg": "#F4F1E9",
       "face": "#FBF8F1",
@@ -459,6 +484,118 @@
       "use": "Alerts, signals and Why Now.",
       "width": 400,
       "height": 400
+    }
+  ],
+  "blend": [
+    {
+      "id": "scene-setting-out",
+      "kind": "scene",
+      "name": "setting-out",
+      "title": "The guide at the foot of a terraced climb",
+      "stage": "Starting out",
+      "use": "Hero. One traveller, a gold path and a lit door at the top.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-fork",
+      "kind": "scene",
+      "name": "fork",
+      "title": "The guide between a blank wall and a lit gate",
+      "stage": "Choosing the road",
+      "use": "The pitch. The cold way ends at a wall with no door. The warm way has steps and a light on.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-fellow",
+      "kind": "scene",
+      "name": "fellow",
+      "title": "Two cloaked travellers meeting on a bridge",
+      "stage": "Not alone",
+      "use": "Warm paths, fellow fractionals and introductions.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-first-stone",
+      "kind": "scene",
+      "name": "first-stone",
+      "title": "The guide beside a tent and three blocks, with a temple outlined in dots",
+      "stage": "Where it began",
+      "use": "The pairing piece for every destination.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-pyramids",
+      "kind": "destination",
+      "name": "pyramids",
+      "title": "Three pyramids with obelisks and a lit gate",
+      "stage": "The pyramids",
+      "use": "Destination. Scale built one block at a time.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-temple",
+      "kind": "destination",
+      "name": "temple",
+      "title": "A columned temple with a lit doorway",
+      "stage": "The temple",
+      "use": "Destination. Craft and reputation that lasts.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-ziggurat",
+      "kind": "destination",
+      "name": "ziggurat",
+      "title": "A stepped tower with one stair to the top",
+      "stage": "The stepped city",
+      "use": "Destination and pipeline. One level, then the next.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "scene-rotunda",
+      "kind": "destination",
+      "name": "rotunda",
+      "title": "A domed rotunda on a round plaza",
+      "stage": "The rotunda",
+      "use": "Destination. Something built to be visited.",
+      "width": 1200,
+      "height": 900
+    },
+    {
+      "id": "spot-guide",
+      "kind": "spot",
+      "name": "guide",
+      "title": "The guide on a hill",
+      "stage": "",
+      "use": "The character on its own: avatars, empty states, sign-in.",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": "spot-guide-door",
+      "kind": "spot",
+      "name": "guide-door",
+      "title": "The guide on the path to a lit door",
+      "stage": "",
+      "use": "Get started and unlock.",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": "spot-guide-beacon",
+      "kind": "spot",
+      "name": "guide-beacon",
+      "title": "The guide below a signalling tower",
+      "stage": "",
+      "use": "Signals and Crystal Ball.",
+      "width": 640,
+      "height": 640
     }
   ]
 }

@@ -29,8 +29,8 @@ export default function MockupIndex() {
             <h2 style={{ fontSize: 26 }}>{theme === "color" ? "Color" : "Night"}</h2>
             <p className="mk-dim" style={{ marginTop: 6 }}>
               {theme === "color"
-                ? "Ivory pages, a forest rail and the full palette: amethyst, lilac, gold, terracotta and moss."
-                : "The dark version: near-black green with lime actions and line-art illustrations."}
+                ? "Ivory pages, a forest rail, the full palette and the landscape journey illustrations."
+                : "The dark version: line-art architecture with the hooded guide walking the gold path."}
             </p>
             <div className="mk-index">
               {MOCKUPS.map((m) => (

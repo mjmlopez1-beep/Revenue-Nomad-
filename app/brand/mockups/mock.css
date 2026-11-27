@@ -1498,3 +1498,38 @@
 .mk-col > header {
   gap: 8px;
 }
+
+/* ---- blend art in the night theme ---- */
+.mk-blend {
+  border-radius: 20px;
+}
+.mk-night .mk-hero img.mk-blend,
+.mk-night .mk-split img,
+.mk-night .mk-dest img {
+  background: none;
+  border-radius: 24px;
+}
+.mk-night .mk-feature img {
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 0;
+}
+.mk-night .mk-cta img {
+  right: 0;
+  top: 0;
+  transform: none;
+  width: 58%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+.mk-night .mk-headart {
+  width: 120px;
+  margin: -14px 0 -18px;
+  border-radius: 18px;
+}
+.mk-night .mk-started img,
+.mk-night .mk-gate img {
+  border-radius: 14px;
+  margin: 0;
+}

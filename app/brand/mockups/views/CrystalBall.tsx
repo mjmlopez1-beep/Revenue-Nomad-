@@ -46,7 +46,7 @@ export default function CrystalBall({ theme }: { theme: MockTheme }) {
             <h1>Your Crystal Ball</h1>
             <p>14 companies likely to hire a fractional Sales leader next.</p>
           </div>
-          <Art theme={theme} land="banner-lookout" arch="spot-beacon" className="mk-headart" />
+          <Art theme={theme} land="banner-lookout" blend="spot-guide-beacon" className="mk-headart" />
         </div>
 
         <div className="mk-bands">

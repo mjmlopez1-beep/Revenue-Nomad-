@@ -75,3 +75,11 @@ Rules for this family:
 - Files have no background. Place them on ivory, white or lilac.
 
 Sources are `landscape.mjs` (the drawing kit) and `journey.mjs` (the scenes).
+
+## The guide (blend set)
+
+`public/brand/blend` joins the two families. A hooded traveller with a staff walks the gold path through the line-art world, with soft green hills behind. Eight scenes at 1200 x 900 (`scene-setting-out`, `scene-fork`, `scene-fellow`, `scene-first-stone`, and the destinations `scene-pyramids`, `scene-temple`, `scene-ziggurat`, `scene-rotunda`) and three spots at 640 x 640 (`spot-guide`, `spot-guide-door`, `spot-guide-beacon`).
+
+- The guide's cloak is the only terracotta in a scene. A second traveller wears lilac.
+- These files carry their own dark green background, so round the corners and use them as framed tiles.
+- Sources are the `BLEND` entries in `scenes.mjs`. The figure, hills, pyramid and gable roof are in `engine.mjs`.

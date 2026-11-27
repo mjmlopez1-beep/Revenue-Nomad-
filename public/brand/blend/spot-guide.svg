@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="The guide on a hill">
+<title>The guide on a hill</title>
+<rect width="640" height="640" fill="#0C3128"/>
+<g stroke-linejoin="round" stroke-linecap="round">
+<ellipse cx="1451.4" cy="878.3" rx="510" ry="456" fill="#14463A"/>
+<ellipse cx="-622.9" cy="673.4" rx="476" ry="360" fill="#1F5644"/>
+<ellipse cx="320" cy="960.9" rx="561" ry="408" fill="#6C7A33"/>
+<path d="M56 422.3L320 574.7L320 520.3L56 367.9Z" fill="#0C3128" stroke="#F4F1E8" stroke-width="2"/>
+<path d="M584 422.3L320 574.7L320 520.3L584 367.9Z" fill="#0A2921" stroke="#F4F1E8" stroke-width="2"/>
+<path d="M320 215.4L584 367.9L320 520.3L56 367.9Z" fill="#124035" stroke="#F4F1E8" stroke-width="2"/>
+<path d="M244.4 367.9Q290.6 355.3 294.8 296.5Q299 237.7 311.6 191.5Q328.4 220.9 353.6 233.5Q372.5 241.9 372.5 283.9L376.7 367.9Q307.4 380.5 244.4 367.9Z" fill="#D9582B"/><path d="M244.4 367.9Q290.6 355.3 294.8 296.5Q311.6 338.5 328.4 374.2Q286.4 378.4 244.4 367.9Z" fill="#B4441E"/><rect x="326.3" y="241.9" width="37.8" height="54.6" rx="16.8" fill="#F4EBDD"/><path d="M326.3 288.1H364.1V304.9H326.3Z" fill="#D9582B"/><ellipse cx="339.9" cy="269.2" rx="4" ry="6.9" fill="#17241E"/><ellipse cx="353.6" cy="269.2" rx="4" ry="6.9" fill="#17241E"/><path d="M387.2 166.3V367.9" stroke="#EADFC8" stroke-width="6.7"/><rect x="372.5" y="292.3" width="21" height="12.6" rx="4.2" fill="#D9582B"/><circle cx="387.2" cy="151.6" r="17.9" fill="#F2B632"/>
+</g></svg>

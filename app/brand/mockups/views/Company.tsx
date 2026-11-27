@@ -118,7 +118,7 @@ export default function Company({ theme }: { theme: MockTheme }) {
             <section className="mk-card">
               <div className="mk-card-head"><h3>What opens, and what stays locked</h3></div>
               <div className="mk-gate">
-                <Art theme={theme} land="spot-gate" arch="spot-door" />
+                <Art theme={theme} land="spot-gate" blend="spot-guide-door" />
                 <div>
                   <h4>Free, showing now</h4>
                   <ul>
