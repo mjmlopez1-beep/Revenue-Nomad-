@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A walker where the trail stops at a rock face">
+<title>A walker where the trail stops at a rock face</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<path d="M120 400L204 195.4L240 235L282 70L330 218.5L360 182.2L420 400Z" fill="#5B5F7A"/>
+<path d="M200 110a22 22 0 0 1 32 -18a30 30 0 0 1 56 -4a20 20 0 0 1 30 22Z" fill="#8C8FA6"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#2B5B4B"/>
+<path d="M60 330L130 290L180 272" fill="none" stroke="#B65E40" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 18"/>
+<rect x="173.6" y="196.8" width="15.4" height="28" rx="5.6" fill="#B65E40"/><path d="M194.6 227.6L186.2 262.6M197.4 227.6L207.2 262.6" stroke="#17241E" stroke-width="7" stroke-linecap="round"/><rect x="184.8" y="194" width="22.4" height="37.8" rx="8.4" fill="#D29B43"/><circle cx="197.4" cy="184.2" r="9.1" fill="#E9B88E"/><path d="M186.9 181.4A10.5 10.5 0 0 1 207.9 181.4Z" fill="#10392F"/><path d="M182 181.4H212.8" stroke="#10392F" stroke-width="4.2" stroke-linecap="round"/><path d="M201.6 202.4L212.8 187" stroke="#D29B43" stroke-width="7" stroke-linecap="round"/><path d="M208.6 184.2L226.8 180" stroke="#17241E" stroke-width="5.6" stroke-linecap="round"/>
+</g></svg>

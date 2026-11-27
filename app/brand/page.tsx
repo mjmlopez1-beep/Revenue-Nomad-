@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ILLUSTRATIONS } from "@/lib/brand/manifest";
+import { ILLUSTRATIONS, LANDSCAPES } from "@/lib/brand/manifest";
 import Illustration from "./Illustration";
 import "./brand.css";
 
@@ -32,6 +32,24 @@ function Files({ id, labeled }: { id: string; labeled: boolean }) {
   );
 }
 
+function LandCard({ l }: { l: (typeof LANDSCAPES)[number] }) {
+  return (
+    <figure className="ml-card">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/brand/landscape/${l.id}.svg`} alt={l.title} width={l.width} height={l.height} loading="lazy" />
+      <figcaption>
+        <code>{l.id}</code>
+        {l.stage && <b style={{ marginLeft: 10 }}>{l.stage}</b>}
+        <p>{l.use}</p>
+        <div className="ml-files">
+          <a href={`/brand/landscape/${l.id}.svg`} download>SVG</a>
+          {l.banner && <a href={`/brand/landscape/${l.id.replace("scene-", "banner-")}.svg`} download>Banner crop</a>}
+        </div>
+      </figcaption>
+    </figure>
+  );
+}
+
 export default function BrandLibrary() {
   return (
     <div className="ml">
@@ -41,6 +59,7 @@ export default function BrandLibrary() {
             merlin<i>.</i>
           </Link>
           <nav>
+            <a href="#journey">The journey</a>
             <a href="#scenes">Scenes</a>
             <a href="#spots">Spots</a>
             <a href="#light">Light theme</a>
@@ -144,6 +163,46 @@ export default function BrandLibrary() {
                 <figure className="ml-card" key={i.id}>
                   <Illustration name={i.id as never} theme="light" />
                 </figure>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div className="ml-light" id="journey">
+        <div className="ml-wrap">
+          <section className="ml-section" style={{ borderTop: 0 }}>
+            <h2>The journey</h2>
+            <p>
+              Flat landscape scenes about going fractional. One walker sets out alone, chooses the
+              warm road over the cold one, finds others on the same trail and builds something of
+              their own. Scenes are 1200 by 800, and each also comes as a wide banner crop.
+            </p>
+            <div className="ml-grid scenes">
+              {LANDSCAPES.filter((l) => l.kind === "scene").map((l) => (
+                <LandCard key={l.id} l={l} />
+              ))}
+            </div>
+          </section>
+          <section className="ml-section">
+            <h2>Destinations</h2>
+            <p>
+              What people built, shown without a word: pyramids, a temple, an aqueduct, stepped
+              cities, a wall across the hills. None of them started there, so each pairs with the
+              first-stone scene.
+            </p>
+            <div className="ml-grid scenes">
+              {LANDSCAPES.filter((l) => l.kind === "destination").map((l) => (
+                <LandCard key={l.id} l={l} />
+              ))}
+            </div>
+          </section>
+          <section className="ml-section">
+            <h2>Journey spots</h2>
+            <p>Eight square pieces at 400 by 400, plus the strip of hills that sits at the foot of the sidebar.</p>
+            <div className="ml-grid spots">
+              {LANDSCAPES.filter((l) => l.kind === "spot").map((l) => (
+                <LandCard key={l.id} l={l} />
               ))}
             </div>
           </section>

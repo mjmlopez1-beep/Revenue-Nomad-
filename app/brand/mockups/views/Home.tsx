@@ -1,5 +1,4 @@
-import Illustration from "../../Illustration";
-import { Icon, Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
+import { Art, Icon, Logo, Route, Shell, type MockTheme } from "../Shell";
 
 const MOVES = [
   {
@@ -26,7 +25,6 @@ const LISTS = [
 ];
 
 export default function Home({ theme }: { theme: MockTheme }) {
-  const art = artOf(theme);
   return (
     <Shell theme={theme} active="home" crumb="Home">
       <div className="mk-page">
@@ -35,7 +33,7 @@ export default function Home({ theme }: { theme: MockTheme }) {
             <h1>Good morning, Jane</h1>
             <p>Three moves for today. About 6 minutes.</p>
           </div>
-          <Illustration theme={art} name="spot-garden" alt="" className="mk-headart" />
+          <Art theme={theme} land="banner-trailhead" arch="spot-garden" className="mk-headart" />
         </div>
         <div className="mk-since">
           <span className="mk-pill">This week</span>
@@ -93,7 +91,7 @@ export default function Home({ theme }: { theme: MockTheme }) {
 
             <div className="mk-stack">
               <section className="mk-card mk-started tint-lilac">
-                <Illustration theme={art} name="spot-stairs" alt="" />
+                <Art theme={theme} land="spot-walker" arch="spot-stairs" />
                 <div>
                   <div className="mk-row between">
                     <h3 style={{ fontSize: 16 }}>Getting started</h3>

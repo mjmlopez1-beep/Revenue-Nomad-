@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A lone walker">
+<title>A lone walker</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<circle cx="280" cy="150" r="54" fill="#F0BE6A"/>
+<path d="M17 400Q80 275 110 150Q140 275 203 400Z" fill="#E9DFF5"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#6FA487"/>
+<path d="M146.4 424.3L148.3 419.4L150.7 413.1L153.3 405.8L156.3 397.7L159.5 389L162.9 379.9L166.5 370.6L170.1 361.3L173.7 352.3L177.3 343.9L180.8 336.2L184.1 329.5L187.4 323.4L191.1 317.4L195.1 311.3L199.3 305.4L203.6 299.7L207.8 294.3L212 289.1L216 284.3L219.6 279.9L223 275.9L225.9 272.3L228.2 269.3L211.8 254.7L209.3 257.1L206.1 260L202.4 263.5L198.1 267.4L193.4 271.7L188.4 276.5L183.1 281.5L177.7 286.8L172.2 292.4L166.7 298.3L161.2 304.3L155.9 310.5L150.5 317.2L144.8 324.5L138.9 332.4L132.9 340.6L126.8 349L120.8 357.4L115.1 365.5L109.6 373.2L104.6 380.3L100.2 386.6L96.5 391.7L93.6 395.7Z" fill="#D29B43"/>
+<rect x="208" y="190" width="16.5" height="30" rx="6" fill="#B65E40"/><path d="M230.5 223L221.5 260.5M233.5 223L244 260.5" stroke="#17241E" stroke-width="7.5" stroke-linecap="round"/><rect x="220" y="187" width="24" height="40.5" rx="9" fill="#D29B43"/><circle cx="233.5" cy="176.5" r="9.8" fill="#E9B88E"/><path d="M222.3 173.5A11.3 11.3 0 0 1 244.8 173.5Z" fill="#10392F"/><path d="M217 173.5H250" stroke="#10392F" stroke-width="4.5" stroke-linecap="round"/><path d="M254.5 193L257.5 262" stroke="#17241E" stroke-width="3.8" stroke-linecap="round"/><path d="M238 199L254.5 208" stroke="#D29B43" stroke-width="7.5" stroke-linecap="round"/>
+<path d="M90 80Q91.8 88.2 100 90Q91.8 91.8 90 100Q88.2 91.8 80 90Q88.2 88.2 90 80Z" fill="#D29B43"/>
+</g></svg>

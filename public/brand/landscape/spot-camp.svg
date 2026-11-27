@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A tent and a campfire">
+<title>A tent and a campfire</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<path d="M3.2 400Q62 285 90 170Q118 285 176.8 400Z" fill="#E9DFF5"/>
+<circle cx="300" cy="130" r="50" fill="#F0BE6A"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#6FA487"/>
+<path d="M95 262L170 154L245 262Z" fill="#7955B5"/><path d="M152 262L170 202L188 262Z" fill="#10392F"/>
+<path d="M261.5 272L288.5 266M288.5 272L261.5 266" stroke="#17241E" stroke-width="4.5" stroke-linecap="round"/><path d="M275 233Q291.5 254 284 267.5Q275 272 266 267.5Q258.5 254 275 233Z" fill="#B65E40"/><path d="M275 249.5Q282.5 260 279.5 267.5Q275 270.5 270.5 267.5Q267.5 260 275 249.5Z" fill="#F0BE6A"/>
+<rect x="57.6" y="288.8" width="4.8" height="11.2" fill="#10392F"/><path d="M41.6 290.4L60 260L78.4 290.4Z" fill="#10392F"/><path d="M46 269.6L60 239.2L74 269.6Z" fill="#10392F"/><path d="M50.4 248.8L60 218.4L69.6 248.8Z" fill="#10392F"/>
+<path d="M200 60Q201.8 68.2 210 70Q201.8 71.8 200 80Q198.2 71.8 190 70Q198.2 68.2 200 60Z" fill="#D29B43"/>
+</g></svg>

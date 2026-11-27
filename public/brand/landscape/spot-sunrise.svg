@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A quiet valley at sunrise">
+<title>A quiet valley at sunrise</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<circle cx="200" cy="250" r="90" fill="#F0BE6A"/>
+<path d="M-100 400A190 150 0 0 1 280 400Z" fill="#A88BD6"/>
+<path d="M130 400A190 130 0 0 1 510 400Z" fill="#7955B5"/>
+<path d="M-60 400A260 90 0 0 1 460 400Z" fill="#6FA487"/>
+<rect x="67.9" y="320.2" width="4.2" height="9.8" fill="#10392F"/><path d="M53.9 321.6L70 295L86.1 321.6Z" fill="#10392F"/><path d="M57.8 303.4L70 276.8L82.2 303.4Z" fill="#10392F"/><path d="M61.6 285.2L70 258.6L78.4 285.2Z" fill="#10392F"/>
+<path d="M310 90Q311.8 98.2 320 100Q311.8 101.8 310 110Q308.2 101.8 300 100Q308.2 98.2 310 90Z" fill="#D29B43"/>
+</g></svg>

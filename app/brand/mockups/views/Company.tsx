@@ -1,5 +1,4 @@
-import Illustration from "../../Illustration";
-import { Lock, Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
+import { Art, Lock, Logo, Route, Shell, type MockTheme } from "../Shell";
 
 const SEATS = [
   { seat: "Fractional VP Sales", by: "Dana R.", member: true, start: "Oct 2025", end: <Lock>1 credit</Lock>, hours: "20 a week", rate: <Lock>1 credit</Lock>, why: "First sales leader", via: <Lock>1 credit</Lock> },
@@ -14,7 +13,6 @@ const PEOPLE = [
 ];
 
 export default function Company({ theme }: { theme: MockTheme }) {
-  const art = artOf(theme);
   return (
     <Shell theme={theme} active="company" crumb={<>Companies / Larkspur Learning <span style={{ marginLeft: 12, fontWeight: 400 }}>3 of 64</span></>}>
       <div className="mk-page">
@@ -120,7 +118,7 @@ export default function Company({ theme }: { theme: MockTheme }) {
             <section className="mk-card">
               <div className="mk-card-head"><h3>What opens, and what stays locked</h3></div>
               <div className="mk-gate">
-                <Illustration theme={art} name="spot-door" alt="" />
+                <Art theme={theme} land="spot-gate" arch="spot-door" />
                 <div>
                   <h4>Free, showing now</h4>
                   <ul>
@@ -152,6 +150,7 @@ export default function Company({ theme }: { theme: MockTheme }) {
           </div>
 
           <aside className="mk-stack">
+            {theme === "color" && <Art theme={theme} land="banner-bridge" className="mk-asideart" />}
             <section className="mk-card forest">
               <span className="mk-eyebrow">Your next move</span>
               <h3 style={{ fontSize: 19, margin: "8px 0" }}>Message Dana</h3>

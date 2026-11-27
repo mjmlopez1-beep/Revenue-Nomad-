@@ -209,4 +209,279 @@ export const ILLUSTRATIONS: IllustrationMeta[] = [
     "labeled": false
   }
 ];
+export interface LandscapeMeta {
+  id: string;
+  kind: IllustrationKind | "destination";
+  name: string;
+  title: string;
+  stage: string;
+  use: string;
+  width: number;
+  height: number;
+  banner?: { width: number; height: number };
+}
+export const LANDSCAPES: LandscapeMeta[] = [
+  {
+    "id": "scene-trailhead",
+    "kind": "scene",
+    "name": "trailhead",
+    "title": "A lone walker setting out on a long gold road",
+    "stage": "Starting out",
+    "use": "Hero and onboarding. One person, a long road, and a lit town far off.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 730,
+      "height": 420
+    }
+  },
+  {
+    "id": "scene-fork",
+    "kind": "scene",
+    "name": "fork",
+    "title": "A signpost between a cold mountain trail and a warm road",
+    "stage": "Choosing the road",
+    "use": "The pitch. Cold outreach climbs the mountain and stops. The warm road is easier.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 700,
+      "height": 420
+    }
+  },
+  {
+    "id": "scene-lookout",
+    "kind": "scene",
+    "name": "lookout",
+    "title": "A walker on a hill spotting lit towns in the distance",
+    "stage": "Seeing ahead",
+    "use": "Crystal Ball and signals. Which companies are about to need you.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 1000,
+      "height": 440
+    }
+  },
+  {
+    "id": "scene-bridge",
+    "kind": "scene",
+    "name": "bridge",
+    "title": "Two walkers meeting on a bridge",
+    "stage": "A way across",
+    "use": "Warm paths and introductions. Someone who has been there meets you halfway.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 800,
+      "height": 400
+    }
+  },
+  {
+    "id": "scene-company",
+    "kind": "scene",
+    "name": "company",
+    "title": "Walkers gathered at a camp with tents and a fire",
+    "stage": "Not alone",
+    "use": "Fractionals, peers and messages. The others on the same road.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 800,
+      "height": 420
+    }
+  },
+  {
+    "id": "scene-summit",
+    "kind": "scene",
+    "name": "summit",
+    "title": "A walker planting a flag on a hilltop",
+    "stage": "The first win",
+    "use": "Pipeline and a deal won.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 440
+    }
+  },
+  {
+    "id": "scene-empire",
+    "kind": "scene",
+    "name": "empire",
+    "title": "A small town on a hill with a lit gate and a flag",
+    "stage": "What you built",
+    "use": "The goal: your own practice. Closing calls to action and pricing.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 500
+    }
+  },
+  {
+    "id": "scene-first-stone",
+    "kind": "destination",
+    "name": "first-stone",
+    "title": "A walker setting the first stones beside a tent, with a temple outlined in dots",
+    "stage": "Where it began",
+    "use": "The pairing piece for every destination. Each of them started as a camp and one block.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 700,
+      "height": 440
+    }
+  },
+  {
+    "id": "scene-nile",
+    "kind": "destination",
+    "name": "nile",
+    "title": "Three pyramids and obelisks by a river",
+    "stage": "The Nile",
+    "use": "Destination. Scale built one block at a time.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 500
+    }
+  },
+  {
+    "id": "scene-acropolis",
+    "kind": "destination",
+    "name": "acropolis",
+    "title": "A columned temple on a rock",
+    "stage": "The Acropolis",
+    "use": "Destination. Craft and reputation that lasts.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 480
+    }
+  },
+  {
+    "id": "scene-forum",
+    "kind": "destination",
+    "name": "forum",
+    "title": "An aqueduct, an arena and a triumphal arch",
+    "stage": "The Forum",
+    "use": "Destination. Roads and systems that carry the work.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 860,
+      "height": 460
+    }
+  },
+  {
+    "id": "scene-jungle",
+    "kind": "destination",
+    "name": "jungle",
+    "title": "Stepped pyramids rising out of jungle",
+    "stage": "The Stepped City",
+    "use": "Destination. One level, then the next.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 500
+    }
+  },
+  {
+    "id": "scene-ridge",
+    "kind": "destination",
+    "name": "ridge",
+    "title": "A tiered tower below a long wall with watchtowers",
+    "stage": "The Long Wall",
+    "use": "Destination. Something that keeps going past the horizon.",
+    "width": 1200,
+    "height": 800,
+    "banner": {
+      "width": 760,
+      "height": 500
+    }
+  },
+  {
+    "id": "spot-walker",
+    "kind": "spot",
+    "name": "walker",
+    "title": "A lone walker",
+    "stage": "",
+    "use": "Profile, your seats, anything about you.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-signpost",
+    "kind": "spot",
+    "name": "signpost",
+    "title": "A signpost with two arrows",
+    "stage": "",
+    "use": "Choosing a way in. Compare the routes.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-camp",
+    "kind": "spot",
+    "name": "camp",
+    "title": "A tent and a campfire",
+    "stage": "",
+    "use": "Community, peers and messages.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-flag",
+    "kind": "spot",
+    "name": "flag",
+    "title": "A flag on a hilltop",
+    "stage": "",
+    "use": "A deal won, a goal reached.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-sunrise",
+    "kind": "spot",
+    "name": "sunrise",
+    "title": "A quiet valley at sunrise",
+    "stage": "",
+    "use": "Empty states. Nothing here yet.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-lost",
+    "kind": "spot",
+    "name": "lost",
+    "title": "A walker where the trail stops at a rock face",
+    "stage": "",
+    "use": "404 and errors.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-gate",
+    "kind": "spot",
+    "name": "gate",
+    "title": "A lit gateway with a road leading in",
+    "stage": "",
+    "use": "Sign in, get started, unlock.",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "id": "spot-beacon",
+    "kind": "spot",
+    "name": "beacon",
+    "title": "A tower with a light at the top",
+    "stage": "",
+    "use": "Alerts, signals and Why Now.",
+    "width": 400,
+    "height": 400
+  }
+];
 export type IllustrationId = "scene-terraces" | "scene-arcade" | "scene-bridge" | "scene-doors" | "scene-summit" | "scene-rotunda" | "scene-beacon" | "spot-door" | "spot-stairs" | "spot-bridge" | "spot-beacon" | "spot-garden" | "spot-dead-end" | "spot-match" | "spot-pin";

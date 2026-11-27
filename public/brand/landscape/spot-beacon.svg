@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A tower with a light at the top">
+<title>A tower with a light at the top</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<path d="M217 400Q280 285 310 170Q340 285 403 400Z" fill="#E9DFF5"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#2B5B4B"/>
+<rect x="168" y="92" width="64" height="170" fill="#FBF8F1"/><path d="M187.2 262V217A12.8 12.8 0 0 1 212.8 217V262Z" fill="#10392F"/>
+<rect x="160" y="84" width="80" height="12" rx="0" fill="#E9DFF5"/>
+<circle cx="200" cy="56" r="16" fill="#F0BE6A"/>
+<path d="M200 22Q206.1 49.9 234 56Q206.1 62.1 200 90Q193.9 62.1 166 56Q193.9 49.9 200 22Z" fill="#F0BE6A"/>
+<rect x="97.9" y="290.2" width="4.2" height="9.8" fill="#10392F"/><path d="M83.9 291.6L100 265L116.1 291.6Z" fill="#10392F"/><path d="M87.8 273.4L100 246.8L112.2 273.4Z" fill="#10392F"/><path d="M91.6 255.2L100 228.6L108.4 255.2Z" fill="#10392F"/>
+<path d="M330 101Q331.6 108.4 339 110Q331.6 111.6 330 119Q328.4 111.6 321 110Q328.4 108.4 330 101Z" fill="#D29B43"/>
+</g></svg>

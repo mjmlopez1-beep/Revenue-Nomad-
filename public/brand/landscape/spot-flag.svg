@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A flag on a hilltop">
+<title>A flag on a hilltop</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<circle cx="200" cy="170" r="80" fill="#F0BE6A"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#7955B5"/>
+<path d="M200 252V102" stroke="#17241E" stroke-width="5.3" stroke-linecap="round"/><path d="M200 102L263 123L200 147Z" fill="#D29B43"/>
+<rect x="87.9" y="300.2" width="4.2" height="9.8" fill="#10392F"/><path d="M73.9 301.6L90 275L106.1 301.6Z" fill="#10392F"/><path d="M77.8 283.4L90 256.8L102.2 283.4Z" fill="#10392F"/><path d="M81.6 265.2L90 238.6L98.4 265.2Z" fill="#10392F"/>
+<rect x="308.3" y="308.2" width="3.4" height="7.8" fill="#10392F"/><path d="M297.1 309.3L310 288L322.9 309.3Z" fill="#10392F"/><path d="M300.2 294.7L310 273.4L319.8 294.7Z" fill="#10392F"/><path d="M303.3 280.2L310 258.9L316.7 280.2Z" fill="#10392F"/>
+<path d="M320 69Q322 78 331 80Q322 82 320 91Q318 82 309 80Q318 78 320 69Z" fill="#D29B43"/>
+<path d="M70 112Q71.4 118.6 78 120Q71.4 121.4 70 128Q68.6 121.4 62 120Q68.6 118.6 70 112Z" fill="#D29B43"/>
+</g></svg>

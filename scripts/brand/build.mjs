@@ -4,6 +4,8 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SCENES, SPOTS, THEMES, render } from "./scenes.mjs";
+import { kit, wrap, NIGHT } from "./landscape.mjs";
+import { JOURNEY, DESTINATIONS, SPOTS as LAND_SPOTS, rail, W as LW, H as LH, S as LS } from "./journey.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const out = join(root, "public", "brand");
@@ -69,7 +71,24 @@ write(
 </svg>`
 );
 
-write("manifest.json", JSON.stringify({ themes: THEMES, illustrations: manifest }, null, 2));
+// ---- landscapes: the journey -----------------------------------------
+const K = kit();
+const landscapes = [];
+for (const [name, def] of Object.entries({ ...JOURNEY, ...DESTINATIONS })) {
+  const body = def.draw(K);
+  const kind = name in DESTINATIONS ? "destination" : "scene";
+  write(`landscape/scene-${name}.svg`, wrap(body, { w: LW, h: LH, title: def.title, radius: 28 }));
+  write(`landscape/banner-${name}.svg`, wrap(body, { w: LW, h: LH, crop: def.banner, title: def.title }));
+  landscapes.push({ id: `scene-${name}`, kind, name, title: def.title, stage: def.stage, use: def.use, width: LW, height: LH, banner: { width: def.banner[2], height: def.banner[3] } });
+}
+for (const [name, def] of Object.entries(LAND_SPOTS)) {
+  write(`landscape/spot-${name}.svg`, wrap(def.draw(K), { w: LS, h: LS, title: def.title, radius: 28 }));
+  landscapes.push({ id: `spot-${name}`, kind: "spot", name, title: def.title, stage: "", use: def.use, width: LS, height: LS });
+}
+write("landscape/rail-night.svg", wrap(rail(kit(NIGHT)), { w: 480, h: 330, title: "Hills at dusk" }));
+write("landscape/rail-day.svg", wrap(rail(K), { w: 480, h: 330, title: "Hills at sunrise" }));
+
+write("manifest.json", JSON.stringify({ themes: THEMES, illustrations: manifest, landscapes }, null, 2));
 
 const lib = join(root, "lib", "brand");
 mkdirSync(lib, { recursive: true });
@@ -90,7 +109,19 @@ export interface IllustrationMeta {
 }
 export const THEMES = ${JSON.stringify(THEMES, null, 2)} as const;
 export const ILLUSTRATIONS: IllustrationMeta[] = ${JSON.stringify(manifest, null, 2)};
+export interface LandscapeMeta {
+  id: string;
+  kind: IllustrationKind | "destination";
+  name: string;
+  title: string;
+  stage: string;
+  use: string;
+  width: number;
+  height: number;
+  banner?: { width: number; height: number };
+}
+export const LANDSCAPES: LandscapeMeta[] = ${JSON.stringify(landscapes, null, 2)};
 export type IllustrationId = ${manifest.map((m) => JSON.stringify(m.id)).join(" | ")};
 `
 );
-console.log(`Wrote ${manifest.length} illustrations x ${Object.keys(THEMES).length} themes to public/brand`);
+console.log(`Wrote ${landscapes.length} landscapes and ${manifest.length} illustrations x ${Object.keys(THEMES).length} themes to public/brand`);

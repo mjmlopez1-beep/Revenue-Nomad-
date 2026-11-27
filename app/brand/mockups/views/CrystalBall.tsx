@@ -1,5 +1,4 @@
-import Illustration from "../../Illustration";
-import { Logo, Route, Shell, artOf, type MockTheme } from "../Shell";
+import { Art, Logo, Route, Shell, type MockTheme } from "../Shell";
 
 const ROWS: { name: string; facts: string; band: "High" | "Medium" | "Low"; why: string[]; when: string; move: string; way: string; sel?: boolean }[] = [
   { name: "Larkspur Learning", facts: "EdTech · $10M-$20M", band: "High", why: ["Fractional seat ended", "No leader on their team page"], when: "Today", move: "Message Dana", way: "Dana held the seat", sel: true },
@@ -39,7 +38,6 @@ function Likely({ band }: { band: "High" | "Medium" | "Low" }) {
 }
 
 export default function CrystalBall({ theme }: { theme: MockTheme }) {
-  const art = artOf(theme);
   return (
     <Shell theme={theme} active="crystal-ball" crumb="Signals / Crystal Ball">
       <div className="mk-page">
@@ -48,7 +46,7 @@ export default function CrystalBall({ theme }: { theme: MockTheme }) {
             <h1>Your Crystal Ball</h1>
             <p>14 companies likely to hire a fractional Sales leader next.</p>
           </div>
-          <Illustration theme={art} name="spot-beacon" alt="" className="mk-headart" />
+          <Art theme={theme} land="banner-lookout" arch="spot-beacon" className="mk-headart" />
         </div>
 
         <div className="mk-bands">

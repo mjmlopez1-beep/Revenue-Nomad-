@@ -1,13 +1,13 @@
 import Illustration from "../../Illustration";
-import { Switcher, artOf, type MockTheme } from "../Shell";
+import { Art, Switcher, artOf, type MockTheme } from "../Shell";
 
 const FUNCTIONS = ["Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM", "Technology", "Finance", "Operations", "People", "Product", "Legal", "Executive"];
 
 const FEATURES = [
-  { art: "spot-beacon", pill: "Find the next client", title: "See who is likely to hire your function next", body: "Crystal Ball ranks companies High, Medium or Low. Hiring now lists every open fractional role." },
-  { art: "spot-bridge", pill: "Get in the door", title: "Know who held the seat, who decides and who you know there", body: "Warm paths show the person in between and how strong the route is." },
-  { art: "spot-stairs", pill: "Price it", title: "Price your work on what fractionals charge", body: "Rate benchmarks by function and client size, per month and per hour." },
-  { art: "spot-match", pill: "Close it", title: "Send the proposal, get it signed", body: "Pipeline, proposals and e-signature in one place." },
+  { art: "spot-beacon", land: "spot-beacon", pill: "Find the next client", title: "See who is likely to hire your function next", body: "Crystal Ball ranks companies High, Medium or Low. Hiring now lists every open fractional role." },
+  { art: "spot-bridge", land: "spot-gate", pill: "Get in the door", title: "Know who held the seat, who decides and who you know there", body: "Warm paths show the person in between and how strong the route is." },
+  { art: "spot-stairs", land: "spot-signpost", pill: "Price it", title: "Price your work on what fractionals charge", body: "Rate benchmarks by function and client size, per month and per hour." },
+  { art: "spot-match", land: "spot-flag", pill: "Close it", title: "Send the proposal, get it signed", body: "Pipeline, proposals and e-signature in one place." },
 ] as const;
 
 const PLANS = [
@@ -48,7 +48,7 @@ export default function Landing({ theme }: { theme: MockTheme }) {
             </div>
             <p className="mk-fine">Built by Revenue Nomad, the network of 500+ fractionals.</p>
           </div>
-          <Illustration theme={art} name="scene-terraces" labeled priority />
+          <Art theme={theme} land="scene-trailhead" arch="scene-terraces" labeled priority />
         </section>
 
         <div className="mk-works">
@@ -70,6 +70,36 @@ export default function Landing({ theme }: { theme: MockTheme }) {
           ))}
         </div>
 
+        {theme === "color" && (
+          <>
+            <section className="mk-sec mk-split">
+              <Art theme={theme} land="scene-fork" />
+              <div>
+                <span className="mk-eyebrow">Why Merlin</span>
+                <h2 className="mk-h2">Most fractionals start out alone.</h2>
+                <p className="lead">
+                  You work from home, with no coworkers and no pipeline, and the usual advice is cold
+                  outreach. That road is steep and it mostly stops short.
+                </p>
+                <p className="lead">
+                  Merlin shows you the warmer one: which companies are about to hire, who held the
+                  seat before you, and who can walk you in.
+                </p>
+              </div>
+            </section>
+            <section className="mk-sec">
+              <span className="mk-eyebrow">Where it leads</span>
+              <h2 className="mk-h2">Every one of these started as a camp and a first stone.</h2>
+              <p className="lead">Your practice is the thing you are building. We help you find the best road to it.</p>
+              <div className="mk-dest">
+                {["first-stone", "nile", "acropolis", "forum", "jungle", "ridge"].map((d) => (
+                  <Art key={d} theme={theme} land={`scene-${d}`} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
         <section className="mk-sec">
           <span className="mk-eyebrow">What you can do with Merlin</span>
           <h2 className="mk-h2">Find the client, get in, price it and close it.</h2>
@@ -77,7 +107,7 @@ export default function Landing({ theme }: { theme: MockTheme }) {
           <div className="mk-grid c4" style={{ marginTop: 32 }}>
             {FEATURES.map((f) => (
               <article className="mk-card mk-feature" key={f.pill}>
-                <Illustration theme={art} name={f.art} alt="" />
+                <Art theme={theme} land={f.land} arch={f.art} />
                 <div>
                   <span className="mk-pill lime">{f.pill}</span>
                   <h3>{f.title}</h3>
@@ -134,7 +164,7 @@ export default function Landing({ theme }: { theme: MockTheme }) {
         </section>
 
         <section className="mk-cta">
-          <Illustration theme={art} name="scene-arcade" alt="" />
+          <Art theme={theme} land="scene-acropolis" arch="scene-arcade" />
           <div>
             <h2>
               Find the companies that hire <em style={{ fontFamily: "var(--ml-serif)", fontWeight: 500, color: "var(--ml-lime)" }}>your function</em>

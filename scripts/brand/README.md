@@ -54,3 +54,24 @@ Labels are set in Inter with a Helvetica and Arial fallback. An SVG loaded throu
 - `build.mjs` writes every theme and variant, plus `lib/brand/manifest.ts`.
 
 To add one, write a draw function in `scenes.mjs`, register it in `SCENES` or `SPOTS` with a title and a use note, then rebuild. Framing is automatic: each illustration is measured and scaled to fit its canvas.
+
+## The journey (landscape set)
+
+A second illustration family in `public/brand/landscape`: flat, geometric landscapes in the full palette. They tell one story. A fractional sets out alone, chooses the warm road over the cold one, finds others on the same trail and builds a practice of their own.
+
+| Set | Files | What it is |
+|---|---|---|
+| Journey scenes | `scene-trailhead`, `scene-fork`, `scene-lookout`, `scene-bridge`, `scene-company`, `scene-summit`, `scene-empire` | The story in order, 1200 x 800 |
+| Destinations | `scene-nile`, `scene-acropolis`, `scene-forum`, `scene-jungle`, `scene-ridge`, with `scene-first-stone` as the origin | What people built, shown without words, and where each began |
+| Banners | `banner-<name>` | A wide crop of each scene for page headers |
+| Spots | `spot-walker`, `spot-signpost`, `spot-camp`, `spot-flag`, `spot-sunrise`, `spot-lost`, `spot-gate`, `spot-beacon` | 400 x 400 |
+| Sidebar strip | `rail-night`, `rail-day` | Hills for the foot of the navigation rail |
+
+Rules for this family:
+
+- The gold road is the warm path. The cold road is a dotted terracotta trail up a grey mountain, and it always stops short.
+- The walker is small and usually alone. A second walker in blue is a fellow fractional or the person making the introduction.
+- A lit doorway and a flag mark the destination, the same as in the architecture set.
+- Files have no background. Place them on ivory, white or lilac.
+
+Sources are `landscape.mjs` (the drawing kit) and `journey.mjs` (the scenes).

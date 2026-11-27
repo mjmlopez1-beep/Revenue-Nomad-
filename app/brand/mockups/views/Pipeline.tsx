@@ -1,4 +1,4 @@
-import { Logo, Shell, artOf, type MockTheme } from "../Shell";
+import { Art, Logo, Shell, type MockTheme } from "../Shell";
 
 interface Deal { name: string; pitch: string; value: string; way: string; next: string; due: string; hot?: boolean }
 const COLS: { stage: string; total: string; deals: Deal[]; won?: boolean }[] = [
@@ -22,7 +22,6 @@ const COLS: { stage: string; total: string; deals: Deal[]; won?: boolean }[] = [
 ];
 
 export default function Pipeline({ theme }: { theme: MockTheme }) {
-  const art = artOf(theme);
   return (
     <Shell theme={theme} active="pipeline" crumb="Close / Pipeline">
       <div className="mk-page">
@@ -31,6 +30,7 @@ export default function Pipeline({ theme }: { theme: MockTheme }) {
             <h1>Pipeline</h1>
             <p>5 open · $46,500 a month in play · 1 next move due</p>
           </div>
+          {theme === "color" && <Art theme={theme} land="banner-summit" className="mk-headart" />}
           <div className="mk-actions">
             <a className="mk-btn ghost" href="#">Add from a list</a>
             <a className="mk-btn" href="#">+ Add a deal</a>

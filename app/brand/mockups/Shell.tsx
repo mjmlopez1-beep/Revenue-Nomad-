@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type React from "react";
 import type { ReactNode } from "react";
+import Illustration from "../Illustration";
+import type { IllustrationId } from "@/lib/brand/manifest";
 
 export const THEMES = ["color", "night"] as const;
 export type MockTheme = (typeof THEMES)[number];
@@ -47,6 +49,15 @@ export function Icon({ name }: { name: keyof typeof ICONS | string }) {
       <path d={ICONS[name] || ICONS.home} />
     </svg>
   );
+}
+
+/** Landscape art in the color theme, architecture line art in the night theme. */
+export function Art({ theme, land, arch, labeled, className, priority }: { theme: MockTheme; land: string; arch?: IllustrationId; labeled?: boolean; className?: string; priority?: boolean }) {
+  if (theme === "color") {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={`/brand/landscape/${land}.svg`} alt="" className={className} loading={priority ? "eager" : "lazy"} />;
+  }
+  return arch ? <Illustration theme="dark" name={arch} labeled={labeled} alt="" className={className} priority={priority} /> : null;
 }
 
 export function Lock({ children }: { children: ReactNode }) {
@@ -185,6 +196,8 @@ export function Shell({ active, theme, crumb, children }: { active: string; them
               </div>
             ))}
           </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {theme === "color" && <img className="mk-rail-art" src="/brand/landscape/rail-night.svg" alt="" />}
           <div className="mk-side-foot">
             <div className="mk-credits">
               <div className="mk-row between">

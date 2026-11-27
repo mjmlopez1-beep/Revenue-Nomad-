@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A lit gateway with a road leading in">
+<title>A lit gateway with a road leading in</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<path d="M3.2 400Q62 280 90 160Q118 280 176.8 400Z" fill="#E9DFF5"/>
+<circle cx="320" cy="120" r="44" fill="#F0BE6A"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#6FA487"/>
+<rect x="140" y="112" width="120" height="150" fill="#FBF8F1"/><path d="M176 262V196A24 24 0 0 1 224 196V262Z" fill="#F0BE6A"/>
+<rect x="132" y="104" width="136" height="12" rx="0" fill="#E9DFF5"/>
+<path d="M181.1 426.1L182.3 422L184 416.9L186.1 410.5L188.5 403.2L191.2 395.3L194 386.9L196.8 378.2L199.6 369.4L202.3 360.7L204.8 352.3L207 344.2L208.9 336.6L210.4 329.4L211.5 322.2L212.4 315.3L213.1 308.5L213.6 302L214 295.8L214.2 290.1L214.4 284.8L214.5 280L214.6 275.9L214.7 272.7L214.9 270L185.1 266L184.5 269.2L183.9 273.1L183.3 277.4L182.7 282L181.9 287L181 292.2L180 297.5L178.7 302.9L177.3 308.3L175.5 313.6L173.5 318.6L171.1 323.4L168.2 328.4L164.4 334.2L160.1 340.5L155.2 347.2L150.1 354.1L144.8 360.9L139.5 367.6L134.4 374L129.7 379.9L125.4 385.3L121.7 390.1L118.9 393.9Z" fill="#D29B43"/>
+<path d="M70 80Q71.8 88.2 80 90Q71.8 91.8 70 100Q68.2 91.8 60 90Q68.2 88.2 70 80Z" fill="#D29B43"/>
+</g></svg>

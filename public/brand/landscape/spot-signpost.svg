@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="A signpost with two arrows">
+<title>A signpost with two arrows</title>
+<defs><clipPath id="c"><rect x="0" y="0" width="400" height="400" rx="28"/></clipPath></defs><g clip-path="url(#c)">
+<path d="M207 400Q270 270 300 140Q330 270 393 400Z" fill="#E9DFF5"/>
+<circle cx="110" cy="160" r="46" fill="#F0BE6A"/>
+<path d="M-30 400A230 150 0 0 1 430 400Z" fill="#2B5B4B"/>
+<path d="M200 256V108" stroke="#17241E" stroke-width="10" stroke-linecap="round"/><path d="M192 116h80l22 18l-22 18h-80Z" fill="#D29B43"/><path d="M208 164h-68l-20 16l20 16h68Z" fill="#B65E40"/>
+<rect x="317.9" y="280.2" width="4.2" height="9.8" fill="#10392F"/><path d="M303.9 281.6L320 255L336.1 281.6Z" fill="#10392F"/><path d="M307.8 263.4L320 236.8L332.2 263.4Z" fill="#10392F"/><path d="M311.6 245.2L320 218.6L328.4 245.2Z" fill="#10392F"/>
+<path d="M330 80Q331.8 88.2 340 90Q331.8 91.8 330 100Q328.2 91.8 320 90Q328.2 88.2 330 80Z" fill="#D29B43"/>
+</g></svg>
