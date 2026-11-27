@@ -8684,6 +8684,8 @@ const CASE_MOTION: Record<string, string> = { "Product-led": "PLG", "Sales-led":
  * member worked there: the seat's "revenue then" and "employees then", else what is on file today.
  */
 function memberClients(seed: Seed, s: State, memberId: string): ClientFacts[] {
+  // A state with no records of its own (a profile read on its own): nothing to learn from.
+  if (!Array.isArray(s.companies) || !Array.isArray(s.engagements)) return [];
   const g = viewGraph(seed, s);
   const by = new Map<string, ClientFacts>();
   const loose: ClientFacts[] = [];

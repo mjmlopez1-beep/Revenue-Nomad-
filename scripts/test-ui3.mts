@@ -212,21 +212,28 @@ async function main() {
   const pkg = read("package.json");
   check("the fonts are bundled, no Google Fonts link", /@fontsource-variable\/fraunces/.test(pkg) && /@fontsource-variable\/geist"/.test(pkg) && !/fonts\.googleapis/.test(css + shell + read("app/post/ui3/fonts.ts")));
 
-  /* ---------- the fit: seven traits from facts on file ---------- */
+  /* ---------- the fit, split in two: criteria of the ideal client on file, and the buying signals apart ---------- */
   const { deriveAll } = await import("../app/post/model");
-  const { fit7, bandOf } = await import("../app/post/ui3/model");
+  const { fit7, fitFor, bandOf, fitCount, FIT_TIP } = await import("../app/post/ui3/model");
   const infos = deriveAll(v.companies);
   const i0 = infos.find((x) => x.c.engagements.length > 0) ?? infos[0];
   check("the made-up seed's companies reach the fit", !!i0, infos.map((x) => x.c.id));
-  const none = fit7(i0, { icp: null, function: "Sales" });
-  check("no ideal client: its four traits are not matched", none.traits.slice(0, 4).every((x) => !x.on) && none.traits.length === 7);
-  const full = fit7(i0, { icp: { industries: ["SaaS"], employees: ["51–200"], revenue: ["$1M–$5M"], countries: ["United States"] }, function: "Sales" });
-  check("a matching ideal client and a past Sales hire: the traits that match are on", full.traits.find((x) => x.key === "industry")!.on && full.traits.find((x) => x.key === "size")!.on && full.traits.find((x) => x.key === "yourFn")!.on, full.traits);
-  check("bands come from the count only", bandOf(7) === "Strong opportunity" && bandOf(6) === "Strong opportunity" && bandOf(5) === "Good opportunity" && bandOf(4) === "Good opportunity" && bandOf(3) === "Worth watching");
-  // The ring reads as traits matched, never a chance of winning: a "fit" caption, "x of 7 traits" in its name, and which traits match.
+  const none = fitFor(i0, { icp: null, function: "Sales" });
+  check("no ideal client: nothing is asked, nothing is counted, and the buying signals still read", none.traits.length === 0 && none.n === 0 && none.of === 0 && none.asked === 0 && none.signals.length === 4 && fitCount(none) === "Set your ideal client to see fit", none);
+  const full = fitFor(i0, { icp: { industries: ["SaaS"], employees: ["51–200"], revenue: ["$1M–$5M"], countries: ["United States"] }, function: "Sales" });
+  check("a matching ideal client and a past Sales hire: the criteria that match are on, and the hire is a buying signal, not a criterion", full.traits.find((x) => x.key === "industries")!.on && full.traits.find((x) => x.key === "employees")!.on && full.signals.find((x) => x.key === "yourFn")!.on && !full.traits.some((x) => (x.key as string) === "yourFn"), full);
+  check("the count is of the criteria on file: one not on file is listed, never counted", full.of === full.traits.filter((x) => !x.unknown).length && full.n === full.traits.filter((x) => x.on).length && full.traits.filter((x) => x.unknown).every((x) => x.value === "Not on file" && !x.on));
+  const more = fitFor(i0, { icp: { industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: [], motion: ["PLG"], dealSize: ["$150K+"] }, function: "Sales" });
+  check("a criterion nobody has added a fact for is Not on file, and the count is unchanged by it", more.traits.find((x) => x.key === "motion")?.unknown === true && more.traits.find((x) => x.key === "motion")?.fact === "motion" && more.of === 2 && more.n === 2 && more.asked === 4, more);
+  check("the member's own client is never scored", ((f) => !!f.client && f.traits.length === 0 && f.of === 0)(fitFor(i0, { icp: { industries: ["SaaS"], employees: [], revenue: [], countries: [] }, function: "Sales", clients: [{ id: i0.c.id, current: true, words: "Your client since Feb 2025" }] })));
+  check("the older name reads the same fit", fit7 === fitFor);
+  check("bands are words from the share of known criteria matched", bandOf(4, 4) === "Strong opportunity" && bandOf(3, 4) === "Strong opportunity" && bandOf(2, 4) === "Good opportunity" && bandOf(1, 4) === "Worth watching" && bandOf(2, 2) === "Good opportunity" && bandOf(0, 0) === "Worth watching");
+  // The ring reads as criteria matched of the ones on file, never a chance of winning: a "fit" caption, its count in its name, and which match, which don't and which are not on file.
   const parts = read("app/post/ui3/parts.tsx");
-  check("the fit ring: a fit caption, its name says traits matched, and its popover lists each trait", /m-fit-cap">fit</.test(parts) && /`Fit: \$\{f\.n\} of \$\{of\} traits match/.test(parts) && /Not matched: /.test(parts) && /not a chance of winning/.test(parts) && /fit\.traits\.map/.test(parts));
-  check("an ideal client part the member hasn't set says so", none.traits[0].value === "Not set in your ideal client", none.traits[0]);
+  check("the fit ring: a fit caption, its name says what is on file, and its popover lists each criterion and the buying signals apart", /m-fit-cap">fit</.test(parts) && /on file match/.test(parts) && /Not matched: /.test(parts) && /Not on file: /.test(parts) && /Buying signals/.test(parts) && /not a chance of winning/.test(parts) && /fit\.traits\.map/.test(parts) && /fit\.signals\.map/.test(parts));
+  check("the member's own client shows its words where the ring would be", /if \(fit\.client\) return <ClientTag/.test(parts));
+  check("the tooltip says a fact not on file is left out, with no percentage", /not on file is left out/i.test(FIT_TIP) && !/%|percent|of 7/.test(FIT_TIP));
+  for (const f of ["app/post/ui3/Targets.tsx", "app/post/ui3/Company.tsx", "app/post/ui3/Crystal.tsx", "app/post/ui3/Home.tsx", "app/post/ui3/Network.tsx", "app/post/ui3/data.ts"]) check(`${f} no longer counts out of seven`, !/of 7|fit\.n >= \d/.test(read(f)));
 
   /* ---------- the acceptance test's findings (2026-11-25): one source, every surface agrees ---------- */
   {

@@ -1662,8 +1662,8 @@ export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string |
   if (Object.values(p).includes(false)) return null;
   const miss = (Object.keys(UNKNOWN_WORD) as (keyof typeof UNKNOWN_WORD)[]).filter((k) => p[k] === null).map((k) => UNKNOWN_WORD[k]);
   if (!miss.length) return null;
-  // The four free facts by name; past them a count, so the line under a name stays one line.
-  const shownWords = miss.length > 3 ? [...miss.slice(0, 2), `${miss.length - 2} more`] : miss;
+  // Up to four by name; past them a count, so the line under a name stays one line.
+  const shownWords = miss.length > 4 ? [...miss.slice(0, 3), `${miss.length - 3} more`] : miss;
   const words = shownWords.length === 1 ? shownWords[0] : `${shownWords.slice(0, -1).join(", ")} and ${shownWords[shownWords.length - 1]}`;
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} not on file`;
 }
