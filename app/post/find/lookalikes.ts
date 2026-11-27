@@ -16,7 +16,7 @@
  * lookalikesFor(infos, me) (or with the seed ids it just added), which returns the profile's
  * words and the ranked rows, and likeFilters() for the Find address to open.
  */
-import type { Me } from "@/lib/tableTypes";
+import type { IcpDropped, Me } from "@/lib/tableTypes";
 import {
   EMPTY_FILTERS, LIKE_TRAITS, applyFilters, likeParts, likeShared, mySeats, regionOf, repeatHirer, rowsFor, shown,
   type CoInfo, type Filters, type LikeTrait, type Row,
@@ -28,10 +28,25 @@ export function defaultSeeds(infos: CoInfo[], me: Me): string[] {
   return [...new Set(mySeats(infos, me).map((s) => s.i.c.id))];
 }
 
-/** The profile's tokens from seed companies. A trait no seed has on file is left out. */
-export function profileOf(seeds: CoInfo[]): string[] {
+/**
+ * A past client's revenue or size as of when the member worked there: their own seat's "revenue
+ * then" or "employees then", else what is on file today (the learned ideal client reads a client
+ * the same way, lib/idealClient.ts).
+ */
+export function thenFact(i: CoInfo, k: "revenue" | "employees"): string | null {
+  for (const e of i.engs) if (e.yours && shown(e.cells[k])) return shown(e.cells[k]);
+  return shown(i.c.cells[k]);
+}
+
+/**
+ * The profile's tokens from seed companies. A trait no seed has on file is left out. `dropped`:
+ * the values the member dropped from their learned ideal client (Me.ideal.dropped), left out here
+ * too, so Lookalikes searches by the same learned profile.
+ */
+export function profileOf(seeds: CoInfo[], dropped?: IcpDropped | null): string[] {
   if (!seeds.length) return [];
-  const add = (set: Set<string>, v: string | null | undefined) => v && set.add(v);
+  const off = (k: "industries" | "employees" | "revenue", v: string) => (dropped?.[k] ?? []).some((x) => x.trim().toLowerCase() === v.trim().toLowerCase());
+  const add = (set: Set<string>, v: string | null | undefined, k?: "industries" | "employees" | "revenue") => v && !(k && off(k, v)) && set.add(v);
   const ind = new Set<string>();
   const emp = new Set<string>();
   const rev = new Set<string>();
@@ -39,9 +54,9 @@ export function profileOf(seeds: CoInfo[]): string[] {
   const fns = new Set<string>();
   let rep = 0;
   for (const i of seeds) {
-    add(ind, shown(i.c.cells.industry));
-    add(emp, shown(i.c.cells.employees));
-    add(rev, shown(i.c.cells.revenue));
+    add(ind, shown(i.c.cells.industry), "industries");
+    add(emp, thenFact(i, "employees"), "employees");
+    add(rev, thenFact(i, "revenue"), "revenue");
     add(reg, regionOf(i.c));
     for (const f of i.fnState.hired) if (f !== "Other") fns.add(f);
     if (repeatHirer(i)) rep++;
@@ -140,7 +155,7 @@ export function lookalikesFor(infos: CoInfo[], me: Me, seedIds?: string[]) {
   const ids = seedIds ?? defaultSeeds(infos, me);
   const byId = new Map(infos.map((i) => [i.c.id, i]));
   const seeds = ids.map((id) => byId.get(id)).filter((i): i is CoInfo => !!i);
-  const tokens = profileOf(seeds);
+  const tokens = profileOf(seeds, me.ideal?.dropped);
   const rows = tokens.length ? applyFilters(rowsFor("companies", infos), likeFilters(tokens), "all", "", me, true).rows : [];
   return { seeds, tokens, words: profileWords(tokens), ranked: rankLike(rows, tokens, seeds) };
 }

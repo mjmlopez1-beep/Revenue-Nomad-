@@ -11,7 +11,7 @@
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import type { CompanyRec, Icp, SavedViewRec } from "@/lib/tableTypes";
-import { FUNCTIONS, INDUSTRY_GROUPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "@/lib/tableFields";
+import { BUSINESS_MODELS, CUSTOMER_SIZES, FUNCTIONS, INDUSTRY_GROUPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES } from "@/lib/tableFields";
 import { IconCheck, IconSearch } from "../ui/shared";
 import { countryKey, countryName, countryOf, deriveAll, icpEmpty, icpLabel, isFirm, shown, type CoInfo } from "./model";
 import { BEFORE_MAX, beforeOrder, toggleBefore } from "../onboard/firstView";
@@ -65,6 +65,64 @@ function Chips({ options, on, toggle, label, name }: { options: string[]; on: (o
 
 const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
+/** The question the newer criteria sit under, in Settings and in onboarding. */
+export const SELL_Q = "How do your best clients sell?";
+export const SELL_NOTE = "Optional. Pick what you know and skip the rest.";
+
+/**
+ * How the member's best clients sell: who they sell to (up to a few industries), how big their
+ * customers are, their business model, sales motion, deal size and sales cycle. Quick picks, every
+ * one optional. `only`: show just these (onboarding leaves out none; a short form can).
+ */
+export function SellFields({ value, onChange, industries, headingClass = "hunt-h" }: { value: Icp; onChange: (v: Icp) => void; industries: { name: string; n: number }[]; headingClass?: string }) {
+  const [q, setQ] = useState("");
+  const words = q.trim().toLowerCase();
+  const sells = value.sellsTo ?? [];
+  const found = words ? industries.filter((x) => x.name.toLowerCase().includes(words) && !sells.includes(x.name)).slice(0, 10).map((x) => x.name) : [];
+  const shownSell = words ? [...sells, ...found] : [...new Set([...sells, ...industries.slice(0, 8).map((x) => x.name)])];
+  const set = (k: "sellsTo" | "customerSize" | "businessModel" | "motion" | "dealSize" | "salesCycle", o: string) => {
+    const next = flip(value[k] ?? [], o);
+    onChange({ ...value, [k]: next });
+  };
+  const row = (k: "customerSize" | "businessModel" | "motion" | "dealSize" | "salesCycle", name: string, options: string[]) => (
+    <fieldset className="hunt-q">
+      <legend className={headingClass}>{name}</legend>
+      <Chips name={name} options={options} on={(o) => (value[k] ?? []).includes(o)} toggle={(o) => set(k, o)} />
+    </fieldset>
+  );
+  return (
+    <>
+      <fieldset className="hunt-q">
+        <legend className={headingClass}>They sell to</legend>
+        <Chips name="They sell to" options={shownSell} on={(o) => sells.includes(o)} toggle={(o) => (set("sellsTo", o), setQ(""))} />
+        <label className="tp-fsearch hunt-isearch">
+          <IconSearch size={13} />
+          <input
+            className="tp-bare"
+            type="search"
+            placeholder="Search the industries their customers are in"
+            aria-label="Search the industries their customers are in"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (found[0]) set("sellsTo", found[0]);
+              setQ("");
+            }}
+            enterKeyHint="done"
+          />
+        </label>
+      </fieldset>
+      {row("customerSize", "Their customers are", CUSTOMER_SIZES)}
+      {row("businessModel", "Business model", BUSINESS_MODELS)}
+      {row("motion", "Sales motion", RN_MOTIONS)}
+      {row("dealSize", "Average deal size", RN_DEAL_SIZES)}
+      {row("salesCycle", "Average sales cycle", RN_SALES_CYCLES)}
+    </>
+  );
+}
+
 /** The Ideal Fractional Profile as chips: industries, company size, client revenue and where. Every part is optional. */
 export function IcpFields({
   value,
@@ -72,6 +130,7 @@ export function IcpFields({
   industries,
   countries,
   headingClass = "hunt-h",
+  sell = true,
 }: {
   value: Icp;
   onChange: (v: Icp) => void;
@@ -79,6 +138,8 @@ export function IcpFields({
   countries: { name: string; n: number }[];
   /** The class of each part's heading (onboarding uses its own). */
   headingClass?: string;
+  /** Also ask how their best clients sell (SellFields). Onboarding asks it on its own screen. */
+  sell?: boolean;
 }) {
   const [indQ, setIndQ] = useState("");
   // The standard list is long (RN_INDUSTRIES): the most common 12 as chips, the ones picked, and a search for the rest.
@@ -168,6 +229,15 @@ export function IcpFields({
           })}
         </div>
       </fieldset>
+      {sell && (
+        <>
+          <p className="hunt-sell-h">
+            <strong>{SELL_Q}</strong>
+            <span>{SELL_NOTE}</span>
+          </p>
+          <SellFields value={value} onChange={onChange} industries={industries} headingClass={headingClass} />
+        </>
+      )}
     </div>
   );
 }

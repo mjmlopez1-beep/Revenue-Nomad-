@@ -134,7 +134,7 @@ export function Find(p: FindProps) {
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
   const seedIds = useMemo(() => seeds ?? defaultSeeds(infos, me), [seeds, infos, me]);
   const seedInfos = useMemo(() => seedIds.map((id) => byId.get(id)).filter((i): i is CoInfo => !!i), [seedIds, byId]);
-  const likeAll = useMemo(() => profileOf(seedInfos), [seedInfos]);
+  const likeAll = useMemo(() => profileOf(seedInfos, me.ideal?.dropped), [seedInfos, me.ideal?.dropped]);
   const like = useMemo(() => traitsOff.reduce((t, k) => withoutTrait(t, k), likeAll), [likeAll, traitsOff]);
   // The filters the run reads: on Lookalikes, the profile is one of them.
   const fx = useMemo<Filters>(() => (kind === "lookalikes" ? { ...f, like, icp: false } : f.like.length ? { ...f, like: [] } : f), [kind, f, like]);

@@ -5,7 +5,7 @@
  * new ones and the ideal client; Demand over six months (each company's dated signals on one lane,
  * gold when this week; hover a dot for what it was and when, click a lane to show only that
  * company); tabs by the kind of signal; and one row a company with the opening its strongest signal
- * points at, its fit (seven traits), Explore (Crystal Ball's own open: free on Trial and Pro, one a
+ * points at, how it fits the member's practice (and the buying signals, apart), Explore (Crystal Ball's own open: free on Trial and Pro, one a
  * day on Free, else the record with its price), Watch (follow) and Why it matters (every signal,
  * dated, why now, where Merlin found it, and how it fits).
  *
@@ -25,7 +25,7 @@ import { useUi3Head } from "./head";
 import { goTargets, useCoActs } from "./data";
 import { Ic } from "./icons";
 import { Band, Chip, CoLogo, FitRing, Traits, Wait } from "./parts";
-import { coFacts, coLine, coTitle, fit7, plural, predicted } from "./model";
+import { coFacts, coLine, coTitle, fit7, fitCount, plural, predicted } from "./model";
 import { oppTitle } from "./Home";
 
 const Legacy = dynamic(() => import("../crystal/CrystalBall").then((m) => m.CrystalBallPage), { ssr: false, loading: () => <Wait /> });
@@ -323,12 +323,22 @@ function OppRow({ r, fn, today, open, onWhy, onExplore, onWatch }: { r: CRow; fn
           </div>
           <figure className="spark fitfig">
             <figcaption>
-              <span className="m-small">How it fits</span>
-              <b>{fit.n} of 7 traits</b>
+              <span className="m-small">{fit.client ? "Your client" : "Fits your practice"}</span>
+              <b>{fit.client ? fit.client.words : fitCount(fit)}</b>
             </figcaption>
-            <Traits n={fit.n} />
+            {!fit.client && fit.of > 0 && <Traits n={fit.n} of={fit.of} />}
             <ul className="fitlist">
               {fit.traits.map((t) => (
+                <li key={t.key} className={t.on ? "on" : t.unknown ? "none" : ""}>
+                  <Ic n={t.on ? "check" : t.unknown ? "plus" : "x"} />
+                  {t.label}
+                  {t.unknown ? " · Not on file" : ""}
+                </li>
+              ))}
+            </ul>
+            <span className="m-small fitlist-h">Buying signals</span>
+            <ul className="fitlist">
+              {fit.signals.map((t) => (
                 <li key={t.key} className={t.on ? "on" : ""}>
                   <Ic n={t.on ? "check" : "x"} />
                   {t.label}

@@ -20,14 +20,15 @@
  *              No seats, or nothing on file to match: the step says so and is skipped.
  *   the rest   the ledger lines, the first company's rows, and the done screen's words.
  */
-import type { Icp, LedgerRow, Me, SavedViewCriteria } from "@/lib/tableTypes";
+import type { Icp, IcpKey, LedgerRow, Me, SavedViewCriteria } from "@/lib/tableTypes";
+import { ICP_NEW_KEYS, ICP_OPTIONS } from "@/lib/idealClient";
 import type { ListAlert } from "@/lib/mcp/alerts";
 import { RN_EMPLOYEES, industryWords } from "@/lib/tableFields";
 
 /** The seat scan's source on a seat (lib/table.ts SEAT_SCAN). */
 const SEAT_SCAN = "Seat scan";
 import {
-  EMPTY_FILTERS, absolutePlace, applyFilters, countryOf, criteriaOf, icpEmpty, icpLabel, mySeats, namedFn, regionOf, rowsFor, shown,
+  EMPTY_FILTERS, absolutePlace, applyFilters, coFitFacts, countryOf, criteriaOf, icpEmpty, icpLabel, mySeats, namedFn, regionOf, rowsFor, shown,
   type CoInfo, type Filters, type LikeTrait, type Row,
 } from "@/app/post/model";
 import { likeCriteria, likeFilters, profileOf, profileWords, rankLike, traitChips, withoutTrait, type LikeRow } from "@/app/post/find/lookalikes";
@@ -122,6 +123,30 @@ export function suggestIcp(infos: CoInfo[], me: Me, fn: string | null, base: Icp
   if (hired.length < 3) return null;
   const p = pick(hired, 4);
   return p.industries.length ? { icp: { ...base, industries: p.industries, employees: p.employees }, from: "hires" } : null;
+}
+
+/**
+ * How the member's claimed seats' companies sell, from the facts on file there: who they sell to,
+ * customer size, business model, motion, deal size and sales cycle. What the set-up's "How do your
+ * best clients sell?" starts with, so the member only confirms. Empty when nothing is on file.
+ */
+export function sellFromSeats(seats: { i: CoInfo }[]): Partial<Icp> {
+  const f = coFitFactsOf(seats.map((s) => s.i));
+  const out: Partial<Icp> = {};
+  for (const k of ICP_NEW_KEYS) {
+    const list = ICP_OPTIONS[k] ?? [];
+    const picks = list.filter((o) => f[k]?.has(o));
+    if (picks.length) out[k] = picks;
+  }
+  return out;
+}
+function coFitFactsOf(cos: CoInfo[]): Partial<Record<IcpKey, Set<string>>> {
+  const out: Partial<Record<IcpKey, Set<string>>> = {};
+  for (const i of new Map(cos.map((c) => [c.c.id, c])).values()) {
+    const facts = coFitFacts(i.c);
+    for (const k of ICP_NEW_KEYS) for (const v of facts[k] ?? []) (out[k] ??= new Set()).add(v);
+  }
+  return out;
 }
 
 /** The ideal client in one line: "Sales · Software, Fintech · 11 to 200 people". */

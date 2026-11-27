@@ -721,3 +721,22 @@
   .u3p .h-cols { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "cb mv nm kp"; }
   .u3p .h-cols .moves { display: block; }
 }
+
+/* company: fit split in two. Criteria of the ideal client (a fact not on file is listed, not counted), then the buying signals apart */
+.u3p .fitcmp tr.none td { color: var(--m-muted); }
+.u3p .fitcmp td:last-child { white-space: nowrap; text-align: right; }
+.u3p .m-link { padding: 0; color: var(--m-forest-ink); text-decoration: underline; text-underline-offset: 3px; font: inherit; cursor: pointer; }
+.u3p .m-link:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; border-radius: 4px; }
+.u3p .fitsig-h { margin-top: 20px; }
+.u3p .fitsig { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
+.u3p .fitsig li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 14px; line-height: 1.35; color: var(--m-muted); }
+.u3p .fitsig li svg { width: 15px; height: 15px; margin-top: 2px; color: var(--m-faint); }
+.u3p .fitsig li.on svg { color: var(--m-forest-3); }
+.u3p .fitsig li b { display: block; font-weight: 600; color: var(--m-muted); }
+.u3p .fitsig li.on b { color: var(--m-ink); }
+.u3p .fitsig li small { font-size: 13px; color: var(--m-muted); }
+.u3p .fitfoot { margin-top: 14px; }
+.u3p .cv-ic.forest { background: var(--m-forest-wash); color: var(--m-forest-ink); }
+@media (max-width: 640px) { .u3p .fitsig { grid-template-columns: minmax(0, 1fr); } }
+.u3p .fitlist-h { display: block; margin-top: 12px; }
+.u3p .fitlist li.none { color: var(--m-muted); }

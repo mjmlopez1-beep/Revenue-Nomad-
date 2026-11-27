@@ -33,30 +33,53 @@ export function CoLogo({ i, s = 40 }: { i: CoInfo; s?: number }) {
   );
 }
 
-/** What a fit ring counts: traits matched out of a set (7 for the fit, fewer for a lookalike), each named. */
+/**
+ * What a fit ring counts: criteria matched out of the ones on file (or traits shared, for a
+ * lookalike), each named. A trait marked `unknown` is "Not on file": listed, never counted.
+ * `signals`: the buying signals, listed apart. `client`: the member's own client, never scored.
+ */
 export interface FitLike {
   n: number;
   of?: number;
-  traits: { label: string; on: boolean; value?: string }[];
+  traits: { label: string; on: boolean; unknown?: boolean; value?: string }[];
+  signals?: { label: string; on: boolean; value?: string }[];
   band?: string;
+  client?: { words: string; current: boolean } | null;
+  /** What is counted, in the list's heading ("Fits your practice"; a lookalike says "traits match"). */
+  what?: "practice" | "traits";
 }
 const fitWords = (f: FitLike) => {
-  const of = f.of ?? 7;
+  const of = f.of ?? f.traits.filter((t) => !t.unknown).length;
+  const practice = f.what !== "traits";
   const on = f.traits.filter((t) => t.on).map((t) => t.label);
-  const off = f.traits.filter((t) => !t.on).map((t) => t.label);
-  const head = `Fit: ${f.n} of ${of} traits match${f.band ? `, ${f.band.toLowerCase()}` : ""}.`;
-  const list = [on.length ? `Matched: ${on.join(", ")}.` : "", off.length ? `Not matched: ${off.join(", ")}.` : ""].filter(Boolean).join(" ");
-  return { of, head, list };
+  const off = f.traits.filter((t) => !t.on && !t.unknown).map((t) => t.label);
+  const none = f.traits.filter((t) => t.unknown).map((t) => t.label);
+  const sig = (f.signals ?? []).filter((t) => t.on).map((t) => t.label);
+  const count = practice ? (of ? `${f.n} of ${of} on file match` : "nothing on file to compare yet") : `${f.n} of ${of} traits match`;
+  const head = `${practice ? "Fits your practice" : "Fit"}: ${count}${f.band && of ? `, ${f.band.toLowerCase()}` : ""}.`;
+  const list = [on.length ? `Matched: ${on.join(", ")}.` : "", off.length ? `Not matched: ${off.join(", ")}.` : "", none.length ? `Not on file: ${none.join(", ")}.` : "", sig.length ? `Buying signals: ${sig.join(", ")}.` : ""].filter(Boolean).join(" ");
+  return { of, head, list, practice, count };
 };
 
+/** The member's own client: said in words where a fit would be, never scored. */
+export function ClientTag({ client, sm }: { client: { words: string; current: boolean }; sm?: boolean }) {
+  return (
+    <span className={`m-chip m-client ${client.current ? "forest" : "soft"}${sm ? " sm" : ""}`} title="Your own client. Fit is for companies you could win, so it isn't shown here.">
+      <Ic n="check" />
+      {client.words}
+    </span>
+  );
+}
+
 /**
- * Traits matched out of 7 (never a chance of winning): forest at 6 or 7, gold at 4 or 5, quiet
- * below. A small "fit" caption sits under the ring, and hover, focus or a tap shows which traits
- * match and which don't. `inside`: the ring sits in another control (a row that is a button), so it
+ * Criteria matched out of the ones on file (never a chance of winning): forest for a strong fit,
+ * gold for a good one, quiet below. A small "fit" caption sits under the ring, and hover, focus or
+ * a tap shows which criteria match, which don't, which are not on file, and the buying signals
+ * apart. The member's own client shows its words instead of a ring. `inside`: the ring sits in another control (a row that is a button), so it
  * is not a button itself; the row's name carries the whole count and list.
  */
 export function FitRing({ fit, lg, am, inside, cap = !lg }: { fit: FitLike; lg?: boolean; am?: boolean; inside?: boolean; cap?: boolean }) {
-  const { of, head, list } = fitWords(fit);
+  const { of, head, list, practice, count } = fitWords(fit);
   const [show, setShow] = useState<"hover" | "pin" | null>(null);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -85,11 +108,13 @@ export function FitRing({ fit, lg, am, inside, cap = !lg }: { fit: FitLike; lg?:
       window.removeEventListener("scroll", away, true);
     };
   }, [show]);
-  const ringCls = `m-fit${lg ? " lg" : ""}${am ? " am" : fitCls(Math.round((fit.n / of) * 7))}`;
+  const ringCls = `m-fit${lg ? " lg" : ""}${am ? " am" : fitCls(fit.band)}${of ? "" : " none"}`;
   const style = { "--n": (fit.n / Math.max(1, of)) * 7 } as CSSProperties;
   const ring = (
     <span className={ringCls} style={style} aria-hidden="true">
-      {lg ? (
+      {!of ? (
+        "–"
+      ) : lg ? (
         <>
           {fit.n}
           <small>/{of}</small>
@@ -115,27 +140,43 @@ export function FitRing({ fit, lg, am, inside, cap = !lg }: { fit: FitLike; lg?:
       ? createPortal(
           <div className="m-fitpop" style={pos} aria-hidden="true">
             <p className="m-fitpop-h">
-              <b>
-                {fit.n} of {of} traits match
-              </b>
-              {fit.band && <small>{fit.band}</small>}
+              <b>{practice ? "Fits your practice" : `${fit.n} of ${of} traits match`}</b>
+              {fit.band && of > 0 && <small>{fit.band}</small>}
             </p>
+            {practice && <p className="m-fitpop-n">{count.charAt(0).toUpperCase() + count.slice(1)}</p>}
             <ul>
               {fit.traits.map((t) => (
-                <li key={t.label} className={t.on ? "on" : undefined}>
-                  <Ic n={t.on ? "check" : "x"} />
+                <li key={t.label} className={t.on ? "on" : t.unknown ? "none" : undefined}>
+                  <Ic n={t.on ? "check" : t.unknown ? "plus" : "x"} />
                   <span>
                     <b>{t.label}</b>
-                    {t.value && <small>{t.value}</small>}
+                    <small>{t.unknown ? "Not on file · Add what you know" : t.value}</small>
                   </span>
                 </li>
               ))}
             </ul>
-            <p className="m-fitpop-f">Fit counts traits matched from facts on file. It is not a chance of winning.</p>
+            {!!fit.signals?.length && (
+              <>
+                <p className="m-fitpop-s">Buying signals</p>
+                <ul>
+                  {fit.signals.map((t) => (
+                    <li key={t.label} className={t.on ? "on" : undefined}>
+                      <Ic n={t.on ? "check" : "x"} />
+                      <span>
+                        <b>{t.label}</b>
+                        {t.value && <small>{t.value}</small>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <p className="m-fitpop-f">{practice ? "Counts criteria of your ideal client matched, from facts on file. A fact not on file is left out. It is not a chance of winning." : "Fit counts traits matched from facts on file. It is not a chance of winning."}</p>
           </div>,
           root,
         )
       : null;
+  if (fit.client) return <ClientTag client={fit.client} sm={!lg} />;
   if (inside)
     return (
       <span ref={ref} className={`m-fitw${lg ? " lg" : ""}`} role="img" aria-label={`${head} ${list}`} {...hover}>

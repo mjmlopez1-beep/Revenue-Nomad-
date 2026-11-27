@@ -1304,3 +1304,21 @@
 .tp-phone .st-foot {
   padding: 10px 16px;
 }
+
+/* ideal client: each value with where it comes from (You chose, or From the member's own clients) */
+.st-src { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.st-src .st-group-l { flex: none; padding-top: 0; }
+.st-src-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.st-src-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-start; }
+.st-src-row dt { flex: 0 0 120px; padding-top: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.st-src-row dd { flex: 1 1 260px; min-width: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.st-src-v { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); }
+.st-src-v.learned { border-style: dashed; background: #f4f8f6; }
+.st-src-t { display: flex; flex-direction: column; line-height: 1.25; }
+.st-src-t strong { font-size: 13.5px; color: var(--ink); }
+.st-src-t small { font-size: 12px; color: var(--muted); }
+.st-src-x { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 999px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.st-src-x:hover { background: var(--line); color: var(--ink); }
+.st-src-x:focus-visible, .st-src-back:focus-visible { outline: 2px solid var(--pine); outline-offset: 2px; }
+.st-src-off { margin: 0; font-size: 13px; color: var(--muted); }
+.st-src-back { padding: 0; border: 0; background: none; color: var(--pine); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }

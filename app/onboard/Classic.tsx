@@ -40,7 +40,7 @@ import { CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconLock, LockedName, 
 import { FUNCTIONS, NAME_HIDDEN, NAME_HIDDEN_SAY, OPENS_RULE, seatNameWho } from "@/lib/tableFields";
 import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { CLIENT_COUNTS } from "@/lib/tableTypes";
-import { countryKey, countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
+import { statedIcp, countryKey, countryOf, deriveAll, hireLine, hireOfRow, icpEmpty, type Filters, type Row } from "@/app/post/model";
 import { EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
 import { alertView, named, realTitle, titlesFor } from "./suggest";
 import {
@@ -207,8 +207,8 @@ export default function Onboarding({ view, act, onDone, onSkip, viewReady = true
     // No title yet means an empty field with the placeholder showing, never a stored "Member".
     const title = typeof a.title === "string" ? a.title : realTitle(me.title);
     // Nothing picked yet anywhere: the profile starts in the member's own country.
-    const here = a.icp || me.icp ? null : localCountry();
-    const icp = a.icp ?? me.icp ?? (here ? { ...EMPTY_ICP, countries: [here] } : EMPTY_ICP);
+    const here = a.icp || statedIcp(me) ? null : localCountry();
+    const icp = a.icp ?? statedIcp(me) ?? (here ? { ...EMPTY_ICP, countries: [here] } : EMPTY_ICP);
     // Their own function can't come before them. An answer left with nothing once it is taken off is unanswered (the suggestion), not "Not sure".
     const raw = Array.isArray(a.before) ? a.before : Array.isArray(me.before) ? me.before : null;
     const kept = raw ? raw.filter((f) => FUNCTIONS.includes(f) && f !== fn).slice(0, BEFORE_MAX) : null;
@@ -845,7 +845,7 @@ function StepWho({
       </fieldset>
       {/* The Ideal Fractional Profile, industry and size only here: revenue and the rest wait for Your profile (onboard.css .ob-icp-short). */}
       <div className="ob-icp-short">
-        <IcpFields value={icp} onChange={setIcp} industries={industries} countries={[]} headingClass="ob-h" />
+        <IcpFields value={icp} onChange={setIcp} industries={industries} countries={[]} headingClass="ob-h" sell={false} />
       </div>
       {where ? (
         <fieldset className="ob-q ob-q-tight">

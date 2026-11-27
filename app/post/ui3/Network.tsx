@@ -35,7 +35,7 @@ import { askOf, setWarmFocus, useTargets, useWarmShared, warmList, type TRow } f
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
 import { Av, Band, Chip, CoLogo, RowMenu, Wait } from "./parts";
-import { agoWords, coName, initialsOf, numWord, plural, predicted, relOfWarmth, tintOf, type RelBand } from "./model";
+import { agoWords, coName, initialsOf, isGoodFit, numWord, plural, predicted, relOfWarmth, tintOf, type RelBand } from "./model";
 import { latestAt } from "../crystal/crystalModel";
 import { oppTitle } from "./Home";
 
@@ -198,7 +198,7 @@ export function Ui3Network() {
     }
     setDraft({ ...n, intro: a.k === "intro", first: x.p.name.split(" ")[0], strength: x.band });
   };
-  const nurture = people.filter((x) => (x.band === "Fading" || x.band === "Cold") && x.i && !x.i.c.hidden && (!!x.demand || (x.t?.fit.n ?? 0) >= 4 || !!x.t?.saved)).sort((a, b) => Number(!!b.demand) - Number(!!a.demand) || lastMs(b) - lastMs(a)).slice(0, 4);
+  const nurture = people.filter((x) => (x.band === "Fading" || x.band === "Cold") && x.i && !x.i.c.hidden && (!!x.demand || (!!x.t && isGoodFit(x.t.fit)) || !!x.t?.saved)).sort((a, b) => Number(!!b.demand) - Number(!!a.demand) || lastMs(b) - lastMs(a)).slice(0, 4);
   // New this week: a role posted, or a signal that happened, in the last seven days (its own day, never the day Merlin saw it).
   const hot = people.filter((x) => (x.demand?.k === "hire" && !!x.t?.role?.fresh) || (x.demand?.k === "emerge" && !!x.i && ((at) => !!at && Date.now() - Date.parse(`${at}T12:00:00Z`) < 7 * 86_400_000)(latestAt(radarOf.get(x.i.c.id)?.sigs ?? [])))).length;
   const next = warmList(warm)[0] ?? null;

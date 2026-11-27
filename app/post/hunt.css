@@ -440,3 +440,8 @@
   color: var(--faint);
   border-color: var(--line);
 }
+
+/* how their best clients sell: the newer criteria, every one optional */
+.hunt-sell-h { margin: 6px 0 0; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.hunt-sell-h strong { font-size: 15px; color: var(--ink); }
+.hunt-sell-h span { font-size: 13px; color: var(--muted); }

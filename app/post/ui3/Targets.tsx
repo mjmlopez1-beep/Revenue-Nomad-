@@ -4,7 +4,7 @@
  * Target Companies in the new design (find-design/v5, ref-target-companies-v2): three questions
  * (who's hiring for my expertise, who fits my ideal client, find clients like my past clients),
  * Opportunities, All Companies and Saved with their counts, quick filters with counts, and one row a
- * company: name and "Industry · City", the fit ring (seven traits from facts on file), the hiring
+ * company: name and "Industry · City", the fit ring (criteria of the ideal client matched, of the ones on file), the hiring
  * signal (an open role, its age, the rate only when posted; else Crystal Ball's signal or the past
  * hires), the warm introduction (who the best way in goes through), the functions it hired
  * fractionals for, Add to pipeline, and "..." with Save, Watch, Find my warmest introduction, Hide.
@@ -25,7 +25,7 @@ import { isWarm, setWarmFocus, useCoActs, useTargets, type TRow } from "./data";
 import { Art } from "./illustrations";
 import { Ic, type IconName } from "./icons";
 import { Av, Band, Chip, CoLogo, FitRing, RowMenu, Wait, ownClick } from "./parts";
-import { FIT_TIP, coLine, coName, numWord, plural, predicted } from "./model";
+import { FIT_TIP, coLine, coName, isGoodFit, isStrong, numWord, plural, predicted } from "./model";
 import { oppTitle } from "./Home";
 
 const Workbench = dynamic(() => import("../shell/workbenchPage").then((m) => m.WorkbenchPage), { ssr: false, loading: () => <Wait /> });
@@ -35,7 +35,7 @@ type TabK = "opps" | "all" | "saved";
 type Tile = "all" | "hiring" | "ideal";
 type QF = "fit" | "hiring" | "warm" | "new";
 const QFS: { k: QF; l: string; ic: IconName; f: (r: TRow) => boolean }[] = [
-  { k: "fit", l: "High fit", ic: "diamond", f: (r) => r.fit.n >= 6 },
+  { k: "fit", l: "High fit", ic: "diamond", f: (r) => isStrong(r.fit) },
   { k: "hiring", l: "Hiring now", ic: "brief", f: (r) => r.hire },
   { k: "warm", l: "Warm ways in", ic: "route", f: (r) => isWarm(r.warm) },
   { k: "new", l: "New this week", ic: "calnew", f: (r) => r.hire && !!r.role?.fresh },
@@ -93,11 +93,11 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
   }, [c.legacy.homeProps.data, c.shell.radar.data]);
 
   const hiringMine = t.all.filter((r) => r.hire);
-  const ideal = t.all.filter((r) => r.fit.n >= 5);
+  const ideal = t.all.filter((r) => isGoodFit(r.fit));
   const base = useMemo(() => {
     let xs = tab === "opps" ? t.opps : tab === "saved" ? t.saved : t.all;
     if (tile === "hiring") xs = xs.filter((r) => r.hire);
-    if (tile === "ideal") xs = xs.filter((r) => r.fit.n >= 5);
+    if (tile === "ideal") xs = xs.filter((r) => isGoodFit(r.fit));
     if (q) xs = xs.filter((r) => r.i.hay.toLowerCase().includes(q));
     return xs;
   }, [tab, tile, q, t.opps, t.saved, t.all]);
@@ -147,7 +147,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
           <button type="button" className="m-qcard co" aria-pressed={tile === "ideal"} onClick={() => (setTile(tile === "ideal" ? "all" : "ideal"), setTab("all"))}>
             <Ic n="star" className="m-qi" />
             <h3 className="m-h3">Who fits my ideal client?</h3>
-            <p>{ideal.length ? `${plural(ideal.length, "company", "companies")} share 5 or more of the 7 traits.` : "Companies that share most of your ideal client's traits."}</p>
+            <p>{ideal.length ? `${plural(ideal.length, "company", "companies")} match most of what is on file against your ideal client.` : "Companies that match most of your ideal client, from the facts on file."}</p>
             <Art name="summit" className="m-qart" />
             <span className="m-iconbtn m-go" aria-hidden="true">
               <Ic n="arrow" />
@@ -227,7 +227,7 @@ function List({ c, onTable, onLike }: { c: ReturnType<typeof useApp>; onTable: (
         </p>
         <h2 className="m-h2 tg-h">{head}</h2>
         {tab === "opps" && !t.opps.length && (
-          <p className="m-sub tg-why">Opportunities are companies hiring in your function, or fitting 4 or more of the 7 traits with a way in. {c.me.icp ? "Widen your ideal client, or" : "Set your ideal client, or"} bring in who you know on Warm Paths.</p>
+          <p className="m-sub tg-why">Opportunities are companies hiring in your function, or a good fit for your practice with a way in. {c.me.icp ? "Widen your ideal client, or" : "Set your ideal client, or"} bring in who you know on Warm Paths.</p>
         )}
 
         {t.loading && !t.all.length ? (

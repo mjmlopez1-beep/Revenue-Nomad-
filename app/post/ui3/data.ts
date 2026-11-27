@@ -55,7 +55,7 @@ export function useWarmShared(): WarmSnap {
 
 // The warm list and the ask live in model.ts (pure, so the checks read them); re-exported here for the pages.
 export { askOf, isWarm, lockedWarm, warmList } from "./model";
-import { isWarm } from "./model";
+import { isGoodFit, isWarm } from "./model";
 
 /* ---------- every company, as the new design reads it ---------- */
 
@@ -110,7 +110,7 @@ export function useTargets() {
   );
   const visible = useMemo(() => rows.filter((r) => !r.hidden), [rows]);
   /**
-   * Opportunities: hiring for the member's function now, or a good fit (4 traits or more) that is
+   * Opportunities: hiring for the member's function now, or a good fit for their practice that is
    * hiring or has a warm way in (someone between the member and the company). Best fit first.
    * Kept as built for the owner's review (coordinator, 2026-11-25): a thin ideal client gives few
    * traits, so hiring in the member's own function always counts.
@@ -118,12 +118,13 @@ export function useTargets() {
   const opps = useMemo(
     () =>
       visible
-        .filter((r) => r.hire || (r.fit.n >= 4 && (!!r.ways?.n || isWarm(r.warm))))
+        // The member's own client is not an opportunity to win: it shows under All companies, marked as theirs.
+        .filter((r) => !r.fit.client && (r.hire || (isGoodFit(r.fit) && (!!r.ways?.n || isWarm(r.warm)))))
         // Hiring in the member's own function first, then fit.
-        .sort((a, b) => Number(b.hire) - Number(a.hire) || b.fit.n - a.fit.n || (b.ways?.n ?? 0) - (a.ways?.n ?? 0) || a.i.c.name.localeCompare(b.i.c.name)),
+        .sort((a, b) => Number(b.hire) - Number(a.hire) || b.fit.order - a.fit.order || (b.ways?.n ?? 0) - (a.ways?.n ?? 0) || a.i.c.name.localeCompare(b.i.c.name)),
     [visible],
   );
-  const all = useMemo(() => [...visible].sort((a, b) => b.fit.n - a.fit.n || Number(!!b.role) - Number(!!a.role) || a.i.c.name.localeCompare(b.i.c.name)), [visible]);
+  const all = useMemo(() => [...visible].sort((a, b) => b.fit.order - a.fit.order || Number(!!b.role) - Number(!!a.role) || a.i.c.name.localeCompare(b.i.c.name)), [visible]);
   const savedRows = useMemo(() => rows.filter((r) => r.saved), [rows]);
   return { rows, opps, all, saved: savedRows, hiddenN: rows.length - visible.length, loading: c.waiting, pathsOn: !!paths };
 }

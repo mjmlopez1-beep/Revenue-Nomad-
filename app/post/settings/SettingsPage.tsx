@@ -18,7 +18,8 @@
  * On a phone the page opens on its list, and a section has a way back to it.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Icp } from "@/lib/tableTypes";
+import type { Icp, IcpKey, IdealView } from "@/lib/tableTypes";
+import { ICP_KEYS, ICP_WORDS, icpList, sourceWords } from "@/lib/idealClient";
 import type { IntegrationsView } from "@/lib/notify/types";
 import type { CloseInboxView } from "@/lib/close/types";
 import type { AlertsView } from "@/lib/inbox";
@@ -32,7 +33,7 @@ import { useApp } from "../shell/pages";
 import { ShellHeader } from "../shell/Header";
 import { PageStrip } from "../shell/PageStrip";
 import { BeforeFields, EMPTY_ICP, IcpFields, countriesByCount, industriesByCount } from "../Hunt";
-import { icpEmpty, icpMatch, isFirm, isOpenRole, shown } from "../model";
+import { icpEmpty, icpMatch, isFirm, isOpenRole, shown, statedIcp } from "../model";
 import { useNetwork, takeNotice } from "../network/useNetwork";
 import { usePaths } from "../network/usePaths";
 import { useExport } from "../network/useExport";
@@ -598,12 +599,89 @@ function ProfileSec({ draft, setDraft, say, onPrivacy }: { draft?: ProfileDraft;
 
 /* ---------- Ideal client ---------- */
 
-const idealOf = (me: { function: string | null; icp?: Icp | null; before?: string[]; looking?: boolean | null }): IdealDraft => ({
+const idealOf = (me: { function: string | null; icp?: Icp | null; ideal?: IdealView; before?: string[]; looking?: boolean | null }): IdealDraft => ({
   fn: me.function && FUNCTIONS.includes(me.function) ? me.function : null,
-  icp: me.icp ?? EMPTY_ICP,
+  // What the member chose, never what their clients added (that part is shown with its sources, and is not theirs to save).
+  icp: statedIcp(me) ?? EMPTY_ICP,
   before: Array.isArray(me.before) ? me.before : null,
   looking: me.looking ?? null,
 });
+
+/**
+ * The ideal client as fit reads it today, each value with where it comes from: "You chose" (saved
+ * below) or "From Clarus, Trialbee" (learned from the member's own clients, as of when they worked
+ * there). A learned value has a remove button; one removed stays out until it is put back.
+ */
+function IdealSources() {
+  const c = useApp();
+  const ideal = c.me.ideal;
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!ideal) return null;
+  const lower = (v: string) => v.trim().toLowerCase();
+  const rows = ICP_KEYS.map((k) => {
+    const learned = ideal.learned[k] ?? [];
+    const stated = icpList(ideal.stated, k);
+    const vals = [
+      ...stated.map((v) => ({ v, stated: true, from: learned.find((x) => lower(x.v) === lower(v))?.from })),
+      ...learned.filter((x) => !stated.some((v) => lower(v) === lower(x.v))).map((x) => ({ v: x.v, stated: false, from: x.from })),
+    ];
+    return { k, vals };
+  }).filter((r) => r.vals.length);
+  const dropped = ICP_KEYS.flatMap((k) => (ideal.dropped[k] ?? []).map((v) => ({ k, v })));
+  const hasLearned = ICP_KEYS.some((k) => (ideal.learned[k] ?? []).length);
+  const drop = async (k: IcpKey, v: string, on: boolean) => {
+    setBusy(`${k}:${v}`);
+    await c.act({ type: "idealDrop", key: k, value: v, on });
+    setBusy(null);
+  };
+  if (!rows.length && !dropped.length) return null;
+  return (
+    <section className="st-src" aria-label="Your ideal client today, and where each part comes from">
+      <span className="st-group-l">
+        <strong>Your ideal client today</strong>
+        <span>{hasLearned ? "What you chose, and what your own clients have in common. Fit reads both." : "What you chose. Claim a seat you held and Merlin adds what your clients have in common."}</span>
+      </span>
+      <dl className="st-src-list">
+        {rows.map((r) => (
+          <div key={r.k} className="st-src-row">
+            <dt>{ICP_WORDS[r.k].label}</dt>
+            <dd>
+              {r.vals.map((x) => (
+                <span key={x.v} className={`st-src-v${x.stated ? "" : " learned"}`}>
+                  <span className="st-src-t">
+                    <strong>{r.k === "employees" ? `${x.v} people` : x.v}</strong>
+                    <small>{sourceWords(x.stated, x.from)}</small>
+                  </span>
+                  {!x.stated && (
+                    <button type="button" className="st-src-x" disabled={busy === `${r.k}:${x.v}`} aria-label={`Remove ${x.v}, learned from your clients`} title="Remove. It stays out even as you add clients." onClick={() => void drop(r.k, x.v, true)}>
+                      <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {dropped.length > 0 && (
+        <p className="st-src-off">
+          Removed:{" "}
+          {dropped.map((d, n) => (
+            <span key={`${d.k}:${d.v}`}>
+              {n ? ", " : ""}
+              {d.v}{" "}
+              <button type="button" className="st-src-back" disabled={busy === `${d.k}:${d.v}`} onClick={() => void drop(d.k, d.v, false)}>
+                Put back
+              </button>
+            </span>
+          ))}
+        </p>
+      )}
+    </section>
+  );
+}
 
 function IdealSec({ draft, setDraft, say }: { draft?: IdealDraft; setDraft: (d: IdealDraft | undefined) => void; say: (t: string, err?: boolean) => void }) {
   const c = useApp();
@@ -641,6 +719,7 @@ function IdealSec({ draft, setDraft, say }: { draft?: IdealDraft; setDraft: (d: 
     <div className="st-body">
       <div className="st-col">
         <Chips label="Your function" hint="Merlin points out open roles in it" options={FUNCTIONS.map((f) => [f, f] as const)} on={(v) => d.fn === v} pick={(v) => setDraft({ ...d, fn: d.fn === v ? null : v })} wide />
+        <IdealSources />
         <div className="st-hunt">
           <BeforeFields fn={d.fn} companies={companies} value={nb} onChange={(b) => setDraft({ ...d, before: b })} />
           <IcpFields value={d.icp} onChange={(icp) => setDraft({ ...d, icp })} industries={industries} countries={countries} />

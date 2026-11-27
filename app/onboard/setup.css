@@ -1343,3 +1343,8 @@
   font-size: 14px;
   line-height: 20px;
 }
+
+/* "How do your best clients sell?": the newer criteria, one group of quick picks, all optional */
+.su-sell-b { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.su-sell-b .hunt-q { margin: 0; padding: 0; border: 0; min-width: 0; }
+.su-sell-h { font-size: 13.5px; font-weight: 600; margin-bottom: 6px; padding: 0; }

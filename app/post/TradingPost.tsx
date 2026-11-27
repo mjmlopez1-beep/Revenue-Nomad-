@@ -44,6 +44,7 @@ import {
   notMineLabel, rowsFor, seatsMissing, shown, sortRows, clearedFilters, icpEmpty, namedFn, splitByFn, hireCounts, isFirm, viewName, criteriaOf, withIcpSpelled, bestFit, icpTest,
   icpApplies, icpMatch, newThisWeek, buysCompany, ICP_FREE_TABS, TYPE_PARAM, absolutePlace, decodeFilters, encodeFilters, hiredOn, placeFilters, suggestHiredFn,
   type CheckStep, type CoInfo, type FactRef, type Filters, type HireCtx, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
+  statedIcp,
 } from "./model";
 import { COLS_PARAM, colsOf, PLACE_KEYS, PLACE_PAGES, PRESET_KEYS, freshCount, listKeyOf, parsePlace, placeDefaults, placeRows, placeSortDefault, presetFacets, savedViewPlace, ui2PageOf, weekN, type FirstList, type Ui2Page } from "./place";
 import { ui2Action } from "@/lib/ui2";
@@ -3697,7 +3698,7 @@ export default function TradingPost({ view, act, refresh, signOut, start, partia
         )}
         {icpOpen && (
           <IcpSheet
-            icp={me.icp}
+            icp={statedIcp(me)}
             title={me.title}
             fn={me.function}
             before={me.before}

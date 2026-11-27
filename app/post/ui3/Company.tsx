@@ -3,7 +3,7 @@
 /**
  * The company intelligence view in the new design (find-design/v5, Company): the name and its free
  * facts, one primary action, and four answers at a glance (fit, need, who you know, how you get in),
- * then Why it fits (the seven traits, and the closest past client by shared traits), Need over time
+ * then Fits your practice (the criteria on file, the buying signals apart, the closest past client), Need over time
  * (the open role and every dated signal in the last six months), Who you know there (with the
  * relationship band only where Merlin derives one) and How you get in (Merlin's best routes, drawn).
  *
@@ -26,7 +26,7 @@ import { isWarm, setWarmFocus, useCoActs, useTargets } from "./data";
 import { Art } from "./illustrations";
 import { Ic } from "./icons";
 import { Av, Chip, CoLogo, FitRing, RelChip, Traits, Wait } from "./parts";
-import { agoWords, coLine, coName, initialsOf, numWord, plural, relOfWarmth } from "./model";
+import { ADD_WHAT_YOU_KNOW, FIT_FOOT, NOT_ON_FILE, agoWords, coLine, coName, fitCount, fitSentence, initialsOf, numWord, plural, relOfWarmth } from "./model";
 import { Graph, GraphLegend } from "./Graph";
 import { oppTitle } from "./Home";
 
@@ -243,12 +243,27 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
 
         <div className="cv-sum">
           <div className="cv-cell">
-            <FitRing fit={fit} lg />
-            <div>
-              <p className="m-eyebrow forest">Fit</p>
-              <b>{fit.n} of 7 traits</b>
-              <span className="m-small">{fit.band}</span>
-            </div>
+            {fit.client ? (
+              <>
+                <span className="cv-ic forest">
+                  <Ic n="check" />
+                </span>
+                <div>
+                  <p className="m-eyebrow forest">{fit.client.current ? "Your client" : "Past client"}</p>
+                  <b>{fit.client.words}</b>
+                  <span className="m-small">Your own clients are not fit-scored</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <FitRing fit={fit} lg />
+                <div>
+                  <p className="m-eyebrow forest">Fits your practice</p>
+                  <b>{fitCount(fit)}</b>
+                  <span className="m-small">{fit.of ? fit.band : fit.asked ? "Add what you know to see it" : "No ideal client yet"}</span>
+                </div>
+              </>
+            )}
           </div>
           <div className="cv-cell">
             <span className="cv-ic gold">
@@ -286,58 +301,118 @@ function Intel({ i, onRecord }: { i: CoInfo; onRecord: () => void }) {
           <section className="m-panel">
             <div className="m-panel-h">
               <div>
-                <p className="m-eyebrow forest">Why it fits</p>
+                <p className="m-eyebrow forest">{fit.client ? "Your client" : "Fits your practice"}</p>
                 <h2 className="m-h3" style={{ marginTop: 8 }}>
-                  {fit.n >= 6 ? "It fits your practice." : fit.n >= 4 ? "It mostly fits your practice." : "It sits outside your sweet spot."}
+                  {fit.client ? `${fit.client.words}.` : fitSentence(fit)}
                 </h2>
               </div>
             </div>
             <div className="m-panel-b">
-              <div className="fitrow">
-                <Traits n={fit.n} />
-                <span>
-                  <b>{fit.n} of 7</b> traits of your ideal client
-                </span>
-              </div>
-              {like && (
-                <div className="fitrow">
-                  <Traits n={like.same} of={like.of} am />
-                  <span>
-                    <b>
-                      {like.same} of {like.of}
-                    </b>{" "}
-                    like {like.name}, your past client
-                  </span>
-                </div>
+              {fit.client ? (
+                <>
+                  <p className="m-sub" style={{ margin: 0 }}>
+                    Fit is for companies you could win, so your own client is never scored. What {coName(i)} has in common with your other clients shapes your ideal client.
+                  </p>
+                  <button type="button" className="m-btn m-btn-ghost m-btn-sm evb" onClick={c.openProfile}>
+                    See your ideal client
+                    <Ic n="arrow" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="fitrow">
+                    {fit.of > 0 && <Traits n={fit.n} of={fit.of} />}
+                    <span>
+                      {fit.of ? (
+                        <>
+                          <b>
+                            {fit.n} of {fit.of}
+                          </b>{" "}
+                          criteria of your ideal client, from what is on file
+                        </>
+                      ) : fit.asked ? (
+                        "Nothing your ideal client asks about is on file here yet."
+                      ) : (
+                        <>
+                          <button type="button" className="m-link" onClick={c.openProfile}>
+                            Set your ideal client
+                          </button>{" "}
+                          to see how this company fits.
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {like && (
+                    <div className="fitrow">
+                      <Traits n={like.same} of={like.of} am />
+                      <span>
+                        <b>
+                          {like.same} of {like.of}
+                        </b>{" "}
+                        like {like.name}, your past client
+                      </span>
+                    </div>
+                  )}
+                  {fit.traits.length > 0 && (
+                    <table className="m-compare fitcmp">
+                      <thead>
+                        <tr>
+                          <th>Your ideal client</th>
+                          <th>{coName(i)}</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(traitsOpen ? fit.traits : fit.traits.slice(0, 5)).map((tr) => (
+                          <tr key={tr.key} className={tr.unknown ? "none" : undefined}>
+                            <td>{tr.label}</td>
+                            <td>
+                              {tr.unknown ? (
+                                <>
+                                  {NOT_ON_FILE} ·{" "}
+                                  <button type="button" className="m-link" onClick={onRecord}>
+                                    {ADD_WHAT_YOU_KNOW}
+                                  </button>
+                                </>
+                              ) : (
+                                tr.value
+                              )}
+                            </td>
+                            <td>
+                              {tr.unknown ? (
+                                <span className="m-small">Not counted</span>
+                              ) : (
+                                <span className={`m-check${tr.on ? "" : " no"}`} role="img" aria-label={tr.on ? "Matches" : "Doesn't match"}>
+                                  <Ic n={tr.on ? "check" : "x"} />
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {fit.traits.length > 5 && (
+                    <button type="button" className="m-btn m-btn-ghost m-btn-sm evb" aria-expanded={traitsOpen} onClick={() => setTraitsOpen((x) => !x)}>
+                      {traitsOpen ? "Show fewer" : `See all ${fit.traits.length} criteria`}
+                      <Ic n="down" />
+                    </button>
+                  )}
+                </>
               )}
-              <button type="button" className="m-btn m-btn-ghost m-btn-sm evb" aria-expanded={traitsOpen} onClick={() => setTraitsOpen((x) => !x)}>
-                {traitsOpen ? "Hide the traits" : "See every trait"}
-                <Ic n="down" />
-              </button>
-              {traitsOpen && (
-                <table className="m-compare">
-                  <thead>
-                    <tr>
-                      <th>Trait</th>
-                      <th>{coName(i)}</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fit.traits.map((tr) => (
-                      <tr key={tr.key}>
-                        <td>{tr.label}</td>
-                        <td>{tr.value}</td>
-                        <td>
-                          <span className={`m-check${tr.on ? "" : " no"}`}>
-                            <Ic n={tr.on ? "check" : "x"} />
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <p className="m-eyebrow fitsig-h">Buying signals</p>
+              <ul className="fitsig">
+                {fit.signals.map((g) => (
+                  <li key={g.key} className={g.on ? "on" : undefined}>
+                    <Ic n={g.on ? "check" : "x"} />
+                    <span>
+                      <b>{g.label}</b>
+                      <small>{g.value}</small>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {!fit.client && <p className="m-small fitfoot">{FIT_FOOT}</p>}
             </div>
           </section>
 

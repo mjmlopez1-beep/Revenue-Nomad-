@@ -458,3 +458,11 @@
   .ui3 .m-qcard .m-go { right: 10px; bottom: 10px; }
   .ui3 .u3p .m-qcard h3 { font-size: 18px; }
 }
+
+/* fit, split in two: criteria of the ideal client (a fact not on file is listed, never counted), and the buying signals apart */
+.ui3 .m-fit.none { color: var(--m-muted); }
+.ui3 .m-fitpop-n { margin: -4px 0 8px; font-size: 13px; color: var(--m-muted); }
+.ui3 .m-fitpop-s { margin: 10px 0 6px; padding-top: 9px; border-top: 1px solid var(--m-line); font: 600 10.5px/1 var(--m-f-text); letter-spacing: .1em; text-transform: uppercase; color: var(--m-muted); }
+.ui3 .m-fitpop li.none svg { color: var(--m-muted); }
+.ui3 .m-fitpop li.none small { font-style: normal; }
+.ui3 .m-chip.m-client { white-space: nowrap; flex: none; }

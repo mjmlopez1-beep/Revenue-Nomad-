@@ -38,8 +38,9 @@ import { IconCheck, post, type Act, type View } from "../ui/shared";
 import { FUNCTIONS, OPENS_RULE, TRIAL_OPENS_DAILY, REFERRAL_BONUS, RN_EMPLOYEES } from "@/lib/tableFields";
 import type { Icp, OnboardDraft } from "@/lib/tableTypes";
 import { deriveAll, icpEmpty, mySeats, namedFn, type LikeTrait } from "@/app/post/model";
-import { EMPTY_ICP, countriesByCount, industriesByCount } from "@/app/post/Hunt";
-import { countryKey } from "@/app/post/model";
+import { EMPTY_ICP, SELL_Q, SellFields, countriesByCount, industriesByCount } from "@/app/post/Hunt";
+import { ICP_NEW_KEYS } from "@/lib/idealClient";
+import { countryKey, statedIcp } from "@/app/post/model";
 import { TRIAL_DAYS, TRIAL_NAME } from "@/lib/billing/rules";
 import { invitedParts } from "@/lib/notify/format";
 import { ICP_SKIPPED, sixSteps } from "@/app/post/getStarted";
@@ -50,7 +51,7 @@ import { localCountry, type OnboardingProps } from "./Classic";
 import { realTitle, titlesFor } from "./suggest";
 import { BEFORE_MAX, beforeOrder, firstView, goalFor, newerAnswers, toggleBefore, andList } from "./firstView";
 import {
-  PROFILE_SCREEN, SETUP_STEPS, companyLabel, factsLine, idealCounts, idealLine, ledgerLines, likeStep, resumeScreen, screenN, screenOf, stepOfScreen, suggestIcp, timeLeftWords,
+  PROFILE_SCREEN, SETUP_STEPS, companyLabel, factsLine, idealCounts, idealLine, ledgerLines, likeStep, resumeScreen, screenN, screenOf, stepOfScreen, sellFromSeats, suggestIcp, timeLeftWords,
   type ScreenKey,
 } from "./setupModel";
 import { SeatsScreen, LikeScreen } from "./SetupSeats";
@@ -141,8 +142,8 @@ export default function Setup({ view, act, onDone, onSkip, viewReady = true, onH
     const picked = a.function;
     const fn = (picked && FUNCTIONS.includes(picked) ? picked : null) ?? triedFn() ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
     const title = typeof a.title === "string" ? a.title : realTitle(me.title);
-    const here = a.icp || me.icp ? null : localCountry();
-    const icp = a.icp ?? me.icp ?? (here ? { ...EMPTY_ICP, countries: [here] } : EMPTY_ICP);
+    const here = a.icp || statedIcp(me) ? null : localCountry();
+    const icp = a.icp ?? statedIcp(me) ?? (here ? { ...EMPTY_ICP, countries: [here] } : EMPTY_ICP);
     const raw = Array.isArray(a.before) ? a.before : Array.isArray(me.before) ? me.before : null;
     const kept = raw ? raw.filter((f) => FUNCTIONS.includes(f) && f !== fn).slice(0, BEFORE_MAX) : null;
     const before = raw && raw.length && kept && !kept.length ? null : kept;
@@ -179,6 +180,9 @@ export default function Setup({ view, act, onDone, onSkip, viewReady = true, onH
   const [finishing, setFinishing] = useState(false);
   const [opened, setOpened] = useState<string | null>(null);
   const [linkKept, setLinkKept] = useState(false);
+  /** The member picked (or already had) how their clients sell: the seats' facts no longer fill it in. */
+  const sellTouched = useRef(ICP_NEW_KEYS.some((k) => (init.icp[k] ?? []).length > 0));
+  const [sellFilled, setSellFilled] = useState(false);
   const rewinding = useRef(false);
   const base = useRef(1);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -194,6 +198,14 @@ export default function Setup({ view, act, onDone, onSkip, viewReady = true, onH
   const fv = useMemo(() => (ready ? firstView(infos, me, { fn, icp: icpNow, before: before ?? [], suggested: order.suggested }) : null), [ready, infos, me, fn, icpNow, before, order]);
   const seats = useMemo(() => mySeats(infos, me), [infos, me]);
   const seedIds = useMemo(() => [...new Set(seats.map((s) => s.i.c.id))], [seats]);
+  // "How do your best clients sell?" starts from the claimed seats' companies, where those facts are on file. A pick of the member's own ends that.
+  const sellSeed = useMemo(() => sellFromSeats(seats), [seats]);
+  const sellSig = JSON.stringify(sellSeed);
+  useEffect(() => {
+    if (sellTouched.current || sellSig === "{}") return;
+    setIcp((v) => ({ ...v, ...(JSON.parse(sellSig) as Partial<Icp>) }));
+    setSellFilled(true);
+  }, [sellSig]);
   const like = useMemo(() => likeStep(infos, me, seedIds, likeOff), [infos, me, seedIds, likeOff]);
   const known = useKnowCounts();
   const lines = ledgerLines(me, view.ledger);
@@ -505,6 +517,12 @@ export default function Setup({ view, act, onDone, onSkip, viewReady = true, onH
               setBefore={setBefore}
               counts={counts}
               suggest={ready ? suggestIcp(infos, me, fn, icp) : null}
+              sellFilled={sellFilled}
+              onSell={(v) => {
+                sellTouched.current = true;
+                setSellFilled(false);
+                setIcp(v);
+              }}
             />
           ) : key === "seats" ? (
             <SeatsScreen view={view} act={act} infos={infos} seats={seats} ready={ready} fn={fn} title={title} mine={mine} setMine={setMine} clients={clients} setClients={setClients} added={added} setAdded={setAdded} />
@@ -753,8 +771,13 @@ function Ideal(p: {
   setBefore: (b: string[] | null) => void;
   counts: ReturnType<typeof idealCounts> | null;
   suggest: ReturnType<typeof suggestIcp>;
+  /** The picks under "How do your best clients sell?" came from the claimed seats' companies. */
+  sellFilled: boolean;
+  onSell: (v: Icp) => void;
 }) {
   const { fn, icp, setIcp } = p;
+  const sellN = ICP_NEW_KEYS.filter((k) => (icp[k] ?? []).length > 0).length;
+  const [sellOpen, setSellOpen] = useState(false);
   const nfn = namedFn(fn);
   const [moreInd, setMoreInd] = useState(false);
   const [moreBefore, setMoreBefore] = useState(() => p.beforeNow.some((f) => !p.suggested.includes(f)));
@@ -897,6 +920,23 @@ function Ideal(p: {
           {unsure ? <span className="su-small">We&apos;ll start with {andList(p.suggested)}.</span> : p.before !== null && full ? <span className="su-small">{BEFORE_MAX} picked, the most.</span> : null}
         </div>
       ) : null}
+      {/* The newer criteria, on one screen of their own: quick picks, all optional, closed until asked for (or filled in from the claimed seats). */}
+      <div className="su-group su-sell" role="group" aria-label={SELL_Q}>
+        <span className="su-glabel">
+          <strong>{SELL_Q}</strong>
+          <span>{p.sellFilled ? "Filled in from the seats you claimed. Change anything." : sellN ? `${sellN} of 6 picked. All optional.` : "Optional. It sharpens who fits your practice. Skip it and add it later in Settings."}</span>
+        </span>
+        <div className="su-chips">
+          <button type="button" className="su-link" aria-expanded={sellOpen} onClick={() => setSellOpen((x) => !x)}>
+            {sellOpen ? "Hide these picks" : sellN ? "Change these picks" : "Add these picks"}
+          </button>
+        </div>
+        {sellOpen ? (
+          <div className="su-sell-b hunt-fields">
+            <SellFields value={icp} onChange={p.onSell} industries={p.industries} headingClass="su-sell-h" />
+          </div>
+        ) : null}
+      </div>
     </>
   );
 }

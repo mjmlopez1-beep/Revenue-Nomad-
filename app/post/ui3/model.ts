@@ -2,72 +2,126 @@
  * What the new design's pages say about a company, from facts the app already has. Nothing here is
  * invented: no odds, no percentages, no timelines.
  *
- *   fit7         how a company fits the member: seven traits matched or not, each from a real fact
- *                (the four parts of their ideal client, past fractional hires, a hire in their own
- *                function, a repeat hirer). A part of the ideal client the member hasn't set, or a
- *                fact not on file, is not matched. Bands: Strong 6 or 7, Good 4 or 5, Worth watching.
+ *   fitFor       how a company stands for the member, in two separate things. Fits your practice:
+ *                the criteria of their ideal client it matches, out of the ones its record answers
+ *                (a fact not on file is left out, never a miss), with a band in words. Buying
+ *                signals: past fractional hires, a hire in their function, a repeat hirer, hiring
+ *                now. The member's own client is never scored (Me.clients).
  *   openRole     the open role to show (the member's function first): its title, when it was
  *                listed, and the rate only when the posting gave one and the member can see it.
  *   coName       a company's name, or "Locked company" (Free describes, never names, a locked one).
  *   relBand      a relationship band (Strong, Good, Fading, Cold) only where the app derives one
  *                (mail and calendar, messages on Merlin); null otherwise, and nothing is shown.
  */
-import type { Me } from "@/lib/tableTypes";
+import type { ClientMark, IcpKey, Me } from "@/lib/tableTypes";
+import { ICP_FACT, ICP_KEYS, ICP_WORDS, fitBand, fitOrder, practiceFit, type FitBand } from "@/lib/idealClient";
 import type { Warmth } from "@/lib/google/types";
-import { icpParts, isOpenSeat, namedFn, openSince, regionOf, repeatHirer, shown, type CoInfo } from "../model";
+import { coFitFacts, isOpenSeat, namedFn, openSince, regionOf, repeatHirer, shown, type CoInfo } from "../model";
 import type { EngagementRec } from "@/lib/tableTypes";
 import type { RadarRow } from "@/lib/radar/types";
 import type { WarmRow, WarmView } from "@/lib/paths/types";
 
-export type TraitKey = "industry" | "size" | "revenue" | "country" | "fractional" | "yourFn" | "repeat";
+export type TraitKey = IcpKey;
+export type SignalKey = "fractional" | "yourFn" | "repeat" | "hiringNow";
 export interface Trait {
   key: TraitKey;
   label: string;
+  /** Matched. False for a miss and for a fact not on file: `unknown` tells the two apart. */
   on: boolean;
-  /** The company's value, or why it doesn't count ("Not set in your ideal client", "Not on file"). */
+  /** The company's record doesn't say: "Not on file", left out of the count, never a miss. */
+  unknown?: boolean;
+  /** The company's value, or "Not on file". */
+  value: string;
+  /** The company fact to add when it isn't on file (GROUPS company field). */
+  fact?: string;
+}
+/** A buying signal: a fact about the company's hiring, shown beside the fit and never counted in it. */
+export interface Signal {
+  key: SignalKey;
+  label: string;
+  on: boolean;
   value: string;
 }
-export type FitBand = "Strong opportunity" | "Good opportunity" | "Worth watching";
-export interface Fit7 {
+export type { FitBand } from "@/lib/idealClient";
+/**
+ * How a company stands for the member, in two separate things:
+ *   Fits your practice   `n` of `of`: criteria of their ideal client matched, out of the ones this
+ *                        company's record answers. `traits` lists every criterion the ideal client
+ *                        has (matched, not matched, or not on file).
+ *   Buying signals       `signals`: hires fractionals, hired your function, repeat hirer, hiring now.
+ * `client`: the company is the member's own client, so it is not scored at all (n and of are 0).
+ */
+export interface Fit {
   n: number;
+  of: number;
+  /** Criteria the ideal client has at all (`of` plus the ones not on file). */
+  asked: number;
   traits: Trait[];
+  signals: Signal[];
   band: FitBand;
+  /** For ordering only, never shown. */
+  order: number;
+  client: ClientMark | null;
 }
+/** Kept for the pages that still import the older name. */
+export type Fit7 = Fit;
 
-export const TRAIT_WORDS: Record<TraitKey, string> = {
-  industry: "Industry",
-  size: "Size",
-  revenue: "Revenue",
-  country: "Country",
-  fractional: "Hires fractionals",
-  yourFn: "Hired your function",
-  repeat: "Repeat hirer",
-};
-/** The Fit header's tooltip: what the seven traits are, and what the count is not. */
-export const FIT_TIP = "Traits matched out of 7, from facts on file: industry, size, revenue and country against your ideal client, past fractional hires, a fractional hire in your function, and repeat hiring. It is not a chance of winning.";
+export const TRAIT_WORDS: Record<TraitKey, string> = Object.fromEntries(ICP_KEYS.map((k) => [k, ICP_WORDS[k].label])) as Record<TraitKey, string>;
+export const SIGNAL_WORDS: Record<SignalKey, string> = { fractional: "Hires fractionals", yourFn: "Hired your function", repeat: "Repeat hirer", hiringNow: "Hiring now" };
+export const NOT_ON_FILE = "Not on file";
+export const ADD_WHAT_YOU_KNOW = "Add what you know";
+/** The Fit header's tooltip: what the count is, what it leaves out, and what it is not. */
+export const FIT_TIP = "Fits your practice: how many criteria of your ideal client this company matches, out of the ones on file for it (industry, who it sells to, customer size, business model, sales motion, revenue, size, deal size, sales cycle, country). A fact not on file is left out, never counted against it. Buying signals such as past fractional hires are shown apart. It is not a chance of winning.";
+/** The one line under a fit list. */
+export const FIT_FOOT = "Counts criteria of your ideal client matched, from facts on file. A fact not on file is left out. It is not a chance of winning.";
 
-export const bandOf = (n: number): FitBand => (n >= 6 ? "Strong opportunity" : n >= 4 ? "Good opportunity" : "Worth watching");
-/** The fit ring's class: forest at 6 or 7, gold at 4 or 5, quiet below. */
-export const fitCls = (n: number) => (n >= 6 ? "" : n >= 4 ? " mid" : " low");
+/** The band for a count of known criteria (lib/idealClient.ts fitBand). */
+export const bandOf = (n: number, of: number): FitBand => fitBand(n, of);
+/** The fit ring's class: forest for Strong, gold for Good, quiet below. */
+export const fitCls = (band: FitBand | string | undefined) => (band === "Strong opportunity" ? "" : band === "Good opportunity" ? " mid" : " low");
+export const isStrong = (f: Pick<Fit, "band" | "client">) => !f.client && f.band === "Strong opportunity";
+/** Good or better: the bar a company clears to count as a fit. */
+export const isGoodFit = (f: Pick<Fit, "band" | "client">) => !f.client && f.band !== "Worth watching";
+/** "It fits your practice.", by band. */
+export const fitSentence = (f: Pick<Fit, "band" | "of">) => (!f.of ? "Not enough is on file to say how it fits your practice." : f.band === "Strong opportunity" ? "It fits your practice." : f.band === "Good opportunity" ? "It mostly fits your practice." : "It sits outside your sweet spot.");
+/** "4 of 5 on file match", or what to say with nothing to count. */
+export const fitCount = (f: Pick<Fit, "n" | "of" | "asked">) => (f.of ? `${f.n} of ${f.of} on file match` : f.asked ? "Nothing on file to compare yet" : "Set your ideal client to see fit");
 
-export function fit7(i: CoInfo, me: Pick<Me, "icp" | "function">): Fit7 {
-  const c = i.c;
-  const p = me.icp ? icpParts(me.icp, c) : { industry: undefined, employees: undefined, revenue: undefined, country: undefined };
+/** The member's own client at this company, or null (Me.clients, by the company's public id). */
+export const clientAt = (me: Pick<Me, "clients">, companyId: string): ClientMark | null => (me.clients ?? []).find((c) => c.id === companyId) ?? null;
+
+/** The buying signals: facts about the company's fractional hiring, apart from fit. */
+export function buyingSignals(i: CoInfo, me: Pick<Me, "function">): Signal[] {
   const fn = namedFn(me.function ?? null);
-  const f = c.friendly;
-  const val = (v: boolean | null | undefined, fact: string | null) => (v === undefined ? "Not set in your ideal client" : v === null ? "Not on file" : fact ?? "On file");
-  const traits: Trait[] = [
-    { key: "industry", label: TRAIT_WORDS.industry, on: p.industry === true, value: val(p.industry, shown(c.cells.industry)) },
-    { key: "size", label: TRAIT_WORDS.size, on: p.employees === true, value: val(p.employees, shown(c.cells.employees)) },
-    { key: "revenue", label: TRAIT_WORDS.revenue, on: p.revenue === true, value: val(p.revenue, shown(c.cells.revenue)) },
-    { key: "country", label: TRAIT_WORDS.country, on: p.country === true, value: val(p.country, c.country ?? null) },
-    { key: "fractional", label: TRAIT_WORDS.fractional, on: f.fractional > 0 || !!f.services, value: f.fractional ? `${f.fractional} fractional ${f.fractional === 1 ? "hire" : "hires"} on file` : f.services ? "A fractional service on file" : "None on file" },
-    { key: "yourFn", label: TRAIT_WORDS.yourFn, on: !!fn && i.fnState.hired.includes(fn), value: !fn ? "Set your function" : i.fnState.hired.includes(fn) ? `Hired fractional ${fn}` : `No ${fn} hire on file` },
-    { key: "repeat", label: TRAIT_WORDS.repeat, on: repeatHirer(i), value: repeatHirer(i) ? "2 or more fractional hires" : "Not yet" },
+  const f = i.c.friendly;
+  const open = i.engs.filter((e) => (e.opened ? !e.closed : isOpenSeat(e)));
+  const mineOpen = !!fn && open.some((e) => shown(e.cells.function) === fn);
+  return [
+    { key: "fractional", label: SIGNAL_WORDS.fractional, on: f.fractional > 0 || !!f.services, value: f.fractional ? `${f.fractional} fractional ${f.fractional === 1 ? "hire" : "hires"} on file` : f.services ? "A fractional service on file" : "None on file" },
+    { key: "yourFn", label: SIGNAL_WORDS.yourFn, on: !!fn && i.fnState.hired.includes(fn), value: !fn ? "Set your function" : i.fnState.hired.includes(fn) ? `Hired fractional ${fn}` : `No ${fn} hire on file` },
+    { key: "repeat", label: SIGNAL_WORDS.repeat, on: repeatHirer(i), value: repeatHirer(i) ? "2 or more fractional hires" : "Not yet" },
+    { key: "hiringNow", label: SIGNAL_WORDS.hiringNow, on: open.length > 0, value: mineOpen ? `An open ${fn} role` : open.length ? `${open.length === 1 ? "An open role" : `${open.length} open roles`} on file` : "No open role on file" },
   ];
-  const n = traits.filter((t) => t.on).length;
-  return { n, traits, band: bandOf(n) };
 }
+
+/**
+ * A company against the member's ideal client (what they chose and what their clients have in
+ * common, Me.icp). Their own client is never scored.
+ */
+export function fitFor(i: CoInfo, me: Pick<Me, "icp" | "function" | "clients">): Fit {
+  const signals = buyingSignals(i, me);
+  const client = clientAt(me, i.c.id);
+  if (client) return { n: 0, of: 0, asked: 0, traits: [], signals, band: "Worth watching", order: -1, client };
+  const facts = coFitFacts(i.c);
+  const p = practiceFit(me.icp, facts);
+  const traits: Trait[] = ICP_KEYS.filter((k) => p.parts[k] !== undefined).map((k) => {
+    const unknown = p.parts[k] === null;
+    return { key: k, label: TRAIT_WORDS[k], on: p.parts[k] === true, ...(unknown ? { unknown: true, fact: ICP_FACT[k] } : {}), value: unknown ? NOT_ON_FILE : (facts[k] ?? []).join(", ") };
+  });
+  return { n: p.matched, of: p.known, asked: p.asked, traits, signals, band: p.band, order: fitOrder(p), client: null };
+}
+/** The older name, kept so nothing that reads a fit breaks: the same split fit. */
+export const fit7 = fitFor;
 
 /** A company's name as the member may see it. */
 export const coName = (i: CoInfo) => (i.c.hidden ? i.c.shownName ?? "Locked company" : i.c.name);

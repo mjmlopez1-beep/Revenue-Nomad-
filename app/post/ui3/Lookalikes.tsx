@@ -14,7 +14,7 @@ import type { RadarRow } from "@/lib/radar/types";
 import { useApp } from "../shell/pages";
 import { useToast } from "../../ui/shared";
 import { LIKE_TRAITS, applyFilters, likeParts, regionOf, repeatHirer, rowsFor, shown, type CoInfo, type LikeTrait } from "../model";
-import { defaultSeeds, likeFilters, profileOf, rankLike, withoutTrait, type LikeRow } from "../find/lookalikes";
+import { defaultSeeds, likeFilters, profileOf, rankLike, thenFact, withoutTrait, type LikeRow } from "../find/lookalikes";
 import { kindLabel } from "../crystal/crystalModel";
 import { tuneGroupOf } from "@/lib/radar/tune";
 import { useUi3Head } from "./head";
@@ -34,7 +34,7 @@ const TRAIT: Record<LikeTrait, { l: string; ic: IconName }> = {
   repeat: { l: "Repeat hirer", ic: "loop" },
 };
 const valOf = (i: CoInfo, k: LikeTrait): string =>
-  (k === "industry" ? shown(i.c.cells.industry) : k === "employees" ? shown(i.c.cells.employees) : k === "revenue" ? shown(i.c.cells.revenue) : k === "region" ? regionOf(i.c) : k === "fns" ? (i.fnState.hired.length ? `Hired ${i.fnState.hired.join(", ")}` : null) : repeatHirer(i) ? "Yes" : "Not yet") ??
+  (k === "industry" ? shown(i.c.cells.industry) : k === "employees" ? thenFact(i, "employees") : k === "revenue" ? thenFact(i, "revenue") : k === "region" ? regionOf(i.c) : k === "fns" ? (i.fnState.hired.length ? `Hired ${i.fnState.hired.join(", ")}` : null) : repeatHirer(i) ? "Yes" : "Not yet") ??
   "Not on file";
 const bandOf = (same: number, of: number) => (same >= of && of > 0 ? "Same on every trait" : same >= Math.max(2, of - 1) ? "Strong match" : same >= Math.ceil(of / 2) ? "Good match" : "Some overlap");
 
@@ -54,7 +54,9 @@ export function Ui3Lookalikes({ onBack }: { onBack: () => void }) {
   const [cmp, setCmp] = useState<"compare" | "opp">("compare");
   const [lq, setLq] = useState<"hire" | "warm" | "most" | null>(null);
 
-  const tokens0 = useMemo(() => (seed ? profileOf([seed]) : []), [seed]);
+  // The learned profile's own rules: a client's revenue and size as of when the member worked there, and never a value they dropped.
+  const dropped = me.ideal?.dropped;
+  const tokens0 = useMemo(() => (seed ? profileOf([seed], dropped) : []), [seed, dropped]);
   const traits0 = useMemo(() => likeParts(tokens0).traits, [tokens0]);
   const tokens = useMemo(() => [...off].reduce((acc, k) => withoutTrait(acc, k), tokens0), [tokens0, off]);
   const of = likeParts(tokens).traits.length;
@@ -356,7 +358,7 @@ function TopMatch({ r, seed, of, off, cmp, setCmp, radar, fn, t }: { r: LikeRow;
           </div>
         </button>
         <div className="tm-fit">
-          <FitRing lg am fit={{ n: same, of, band, traits: LIKE_TRAITS.filter((k) => !off.has(k) && likeParts(profileOf([seed])).traits.includes(k)).map((k) => ({ label: TRAIT[k].l, on: r.shared.includes(k), value: valOf(i, k) })) }} />
+          <FitRing lg am fit={{ n: same, of, band, what: "traits", traits: LIKE_TRAITS.filter((k) => !off.has(k) && likeParts(profileOf([seed])).traits.includes(k)).map((k) => ({ label: TRAIT[k].l, on: r.shared.includes(k), value: valOf(i, k) })) }} />
           <div>
             <b className="m-h3">
               {same} of {of} traits match

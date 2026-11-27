@@ -1608,6 +1608,9 @@ const industryKey = (v: string) => v.trim().toLowerCase();
 
 export const icpEmpty = (icp: Icp | null | undefined) => icpIsBlank(icp);
 
+/** The ideal client as the member chose it (Me.ideal.stated): what Settings and onboarding edit. Me.icp also holds what their clients added. */
+export const statedIcp = (me: Pick<Me, "icp" | "ideal">): Icp | null => (me.ideal ? me.ideal.stated : (me.icp ?? null));
+
 /** A company's facts as the ideal client's criteria read them (lib/idealClient.ts): only what the viewer sees on its record. */
 export function coFitFacts(c: CompanyRec): FitFacts {
   const one = (f: string) => ((v) => (v ? [v] : []))(shown(c.cells[f]));
