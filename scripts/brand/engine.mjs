@@ -49,6 +49,23 @@ export const THEMES = {
     via: "#C08CF5",
     transparent: true,
   },
+  // Line architecture for dark panels on the ivory and forest app design.
+  forest: {
+    bg: "#0E3329",
+    face: "#0E3329",
+    sideR: "#0B2B22",
+    top: "#134237",
+    void: "#07211A",
+    line: "#F4F1E8",
+    accent: "#C9F03D",
+    path: "#F2B632",
+    pathShade: "#D29A1E",
+    glow: "#FBEFC2",
+    text: "#F4F1E8",
+    muted: "#7FA091",
+    via: "#C9B3EE",
+    transparent: true,
+  },
   // The blend: the dark line-art world with felt-green hills and the guide.
   blend: {
     bg: "#0C3128",
