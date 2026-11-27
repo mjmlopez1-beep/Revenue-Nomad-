@@ -131,6 +131,6 @@
 <path d="M635.8 786.4V779.7" stroke="#C9F03D" stroke-width="2"/>
 <path d="M635.8 779.7C623 779.7 623 746 635.8 719C648.7 746 648.7 779.7 635.8 779.7Z" fill="#0E3329" stroke="#C9F03D" stroke-width="2" stroke-linejoin="round"/>
 <circle cx="288.1" cy="579.5" r="13" fill="#0E3329"/><circle cx="288.1" cy="579.5" r="7" fill="#0E3329" stroke="#C9F03D" stroke-width="3.5"/>
-<circle cx="649.1" cy="518.2" r="13" fill="#0E3329"/><circle cx="649.1" cy="518.2" r="7" fill="#0E3329" stroke="#F2B632" stroke-width="3.5"/>
+<circle cx="649.1" cy="518.2" r="13" fill="#0E3329"/><circle cx="649.1" cy="518.2" r="7" fill="#0E3329" stroke="#C9B3EE" stroke-width="3.5"/>
 <circle cx="758" cy="305.2" r="13" fill="#0E3329"/><circle cx="758" cy="305.2" r="7" fill="#0E3329" stroke="#F2B632" stroke-width="3.5"/>
 </g></svg>

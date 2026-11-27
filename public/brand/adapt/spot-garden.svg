@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="A quiet garden with an empty waypoint">
+<title>A quiet garden with an empty waypoint</title>
+<g stroke-linejoin="round" stroke-linecap="round">
+<path d="M56 370.1L320 522.5L320 500.7L56 348.3Z" fill="#073F2F" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M584 370.1L320 522.5L320 500.7L584 348.3Z" fill="#06382A" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M320 195.9L584 348.3L320 500.7L56 348.3Z" fill="#0B4A38" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M320 248.1V235.1" stroke="#2EE59D" stroke-width="2"/>
+<path d="M320 235.1C301.7 235.1 301.7 169.8 320 117.5C338.3 169.8 338.3 235.1 320 235.1Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M387.9 269.9V260.3" stroke="#2EE59D" stroke-width="2"/>
+<path d="M387.9 260.3C369.6 260.3 369.6 212.4 387.9 174.1C406.2 212.4 406.2 260.3 387.9 260.3Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M470.9 352.7V341.3" stroke="#2EE59D" stroke-width="2"/>
+<path d="M470.9 341.3C452.6 341.3 452.6 284.7 470.9 239.4C489.1 284.7 489.1 341.3 470.9 341.3Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M358.6 330.9A19.6 19.6 0 0 1 384.7 314.7A26.1 26.1 0 0 1 425.2 317.8A18.3 18.3 0 0 1 447.4 330.9Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M349.5 464.7L348 462.6L345.9 460.1L343.5 457.4L341 454.6L338.3 451.5L335.5 448.3L332.8 445L330.1 441.7L327.7 438.4L325.5 435.3L323.8 432.3L322.5 429.7L321.7 427.5L321.3 426L321.4 424.9L321.7 423.7L322.5 422.1L323.6 420.3L325.2 418.2L327.2 415.8L329.5 413.2L332.1 410.4L334.7 407.3L337.3 404L339.8 400.5L341.9 396.5L343.4 392.2L344 387.6L343.6 383.2L342.5 379L341 375L339.1 371.1L337 367.4L334.7 363.7L332.3 360.2L329.9 356.9L327.6 353.8L325.4 351L323.5 348.5L321.9 346.4L320.7 344.8L319.9 343.5L274.9 353.1L276.1 355L277.8 357.3L279.6 359.7L281.6 362.3L283.7 365L285.8 367.8L287.9 370.7L289.8 373.6L291.6 376.4L293.2 379.2L294.5 381.8L295.3 384.1L295.8 386L296 387.4L295.9 388.4L295.4 389.6L294.6 391.2L293.2 393.1L291.5 395.3L289.3 397.8L286.9 400.5L284.3 403.4L281.6 406.6L279 410.1L276.6 413.9L274.7 418L273.6 422.6L273.4 427.4L274.3 432L275.9 436.4L278 440.7L280.5 444.9L283.3 449L286.3 453L289.3 456.8L292.4 460.5L295.4 464L298.2 467.1L300.7 470L302.8 472.4L304.4 474.3L305.6 475.8Z" fill="#FFC12E"/>
+<path d="M132.4 335.2A22.9 22.9 0 0 1 162.9 316.3A30.5 30.5 0 0 1 210.1 320A21.3 21.3 0 0 1 236.1 335.2Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<path d="M116.3 348.3V339.6" stroke="#2EE59D" stroke-width="2"/>
+<path d="M116.3 339.6C98.1 339.6 98.1 296 116.3 261.2C134.6 296 134.6 339.6 116.3 339.6Z" fill="#073F2F" stroke="#2EE59D" stroke-width="2" stroke-linejoin="round"/>
+<ellipse cx="297.4" cy="348.3" rx="48" ry="27.7" fill="none" stroke="#2EE59D" stroke-width="2" stroke-linecap="round" stroke-dasharray="none" opacity="1"/>
+<ellipse cx="297.4" cy="348.3" rx="80" ry="46.2" fill="none" stroke="#2EE59D" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 7" opacity="0.8"/>
+<circle cx="297.4" cy="348.3" r="13" fill="#073F2F"/><circle cx="297.4" cy="348.3" r="7" fill="#073F2F" stroke="#2EE59D" stroke-width="3.5"/>
+</g></svg>

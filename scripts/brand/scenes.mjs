@@ -51,7 +51,7 @@ function terraces(s) {
   s.shrub(10.6, 3, 1, { r: 0.6 });
   s.tree(11.9, 5.8, 1, { h: 2.2 });
   s.marker([-1.4, 5.6, 1], { color: s.t.accent });
-  s.marker([5.4, -1.2, 3]);
+  s.marker([5.4, -1.2, 3], { color: s.t.via || s.t.path });
   s.marker([3.5, -7.2, 6]);
   s.label([-1.4, 5.6, 1], "You", { dx: -30, dy: -80, anchor: "end" });
   s.label([5.4, -1.2, 3], "Mutual\ncontact", { dx: -30, dy: -150, anchor: "end" });

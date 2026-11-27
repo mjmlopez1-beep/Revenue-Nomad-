@@ -40,6 +40,24 @@ export default function MockupIndex() {
                 <p>The companies table in the current design system, adapted.</p>
               </div>
             </Link>
+            <Link href="/brand/mockups/homepage">
+              <div className="thumb">
+                <iframe src="/brand/mockups/homepage" title="Homepage redesign" tabIndex={-1} loading="lazy" />
+              </div>
+              <div className="cap">
+                <b>Homepage redesign</b>
+                <p>The current design system with the line architecture hero and the path as the page&apos;s spine.</p>
+              </div>
+            </Link>
+            <Link href="/brand/mockups/network">
+              <div className="thumb">
+                <iframe src="/brand/mockups/network/6" title="My Network" tabIndex={-1} loading="lazy" />
+              </div>
+              <div className="cap">
+                <b>My Network, ten versions</b>
+                <p>The line art in a different place each time.</p>
+              </div>
+            </Link>
             <Link href="/brand/mockups/reimagined/companies">
               <div className="thumb">
                 <iframe src="/brand/mockups/reimagined/companies" title="Companies, reimagined" tabIndex={-1} loading="lazy" />
