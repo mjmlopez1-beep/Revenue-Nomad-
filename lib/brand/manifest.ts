@@ -38,6 +38,22 @@ export const THEMES = {
     "text": "#0A1F1A",
     "muted": "#9AA79F"
   },
+  "pine": {
+    "bg": "#073F2F",
+    "face": "#073F2F",
+    "sideR": "#06382A",
+    "top": "#0B4A38",
+    "void": "#042B20",
+    "line": "#FFFFFF",
+    "accent": "#2EE59D",
+    "path": "#FFC12E",
+    "pathShade": "#E0A51F",
+    "glow": "#FFE39A",
+    "text": "#FFFFFF",
+    "muted": "#6FA08E",
+    "via": "#C08CF5",
+    "transparent": true
+  },
   "blend": {
     "bg": "#0C3128",
     "face": "#0C3128",

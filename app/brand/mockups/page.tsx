@@ -24,6 +24,24 @@ export default function MockupIndex() {
           Five pages from the current product, redrawn in two directions. Structure and wording follow the live app. Names and numbers are
           examples.
         </p>
+        <section style={{ marginTop: 44 }}>
+          <h2 style={{ fontSize: 26 }}>Adaptation</h2>
+          <p className="mk-dim" style={{ marginTop: 6 }}>
+            The current site design with about a fifth of the new direction: one pine band of line
+            architecture, a saffron path, and violet for the person in between.
+          </p>
+          <div className="mk-index">
+            <Link href="/brand/mockups/adapt/companies">
+              <div className="thumb">
+                <iframe src="/brand/mockups/adapt/companies" title="Companies, adapted" tabIndex={-1} loading="lazy" />
+              </div>
+              <div className="cap">
+                <b>Companies</b>
+                <p>The companies table in the current design system, adapted.</p>
+              </div>
+            </Link>
+          </div>
+        </section>
         {THEMES.map((theme) => (
           <section key={theme} style={{ marginTop: 44 }}>
             <h2 style={{ fontSize: 26 }}>{theme === "color" ? "Color" : "Night"}</h2>

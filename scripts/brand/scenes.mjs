@@ -593,4 +593,40 @@ export const BLEND = {
   "guide-beacon": { ...SPOT, draw: bBeacon, kind: "spot", stage: "", title: "The guide below a signalling tower", use: "Signals and Crystal Ball." },
 };
 
+// ----------------------------------------------------------------- adapt
+// Pieces for the current product: a long wall of doors for the Companies
+// page, and a small doorway for pine cards.
+function aCompanies(s) {
+  s.box(-1, -0.4, -0.5, 30, 9.4, 0.5);
+  s.box(0, 0, 0, 28, 1.6, 5.6);
+  s.rail([0, 1.6, 5.6], [28, 1.6, 5.6], { h: 0.45 });
+  const xs = [2, 5, 8, 11, 14, 17, 20, 23, 26];
+  xs.forEach((c, i) => s.arch({ face: "y", at: 1.6, c, z: 0, w: 1.8, h: 3.8, lit: i === 5 }));
+  s.arch({ face: "x", at: 28, c: 0.8, z: 0, w: 0.8, h: 3.2, depth: 0.3 });
+  [[8, [9.6, 6.4]], [11, [11, 5.8]], [14, [13, 5]], [20, [15.6, 4.4]], [23, [16.2, 4]]].forEach(([c, from]) =>
+    s.line([[from[0], from[1], 0], [c, 1.9, 0]], { stroke: s.t.muted, dash: "3 8" })
+  );
+  s.ribbon([[2, 7.6], [5, 7.2], [8.6, 6.8], [12, 5.6], [15.4, 4.6], [17, 1.6]], { z: 0 });
+  s.tree(0.5, 2.6, 0, { h: 2.4 });
+  s.tree(27.4, 2.6, 0, { h: 2.4 });
+  s.shrub(22, 6.6, 0, { r: 0.6 });
+  s.tree(25, 7.4, 0, { h: 1.9 });
+  s.marker([2, 7.6, 0], { color: s.t.accent });
+  s.marker([10.4, 6.3, 0], { color: s.t.via });
+  s.marker([16.6, 2.6, 0]);
+}
+function aDoor(s) {
+  s.box(0.4, 0, 0, 4.2, 2.4, 6);
+  s.arch({ face: "x", at: 4.6, c: 1.2, z: 0.8, w: 0.9, h: 3 });
+  s.arch({ face: "y", at: 2.4, c: 2.5, z: 0, w: 2.3, h: 4.2, lit: true });
+  s.ribbon([[2.5, 2.4], [2.6, 3.8], [3.7, 5], [3.6, 6.4], [2.6, 7.8]], { z: 0 });
+  s.tree(0.2, 3.4, 0, { h: 2.6 });
+  s.marker([3.5, 5.6, 0], { color: s.t.via });
+  s.marker([3.1, 7.1, 0], { color: s.t.accent });
+}
+export const ADAPT = {
+  "band-companies": { w: 1100, h: 400, pad: 12, draw: aCompanies, title: "A long wall of doors with one lit and a path leading to it" },
+  "card-door": { w: 360, h: 420, pad: 10, draw: aDoor, title: "A path to a lit doorway" },
+};
+
 export { THEMES };
