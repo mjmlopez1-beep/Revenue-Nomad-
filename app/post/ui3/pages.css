@@ -742,3 +742,7 @@
 .u3p .fitlist li.none { color: var(--m-muted); }
 .u3p .fitsug { display: block; margin-top: 4px; font-size: 13px; color: var(--m-muted); }
 .u3p .fitsug b { color: var(--m-ink-2); font-weight: 600; }
+.u3p .fitsig-h { display: flex; width: 100%; }
+.u3p .tg .m-chip.m-client { white-space: normal; min-height: 0; padding: 4px 8px; border-radius: 10px; font-size: 11.5px; line-height: 1.25; gap: 5px; text-align: left; }
+.u3p .tg .m-chip.m-client svg { width: 12px; height: 12px; flex: none; }
+.u3p .cbp-row .m-chip.m-client { flex: none; }

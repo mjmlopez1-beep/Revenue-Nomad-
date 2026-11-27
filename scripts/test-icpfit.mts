@@ -344,7 +344,8 @@ async function main() {
     const d2c = u3.fitFor(bi.find((i) => i.c.id === pub("c_d2c"))!, bv.me!);
     check("a B2C ideal client matches a D2C company on the page", d2c.n === 1 && d2c.of === 1 && d2c.traits[0].key === "businessModel" && d2c.traits[0].value === "D2C", d2c);
     check("and the ideal-client filter lets it in", model.icpTest(bv.me!.icp!)(bi.find((i) => i.c.id === pub("c_d2c"))!.c) && model.icpTest(bv.me!.icp!)(bi.find((i) => i.c.id === pub("c_b2c"))!.c) && !model.icpTest(bv.me!.icp!)(bi.find((i) => i.c.id === pub("c_calder"))!.c));
-    check("what a maybe is missing names the new criteria", /not on file/.test(model.icpUnknown(av.me!.icp, by("c_thin").c) ?? ""), model.icpUnknown(av.me!.icp, by("c_thin").c));
+    check("a newer criterion nobody added yet never keeps a company from being a match", model.icpMatch({ industries: ["SaaS"], employees: [], revenue: [], countries: [], motion: ["PLG"], dealSize: ["$150K+"] }, by("c_thin").c) === "match" && model.icpMatch({ industries: ["SaaS"], employees: ["51–200"], revenue: [], countries: [], motion: ["PLG"] }, by("c_thin").c) === "maybe" && model.icpMatch({ industries: [], employees: [], revenue: [], countries: [], businessModel: ["B2C"] }, by("c_full").c) === "no");
+    check("what a maybe is missing is said in words", /not on file/.test(model.icpUnknown(av.me!.icp, by("c_thin").c) ?? ""), model.icpUnknown(av.me!.icp, by("c_thin").c));
     // Crystal Ball's own match reads the same criteria.
     const facts = { name: "x", industry: "SaaS", employees: null, revenue: null, country: null, region: null, fit: { motion: ["PLG"] } };
     check("Crystal Ball leaves out a company whose known sales motion conflicts", radar.inIcp({ ...OLD_ICP, industries: ["SaaS"], countries: [], motion: ["Enterprise sales"] }, facts) === false && radar.inIcp({ ...OLD_ICP, industries: ["SaaS"], countries: [], motion: ["PLG"] }, facts) === true);

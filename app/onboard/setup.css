@@ -1348,3 +1348,9 @@
 .su-sell-b { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
 .su-sell-b .hunt-q { margin: 0; padding: 0; border: 0; min-width: 0; }
 .su-sell-h { font-size: 13.5px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+/* its chips read as the set-up's own (su-chip), not the table's */
+.su-sell-b .hunt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.su-sell-b .hunt-chip { min-height: 36px; padding: 0 12px; border-radius: 999px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: #fff; color: var(--body-ink); font-weight: 500; }
+.su-sell-b .hunt-chip.chip-on { border-color: var(--pine); background: #e8f3ee; color: var(--pine); font-weight: 700; }
+.su-sell-b .hunt-isearch { margin-top: 8px; max-width: 360px; }
+.su-sell-b legend.su-sell-h { color: var(--ink); }

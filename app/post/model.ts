@@ -1646,21 +1646,35 @@ export function icpTest(icp: Icp): (c: CompanyRec) => boolean {
   };
 }
 
-/** How a company stands against the ideal client: every part it asks for on file and matching, some part not on file, or a known part that conflicts. */
+const FIRST_FOUR = ["industry", "employees", "revenue", "country"] as const;
+/**
+ * How a company stands against the ideal client: "no" when a known part conflicts, "match" when
+ * the free facts it asks for (industry, size, revenue, country) are all on file and nothing
+ * conflicts, "maybe" when one of those is not on file. A newer criterion (who it sells to, customer
+ * size, model, motion, deal size, sales cycle) counts only once the company's record answers it: a
+ * fact nobody added yet is never a miss, and never keeps a company from being a match.
+ */
 export type IcpMatch = "match" | "maybe" | "no";
 export function icpMatch(icp: Icp | null | undefined, c: CompanyRec): IcpMatch | null {
   if (icpEmpty(icp)) return null;
-  const v = Object.values(icpParts(icp!, c)).filter((x) => x !== undefined);
-  return v.includes(false) ? "no" : v.includes(null) ? "maybe" : "match";
+  const p = icpParts(icp!, c);
+  const all = Object.values(p).filter((x) => x !== undefined);
+  if (all.includes(false)) return "no";
+  const four = FIRST_FOUR.map((k) => p[k]).filter((x) => x !== undefined);
+  if (four.includes(null)) return "maybe";
+  // Only newer criteria asked, and none of them on file: nothing confirms it yet.
+  return four.length || all.includes(true) ? "match" : "maybe";
 }
 
 const UNKNOWN_WORD = { industry: "industry", employees: "size", revenue: "revenue", country: "country", sellsTo: "who it sells to", customerSize: "customer size", businessModel: "business model", motion: "sales motion", dealSize: "deal size", salesCycle: "sales cycle" } as const;
 /** What a maybe is missing, as one line: "Size not on file", "Size and revenue not on file". Null when nothing the ideal client asks for is missing. */
 export function icpUnknown(icp: Icp | null | undefined, c: CompanyRec): string | null {
-  if (icpEmpty(icp)) return null;
+  if (icpMatch(icp, c) !== "maybe") return null;
   const p = icpParts(icp!, c);
-  if (Object.values(p).includes(false)) return null;
-  const miss = (Object.keys(UNKNOWN_WORD) as (keyof typeof UNKNOWN_WORD)[]).filter((k) => p[k] === null).map((k) => UNKNOWN_WORD[k]);
+  const keys = Object.keys(UNKNOWN_WORD) as (keyof typeof UNKNOWN_WORD)[];
+  // The free facts first: they are what makes it a maybe. The newer criteria are named only when nothing else is asked.
+  const four = keys.filter((k) => (FIRST_FOUR as readonly string[]).includes(k) && p[k] === null);
+  const miss = (four.length ? four : keys.filter((k) => p[k] === null)).map((k) => UNKNOWN_WORD[k]);
   if (!miss.length) return null;
   // Up to four by name; past them a count, so the line under a name stays one line.
   const shownWords = miss.length > 4 ? [...miss.slice(0, 3), `${miss.length - 3} more`] : miss;
