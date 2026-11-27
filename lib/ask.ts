@@ -99,7 +99,7 @@ export interface AskPlan {
 export interface AskVocab {
   /** Their function (Me.function): "what should I charge" and "no fractional X yet" read it. */
   myFn?: string | null;
-  /** They have an ideal client (Me.icp not empty): "my ideal client" sets the pill. */
+  /** They have an ideal client (Me.icp not empty: what they chose, or what their own clients have in common): "my ideal client" sets the pill. */
   hasIcp?: boolean;
 }
 
@@ -480,7 +480,7 @@ function readRules(text: string, vocab: AskVocab): AskRaw {
   take(toks, ["i follow", "you follow", "following", "followed", "that i follow"].map(P), () => (f.followed = true));
   take(toks, ["i opened", "i have opened", "ive opened", "opened", "unlocked", "i unlocked"].map(P), () => (f.opened = true));
   take(toks, ["in my pipeline", "in the pipeline", "in pipeline", "on my pipeline"].map(P), () => (f.inPipeline = true));
-  take(toks, ["my ideal client", "my ideal clients", "ideal client", "fit my ideal client", "fits my ideal client", "my kind of company", "my kind of companies", "my market", "my profile", "fit me"].map(P), () => (f.icp = true));
+  take(toks, ["my ideal client", "my ideal clients", "ideal client", "fit my ideal client", "fits my ideal client", "my kind of company", "my kind of companies", "my market", "my profile", "fit me", "fits my practice", "fit my practice", "my practice"].map(P), () => (f.icp = true));
   take(toks, ["hired a fractional", "hired fractional", "had a fractional", "have a fractional", "has a fractional", "used a fractional", "brought in a fractional", "hired a", "hired"].map(P), () => (hired = true));
   take(toks, ["rate on file", "with a rate", "rates on file", "posted rate"].map(P), () => (f.rateKnown = true));
   take(toks, ["email on file", "with an email", "with emails", "emails"].map(P), () => cols.push("email"));
@@ -566,7 +566,7 @@ const BOOL_KEYS = ["notMine", "icp", "repeatHirer", "hiringNow", "newLeader", "f
 
 const BOOL_LABEL: Record<(typeof BOOL_KEYS)[number], (v: AskVocab) => string> = {
   notMine: (v) => (v.myFn ? `No fractional ${v.myFn} yet` : "No fractional in your function yet"),
-  icp: () => "Fits your ideal client",
+  icp: () => "Fits your practice",
   repeatHirer: () => "Repeat hirer",
   hiringNow: () => "Hiring a fractional now",
   newLeader: () => "New leader this year",

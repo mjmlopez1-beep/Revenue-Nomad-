@@ -261,9 +261,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
         "Add a missing fact about a company that the member knows (earns 1 credit when the field was empty). Only add what the member told you or confirmed. get_company lists what is missing under you_can_add.",
       inputSchema: {
         company,
-        field: z.string().describe("website, industry, employees, revenue, hq, linkedin, business_model, sales_motion, deal_size, sales_cycle or ownership"),
+        field: z.string().describe("website, industry, employees, revenue, hq, linkedin, sells_to, customer_size, business_model, sales_motion, deal_size, sales_cycle or ownership"),
         value: z.string().describe(
-          `The value. Pick lists: industry (${list(RN_INDUSTRIES)}), employees (${list(RN_EMPLOYEES)}), revenue (${list(RN_REVENUE)}), business_model (${list(BUSINESS_MODELS)}), sales_motion (${list(RN_MOTIONS)}), deal_size (${list(RN_DEAL_SIZES)}), sales_cycle (${list(RN_SALES_CYCLES)}), ownership (${list(OWNERSHIP_TYPES)}).`,
+          `The value. Pick lists: industry (${list(RN_INDUSTRIES)}: what the company is), sells_to (up to 3 from the industry list, the industries of its customers, separated by a semicolon), customer_size (SMB, Mid-market, Enterprise), employees (${list(RN_EMPLOYEES)}), revenue (${list(RN_REVENUE)}), business_model (${list(BUSINESS_MODELS)}), sales_motion (${list(RN_MOTIONS)}), deal_size (${list(RN_DEAL_SIZES)}), sales_cycle (${list(RN_SALES_CYCLES)}), ownership (${list(OWNERSHIP_TYPES)}).`,
         ),
       },
       annotations: { title: "Add a company fact", ...WRITE },

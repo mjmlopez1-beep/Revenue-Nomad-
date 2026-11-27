@@ -643,7 +643,8 @@ export function companiesOf(seed: Seed, s: State, n: MemberNetwork | undefined, 
   const ids = [...new Set([...networkIds(n), ...matches.keys()])].filter((id) => g.companies.has(id));
   const prof = m ? s.profiles[m.id] ?? {} : {};
   const fn = m ? (prof.function ?? null) : null;
-  const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
+  const ideal = m ? T.idealIcpOf(seed, s, m.id) : null;
+  const icp = ideal && !icpIsEmpty(ideal) ? ideal : null;
   const odds = m ? oddsFor(seed, s, ids, fn, nowMs, icp, m) : new Map();
   const ball = m ? crystalIdsOf(seed, s, m, nowMs) : new Set<string>();
   const held = m ? heldSeats(seed, s, m, new Set(ids)) : new Map<string, { id: string; active: boolean }>();

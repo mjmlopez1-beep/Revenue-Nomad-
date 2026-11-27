@@ -557,8 +557,8 @@ export function introPlansOf(seed: Seed, s: State, m: Member, f: Found, nowMs = 
     /* no Crystal Ball yet */
   }
   const views = (s.connector?.alerts?.[m.id] ?? []) as SavedSearch[];
-  const prof = s.profiles[m.id] ?? {};
-  const icp = prof.icp && !icpIsEmpty(prof.icp) ? prof.icp : null;
+  const ideal = T.idealIcpOf(seed, s, m.id);
+  const icp = ideal && !icpIsEmpty(ideal) ? ideal : null;
   const fn = f.me.words.fn;
   const crystal = T.crystalOf(s, m.id, nowMs);
   const fits = new Map<string, ListFit | null>();

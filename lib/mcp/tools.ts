@@ -25,8 +25,13 @@ import { randomBytes } from "crypto";
 import { ActionError, FREE_COMPANY_USED, PRO_OPEN_FREE, aboutCells, connectorState, digestEnabled, inviteCode, loadState, onFreePlan, perform, savedViewsFull, updateConnector, viewPatch, type Member } from "../table";
 import { upgradeUrl } from "../plan";
 import { TRIAL_NAME, planName } from "../billing/rules";
-import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
-import { PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
+import type { Action, Cell, EngagementRec, IcpKey, Me, PersonRec, RateStat } from "../tableTypes";
+import { ICP_KEYS, ICP_NEW_KEYS, icpList, sourceWords } from "../idealClient";
+import { clientAt, fitFor } from "@/app/post/ui3/model";
+
+/** The ideal client's criteria as my_account names them. */
+const IDEAL_OUT: Record<IcpKey, string> = { industries: "industries", sellsTo: "sells_to", customerSize: "customer_size", businessModel: "business_model", motion: "sales_motion", revenue: "revenue", employees: "employees", dealSize: "deal_size", salesCycle: "sales_cycle", countries: "countries" };
+import { CUSTOMER_SIZES, SELLS_TO_MAX, picksOf, PERSON_BUNDLE, FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, OWNERSHIP_TYPES, WHY_NOW, END_REASONS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
   EMPTY_FILTERS, applyFilters, countryOf, deriveAll, fitReason, fitTier, friendlyCo, hireOfRow, hiredOn, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   fractionalLeadFns, fullTimeLead,
@@ -111,7 +116,7 @@ const URL_FIELDS = new Set(["website", "linkedin", "posting"]);
 /** Output keys (what a model reads and sends back) and the field each one is. */
 const COMPANY_KEYS: Record<string, string> = {
   website: "website", industry: "industry", employees: "employees", revenue: "revenue", hq: "hq", linkedin: "linkedin", about: "about",
-  business_model: "businessModel", sales_motion: "motion", deal_size: "dealSize", sales_cycle: "salesCycle", ownership: "ownership",
+  sells_to: "sellsTo", customer_size: "customerSize", business_model: "businessModel", sales_motion: "motion", deal_size: "dealSize", sales_cycle: "salesCycle", ownership: "ownership",
 };
 const SEAT_KEYS: Record<string, string> = {
   function: "function", role: "role", type: "type", status: "status", seat_holder: "operator", start: "start", end: "end", why_hired: "reason",
@@ -193,6 +198,30 @@ function companyBundle(i: CoInfo): { what: string; rate: boolean } {
   return { what: `its name, website, logo and LinkedIn${roles}`, rate: has("rate") };
 }
 
+/**
+ * How a company stands for the member, as the app shows it, in two separate things. Fits your
+ * practice: criteria of their ideal client matched, out of the ones on file for this company (a
+ * fact not on file is listed apart and never counted against it), with a band in words and never a
+ * percentage. Buying signals: facts about its fractional hiring.
+ */
+function practiceOut(i: CoInfo, me: Me): ToolOut {
+  const f = fitFor(i, me);
+  const names = (xs: typeof f.traits) => xs.map((t) => t.label);
+  return {
+    fits_your_practice: !f.asked
+      ? "The member has no ideal client yet. They set it in Settings on Merlin, and it also learns from the seats they claim."
+      : {
+          matched: f.of ? `${f.n} of ${f.of} on file` : "Nothing on file to compare yet",
+          ...(f.of ? { band: f.band } : {}),
+          matches: names(f.traits.filter((t) => t.on)),
+          does_not_match: names(f.traits.filter((t) => !t.on && !t.unknown)),
+          not_on_file: names(f.traits.filter((t) => t.unknown)),
+          note: "Counts criteria of the member's ideal client, from facts on file. A fact not on file is left out, never a miss: add what the member knows with add_company_fact. It is not a chance of winning.",
+        },
+    buying_signals: f.signals.filter((g) => g.on).map((g) => `${g.label}: ${g.value}`),
+  };
+}
+
 /** `mv`: the member's view, so a company in their Crystal Ball on Trial or Pro says it opens free. */
 function companySummary(i: CoInfo, mv?: MemberView): ToolOut {
   const c = i.c;
@@ -209,9 +238,10 @@ function companySummary(i: CoInfo, mv?: MemberView): ToolOut {
     ...(missing ? { not_on_file: missing } : {}),
     ...(c.country ? { country: c.country } : {}),
     ...(c.region ? { region: c.region } : {}),
-    fit: fitOf(i),
-    fit_reason: fitWhy(i),
-    fit_score: c.friendly.score,
+    // The member's own client is never scored: it says so in words where the fit would be.
+    ...(mv && clientAt(mv.view.me!, c.id)
+      ? { your_client: clientAt(mv.view.me!, c.id)!.words, your_client_note: "The member's own client. Fit is for companies they could win, so none is given here." }
+      : { fit: fitOf(i), fit_reason: fitWhy(i), fit_score: c.friendly.score, ...(mv ? practiceOut(i, mv.view.me!) : {}) }),
     why: fitReason(i),
     functions_hired: i.fnState.hired,
     fractional_hires: c.friendly.fractional,
@@ -807,7 +837,28 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
     // The companies they want as clients. Empty parts mean any.
     ideal_fractional_profile: icpEmpty(me.icp)
       ? "Not set. The member sets it in Your profile on Merlin."
-      : { industries: me.icp!.industries, employees: me.icp!.employees, revenue: me.icp!.revenue, countries: me.icp!.countries, summary: icpLabel(me.icp) },
+      : {
+          industries: me.icp!.industries, employees: me.icp!.employees, revenue: me.icp!.revenue, countries: me.icp!.countries,
+          ...Object.fromEntries(ICP_NEW_KEYS.filter((k) => (me.icp![k] ?? []).length).map((k) => [IDEAL_OUT[k], me.icp![k]])),
+          summary: icpLabel(me.icp),
+          // Each value's source: what the member chose, and what their own clients have in common (as of when they worked there).
+          ...(me.ideal
+            ? {
+                sources: Object.fromEntries(
+                  ICP_KEYS.filter((k) => (me.icp![k] ?? []).length).map((k) => [
+                    IDEAL_OUT[k],
+                    (me.icp![k] ?? []).map((v) => ({
+                      value: v,
+                      source: sourceWords(icpList(me.ideal!.stated, k).some((x) => x.toLowerCase() === v.toLowerCase()), (me.ideal!.learned[k] ?? []).find((x) => x.v.toLowerCase() === v.toLowerCase())?.from),
+                    })),
+                  ]),
+                ),
+                ...(Object.keys(me.ideal.dropped).length ? { removed_by_the_member: me.ideal.dropped } : {}),
+                note: "The ideal client is what the member chose plus what their own clients have in common. The member edits it, and removes a learned value, in Settings on Merlin.",
+              }
+            : {}),
+        },
+    ...((me.clients ?? []).length ? { your_clients: (me.clients ?? []).map((c) => ({ company_id: c.id, ...(mv.infos.find((i) => i.c.id === c.id && !i.c.hidden) ? { company: mv.infos.find((i) => i.c.id === c.id)!.c.name } : {}), status: c.words })) } : {}),
     credits: me.credits,
     ...(me.owed ? { owed: me.owed } : {}),
     earned_today: `${me.earned24h} of ${me.earnCap}`,
@@ -1016,7 +1067,7 @@ async function act(ctx: Ctx, action: Action) {
 const creditsLine = (r: Awaited<ReturnType<typeof perform>>) => ({ credits: r.me?.credits, ...(r.me ? { earned_today: r.me.earned24h } : {}) });
 
 const PICKS: Record<string, readonly string[]> = {
-  industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE, businessModel: BUSINESS_MODELS, motion: RN_MOTIONS, dealSize: RN_DEAL_SIZES, salesCycle: RN_SALES_CYCLES, ownership: OWNERSHIP_TYPES,
+  industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE, customerSize: CUSTOMER_SIZES, businessModel: BUSINESS_MODELS, motion: RN_MOTIONS, dealSize: RN_DEAL_SIZES, salesCycle: RN_SALES_CYCLES, ownership: OWNERSHIP_TYPES,
 };
 
 export async function addCompanyFact(ctx: Ctx, a: { company: string; field: string; value: string }): Promise<ToolOut> {
@@ -1024,7 +1075,9 @@ export async function addCompanyFact(ctx: Ctx, a: { company: string; field: stri
   const i = companyInfo(mv, a.company);
   const field = fieldFrom(COMPANY_KEYS, String(a.field ?? ""));
   if (!field || field === "about") throw new ToolProblem(`field is one of: ${Object.keys(COMPANY_KEYS).filter((k) => k !== "about").join(", ")}`);
-  const value = PICKS[field] ? listValue(outKey(COMPANY_KEYS, field), PICKS[field], a.value) : String(a.value ?? "");
+  // Sells to takes up to three industries, separated by a semicolon (an industry's own name can hold a comma).
+  const many = (raw: unknown) => picksOf({ sep: "; ", options: [...RN_INDUSTRIES] }, String(raw ?? "")).map((x) => listValue("sells_to", RN_INDUSTRIES, x));
+  const value = field === "sellsTo" ? ((xs) => (xs.length > SELLS_TO_MAX ? (() => { throw new ToolProblem(`sells_to takes up to ${SELLS_TO_MAX} industries.`); })() : xs.join("; ")))(many(a.value)) : PICKS[field] ? listValue(outKey(COMPANY_KEYS, field), PICKS[field], a.value) : String(a.value ?? "");
   const r = await act(ctx, { type: "fill", entity: "company", id: i.c.id, field, value });
   return { message: r.message, ...creditsLine(r) };
 }
